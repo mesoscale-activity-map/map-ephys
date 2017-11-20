@@ -1,60 +1,9 @@
 import datajoint as dj
+import ccf, experiment
+
+schema = dj.schema('dimitri_map_ephys', locals())
 
 
-schema = dj.schema('map_ccf', locals())
-
-
-@schema
-class CCF(dj.Lookup):
-    definition = """
-    # Common Coordinate Framework
-    x   :  int   # (um)
-    y   :  int   # (um)
-    z   :  int   # (um)
-    ---
-    label  : varchar(128)   # TODO
-    """
-
-@schema
-class AnnotationType(dj.Lookup):
-    definition = """
-    annotation_type  : varchar(16)  
-    """
-    
-@schema
-class CCFAnnotation(dj.Manual):
-    definition = """
-    -> CCF
-    -> AnnotationType
-    ---
-    annotation  : varchar(1200)
-    """
-
-@schema
-class Animal(dj.Manual):
-    definition = """
-    animal  : int    # Janelia ANM ID (6 digits)
-    --- 
-    dob    : date
-    """
-        
-@schema
-class Session(dj.Manual):
-    definition = """
-    -> Animal
-    session : smallint 
-    ---
-    session_date  : date
-    """
-    
-    class Trial(dj.Part):
-        definition = """
-        -> Session
-        trial   : smallint
-        ---
-        start_time : decimal(9,3)  # (s)
-        """
-        
 @schema
 class Probe(dj.Lookup):
     definition = """
@@ -71,7 +20,7 @@ class Probe(dj.Lookup):
 @schema
 class ElectrodeGroup(dj.Manual):
     definition = """
-    -> Session
+    -> experiment.Session
     electrode_group :  tinyint
     ---
     -> Probe
@@ -95,7 +44,7 @@ class LabeledTrack(dj.Manual):
     class Point(dj.Part):
         definition = """
         -> LabeledTrack
-        -> CCF
+        -> ccf.CCF
         """
 
 @schema
@@ -116,7 +65,7 @@ class Ephys(dj.Imported):
         definition = """
         # Entries for trials a unit is in
         -> Ephys.Unit
-        -> Session.Trial
+        -> experiment.Session.Trial
         """
     
     class Spike(dj.Part):
@@ -125,7 +74,7 @@ class Ephys(dj.Imported):
         spike_time : decimal(9,3)   # (s)
         ---
         -> ElectrodeGroup.Electrode
-        -> Session.Trial
+        -> experiment.Session.Trial
         """
 
 @schema
@@ -133,5 +82,5 @@ class ElectrodePosition(dj.Manual):
     definition = """
     -> ElectrodeGroup.Electrode
     ---
-    -> CCF
+    -> ccf.CCF
     """
