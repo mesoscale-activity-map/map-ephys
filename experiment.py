@@ -51,10 +51,7 @@ class Session(dj.Manual):
         OriginalStateData=RawData.flatten()[0][1]
         OriginalStateTimestamps=RawData.flatten()[0][3]
         OriginalEventTimestamps=RawData.flatten()[0][4]
-        
-<<<<<<< HEAD
-        
-		
+
         for i in range(0, len(OriginalEventTimestamps)):
             trial_instruction = 'left'
             early_lick = 'no early'
@@ -75,39 +72,12 @@ class Session(dj.Manual):
                 itemindex = np.where(OriginalStateData[i]==16)
                 if np.any(OriginalStateData[i]==5):
                     early_lick = 'early'
-
-=======
-        trial_instruction = 'left'
-        early_lick = 'no early'
-        outcome = 'ignore'
-		
-        for i in range(0, len(OriginalEventTimestamps)):
-            GUI = TrialSettings[i][0]
-
-            ProtocolType = GUI.flatten()[0][10] # 1 Water-Valve-Calibration 2 Licking 3 Autoassist 4 No autoassist 5 DelayEnforce 6 SampleEnforce 7 Fixed
-
-            if ProtocolType>5:
-                itemindex = np.where(OriginalStateData[i]==17)
-                if np.any(OriginalStateData[i]==4) or np.any(OriginalStateData[i]==6):
-                    early_lick = 'early'
-                if np.any(OriginalStateData[i]==13):
-                    outcome = 'hit'
-                elif np.any(OriginalStateData[i]==16):
-                    outcome = 'miss'
-                elif np.any(OriginalStateData[i]==15):
-                    outcome = 'ignore'
-            elif ProtocolType>4:
-                itemindex = np.where(OriginalStateData[i]==16)
-                if np.any(OriginalStateData[i]==5):
-                    early_lick = 'early'
->>>>>>> map-ephys
                 if np.any(OriginalStateData[i]==12):
                     outcome = 'hit'
                 elif np.any(OriginalStateData[i]==15):
                     outcome = 'miss'
                 elif np.any(OriginalStateData[i]==14):
                     outcome = 'ignore'
-<<<<<<< HEAD
 
             if ProtocolType>5:
                 itemindex = np.where(OriginalStateData[i]==17)
@@ -118,15 +88,6 @@ class Session(dj.Manual):
                 elif np.any(OriginalStateData[i]==16):
                     outcome = 'miss'
                 elif np.any(OriginalStateData[i]==15):
-=======
-            elif ProtocolType>3:
-                itemindex = np.where(OriginalStateData[i]==15)
-                if np.any(OriginalStateData[i]==11):
-                    outcome = 'hit'
-                elif np.any(OriginalStateData[i]==14):
-                    outcome = 'miss'
-                elif np.any(OriginalStateData[i]==13):
->>>>>>> map-ephys
                     outcome = 'ignore'
             else:
                 itemindex = np.where(OriginalStateData[i]==1)
