@@ -1,7 +1,7 @@
 import datajoint as dj
 import lab, ccf
 
-schema = dj.schema('dimitri_map_experi', locals())
+schema = dj.schema('daveliu_map_experi', locals())
 
 @schema
 class Task(dj.Lookup):
@@ -21,21 +21,87 @@ class Task(dj.Lookup):
 class Session(dj.Manual):
     definition = """
     -> lab.Animal
-    session : smallint 
+    session : smallint 		# session number
     ---
     session_date  : date
     -> lab.Person
     -> lab.Rig
+    behavior_file : varchar(255) # the behavior file name
     """
+    
     
     class Trial(dj.Part):
         definition = """
         -> Session
         trial   : smallint
         ---
-        start_time : decimal(9,3)  # (s)
-        end_time : decimal(9,3)  # (s)
+        start_time : decimal(6,4)  # (s)
+        end_time : decimal(6,4)  # (s)
         """
+		
+		
+    def _make_tuples(self, key, key1):
+        import scipy.io as spio
+        import numpy as np
+        mat = spio.loadmat(key1, squeeze_me=True)
+        SessionData=mat['SessionData']
+        TrialTypes=SessionData.flatten()[0][0]
+        RawData=SessionData.flatten()[0][7]
+        TrialSettings=SessionData.flatten()[0][10]
+        OriginalStateData=RawData.flatten()[0][1]
+        OriginalStateTimestamps=RawData.flatten()[0][3]
+        OriginalEventTimestamps=RawData.flatten()[0][4]
+
+        for i in range(0, len(OriginalEventTimestamps)):
+            trial_instruction = 'left'
+            early_lick = 'no early'
+            outcome = 'ignore'
+            GUI = TrialSettings[i][0]
+            ProtocolType = GUI.flatten()[0][10] # 1 Water-Valve-Calibration 2 Licking 3 Autoassist 4 No autoassist 5 DelayEnforce 6 SampleEnforce 7 Fixed
+
+            if ProtocolType==4:
+                itemindex = np.where(OriginalStateData[i]==15)
+                if np.any(OriginalStateData[i]==11):
+                    outcome = 'hit'
+                elif np.any(OriginalStateData[i]==14):
+                    outcome = 'miss'
+                elif np.any(OriginalStateData[i]==13):
+                    outcome = 'ignore'
+
+            if ProtocolType==5:
+                itemindex = np.where(OriginalStateData[i]==16)
+                if np.any(OriginalStateData[i]==5):
+                    early_lick = 'early'
+                if np.any(OriginalStateData[i]==12):
+                    outcome = 'hit'
+                elif np.any(OriginalStateData[i]==15):
+                    outcome = 'miss'
+                elif np.any(OriginalStateData[i]==14):
+                    outcome = 'ignore'
+
+            if ProtocolType>5:
+                itemindex = np.where(OriginalStateData[i]==17)
+                if np.any(OriginalStateData[i]==4) or np.any(OriginalStateData[i]==6):
+                    early_lick = 'early'
+                if np.any(OriginalStateData[i]==13):
+                    outcome = 'hit'
+                elif np.any(OriginalStateData[i]==16):
+                    outcome = 'miss'
+                elif np.any(OriginalStateData[i]==15):
+                    outcome = 'ignore'
+            else:
+                itemindex = np.where(OriginalStateData[i]==1)
+
+            Session.Trial().insert1((int(key[0]), int(key[1]), i, OriginalEventTimestamps[i][1], OriginalStateTimestamps[i][itemindex][0]))
+            
+            if TrialTypes[i]==0:
+                trial_instruction = 'left'
+            elif TrialTypes[i]==1:
+                trial_instruction = 'right'
+            
+
+            BehaviorTrial().insert1((int(key[0]), int(key[1]), i, 'audio delay', trial_instruction, early_lick, outcome))
+            TrialNote().insert1((int(key[0]), int(key[1]), i, 'protocol #', str(ProtocolType)))
 
 @schema 
 class TrialNoteType(dj.Lookup):

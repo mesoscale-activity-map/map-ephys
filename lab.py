@@ -1,6 +1,6 @@
 import datajoint as dj
 
-schema = dj.schema('dimitri_map', locals())
+schema = dj.schema('daveliu_map', locals())
 
 
 @schema
@@ -9,6 +9,7 @@ class Animal(dj.Manual):
     animal  : int    # Janelia ANM ID (6 digits)
     ---
     dob    : date
+	wr_num : varchar(6) # water restriction number 
     """
 
 
