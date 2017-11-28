@@ -59,18 +59,13 @@ class Session(dj.Manual):
             outcome = 'ignore'
             GUI = TrialSettings[i][0]
             ProtocolType = GUI.flatten()[0][10] # 1 Water-Valve-Calibration 2 Licking 3 Autoassist 4 No autoassist 5 DelayEnforce 6 SampleEnforce 7 Fixed
-            StopLicking=np.where(OriginalStateNamesByNumber[i]=='StopLicking')
-            StopLicking=StopLicking[0]+1
-            Reward=np.where(OriginalStateNamesByNumber[i]=='Reward')
-            Reward=Reward[0]+1
-            TimeOut=np.where(OriginalStateNamesByNumber[i]=='TimeOut')
-            TimeOut=TimeOut[0]+1
-            NoResponse=np.where(OriginalStateNamesByNumber[i]=='NoResponse')
-            NoResponse=NoResponse[0]+1
-            EarlyLickDelay=np.where(OriginalStateNamesByNumber[i]=='EarlyLickDelay')
-            EarlyLickDelay=EarlyLickDelay[0]+1
-            EarlyLickSample=np.where(OriginalStateNamesByNumber[i]=='EarlyLickSample')
-            EarlyLickSample=EarlyLickSample[0]+1
+            Reversal = GUI.flatten()[0][13]
+            StopLicking=np.where(OriginalStateNamesByNumber[i]=='StopLicking')[0]+1
+            Reward=np.where(OriginalStateNamesByNumber[i]=='Reward')[0]+1
+            TimeOut=np.where(OriginalStateNamesByNumber[i]=='TimeOut')[0]+1
+            NoResponse=np.where(OriginalStateNamesByNumber[i]=='NoResponse')[0]+1
+            EarlyLickDelay=np.where(OriginalStateNamesByNumber[i]=='EarlyLickDelay')[0]+1
+            EarlyLickSample=np.where(OriginalStateNamesByNumber[i]=='EarlyLickSample')[0]+1
             itemindex = np.where(OriginalStateData[i]==StopLicking)
             if np.any(OriginalStateData[i]==Reward):
                 outcome = 'hit'
@@ -87,11 +82,16 @@ class Session(dj.Manual):
 
             Session.Trial().insert1((int(key[0]), int(key[1]), i, OriginalEventTimestamps[i][1], OriginalStateTimestamps[i][itemindex][0]))
             
-            if TrialTypes[i]==0:
-                trial_instruction = 'left'
-            elif TrialTypes[i]==1:
-                trial_instruction = 'right'
-            
+            if Reversal==1:
+                if TrialTypes[i]==0:
+                    trial_instruction = 'left'
+                elif TrialTypes[i]==1:
+                    trial_instruction = 'right'
+            elif Reversal==2:
+                if TrialTypes[i]==0:
+                    trial_instruction = 'right'
+                elif TrialTypes[i]==1:
+                    trial_instruction = 'left'
 
             BehaviorTrial().insert1((int(key[0]), int(key[1]), i, 'audio delay', trial_instruction, early_lick, outcome))
             TrialNote().insert1((int(key[0]), int(key[1]), i, 'protocol #', str(ProtocolType)))
