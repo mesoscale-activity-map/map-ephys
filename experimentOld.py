@@ -59,31 +59,39 @@ class Session(dj.Manual):
             outcome = 'ignore'
             GUI = TrialSettings[i][0]
             ProtocolType = GUI.flatten()[0][10] # 1 Water-Valve-Calibration 2 Licking 3 Autoassist 4 No autoassist 5 DelayEnforce 6 SampleEnforce 7 Fixed
-            StopLicking=np.where(OriginalStateNamesByNumber[i]=='StopLicking')
-            StopLicking=StopLicking[0]+1
-            Reward=np.where(OriginalStateNamesByNumber[i]=='Reward')
-            Reward=Reward[0]+1
-            TimeOut=np.where(OriginalStateNamesByNumber[i]=='TimeOut')
-            TimeOut=TimeOut[0]+1
-            NoResponse=np.where(OriginalStateNamesByNumber[i]=='NoResponse')
-            NoResponse=NoResponse[0]+1
-            EarlyLickDelay=np.where(OriginalStateNamesByNumber[i]=='EarlyLickDelay')
-            EarlyLickDelay=EarlyLickDelay[0]+1
-            EarlyLickSample=np.where(OriginalStateNamesByNumber[i]=='EarlyLickSample')
-            EarlyLickSample=EarlyLickSample[0]+1
-            itemindex = np.where(OriginalStateData[i]==StopLicking)
-            if np.any(OriginalStateData[i]==Reward):
-                outcome = 'hit'
-            elif np.any(OriginalStateData[i]==TimeOut):
-                outcome = 'miss'
-            elif np.any(OriginalStateData[i]==NoResponse):
-                outcome = 'ignore'
+
+            if ProtocolType==4:
+                itemindex = np.where(OriginalStateData[i]==15)
+                if np.any(OriginalStateData[i]==11):
+                    outcome = 'hit'
+                elif np.any(OriginalStateData[i]==14):
+                    outcome = 'miss'
+                elif np.any(OriginalStateData[i]==13):
+                    outcome = 'ignore'
+
             if ProtocolType==5:
-                if np.any(OriginalStateData[i]==EarlyLickDelay):
+                itemindex = np.where(OriginalStateData[i]==16)
+                if np.any(OriginalStateData[i]==5):
                     early_lick = 'early'
+                if np.any(OriginalStateData[i]==12):
+                    outcome = 'hit'
+                elif np.any(OriginalStateData[i]==15):
+                    outcome = 'miss'
+                elif np.any(OriginalStateData[i]==14):
+                    outcome = 'ignore'
+
             if ProtocolType>5:
-                if np.any(OriginalStateData[i]==EarlyLickDelay) or np.any(OriginalStateData[i]==EarlyLickSample):
+                itemindex = np.where(OriginalStateData[i]==17)
+                if np.any(OriginalStateData[i]==4) or np.any(OriginalStateData[i]==6):
                     early_lick = 'early'
+                if np.any(OriginalStateData[i]==13):
+                    outcome = 'hit'
+                elif np.any(OriginalStateData[i]==16):
+                    outcome = 'miss'
+                elif np.any(OriginalStateData[i]==15):
+                    outcome = 'ignore'
+            else:
+                itemindex = np.where(OriginalStateData[i]==1)
 
             Session.Trial().insert1((int(key[0]), int(key[1]), i, OriginalEventTimestamps[i][1], OriginalStateTimestamps[i][itemindex][0]))
             
