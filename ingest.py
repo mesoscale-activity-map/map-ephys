@@ -71,14 +71,20 @@ class ImportedSessionFileIngest(dj.Imported):
                 #return
 
             # lookup animal
-
+            log.info('looking up animal for {h2o}'.format(h2o=h2o))
             key['animal'] = (lab.Animal()
                              & (lab.AnimalWaterRestriction
                                 and {'water_restriction': h2o})).fetch1('animal')
+            log.info('got {animal}'.format(animal=key['animal']))
 
             # synthesize session
+            log.info('synthesizing session ID')
             key['session'] = (dj.U().aggr(experiment.Session(),
                                           n='max(session)').fetch1('n') or 0)+1
+
+
+            log.info('generated session id: {session}'.format(
+                session=key['session']))
 
             #if experiment.Session() & key:
                 # XXX: raise DataJointError?
@@ -96,6 +102,23 @@ if __name__ == '__main__':
         print("usage: {p} [populate]"
               .format(p=os.path.basename(sys.argv[0])))
         sys.exit(0)
+
+    try:
+        lab.Animal().insert1({
+            'animal': 399752,
+            'dob':  '2017-08-01'
+        })
+        lab.AnimalWaterRestriction().insert1({
+            'animal': 399752,
+            'water_restriction': 'dl7'
+        })
+        lab.Person().insert1({
+            'username': 'daveliu',
+            'fullname': 'Dave Liu'
+        })
+
+    except:
+        print("note: data existed", file=sys.stderr)
 
     logging.basicConfig(level=logging.ERROR)  # quiet other modules
     log.setLevel(logging.INFO)  # but show ours
