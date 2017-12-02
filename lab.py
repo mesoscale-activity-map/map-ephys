@@ -9,7 +9,6 @@ class Animal(dj.Manual):
     animal  : int    # Janelia ANM ID (6 digits)
     ---
     dob    : date
-	wr_num : varchar(6) # water restriction number 
     """
 
 
@@ -28,3 +27,13 @@ class Rig(dj.Manual):
     ---
     rig_description : varchar(1024) 
     """
+
+@schema
+class AnimalWaterRestriction(dj.Manual):
+    # separated from Animal since is not an initial attribute;
+    # potentially not applicable to all experiments
+    definition = """
+    -> Animal
+    water_restriction : varchar(6) # water restriction number
+    """
+
