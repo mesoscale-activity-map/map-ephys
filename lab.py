@@ -1,6 +1,6 @@
 import datajoint as dj
 
-schema = dj.schema('daveliu_map', locals())
+schema = dj.schema(dj.config['lab.database'], locals())
 
 
 @schema

@@ -1,7 +1,7 @@
 import datajoint as dj
 import lab, ccf
 
-schema = dj.schema('daveliu_map_experi', locals())
+schema = dj.schema('', locals())
 
 @schema
 class Task(dj.Lookup):
