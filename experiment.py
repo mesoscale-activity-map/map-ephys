@@ -17,6 +17,7 @@ class Task(dj.Lookup):
          ('s1 stim', 'S1 photostimulation task (2AFC)')
          ]
 
+
 @schema
 class Session(dj.Manual):
     definition = """
@@ -26,10 +27,8 @@ class Session(dj.Manual):
     session_date  : date
     -> lab.Person
     -> lab.Rig
-    behavior_file : varchar(255) # the behavior file name
     """
-    
-    
+
     class Trial(dj.Part):
         definition = """
         -> Session
