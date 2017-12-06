@@ -83,7 +83,7 @@ class ImportedSessionFileIngest(dj.Imported):
         # lookup animal
         log.info('looking up animal for {h2o}'.format(h2o=h2o))
         skey['animal'] = (lab.AnimalWaterRestriction()
-                          & {'water_restriction': h2o})).fetch1('animal')
+                          & {'water_restriction': h2o}).fetch1('animal')
         log.info('got {animal}'.format(animal=skey['animal']))
 
         # synthesize session id
