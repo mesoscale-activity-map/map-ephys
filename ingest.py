@@ -3,8 +3,9 @@
 import os
 import sys
 import logging
-from collections import namedtuple
 
+from collections import namedtuple
+from code import interact
 
 import scipy.io as spio
 import numpy as np
@@ -54,6 +55,7 @@ class ImportedSessionFileIngest(dj.Imported):
         #
         # Handle filename & Construct Session
         #
+        # interact('debugging make()', local=locals())
 
         fname = key['imported_session_file']
         fpath = os.path.join(dj.config['imported_session_path'], fname)
@@ -63,6 +65,10 @@ class ImportedSessionFileIngest(dj.Imported):
 
         # split files like 'dl7_TW_autoTrain_20171114_140357.mat'
         h2o, t1, t2, date, time = fname.split('.')[0].split('_')
+
+        if os.stat(fpath).st_size/1024 < 500:
+            log.info('skipping file {f} - too small'.format(f=fname))
+            return
 
         # '%%' due to datajoint-python/issues/376
         dups = (self & "imported_session_file like '%%{h2o}%%{date}%%'"
@@ -164,10 +170,10 @@ class ImportedSessionFileIngest(dj.Imported):
 
             tkey = dict(skey)
 
-            startindex = (np.where(t.state_data == states['PreSamplePeriod'])
+            startindex = (np.where(t.state_data == states['PreSamplePeriod'])[0]
                           if 'PreSamplePeriod' in states else 0)
 
-            endindex = (np.where(t.state_data == states['StopLicking'])
+            endindex = (np.where(t.state_data == states['StopLicking'])[0]
                         if 'StopLicking' in states else 0)
 
             # print(str(startindex))
@@ -180,83 +186,11 @@ class ImportedSessionFileIngest(dj.Imported):
             experiment.Session.Trial().insert1(tkey, ignore_extra_fields=True)
 
             #
-            # Add 'protocol' note
-            #
-
-            nkey = dict(tkey)
-            nkey['trial_note_type'] = 'protocol #'
-            nkey['trial_note'] = str(gui['ProtocolType'][0])
-            log.info('ImportedSessionFileIngest.make(): TrialNote().insert1')
-            experiment.TrialNote().insert1(nkey, ignore_extra_fields=True)
-
-            #
-            # Add presample event
-            #
-
-            ekey = dict(tkey)
-
-            sampleindex = (np.where(t.state_data == states['SamplePeriod'])
-                           if 'SamplePeriod' in states else 0)
-
-            ekey['trial_event_type'] = 'presample'
-            ekey['trial_event_time'] = t.state_times[startindex]
-            ekey['duration'] = (t.state_times[sampleindex]
-                                - t.state_times[startindex])
-            log.info('ImportedSessionFileIngest.make(): presample')
-            experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
-
-            #
-            # Add 'go' event
-            #
-
-            ekey = dict(tkey)
-
-            responseindex = (np.where(t.state_data == states['ResponseCue'])
-                             if 'ResponseCue' in states else 0)
-
-            ekey['trial_event_type'] = 'go'
-            ekey['trial_event_time'] = t.state_times[responseindex]
-            ekey['duration'] = gui['AnswerPeriod'][0]
-            log.info('ImportedSessionFileIngest.make(): go')
-            experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
-
-            #
-            # Add other 'sample' events
-            #
-
-            # TODO: not 100% here - can we index on contents of sampleindex?
-            log.info('ImportedSessionFileIngest.make(): sample events')
-            for s in sampleindex:
-                # todo: batch events
-                ekey = dict(tkey)
-                ekey['trial_event_type'] = 'sample'
-                ekey['trial_event_time'] = t.state_times[s]
-                ekey['duration'] = gui['SamplePeriod'][0]
-                experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
-
-            #
-            # Add 'delay' events
-            #
-
-            # TODO: not 100% here - can we index on contents of delayindex?
-            delayindex = (np.where(t.state_data == states['DelayPeriod'])
-                          if 'DelayPeriod' in states else 0)
-
-            log.info('ImportedSessionFileIngest.make(): delay events')
-            for d in delayindex:
-                # todo: batch events
-                ekey = dict(tkey)
-                ekey['trial_event_type'] = 'delay'
-                ekey['trial_event_time'] = t.state_times[d]
-                ekey['duration'] = gui['DelayPeriod'][0]
-                experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
-
-            #
             # Specific BehaviorTrial information for this trial
             #
 
             bkey = dict(tkey)
-            bkey['task'] = 'audio_delay'
+            bkey['task'] = 'audio delay'
 
             # determine trial instruction
 
@@ -315,37 +249,120 @@ class ImportedSessionFileIngest(dj.Imported):
             experiment.BehaviorTrial().insert1(bkey, ignore_extra_fields=True)
 
             #
+            # Add 'protocol' note
+            #
+
+            nkey = dict(tkey)
+            nkey['trial_note_type'] = 'protocol #'
+            nkey['trial_note'] = str(gui['ProtocolType'][0])
+            log.info('ImportedSessionFileIngest.make(): TrialNote().insert1')
+            experiment.TrialNote().insert1(nkey, ignore_extra_fields=True)
+
+            #
+            # Add presample event
+            #
+
+            ekey = dict(tkey)
+
+            sampleindex = (np.where(t.state_data == states['SamplePeriod'])
+                           if 'SamplePeriod' in states else [0])
+
+            ekey['trial_event_type'] = 'presample'
+            ekey['trial_event_time'] = t.state_times[startindex]
+            ekey['duration'] = (t.state_times[sampleindex[0]]
+                                - t.state_times[startindex])
+            log.info('ImportedSessionFileIngest.make(): presample')
+            experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
+
+            #
+            # Add 'go' event
+            #
+
+            ekey = dict(tkey)
+
+            responseindex = (np.where(t.state_data == states['ResponseCue'])
+                             if 'ResponseCue' in states else 0)
+
+            ekey['trial_event_type'] = 'go'
+            ekey['trial_event_time'] = t.state_times[responseindex]
+            ekey['duration'] = gui['AnswerPeriod'][0]
+            log.info('ImportedSessionFileIngest.make(): go')
+            experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
+
+            #
+            # Add other 'sample' events
+            #
+
+            # TODO: not 100% here - can we index on contents of sampleindex?
+            log.info('ImportedSessionFileIngest.make(): sample events')
+            for s in sampleindex:
+                # todo: batch events
+                ekey = dict(tkey)
+                ekey['trial_event_type'] = 'sample'
+                ekey['trial_event_time'] = t.state_times[s]
+                ekey['duration'] = gui['SamplePeriod'][0]
+                experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
+
+            #
+            # Add 'delay' events
+            #
+
+            # TODO: not 100% here - can we index on contents of delayindex?
+            delayindex = (np.where(t.state_data == states['DelayPeriod'])
+                          if 'DelayPeriod' in states else [0])
+
+            log.info('ImportedSessionFileIngest.make(): delay events')
+            for d in delayindex:
+                # todo: batch events
+                ekey = dict(tkey)
+                ekey['trial_event_type'] = 'delay'
+                ekey['trial_event_time'] = t.state_times[d]
+                ekey['duration'] = gui['DelayPeriod'][0]
+                experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
+
+            #
             # Add lick events
             #
 
-            lickleft = np.where(t.event_data == 69)
+            lickleft = np.where(t.event_data == 69)[0]
 
-            if lickleft:
-                # XXX: needs testing.
+            if len(lickleft):
+                # TODO: is 'sample' the type?
+                # TODO: are trial event time and action event time same?
                 log.info('ImportedSessionFileIngest.make(): left licks')
+                leftlicks = list((dict(**tkey,
+                                       trial_event_type='sample',
+                                       trial_event_time=t.event_times[l],
+                                       action_event_type='left lick',
+                                       action_event_time=t.event_times[l],
+                                       duration=1)
+                                  for l in lickleft))
+
                 experiment.ActionEvent().insert(
-                    list((dict(**tkey,
-                               trial_event_type='left lick',
-                               trial_event_time=t.event_times[l],
-                               duration=1)
-                          for l in lickleft)))
+                    leftlicks, ignore_extra_fields=True)
 
-            lickright = np.where(t.event_data == 70)
-
-            if lickright:
-                # XXX: needs testing.
+            lickright = np.where(t.event_data == 70)[0]
+            log.info('... lickright: {r}'.format(r=str(lickright)))
+            # interact('lickright', local=locals())
+            if len(lickright):
+                # TODO: is 'sample' the type?
+                # TODO: are trial event time and action event time same?
                 log.info('ImportedSessionFileIngest.make(): right licks')
+                rightlicks = list((dict(**tkey,
+                                        trial_event_type='sample',
+                                        trial_event_time=t.event_times[r],
+                                        action_event_type='right lick',
+                                        action_event_time=t.event_times[r],
+                                        duration=1)
+                                   for r in lickright))
+
                 experiment.ActionEvent().insert(
-                    list((dict(**tkey,
-                               trial_event_type='right lick',
-                               trial_event_time=t.event_times[r],
-                               duration=1)
-                          for r in lickright)))
+                    rightlicks, ignore_extra_fields=True)
 
             # end of trial loop.
 
         # save a record here to prevent future loading
-        self.insert1(key, ignore_extra_fields=True)
+        self.insert1(dict(**key, **skey), ignore_extra_fields=True)
 
 
 if __name__ == '__main__':
