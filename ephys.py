@@ -20,6 +20,7 @@ class Probe(dj.Lookup):
 @schema
 class ElectrodeGroup(dj.Manual):
     definition = """
+    # Electrode
     -> experiment.Session
     electrode_group :  tinyint
     ---
@@ -76,6 +77,10 @@ class Ephys(dj.Imported):
         -> ElectrodeGroup.Electrode
         -> experiment.Session.Trial
         """
+
+    def make(self, key):
+        print(key)
+
 
 @schema
 class ElectrodePosition(dj.Manual):
