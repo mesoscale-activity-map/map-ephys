@@ -28,11 +28,13 @@ class ElectrodeGroup(dj.Manual):
     ephys_filepath  : varchar(255)   #  
     """
     
-    class Electrode(dj.Part):
+    class Electrode(dj.Part): # Can we force insert the electrode here? I am running into a lot of problems with the int types
         definition = """
         -> ElectrodeGroup
         electrode : smallint
         """
+    def make(self, key):
+        print (key)
         
 @schema
 class LabeledTrack(dj.Manual):
@@ -47,6 +49,8 @@ class LabeledTrack(dj.Manual):
         -> LabeledTrack
         -> ccf.CCF
         """
+import numpy as np
+import h5py
 
 @schema
 class Ephys(dj.Imported):
@@ -80,6 +84,8 @@ class Ephys(dj.Imported):
 
     def make(self, key):
         print(key)
+        #print(key['ephys_filepath'])
+        #Unit().insert() # batch insert the units
 
 
 @schema

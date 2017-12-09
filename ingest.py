@@ -16,7 +16,8 @@ import experiment
 if 'imported_session_path' not in dj.config:
     #dj.config['imported_session_path'] = 'R:\\Arduino\\Bpod_Train1\\Bpod Local\\Data\\dl7\\TW_autoTrain\\Session Data\\'
     #dj.config['imported_session_path'] = 'Z:\\MATLAB\\Bpod Local\\Data\\dl7\\TW_autoTrain\\Session Data\\'
-    dj.config['imported_session_path'] = 'S:\\MATLAB\\Bpod Local\\Data\\dl8\\TW_autoTrain\\Session Data\\'
+    #dj.config['imported_session_path'] = 'S:\\MATLAB\\Bpod Local\\Data\\dl8\\TW_autoTrain\\Session Data\\'
+    dj.config['imported_session_path'] = 'C:\\Users\\liul.HHMI\\Desktop\\' # path should depend on the rig
 
 log = logging.getLogger(__name__)
 schema = dj.schema(dj.config['ingest.database'], locals())
@@ -24,7 +25,7 @@ schema = dj.schema(dj.config['ingest.database'], locals())
 
 def _listfiles():
     return (f for f in os.listdir(dj.config['imported_session_path'])
-            if f.endswith('.mat'))
+            if f.endswith('.mat')) # need to end with 6 numbers
 
 
 @schema
@@ -82,7 +83,7 @@ class ImportedSessionFileIngest(dj.Imported):
             # synthesize session
             log.info('synthesizing session ID')
             key['session'] = (dj.U().aggr(experiment.Session(),
-                                          n='max(session)').fetch1('n') or 0)+1
+                                          n='max(session)').fetch1('n') or 0)+1 # it should be the max(session) for each animal
 
             log.info('generated session id: {session}'.format(
                 session=key['session']))
@@ -93,15 +94,13 @@ class ImportedSessionFileIngest(dj.Imported):
             GUI = TrialSettings[0][0]
             ProtocolType = GUI.flatten()[0][10]
             if ProtocolType > 3:
-                experiment.Session().insert1((key['animal'], key['session'], date[0:4]+'-'+date[4:6]+'-'+date[6:8],'daveliu', 'TRig2', key['imported_session_file']))
+                experiment.Session().insert1((key['animal'], key['session'], date[0:4]+'-'+date[4:6]+'-'+date[6:8],'daveliu', 'RRig', key['imported_session_file'])) # change the rig based on the file path
                 #if experiment.Session() & key:
                     # XXX: raise DataJointError?
                     #log.warning("Warning! session exists for {f}".format(fname))
     
                 TrialTypes=SessionData.flatten()[0][0]
-                #RawData=SessionData.flatten()[0][7]
                 RawData=SessionData.flatten()[0][-4] # Hack, need to fix
-                #TrialSettings=SessionData.flatten()[0][10]
                 TrialSettings=SessionData.flatten()[0][-1] # Hack Need to fix
                 OriginalStateNamesByNumber=RawData.flatten()[0][0]
                 OriginalStateData=RawData.flatten()[0][1]
