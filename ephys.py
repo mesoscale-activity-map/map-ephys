@@ -60,6 +60,7 @@ class Ephys(dj.Imported):
     
     class Unit(dj.Part):
         definition = """
+        # Sorted unit
         -> Ephys
         unit  : smallint
         ---        
@@ -86,6 +87,8 @@ class Ephys(dj.Imported):
         print(key)
         #print(key['ephys_filepath'])
         #Unit().insert() # batch insert the units
+        #TrialUnit().insert() # batch insert the TrialUnit
+        #Spike().insert() # batch insert the Spike
 
 
 @schema
