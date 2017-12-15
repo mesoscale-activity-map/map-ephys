@@ -18,10 +18,10 @@ import experiment
 
 
 # scratch for ingest paths - to be adapted/formalized for multiple rig load
-'R:\\Arduino\\Bpod_Train1\\Bpod Local\\Data\\dl7\\TW_autoTrain\\Session Data\\'
-'Z:\\MATLAB\\Bpod Local\\Data\\dl7\\TW_autoTrain\\Session Data\\'
-'S:\\MATLAB\\Bpod Local\\Data\\dl8\\TW_autoTrain\\Session Data\\'
-'S:\\MATLAB\\Bpod Local\\Data\\dl8\\TW_autoTrain\\Session Data\\'
+r'R:\Arduino\Bpod_Train1\Bpod Local\Data\dl7\TW_autoTrain\Session Data'
+r'Z:\MATLAB\Bpod Local\Data\dl7\TW_autoTrain\Session Data'
+r'S:\MATLAB\Bpod Local\Data\dl8\TW_autoTrain\Session Data'
+r'S:\MATLAB\Bpod Local\Data\dl8\TW_autoTrain\Session Data'
 
 
 if 'imported_session_path' not in dj.config:
