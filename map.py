@@ -14,7 +14,7 @@ import ccf
 import ingest
 
 log = logging.getLogger(__name__)
-__all__ = [ephys, lab, experiment, ccf]
+__all__ = [ephys, lab, experiment, ccf, ingest]
 [ dj ]  # NOQA flake8 
 
 
@@ -27,13 +27,14 @@ def usage_exit():
 def logsetup(*args):
     logging.basicConfig(level=logging.ERROR)
     log.setLevel(logging.INFO)
-    log.setLevel(logging.INFO)
     logging.getLogger('ingest').setLevel(logging.INFO)
 
 
 def populate(*args):
-    ingest.ImportedSessionFile().populate()
-    ingest.ImportedSessionFileIngest().populate()
+    ingest.ImportedSessionFile().populate(
+        reserve_jobs=True, ignore_errors=True)
+    ingest.ImportedSessionFileIngest().populate(
+        reserve_jobs=True, ignore_errors=True)
 
 
 def shell(*args):
