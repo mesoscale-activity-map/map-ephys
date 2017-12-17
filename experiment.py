@@ -21,7 +21,8 @@ class Task(dj.Lookup):
 class Session(dj.Manual):
     definition = """
     -> lab.Animal
-    session : smallint 		# session number
+    #session : smallint 		# session number (change to int for now)
+    session : int 		# session number
     ---
     session_date  : date
     -> lab.Person

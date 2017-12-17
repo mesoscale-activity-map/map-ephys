@@ -15,9 +15,9 @@ import experiment
 
 if 'imported_session_path' not in dj.config:
     #dj.config['imported_session_path'] = 'R:\\Arduino\\Bpod_Train1\\Bpod Local\\Data\\dl7\\TW_autoTrain\\Session Data\\'
-    #dj.config['imported_session_path'] = 'Z:\\MATLAB\\Bpod Local\\Data\\dl7\\TW_autoTrain\\Session Data\\'
+    dj.config['imported_session_path'] = 'Z:\\MATLAB\\Bpod Local\\Data\\dl7\\TW_autoTrain\\Session Data\\'
     #dj.config['imported_session_path'] = 'S:\\MATLAB\\Bpod Local\\Data\\dl8\\TW_autoTrain\\Session Data\\'
-    dj.config['imported_session_path'] = 'C:\\Users\\liul.HHMI\\Desktop\\' # path should depend on the rig
+    #dj.config['imported_session_path'] = 'C:\\Users\\liul.HHMI\\Desktop\\' # path should depend on the rig
 
 log = logging.getLogger(__name__)
 schema = dj.schema(dj.config['ingest.database'], locals())
@@ -82,7 +82,7 @@ class ImportedSessionFileIngest(dj.Imported):
 
             # synthesize session
             log.info('synthesizing session ID')
-            key['session'] = (dj.U().aggr(experiment.Session(),
+            key['session'] = (dj.U().aggr(experiment.Session() & {'animal': animal},
                                           n='max(session)').fetch1('n') or 0)+1 # it should be the max(session) for each animal
 
             log.info('generated session id: {session}'.format(
@@ -94,7 +94,7 @@ class ImportedSessionFileIngest(dj.Imported):
             GUI = TrialSettings[0][0]
             ProtocolType = GUI.flatten()[0][10]
             if ProtocolType > 3:
-                experiment.Session().insert1((key['animal'], key['session'], date[0:4]+'-'+date[4:6]+'-'+date[6:8],'daveliu', 'RRig', key['imported_session_file'])) # change the rig based on the file path
+                experiment.Session().insert1((key['animal'], key['session'], date[0:4]+'-'+date[4:6]+'-'+date[6:8],'daveliu', 'RRig')) # change the rig based on the file path
                 #if experiment.Session() & key:
                     # XXX: raise DataJointError?
                     #log.warning("Warning! session exists for {f}".format(fname))
