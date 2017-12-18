@@ -99,9 +99,10 @@ class Ephys(dj.Imported):
         clu_ids_diff = np.where(clu_ids_diff != 0)[0] + 1 #
         units = np.split(spike_times, clu_ids_diff) # sub arrays of spike_times
         #TODO: subtract the viT_offset_file from each trial, and divide the sampling rate
-        unit_ids = np.arange(len(clu_ids_diff)) # unit number
+        unit_ids = np.arange(len(clu_ids_diff)+1) # unit number
         #TODO: insert the unit_ids with the units
         #Unit().insert((unit_ids, units)) # batch insert the units
+		
         #TODO: fetch the trial from experiment.Session.Trial
         #TrialUnit().insert() # batch insert the TrialUnit
         #Spike().insert() # batch insert the Spike
