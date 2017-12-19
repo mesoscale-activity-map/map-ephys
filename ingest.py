@@ -1,12 +1,9 @@
 #! /usr/bin/env python
 
 import os
-import sys
 import logging
 
 from collections import namedtuple
-from code import interact
-import yaml
 
 import scipy.io as spio
 import numpy as np
