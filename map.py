@@ -31,10 +31,9 @@ def logsetup(*args):
 
 
 def populate(*args):
-    ingest.ImportedSessionFile().populate(
-        reserve_jobs=True, ignore_errors=True)
-    ingest.ImportedSessionFileIngest().populate(
-        reserve_jobs=True, ignore_errors=True)
+    ingest.RigDataFile().populate()  # populate overridden; jobs n/a & ni
+    ingest.RigDataFileIngest().populate(
+        reserve_jobs=True, suppress_errors=True)
 
 
 def shell(*args):

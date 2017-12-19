@@ -17,44 +17,70 @@ import lab
 import experiment
 
 
-# scratch for ingest paths - to be adapted/formalized for multiple rig load
-r'R:\Arduino\Bpod_Train1\Bpod Local\Data\dl7\TW_autoTrain\Session Data'
-r'Z:\MATLAB\Bpod Local\Data\dl7\TW_autoTrain\Session Data'
-r'S:\MATLAB\Bpod Local\Data\dl8\TW_autoTrain\Session Data'
-r'S:\MATLAB\Bpod Local\Data\dl8\TW_autoTrain\Session Data'
-
-
-if 'imported_session_path' not in dj.config:
-    dj.config['imported_session_path'] = 'R:\\Arduino\\Bpod_Train1\\Bpod Local\\Data\\dl7\\TW_autoTrain\\Session Data\\'
-
 log = logging.getLogger(__name__)
 schema = dj.schema(dj.config['ingest.database'], locals())
 
 
-def _listfiles():
-    return (f for f in os.listdir(dj.config['imported_session_path'])
-            if f.endswith('.mat'))
-
-
 @schema
-class ImportedSessionFile(dj.Lookup):
-    # TODO: more representative class name
+class RigDataPath(dj.Lookup):
+    ''' rig storage locations '''
+    # todo: cross platform path mapping needed?
     definition = """
-    imported_session_file:         varchar(255)    # imported session file
+    -> lab.Rig
+    ---
+    rig_data_path:             varchar(1024)           # rig data path
     """
 
-    contents = ((f,) for f in (_listfiles()))
+    @property
+    def contents(self):
+        if 'rig_data_paths' in dj.config:  # for local testing
+            return dj.config['rig_data_paths']
 
-    def populate(self):
-        for f in _listfiles():
-            if not self & {'imported_session_file': f}:
-                self.insert1((f,))
+        return (('TRig1', r'\\data\rig1'),
+                ('TRig2', r'\\data\rig2'))
 
 
 @schema
-class ImportedSessionFileIngest(dj.Imported):
+class RigDataFile(dj.Imported):
+    ''' files in rig-specific storage '''
     definition = """
-    -> ImportedSessionFile
+    -> RigDataPath
+    rig_data_file:              varchar(255)          # rig file subpath
+    """
+
+    @property
+    def key_source(self):
+        return RigDataPath()
+
+    def make(self, key):
+        print('key:', key)
+        rig, data_path = (RigDataPath & dict(rig=key['rig'])).fetch1().values()
+        log.info('RigDataFile.make(): searching %s' % rig)
+
+        initial = list(k['rig_data_file'] for k in
+                       (self & key).fetch(as_dict=True))
+
+        for root, dirs, files in os.walk(data_path):
+            log.debug('RigDataFile.make(): traversing %s' % root)
+            subpaths = list(os.path.join(root, f)
+                            .split(data_path)[1].lstrip(os.path.sep)
+                            for f in files if f.endswith('.mat'))
+
+            self.insert(list((rig, f,) for f in subpaths if f not in initial))
+
+    def populate(self):
+        '''
+        Overriding populate since presence of any rig_data_file
+        will prevent that key to be given to Make.
+        '''
+        for k in self.key_source.fetch(as_dict=True):
+            self.make(k)
+
+
+@schema
+class RigDataFileIngest(dj.Imported):
+    definition = """
+    -> RigDataFile
     ---
     -> experiment.Session
     """
@@ -65,22 +91,27 @@ class ImportedSessionFileIngest(dj.Imported):
         # Handle filename & Construct Session
         #
 
-        fname = key['imported_session_file']
-        fpath = os.path.join(dj.config['imported_session_path'], fname)
+        rigdir = (RigDataPath() & key).fetch1('rig_data_path')
+        rigfile = key['rig_data_file']
+        filename = os.path.basename(rigfile)
+        fullpath = os.path.join(rigdir, rigfile)
 
-        log.info('ImportedSessionFileIngest.make(): Loading {f}'
-                 .format(f=fname))
+        log.debug('RigDataFileIngest.make(): {f}'
+                  .format(f=dict(rigdir=rigdir, rigfile=rigfile,
+                                 filename=filename, fullpath=fullpath)))
+
+        log.info('RigDataFileIngest.make(): Loading {f}'
+                 .format(f=fullpath))
 
         # split files like 'dl7_TW_autoTrain_20171114_140357.mat'
-        h2o, t1, t2, date, time = fname.split('.')[0].split('_')
+        h2o, t1, t2, date, time = filename.split('.')[0].split('_')
 
-        if os.stat(fpath).st_size/1024 < 500:
-            log.info('skipping file {f} - too small'.format(f=fname))
+        if os.stat(fullpath).st_size/1024 < 500:
+            log.info('skipping file {f} - too small'.format(f=fullpath))
             return
 
         # '%%' vs '%' due to datajoint-python/issues/376
-        dups = (ImportedSessionFile()
-                & "imported_session_file like '%%{h2o}%%{date}%%'"
+        dups = (self & "rig_data_file like '%%{h2o}%%{date}%%'"
                 .format(h2o=h2o, date=date))
 
         if len(dups) > 1:
@@ -109,7 +140,7 @@ class ImportedSessionFileIngest(dj.Imported):
         skey['rig'] = 'TRig1'
 
         if experiment.Session() & skey:
-            log.warning("Warning! session exists for {f}".format(fname))
+            log.warning("Warning! session exists for {f}".format(rigfile))
 
         log.debug('ImportedSessionFileIngest.make(): adding session record')
         # XXX: note - later breaks can result in Sessions without valid trials
@@ -119,7 +150,7 @@ class ImportedSessionFileIngest(dj.Imported):
         # Extract trial data from file & prepare trial loop
         #
 
-        mat = spio.loadmat(fpath, squeeze_me=True)
+        mat = spio.loadmat(fullpath, squeeze_me=True)
         SessionData = mat['SessionData'].flatten()
 
         AllTrialTypes = SessionData['TrialTypes'][0]
