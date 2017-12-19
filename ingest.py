@@ -400,13 +400,12 @@ class RigDataFileIngest(dj.Imported):
             log.debug('... lickleft: {r}'.format(r=str(lickleft)))
             if len(lickleft):
                 # TODO: is 'sample' the type?
-                leftlicks = list((dict(**tkey,
-                                       trial_event_type='sample',
-                                       trial_event_time=t.event_times[l],
-                                       action_event_type='left lick',
-                                       action_event_time=t.event_times[l],
-                                       duration=1)
-                                  for l in lickleft))
+                leftlicks = list(
+                    (dict(**tkey, trial_event_type='sample',
+                          trial_event_time=t.event_times[l],
+                          action_event_type='left lick',
+                          action_event_time=t.event_times[l], duration=1)
+                     for l in lickleft))
 
                 experiment.ActionEvent().insert(
                     leftlicks, ignore_extra_fields=True)
@@ -415,13 +414,12 @@ class RigDataFileIngest(dj.Imported):
             log.debug('... lickright: {r}'.format(r=str(lickright)))
             if len(lickright):
                 # TODO: is 'sample' the type?
-                rightlicks = list((dict(**tkey,
-                                        trial_event_type='sample',
-                                        trial_event_time=t.event_times[r],
-                                        action_event_type='right lick',
-                                        action_event_time=t.event_times[r],
-                                        duration=1)
-                                   for r in lickright))
+                rightlicks = list(
+                    (dict(**tkey, trial_event_type='sample',
+                          trial_event_time=t.event_times[r],
+                          action_event_type='right lick',
+                          action_event_time=t.event_times[r], duration=1)
+                     for r in lickright))
 
                 experiment.ActionEvent().insert(
                     rightlicks, ignore_extra_fields=True)
