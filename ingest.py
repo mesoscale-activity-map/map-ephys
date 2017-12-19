@@ -137,7 +137,8 @@ class RigDataFileIngest(dj.Imported):
         skey['session'] = session
         skey['session_date'] = date[0:4] + '-' + date[4:6] + '-' + date[6:8]
         skey['username'] = 'daveliu'
-        skey['rig'] = 'TRig1'
+        skey['rig'] = key['rig']
+        key = dict(key, **skey)
 
         if experiment.Session() & skey:
             log.warning("Warning! session exists for {f}".format(rigfile))
@@ -430,5 +431,5 @@ class RigDataFileIngest(dj.Imported):
 
             # end of trial loop.
 
-        # save a record here to prevent future loading
-        self.insert1(dict(**key, **skey), ignore_extra_fields=True)
+        log.debug('RigDataFileIngest.make(): saving ingest {d}'.format(d=key))
+        self.insert1(key, ignore_extra_fields=True)
