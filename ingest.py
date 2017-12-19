@@ -53,7 +53,7 @@ class RigDataFile(dj.Imported):
         return RigDataPath()
 
     def make(self, key):
-        print('key:', key)
+        log.info('RigDataFIle.make(): key:', key)
         rig, data_path = (RigDataPath & dict(rig=key['rig'])).fetch1().values()
         log.info('RigDataFile.make(): searching %s' % rig)
 
@@ -242,8 +242,8 @@ class RigDataFileIngest(dj.Imported):
                 continue
 
             protocol_type = gui['ProtocolType'][0]
-            if gui['ProtocolType'][0] < 5:
-                log.info('skipping trial {i}; protocol {n} < 5'
+            if gui['ProtocolType'][0] < 4:
+                log.info('skipping trial {i}; protocol {n} < 4'
                          .format(i=i, n=gui['ProtocolType'][0]))
                 continue
 
