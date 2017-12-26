@@ -15,7 +15,7 @@ class Probe(dj.Lookup):
     probe_description :  varchar(1023)
     """
     contents = [
-        ('123123123', 'neuropixel probe')
+        ('15131808323', 'neuropixels probe O3')
     ]
 
 
@@ -24,8 +24,7 @@ class ElectrodeGroup(dj.Manual):
     definition = """
     # Electrode
     -> experiment.Session
-    #electrode_group :  tinyint
-    electrode_group :  int # Electrode_group is like the probe
+    electrode_group : tinyint # Electrode_group is like the probe
     ---
     -> Probe
     ephys_filepath  : varchar(255)   #  
@@ -34,12 +33,14 @@ class ElectrodeGroup(dj.Manual):
     class Electrode(dj.Part): # Can we force insert the electrode here? I am running into a lot of problems with the datatype cannot be inserted
         definition = """
         -> ElectrodeGroup
-        #electrode : smallint # sites on the electrode (int for now)
-        electrode : int
+        electrode : smallint # sites on the electrode
         """
     def make(self, key):
-        print (key)
-        # TODO: For now, 374 electrodes for 1 electrode group
+        part_no = (ElectrodeGroup() & key).fetch1('probe_part_no')
+        probe = (Probe() & part_no).fetch1()
+        if probe['probe_description'] == 'neuropixels probe O3':
+            # Fetch the Probe corresponding to this session. If Neuropixel probe in the probe_description, then 374 electrodes for 1 electrode group
+            ElectrodeGroup.Electrode().insert(list(dict(key, electrode = x) for x in range (1,375)))
         
 @schema
 class LabeledTrack(dj.Manual):
@@ -88,24 +89,36 @@ class Ephys(dj.Imported):
         """
 
     def make(self, key):
-        f = h5py.File(key['ephys_filepath'],'r')
+        print(key)
+        filepath = (ElectrodeGroup() & key).fetch1('ephys_filepath')
+        f = h5py.File(filepath,'r')
         ind = np.argsort(f['S_clu']['viClu'][0]) # index sorted by cluster
         cluster_ids = f['S_clu']['viClu'][0][ind] # cluster (unit) number
         spike_times = f['viTime_spk'][0][ind] # spike times
+        viSite_spk = f['viSite_spk'][0][ind] # electrode site for the spike
         viT_offset_file = f['viT_offset_file'][:] # start of each trial, subtract this number for each trial
         sRateHz = f['P']['sRateHz'][0] # sampling rate
-        #TODO: Get the position of each spike: either from mrPos_spk or cviSpk_site
-        clu_ids_diff = np.diff(cluster_ids)
-        clu_ids_diff = np.where(clu_ids_diff != 0)[0] + 1 #
+        spike_trials = np.ones(len(spike_times)) * len(viT_offset_file) # every spike is in the last trial
+        for i in range(len(viT_offset_file) - 1, 0, -1): #find the trials each unit has a spike in
+            spike_trials[np.where(spike_times < viT_offset_file[i])] = i # Get the trial number of each spike
+        clu_ids_diff = np.diff(cluster_ids) # where the units seperate
+        clu_ids_diff = np.where(clu_ids_diff != 0)[0] + 1 # seperate the spike_times
         units = np.split(spike_times, clu_ids_diff) # sub arrays of spike_times
-        #TODO: subtract the viT_offset_file from each trial, and divide the sampling rate
-        unit_ids = np.arange(len(clu_ids_diff)+1) # unit number
+        trialunits = np.split(spike_trials, clu_ids_diff) # sub arrays of spike_trials
+        unit_ids = np.arange(len(clu_ids_diff) + 1) # unit number
+        trialunits1 = [] # array of unit number
+        trialunits2 = [] # array of trial number
+        for i in range(0,len(trialunits)):
+            trialunits2 = np.append(trialunits2, np.unique(trialunits[i]))
+            trialunits1 = np.append(trialunits1, np.zeros(len(np.unique(trialunits[i]))) + i)
         #TODO: insert the unit_ids with the units
-        #Unit().insert((unit_ids, units)) # batch insert the units
-		
-        #TODO: fetch the trial from experiment.Session.Trial
-        #TrialUnit().insert() # batch insert the TrialUnit
-        #Spike().insert() # batch insert the Spike
+        Ephys.Unit().insert(list(dict(key, unit = x, spike_times = units[x]) for x in unit_ids)) # batch insert the units
+        #Error: cannot add or update a child row: a foreign key contrain fail
+        # TODO: How to link Trial and Unit across schema?
+        #experiment.Session.Trial() #TODO: fetch the trial from experiment.Session.Trial ?
+        #Ephys.TrialUnit().insert(list(dict(key, unit = trialunits1[x], trial = trialunits2[x]) for x in range(0, len(trialunits2)))) # batch insert the TrialUnit (key, unit, trial)
+        #TODO: subtract the viT_offset_file from each trial, and divide the sampling rate, sRateHz
+        #Ephys.Spike().insert(list(dict(key, unit = cluster_ids[x], spike_time = spike_times[x], electrode = viSite_spk[x], trial = spike_trials[x]) for x in cluster_ids)) # batch insert the Spikes (key, unit, spike_time, electrode, trial)
 
 @schema
 class ElectrodePosition(dj.Manual):
