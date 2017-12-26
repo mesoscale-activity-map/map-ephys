@@ -118,7 +118,7 @@ class Ephys(dj.Imported):
         #experiment.Session.Trial() #TODO: fetch the trial from experiment.Session.Trial ?
         #Ephys.TrialUnit().insert(list(dict(key, unit = trialunits1[x], trial = trialunits2[x]) for x in range(0, len(trialunits2)))) # batch insert the TrialUnit (key, unit, trial)
         #TODO: subtract the viT_offset_file from each trial, and divide the sampling rate, sRateHz
-        #Ephys.Spike().insert(list(dict(key, unit = cluster_ids[x], spike_time = spike_times[x], electrode = viSite_spk[x], trial = spike_trials[x]) for x in cluster_ids)) # batch insert the Spikes (key, unit, spike_time, electrode, trial)
+        #Ephys.Spike().insert(list(dict(key, unit = x, spike_time = spike_times[x], electrode = viSite_spk[x], trial = spike_trials[x]) for x in cluster_ids)) # batch insert the Spikes (key, unit, spike_time, electrode, trial)
 
 @schema
 class ElectrodePosition(dj.Manual):
