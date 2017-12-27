@@ -15,7 +15,7 @@ import experiment
 
 if 'imported_session_path' not in dj.config:
     #dj.config['imported_session_path'] = 'R:\\Arduino\\Bpod_Train1\\Bpod Local\\Data\\dl7\\TW_autoTrain\\Session Data\\'
-    dj.config['imported_session_path'] = 'Z:\\MATLAB\\Bpod Local\\Data\\dl7\\TW_autoTrain\\Session Data\\'
+    dj.config['imported_session_path'] = 'Z:\\MATLAB\\Bpod Local\\Data\\dl7\\TW_autoTrain\\Session Data\\' # the data path contains the water restriction number
     #dj.config['imported_session_path'] = 'S:\\MATLAB\\Bpod Local\\Data\\dl8\\TW_autoTrain\\Session Data\\'
     #dj.config['imported_session_path'] = 'C:\\Users\\liul.HHMI\\Desktop\\' # path should depend on the rig
 
