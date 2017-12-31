@@ -1,8 +1,9 @@
 #! /usr/bin/env python
 
 import os
-import sys
 import logging
+
+from collections import namedtuple
 
 import scipy.io as spio
 import numpy as np
@@ -13,202 +14,428 @@ import lab
 import experiment
 
 
-if 'imported_session_path' not in dj.config:
-    #dj.config['imported_session_path'] = 'R:\\Arduino\\Bpod_Train1\\Bpod Local\\Data\\dl7\\TW_autoTrain\\Session Data\\'
-    dj.config['imported_session_path'] = 'Z:\\MATLAB\\Bpod Local\\Data\\dl7\\TW_autoTrain\\Session Data\\' # the data path contains the water restriction number
-    #dj.config['imported_session_path'] = 'S:\\MATLAB\\Bpod Local\\Data\\dl8\\TW_autoTrain\\Session Data\\'
-    #dj.config['imported_session_path'] = 'C:\\Users\\liul.HHMI\\Desktop\\' # path should depend on the rig
-
 log = logging.getLogger(__name__)
 schema = dj.schema(dj.config['ingest.database'], locals())
 
 
-def _listfiles():
-    return (f for f in os.listdir(dj.config['imported_session_path'])
-            if f.endswith('.mat')) # need to end with 6 numbers
-
-
 @schema
-class ImportedSessionFile(dj.Lookup):
-    # TODO: more representative class name
+class RigDataPath(dj.Lookup):
+    ''' rig storage locations '''
+    # todo: cross platform path mapping needed?
     definition = """
-    imported_session_file:         varchar(255)    # imported session file
+    -> lab.Rig
+    ---
+    rig_data_path:             varchar(1024)           # rig data path
     """
 
-    contents = ((f,) for f in (_listfiles()))
+    @property
+    def contents(self):
+        if 'rig_data_paths' in dj.config:  # for local testing
+            return dj.config['rig_data_paths']
 
-    def populate(self):
-        for f in _listfiles():
-            if not self & {'imported_session_file': f}:
-                self.insert1((f,))
+        return (('RRig', r'H:\\data\bpodRecord'), ('TRig1', r'R:\\Arduino\Bpod_Train1\Bpod Local\Data'),
+                ('TRig2', r'S:\\MATLAB\Bpod Local\Data'))
 
 
 @schema
-class ImportedSessionFileIngest(dj.Imported):
+class RigDataFile(dj.Imported):
+    ''' files in rig-specific storage '''
     definition = """
-    -> ImportedSessionFile
+    -> RigDataPath
+    rig_data_file:              varchar(255)          # rig file subpath
+    """
+
+    @property
+    def key_source(self):
+        return RigDataPath()
+
+    def make(self, key):
+        log.info('RigDataFIle.make(): key:', key)
+        rig, data_path = (RigDataPath & dict(rig=key['rig'])).fetch1().values()
+        log.info('RigDataFile.make(): searching %s' % rig)
+
+        initial = list(k['rig_data_file'] for k in # only add the new files, have to overwrite populate for this: populate checks the primary key upstream, but this is the dir
+                       (self & key).fetch(as_dict=True))
+
+        for root, dirs, files in os.walk(data_path): # oswalk goes through subpath
+            log.debug('RigDataFile.make(): traversing %s' % root)
+            subpaths = list(os.path.join(root, f)
+                            .split(data_path)[1].lstrip(os.path.sep)
+                            for f in files if f.endswith('.mat'))
+
+            self.insert(list((rig, f,) for f in subpaths if f not in initial)) #add the new file
+
+    def populate(self):
+        '''
+        Overriding populate since presence of any rig_data_file
+        will prevent that key to be given to Make.
+        '''
+        for k in self.key_source.fetch(as_dict=True):
+            self.make(k)
+
+
+@schema
+class RigDataFileIngest(dj.Imported):
+    definition = """
+    -> RigDataFile
     ---
     -> experiment.Session
     """
 
     def make(self, key):
 
-        fname = key['imported_session_file']
-        fpath = os.path.join(dj.config['imported_session_path'], fname)
+        #
+        # Handle filename & Construct Session
+        #
 
-        log.info('ImportedSessionFileIngest.make(): Loading {f}'
-                 .format(f=fname))
+        rigdir = (RigDataPath() & key).fetch1('rig_data_path')
+        rigfile = key['rig_data_file']
+        filename = os.path.basename(rigfile)
+        fullpath = os.path.join(rigdir, rigfile)
+
+        log.debug('RigDataFileIngest.make(): {f}'
+                  .format(f=dict(rigdir=rigdir, rigfile=rigfile,
+                                 filename=filename, fullpath=fullpath)))
+
+        log.info('RigDataFileIngest.make(): Loading {f}'
+                 .format(f=fullpath))
 
         # split files like 'dl7_TW_autoTrain_20171114_140357.mat'
-        h2o, t1, t2, date, time = fname.split('.')[0].split('_')
-        
-        if os.stat(fpath).st_size/1024 > 500: #False:  # TODO: pre-populate lab.Animal and AnimalWaterRestriction
+        h2o, t1, t2, date, time = filename.split('.')[0].split('_')
 
-            # '%%' due to datajoint-python/issues/376
-            #dups = (self & "imported_session_file like '%%{h2o}%%{date}%%"
-                    #.format(h2o=h2o, date=date))
+        if os.stat(fullpath).st_size/1024 < 500:
+            log.info('skipping file {f} - too small'.format(f=fullpath))
+            return
 
-            #if len(dups) > 1:
-                #log.warning('split session case detected')
-                # TODO: handle split file
-                # TODO: self.insert( all split files )
-                #return
+        # '%%' vs '%' due to datajoint-python/issues/376
+        dups = (self & "rig_data_file like '%%{h2o}%%{date}%%'"
+                .format(h2o=h2o, date=date))
 
-            # lookup animal
-            log.info('looking up animal for {h2o}'.format(h2o=h2o))
-            key['animal'] = (lab.AnimalWaterRestriction()
-                                & {'water_restriction': h2o}).fetch1('animal')
-            log.info('got {animal}'.format(animal=key['animal']))
+        if len(dups) > 1:
+            # TODO: handle split file
+            log.warning('split session case detected for {h2o} on {date}'
+                        .format(h2o=h2o, date=date))
+            return
 
-            # synthesize session
-            log.info('synthesizing session ID')
-            key['session'] = (dj.U().aggr(experiment.Session() & {'animal': animal},
-                                          n='max(session)').fetch1('n') or 0)+1 # it should be the max(session) for each animal
+        skey = {}
+        # lookup animal
+        log.debug('looking up animal for {h2o}'.format(h2o=h2o))
+        animal = (lab.AnimalWaterRestriction()
+                  & {'water_restriction': h2o}).fetch1('animal')
+        log.info('animal is {animal}'.format(animal=animal))
 
-            log.info('generated session id: {session}'.format(
-                session=key['session']))
-            mat = spio.loadmat(fpath, squeeze_me=True)  # NOQA
-            SessionData=mat['SessionData']
-            #TrialSettings=SessionData.flatten()[0][10]
-            TrialSettings=SessionData.flatten()[0][-1]
-            GUI = TrialSettings[0][0]
-            ProtocolType = GUI.flatten()[0][10]
-            if ProtocolType > 3:
-                experiment.Session().insert1((key['animal'], key['session'], date[0:4]+'-'+date[4:6]+'-'+date[6:8],'daveliu', 'RRig')) # change the rig based on the file path
-                #if experiment.Session() & key:
-                    # XXX: raise DataJointError?
-                    #log.warning("Warning! session exists for {f}".format(fname))
-    
-                TrialTypes=SessionData.flatten()[0][0]
-                RawData=SessionData.flatten()[0][-4] # Hack, need to fix
-                TrialSettings=SessionData.flatten()[0][-1] # Hack Need to fix
-                OriginalStateNamesByNumber=RawData.flatten()[0][0]
-                OriginalStateData=RawData.flatten()[0][1]
-                OriginalEventData=RawData.flatten()[0][2]
-                OriginalStateTimestamps=RawData.flatten()[0][3]
-                OriginalEventTimestamps=RawData.flatten()[0][4]
-        
-                for i in range(0, len(OriginalStateTimestamps)):
+        # synthesize session id
+        log.debug('synthesizing session ID')
+        session = (dj.U().aggr(experiment.Session() & {'animal': animal},
+                               n='max(session)').fetch1('n') or 0) + 1
+        log.info('generated session id: {session}'.format(session=session))
+
+        skey['animal'] = animal
+        skey['session'] = session
+        skey['session_date'] = date[0:4] + '-' + date[4:6] + '-' + date[6:8]
+        skey['username'] = 'daveliu'
+        skey['rig'] = key['rig']
+        key = dict(key, **skey)
+
+        if experiment.Session() & skey:
+            log.warning("Warning! session exists for {f}".format(rigfile))
+
+        log.debug('ImportedSessionFileIngest.make(): adding session record')
+        # XXX: note - later breaks can result in Sessions without valid trials
+        experiment.Session().insert1(skey)
+
+        #
+        # Extract trial data from file & prepare trial loop
+        #
+
+        mat = spio.loadmat(fullpath, squeeze_me=True)
+        SessionData = mat['SessionData'].flatten()
+
+        AllTrialTypes = SessionData['TrialTypes'][0]
+        AllTrialSettings = SessionData['TrialSettings'][0]
+
+        RawData = SessionData['RawData'][0].flatten()
+        AllStateNames = RawData['OriginalStateNamesByNumber'][0]
+        AllStateData = RawData['OriginalStateData'][0]
+        AllEventData = RawData['OriginalEventData'][0]
+        AllStateTimestamps = RawData['OriginalStateTimestamps'][0]
+        AllEventTimestamps = RawData['OriginalEventTimestamps'][0]
+
+        # verify trial-related data arrays are all same length
+        assert(all((x.shape[0] == AllStateTimestamps.shape[0] for x in
+                    (AllTrialTypes, AllTrialSettings, AllStateNames,
+                     AllStateData, AllEventData, AllEventTimestamps))))
+
+        trial = namedtuple(  # simple structure to track per-trial vars
+            'trial', ('ttype', 'settings', 'state_times', 'state_names',
+                      'state_data', 'event_data', 'event_times'))
+
+        AllTrials = zip(AllTrialTypes, AllTrialSettings, AllStateTimestamps,
+                        AllStateNames, AllStateData, AllEventData,
+                        AllEventTimestamps)
+
+        #
+        # Actually load per-trial data
+        #
+
+        i = -1
+        for t in AllTrials:
+
+            #
+            # Misc
+            #
+
+            t = trial(*t)  # convert list of items to a 'trial' structure
+            i += 1  # increment trial counter
+
+            log.info('ImportedSessionFileIngest.make(): trial {i}'.format(i=i))
+
+            # covert state data names into a lookup dictionary
+            #
+            # names (seem to be? are?):
+            #
+            # Trigtrialstart
+            # PreSamplePeriod
+            # SamplePeriod
+            # DelayPeriod
+            # EarlyLickDelay
+            # EarlyLickSample
+            # ResponseCue
+            # GiveLeftDrop
+            # GiveRightDrop
+            # GiveLeftDropShort
+            # GiveRightDropShort
+            # AnswerPeriod
+            # Reward
+            # RewardConsumption
+            # NoResponse
+            # TimeOut
+            # StopLicking
+            # StopLickingReturn
+            # TrialEnd
+
+            states = {k: (v+1) for v, k in enumerate(t.state_names)}
+            required_states = ('PreSamplePeriod', 'SamplePeriod',
+                               'DelayPeriod', 'ResponseCue', 'TrialEnd')
+
+            missing = list(k for k in required_states if k not in states)
+
+            if len(missing):
+                log.info('skipping trial {i}; missing {m}'
+                         .format(i=i, m=missing))
+                continue
+
+            gui = t.settings['GUI'].flatten()
+
+            # ProtocolType
+            #
+            # 1 Water-Valve-Calibration 2 Licking 3 Autoassist
+            # 4 No autoassist 5 DelayEnforce 6 SampleEnforce 7 Fixed
+            # only ingest protocol >= 4
+
+            if 'ProtocolType' not in gui.dtype.names:
+                log.info('skipping trial {i}; protocol undefined'
+                         .format(i=i))
+                continue
+
+            protocol_type = gui['ProtocolType'][0]
+            if gui['ProtocolType'][0] < 4:
+                log.info('skipping trial {i}; protocol {n} < 4'
+                         .format(i=i, n=gui['ProtocolType'][0]))
+                continue
+
+            autolearn = gui['Autolearn'][0]
+
+            # Top-level 'Trial' record
+            #
+
+            tkey = dict(skey)
+            startindex = np.where(t.state_data == states['PreSamplePeriod'])[0]
+
+            # should be only end of 1st StopLicking;
+            # rest of data is irrelevant w/r/t separately ingested ephys
+            endindex = np.where(t.state_data == states['StopLicking'])[0]
+
+            log.debug('states\n' + str(states))
+            log.debug('state_data\n' + str(t.state_data))
+            log.debug('startindex\n' + str(startindex))
+            log.debug('endendex\n' + str(endindex))
+
+            tkey['trial'] = i
+            tkey['start_time'] = t.state_times[startindex][0]
+            tkey['end_time'] = t.state_times[endindex][0]
+
+            log.debug('ImportedSessionFileIngest.make(): Trial().insert1')
+            log.debug('tkey' + str(tkey))
+            experiment.Session.Trial().insert1(tkey, ignore_extra_fields=True)
+
+            #
+            # Specific BehaviorTrial information for this trial
+            #
+
+            bkey = dict(tkey)
+            bkey['task'] = 'audio delay'
+
+            # determine trial instruction
+            trial_instruction = 'left'
+
+            if gui['Reversal'][0] == 1:
+                if t.ttype == 1:
                     trial_instruction = 'left'
-                    early_lick = 'no early'
-                    outcome = 'ignore'
-                    GUI = TrialSettings[i][0]
-                    SampleDur = GUI.flatten()[0][1]
-                    DelayDur = GUI.flatten()[0][2]
-                    AnswerPeriod = GUI.flatten()[0][3]
-                    ProtocolType = GUI.flatten()[0][10] # 1 Water-Valve-Calibration 2 Licking 3 Autoassist 4 No autoassist 5 DelayEnforce 6 SampleEnforce 7 Fixed
-                    Reversal = GUI.flatten()[0][13]
-                    StopLicking=np.where(OriginalStateNamesByNumber[i]=='StopLicking')[0]+1
-                    Reward=np.where(OriginalStateNamesByNumber[i]=='Reward')[0]+1
-                    TimeOut=np.where(OriginalStateNamesByNumber[i]=='TimeOut')[0]+1
-                    NoResponse=np.where(OriginalStateNamesByNumber[i]=='NoResponse')[0]+1
-                    EarlyLickDelay=np.where(OriginalStateNamesByNumber[i]=='EarlyLickDelay')[0]+1
-                    EarlyLickSample=np.where(OriginalStateNamesByNumber[i]=='EarlyLickSample')[0]+1
-                    PreSamplePeriod=np.where(OriginalStateNamesByNumber[i]=='PreSamplePeriod')[0]+1
-                    SamplePeriod=np.where(OriginalStateNamesByNumber[i]=='SamplePeriod')[0]+1
-                    DelayPeriod=np.where(OriginalStateNamesByNumber[i]=='DelayPeriod')[0]+1
-                    ResponseCue=np.where(OriginalStateNamesByNumber[i]=='ResponseCue')[0]+1
-                    startindex = np.where(OriginalStateData[i]==PreSamplePeriod)[0]
-                    sampleindex = np.where(OriginalStateData[i]==SamplePeriod)[0]
-                    delayindex = np.where(OriginalStateData[i]==DelayPeriod)[0]
-                    responseindex = np.where(OriginalStateData[i]==ResponseCue)[0]
-                    endindex = np.where(OriginalStateData[i]==StopLicking)[0]
-                    lickleft = np.where(OriginalEventData[i]==69)[0]
-                    lickright = np.where(OriginalEventData[i]==70)[0]
-                    if np.any(OriginalStateData[i]==Reward):
-                        outcome = 'hit'
-                    elif np.any(OriginalStateData[i]==TimeOut):
-                        outcome = 'miss'
-                    elif np.any(OriginalStateData[i]==NoResponse):
-                        outcome = 'ignore'
-                    if ProtocolType==5:
-                        if np.any(OriginalStateData[i]==EarlyLickDelay):
-                            early_lick = 'early'
-                    if ProtocolType>5:
-                        if np.any(OriginalStateData[i]==EarlyLickDelay) or np.any(OriginalStateData[i]==EarlyLickSample):
-                            early_lick = 'early'
-        
-                    experiment.Session.Trial().insert1((key['animal'], key['session'], i, OriginalStateTimestamps[i][startindex][0], OriginalStateTimestamps[i][endindex[0]]))
-                    
-                    if Reversal==1:
-                        if TrialTypes[i]==1:
-                            trial_instruction = 'left'
-                        elif TrialTypes[i]==0:
-                            trial_instruction = 'right'
-                    elif Reversal==2:
-                        if TrialTypes[i]==1:
-                            trial_instruction = 'right'
-                        elif TrialTypes[i]==0:
-                            trial_instruction = 'left'
-        
-                    experiment.BehaviorTrial().insert1((key['animal'], key['session'], i, 'audio delay', trial_instruction, early_lick, outcome))
-                    experiment.TrialNote().insert1((key['animal'], key['session'], i, 'protocol #', str(ProtocolType)))
-                    experiment.TrialEvent().insert([(key['animal'], key['session'], i, 'presample', OriginalStateTimestamps[i][startindex][0], OriginalStateTimestamps[i][sampleindex[0]]-OriginalStateTimestamps[i][startindex][0]),
-                    (key['animal'], key['session'], i, 'go', OriginalStateTimestamps[i][responseindex][0], AnswerPeriod)])
-                    for j in range(0, len(sampleindex)):
-                        experiment.TrialEvent().insert1((key['animal'], key['session'], i, 'sample', OriginalStateTimestamps[i][sampleindex[j]], SampleDur))
-                    for j in range(0, len(delayindex)):
-                        experiment.TrialEvent().insert1((key['animal'], key['session'], i, 'delay', OriginalStateTimestamps[i][delayindex[j]], DelayDur))
-                    if len(lickleft)>0:
-                        lickleftAll=np.tile((key['animal'], key['session'], i, 'left lick'),(len(lickleft),1))
-                        lickleftAll=np.insert(lickleftAll,[4],np.split(OriginalEventTimestamps[i][lickleft],len(lickleft)),axis=1)
-                        experiment.ActionEvent().insert(lickleftAll)
-                    if len(lickright)>0:
-                        lickrightAll=np.tile((key['animal'], key['session'], i, 'right lick'),(len(lickright),1))
-                        lickrightAll=np.insert(lickrightAll,[4],np.split(OriginalEventTimestamps[i][lickright],len(lickright)),axis=1)
-                        experiment.ActionEvent().insert(lickrightAll)
-                    #for j in range(0, len(lickleft)):
-                        #experiment.ActionEvent().insert1((key['animal'], key['session'], i, 'left lick', OriginalEventTimestamps[i][lickleft[j]]))
-                    #for j in range(0, len(lickright)):
-                        #experiment.ActionEvent().insert1((key['animal'], key['session'], i, 'right lick', OriginalEventTimestamps[i][lickright[j]]))
-                # ... and save a record here to prevent future loading
-                self.insert1(key, ignore_extra_fields=True)
+                elif t.ttype == 0:
+                    trial_instruction = 'right'
+            elif gui['Reversal'][0] == 2:
+                if t.ttype == 1:
+                    trial_instruction = 'right'
+                elif t.ttype == 0:
+                    trial_instruction = 'left'
 
+            bkey['trial_instruction'] = trial_instruction
 
-if __name__ == '__main__':
-    if len(sys.argv) < 2 or sys.argv[1] != 'populate':
-        print("usage: {p} [populate]"
-              .format(p=os.path.basename(sys.argv[0])))
-        sys.exit(0)
+            # determine early lick
+            early_lick = 'no early'
 
-    try:
-        lab.Animal().insert1({
-            'animal': 399752,
-            'dob':  '2017-08-01'
-        })
-        lab.AnimalWaterRestriction().insert1({
-            'animal': 399752,
-            'water_restriction': 'dl7'
-        })
-        lab.Person().insert1({
-            'username': 'daveliu',
-            'fullname': 'Dave Liu'
-        })
+            if (protocol_type >= 5
+                and 'EarlyLickDelay' in states
+                    and np.any(t.state_data == states['EarlyLickDelay'])):
+                    early_lick = 'early'
+            if (protocol_type > 5
+                and ('EarlyLickSample' in states
+                     and np.any(t.state_data == states['EarlyLickSample']))):
+                    early_lick = 'early'
 
-    except:
-        print("note: data existed", file=sys.stderr)
+            bkey['early_lick'] = early_lick
 
-    logging.basicConfig(level=logging.ERROR)  # quiet other modules
-    log.setLevel(logging.INFO)  # but show ours
-    ImportedSessionFile().populate()
-    ImportedSessionFileIngest().populate()
+            # determine outcome
+            outcome = 'ignore'
+
+            if ('Reward' in states
+                    and np.any(t.state_data == states['Reward'])):
+                outcome = 'hit'
+            elif ('TimeOut' in states
+                    and np.any(t.state_data == states['TimeOut'])):
+                outcome = 'miss'
+            elif ('NoResponse' in states
+                    and np.any(t.state_data == states['NoResponse'])):
+                outcome = 'ignore'
+
+            bkey['outcome'] = outcome
+
+            # add behavior record
+            log.debug('ImportedSessionFileIngest.make(): BehaviorTrial()')
+            experiment.BehaviorTrial().insert1(bkey, ignore_extra_fields=True)
+
+            #
+            # Add 'protocol' note
+            #
+
+            nkey = dict(tkey)
+            nkey['trial_note_type'] = 'protocol #'
+            nkey['trial_note'] = str(protocol_type)
+
+            log.debug('ImportedSessionFileIngest.make(): TrialNote().insert1')
+            experiment.TrialNote().insert1(nkey, ignore_extra_fields=True)
+
+            #
+            # Add 'autolearn' note
+            #
+
+            nkey = dict(tkey)
+            nkey['trial_note_type'] = 'autolearn'
+            nkey['trial_note'] = str(autolearn)
+
+            experiment.TrialNote().insert1(nkey, ignore_extra_fields=True)
+
+            #
+            # Add presample event
+            #
+
+            ekey = dict(tkey)
+            sampleindex = np.where(t.state_data == states['SamplePeriod'])[0]
+
+            ekey['trial_event_type'] = 'presample'
+            ekey['trial_event_time'] = t.state_times[startindex][0]
+            ekey['duration'] = (t.state_times[sampleindex[0]]
+                                - t.state_times[startindex])[0]
+
+            log.debug('ImportedSessionFileIngest.make(): presample')
+            experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
+
+            #
+            # Add 'go' event
+            #
+
+            ekey = dict(tkey)
+            responseindex = np.where(t.state_data == states['ResponseCue'])[0]
+
+            ekey['trial_event_type'] = 'go'
+            ekey['trial_event_time'] = t.state_times[responseindex][0]
+            ekey['duration'] = gui['AnswerPeriod'][0]
+
+            log.debug('ImportedSessionFileIngest.make(): go')
+            experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
+
+            #
+            # Add other 'sample' events
+            #
+
+            log.debug('ImportedSessionFileIngest.make(): sample events')
+            for s in sampleindex:  # in protocol > 6 ~-> n>1
+                # todo: batch events
+                ekey = dict(tkey)
+                ekey['trial_event_type'] = 'sample'
+                ekey['trial_event_time'] = t.state_times[s]
+                ekey['duration'] = gui['SamplePeriod'][0]
+                experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
+
+            #
+            # Add 'delay' events
+            #
+
+            delayindex = np.where(t.state_data == states['DelayPeriod'])[0]
+
+            log.debug('ImportedSessionFileIngest.make(): delay events')
+            for d in delayindex:  # protocol > 6 ~-> n>1
+                # todo: batch events
+                ekey = dict(tkey)
+                ekey['trial_event_type'] = 'delay'
+                ekey['trial_event_time'] = t.state_times[d]
+                ekey['duration'] = gui['DelayPeriod'][0]
+                experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
+
+            #
+            # Add lick events
+            #
+
+            lickleft = np.where(t.event_data == 69)[0]
+            log.debug('... lickleft: {r}'.format(r=str(lickleft)))
+            if len(lickleft):
+                # TODO: is 'sample' the type?
+                leftlicks = list(
+                    (dict(**tkey, trial_event_type='sample',
+                          trial_event_time=t.event_times[l],
+                          action_event_type='left lick',
+                          action_event_time=t.event_times[l], duration=1)
+                     for l in lickleft))
+
+                experiment.ActionEvent().insert(
+                    leftlicks, ignore_extra_fields=True)
+
+            lickright = np.where(t.event_data == 70)[0]
+            log.debug('... lickright: {r}'.format(r=str(lickright)))
+            if len(lickright):
+                # TODO: is 'sample' the type?
+                rightlicks = list(
+                    (dict(**tkey, trial_event_type='sample',
+                          trial_event_time=t.event_times[r],
+                          action_event_type='right lick',
+                          action_event_time=t.event_times[r], duration=1)
+                     for r in lickright))
+
+                experiment.ActionEvent().insert(
+                    rightlicks, ignore_extra_fields=True)
+
+            # end of trial loop.
+
+        log.debug('RigDataFileIngest.make(): saving ingest {d}'.format(d=key))
+        self.insert1(key, ignore_extra_fields=True)
