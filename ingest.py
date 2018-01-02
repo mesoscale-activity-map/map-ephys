@@ -51,7 +51,7 @@ class RigDataFile(dj.Imported):
 
     def make(self, key):
         log.info('RigDataFIle.make(): key:', key)
-        rig, data_path = (RigDataPath & dict(rig=key['rig'])).fetch1().values()
+        rig, data_path = (RigDataPath() & dict(rig=key['rig'])).fetch1().values()
         log.info('RigDataFile.make(): searching %s' % rig)
 
         initial = list(k['rig_data_file'] for k in # only add the new files, have to overwrite populate for this: populate checks the primary key upstream, but this is the dir
@@ -410,11 +410,8 @@ class RigDataFileIngest(dj.Imported):
             lickleft = np.where(t.event_data == 69)[0]
             log.debug('... lickleft: {r}'.format(r=str(lickleft)))
             if len(lickleft):
-                # TODO: is 'sample' the type?
                 leftlicks = list(
-                    (dict(**tkey, trial_event_type='sample',
-                          trial_event_time=t.event_times[l],
-                          action_event_type='left lick',
+                    (dict(**tkey, action_event_type='left lick',
                           action_event_time=t.event_times[l], duration=1)
                      for l in lickleft))
 
@@ -424,11 +421,8 @@ class RigDataFileIngest(dj.Imported):
             lickright = np.where(t.event_data == 70)[0]
             log.debug('... lickright: {r}'.format(r=str(lickright)))
             if len(lickright):
-                # TODO: is 'sample' the type?
                 rightlicks = list(
-                    (dict(**tkey, trial_event_type='sample',
-                          trial_event_time=t.event_times[r],
-                          action_event_type='right lick',
+                    (dict(**tkey, action_event_type='right lick',
                           action_event_time=t.event_times[r], duration=1)
                      for r in lickright))
 

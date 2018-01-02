@@ -26,7 +26,6 @@ class Session(dj.Manual):
     session_date  : date
     -> lab.Person
     -> lab.Rig
-    behavior_file : varchar(255) # the behavior file name
     """
     
     class Trial(dj.Part):
