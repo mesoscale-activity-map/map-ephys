@@ -107,7 +107,7 @@ class RigDataFileIngest(dj.Imported):
             log.info('skipping file {f} - too small'.format(f=fullpath))
             return
 
-        if len((lab.AnimalWaterRestriction() & {'water_restriction': h2o}).fetch())==0:
+        if not (lab.AnimalWaterRestriction() & {'water_restriction': h2o}): # hack to only ingest files with a water restriction number
             log.info('skipping file {f} - no water restriction #'.format(f=fullpath))
             return
 
