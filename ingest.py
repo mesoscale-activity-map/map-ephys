@@ -61,7 +61,7 @@ class RigDataFile(dj.Imported):
             log.debug('RigDataFile.make(): traversing %s' % root)
             subpaths = list(os.path.join(root, f)
                             .split(data_path)[1].lstrip(os.path.sep)
-                            for f in files if f.endswith('.mat'))
+                            for f in files if f.endswith('.mat') and 'TW_autoTrain' in f)
 
             self.insert(list((rig, f,) for f in subpaths if f not in initial)) #add the new file
 
