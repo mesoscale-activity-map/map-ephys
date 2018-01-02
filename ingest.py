@@ -107,6 +107,10 @@ class RigDataFileIngest(dj.Imported):
             log.info('skipping file {f} - too small'.format(f=fullpath))
             return
 
+        if len((ephys.experiment.lab.AnimalWaterRestriction() & {'water_restriction': h2o}).fetch())==0:
+            log.info('skipping file {f} - no water restriction #'.format(f=fullpath))
+            return
+
         # '%%' vs '%' due to datajoint-python/issues/376
         dups = (self & "rig_data_file like '%%{h2o}%%{date}%%'"
                 .format(h2o=h2o, date=date))
