@@ -107,7 +107,7 @@ class RigDataFileIngest(dj.Imported):
             log.info('skipping file {f} - too small'.format(f=fullpath))
             return
 
-        if len((ephys.experiment.lab.AnimalWaterRestriction() & {'water_restriction': h2o}).fetch())==0:
+        if len((lab.AnimalWaterRestriction() & {'water_restriction': h2o}).fetch())==0:
             log.info('skipping file {f} - no water restriction #'.format(f=fullpath))
             return
 
