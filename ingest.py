@@ -50,8 +50,8 @@ class RigDataFile(dj.Imported):
         return RigDataPath()
 
     def make(self, key):
-        log.info('RigDataFIle.make(): key:', key)
-        rig, data_path = (RigDataPath & dict(rig=key['rig'])).fetch1().values()
+        log.info('RigDataFile.make(): key:', key)
+        rig, data_path = (RigDataPath() & {'rig': key['rig']}).fetch1().values()
         log.info('RigDataFile.make(): searching %s' % rig)
 
         initial = list(k['rig_data_file'] for k in
