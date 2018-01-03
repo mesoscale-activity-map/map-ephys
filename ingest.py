@@ -100,9 +100,6 @@ class RigDataFileIngest(dj.Imported):
                   .format(f=dict(rigdir=rigdir, rigfile=rigfile,
                                  filename=filename, fullpath=fullpath)))
 
-        log.info('RigDataFileIngest.make(): Loading {f}'
-                 .format(f=fullpath))
-
         # split files like 'dl7_TW_autoTrain_20171114_140357.mat'
         h2o, t1, t2, date, time = filename.split('.')[0].split('_')
 
