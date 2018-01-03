@@ -109,10 +109,10 @@ class RigDataFileIngest(dj.Imported):
             return
 
         # '%%' vs '%' due to datajoint-python/issues/376
-        dups = (self & "rig_data_file like '%%{h2o}%%{date}%%'"
+        dups = (RigDataFile() & "rig_data_file like '%%{h2o}%%{date}%%'"
                 .format(h2o=h2o, date=date))
 
-        if len(dups):
+        if len(dups) > 1:
             # TODO: handle split file
             log.warning('split session case detected for {h2o} on {date}'
                         .format(h2o=h2o, date=date))
