@@ -64,6 +64,8 @@ class RigDataFile(dj.Imported):
                             for f in files if f.endswith('.mat')
                             and 'TW_autoTrain' in f)
 
+            subpaths.sort()  # ascending dates help sequential session id
+
             self.insert(list((rig, f,) for f in subpaths if f not in initial))
 
     def populate(self):
