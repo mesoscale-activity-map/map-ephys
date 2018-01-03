@@ -112,7 +112,7 @@ class RigDataFileIngest(dj.Imported):
         dups = (self & "rig_data_file like '%%{h2o}%%{date}%%'"
                 .format(h2o=h2o, date=date))
 
-        if len(dups) > 1:
+        if len(dups):
             # TODO: handle split file
             log.warning('split session case detected for {h2o} on {date}'
                         .format(h2o=h2o, date=date))
