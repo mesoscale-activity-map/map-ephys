@@ -104,6 +104,7 @@ class RigDataFileIngest(dj.Imported):
                                  filename=filename, fullpath=fullpath)))
 
         # split files like 'dl7_TW_autoTrain_20171114_140357.mat'
+        # some files are like 'tw6_orig_TW_autoTrain_20171029_203629.mat'
         h2o, t1, t2, date, time = filename.split('.')[0].split('_')
 
         if not (lab.AnimalWaterRestriction() & {'water_restriction': h2o}): # hack to only ingest files with a water restriction number
