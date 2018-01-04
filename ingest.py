@@ -3,7 +3,10 @@
 import os
 import logging
 
+from itertools import chain
 from collections import namedtuple
+
+from code import interact
 
 import scipy.io as spio
 import numpy as np
@@ -103,83 +106,107 @@ class RigDataFileIngest(dj.Imported):
         # split files like 'dl7_TW_autoTrain_20171114_140357.mat'
         h2o, t1, t2, date, time = filename.split('.')[0].split('_')
 
-        if os.stat(fullpath).st_size/1024 < 500:
-            log.info('skipping file {f} - too small'.format(f=fullpath))
-            return
-
-        # '%%' vs '%' due to datajoint-python/issues/376
-        dups = (RigDataFile() & "rig_data_file like '%%{h2o}%%{date}%%'"
-                .format(h2o=h2o, date=date))
-
-        if len(dups) > 1:
-            # TODO: handle split file
-            log.warning('split session case detected for {h2o} on {date}'
-                        .format(h2o=h2o, date=date))
-            return
-
-        skey = {}
         # lookup animal
         log.debug('looking up animal for {h2o}'.format(h2o=h2o))
         animal = (lab.AnimalWaterRestriction()
                   & {'water_restriction': h2o}).fetch1('animal')
         log.info('animal is {animal}'.format(animal=animal))
 
-        # synthesize session id
-        log.debug('synthesizing session ID')
-        session = (dj.U().aggr(experiment.Session() & {'animal': animal},
-                               n='max(session)').fetch1('n') or 0) + 1
-        log.info('generated session id: {session}'.format(session=session))
-
+        # session record key
+        skey = {}
         skey['animal'] = animal
-        skey['session'] = session
         skey['session_date'] = date[0:4] + '-' + date[4:6] + '-' + date[6:8]
         skey['username'] = 'daveliu'
         skey['rig'] = key['rig']
-        key = dict(key, **skey)
 
+        # session:date relationship is 1:1; skip if we have a seession
         if experiment.Session() & skey:
-            log.warning("Warning! session exists for {f}".format(rigfile))
-
-        log.debug('ImportedSessionFileIngest.make(): adding session record')
-        # XXX: note - later breaks can result in Sessions without valid trials
-        experiment.Session().insert1(skey)
+            log.warning("Warning! session exists for {f}".format(f=rigfile))
+            return
 
         #
-        # Extract trial data from file & prepare trial loop
+        # Check for split files and prepare filelists
+        # XXX: not querying by rig.. 2+ sessions on 2+ rigs possible?
         #
 
-        mat = spio.loadmat(fullpath, squeeze_me=True)
-        SessionData = mat['SessionData'].flatten()
+        # '%%' vs '%' due to datajoint-python/issues/376
+        daily = (RigDataFile() & "rig_data_file like '%%{h2o}%%{date}%%'"
+                 .format(h2o=h2o, date=date)).fetch('rig_data_file')
 
-        AllTrialTypes = SessionData['TrialTypes'][0]
-        AllTrialSettings = SessionData['TrialSettings'][0]
+        daily = list(os.path.join(rigdir, x) for x in daily)
 
-        RawData = SessionData['RawData'][0].flatten()
-        AllStateNames = RawData['OriginalStateNamesByNumber'][0]
-        AllStateData = RawData['OriginalStateData'][0]
-        AllEventData = RawData['OriginalEventData'][0]
-        AllStateTimestamps = RawData['OriginalStateTimestamps'][0]
-        AllEventTimestamps = RawData['OriginalEventTimestamps'][0]
+        if len(daily) > 1:
+            log.warning('split session case detected for {h2o} on {date}'
+                        .format(h2o=h2o, date=date))
 
-        # verify trial-related data arrays are all same length
-        assert(all((x.shape[0] == AllStateTimestamps.shape[0] for x in
-                    (AllTrialTypes, AllTrialSettings, AllStateNames,
-                     AllStateData, AllEventData, AllEventTimestamps))))
+        #
+        # Extract trial data from file(s) & prepare trial loop
+        #
+
+        trials = zip()
 
         trial = namedtuple(  # simple structure to track per-trial vars
             'trial', ('ttype', 'settings', 'state_times', 'state_names',
                       'state_data', 'event_data', 'event_times'))
 
-        AllTrials = zip(AllTrialTypes, AllTrialSettings, AllStateTimestamps,
-                        AllStateNames, AllStateData, AllEventData,
-                        AllEventTimestamps)
+        for f in daily:
+            # interact('dailyloop', local=locals())
+
+            if os.stat(f).st_size/1024 < 500:
+                log.info('skipping file {f} - too small'.format(f=fullpath))
+                continue
+
+            mat = spio.loadmat(f, squeeze_me=True)
+            SessionData = mat['SessionData'].flatten()
+
+            AllTrialTypes = SessionData['TrialTypes'][0]
+            AllTrialSettings = SessionData['TrialSettings'][0]
+
+            RawData = SessionData['RawData'][0].flatten()
+            AllStateNames = RawData['OriginalStateNamesByNumber'][0]
+            AllStateData = RawData['OriginalStateData'][0]
+            AllEventData = RawData['OriginalEventData'][0]
+            AllStateTimestamps = RawData['OriginalStateTimestamps'][0]
+            AllEventTimestamps = RawData['OriginalEventTimestamps'][0]
+
+            # verify trial-related data arrays are all same length
+            assert(all((x.shape[0] == AllStateTimestamps.shape[0] for x in
+                        (AllTrialTypes, AllTrialSettings, AllStateNames,
+                         AllStateData, AllEventData, AllEventTimestamps))))
+
+            z = zip(AllTrialTypes, AllTrialSettings, AllStateTimestamps,
+                    AllStateNames, AllStateData, AllEventData,
+                    AllEventTimestamps)
+
+            trials = chain(trials, z)
+
+        trials = list(trials)
+
+        # all files were invalid / size < 500k
+        if not trials:
+            log.warning('skipping date {d}, no valid files'.format(d=date))
 
         #
-        # Actually load per-trial data
+        # Trial data seems valid; synthesize session id & add session record
+        # XXX: note - later breaks can result in Sessions without valid trials
+        #
+
+        log.debug('synthesizing session ID')
+        session = (dj.U().aggr(experiment.Session() & {'animal': animal},
+                               n='max(session)').fetch1('n') or 0) + 1
+        log.info('generated session id: {session}'.format(session=session))
+        skey['session'] = session
+        key = dict(key, **skey)
+
+        log.debug('ImportedSessionFileIngest.make(): adding session record')
+        experiment.Session().insert1(skey)
+
+        #
+        # Actually load the per-trial data
         #
 
         i = -1
-        for t in AllTrials:
+        for t in trials:
 
             #
             # Misc
