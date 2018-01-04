@@ -123,7 +123,7 @@ class RigDataFileIngest(dj.Imported):
         skey['username'] = 'daveliu'
         skey['rig'] = key['rig']
 
-        # session:date relationship is 1:1; skip if we have a seession
+        # session:date relationship is 1:1; skip if we have a session
         if experiment.Session() & skey:
             log.warning("Warning! session exists for {f}".format(f=rigfile))
             return
@@ -270,8 +270,8 @@ class RigDataFileIngest(dj.Imported):
                 continue
 
             protocol_type = gui['ProtocolType'][0]
-            if gui['ProtocolType'][0] < 4:
-                log.info('skipping trial {i}; protocol {n} < 4'
+            if gui['ProtocolType'][0] < 3:
+                log.info('skipping trial {i}; protocol {n} < 3'
                          .format(i=i, n=gui['ProtocolType'][0]))
                 continue
 
