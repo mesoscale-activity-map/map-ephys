@@ -26,7 +26,8 @@ class RigDataPath(dj.Lookup):
     definition = """
     -> lab.Rig
     ---
-    rig_data_path:             varchar(1024)           # rig data path
+    rig_data_path:              varchar(1024)           # rig data path
+    rig_search_order:           int                     # rig search order
     """
 
     @property
@@ -34,9 +35,9 @@ class RigDataPath(dj.Lookup):
         if 'rig_data_paths' in dj.config:  # for local testing
             return dj.config['rig_data_paths']
 
-        return (('RRig', r'H:\\data\bpodRecord'),
-                ('TRig1', r'R:\\Arduino\Bpod_Train1\Bpod Local\Data'),
-                ('TRig2', r'S:\\MATLAB\Bpod Local\Data'))
+        return (('TRig1', r'R:\\Arduino\Bpod_Train1\Bpod Local\Data', 0),
+                ('TRig2', r'S:\\MATLAB\Bpod Local\Data', 1),
+                ('RRig', r'H:\\data\bpodRecord', 2),)
 
 
 @schema
@@ -53,7 +54,10 @@ class RigDataFile(dj.Imported):
 
     def make(self, key):
         log.info('RigDataFile.make(): key:', key)
-        rig, data_path = (RigDataPath() & {'rig': key['rig']}).fetch1().values()
+
+        rig = key['rig']
+        data_path = (RigDataPath() & {'rig': rig}).fetch1('rig_data_path')
+
         log.info('RigDataFile.make(): searching %s' % rig)
 
         # only add the new files, have to overwrite populate for this:
@@ -78,11 +82,18 @@ class RigDataFile(dj.Imported):
 
     def populate(self):
         '''
-        Overriding populate since presence of any rig_data_file
-        will prevent that key to be given to Make.
+        Overriding populate:
+
+        - presence of any instance of rig_data_path in table blocks (re)make
+        - we want to guarantee a custom ingest sequence by rig_search_order
+          since synthetic session id's depend on ingest sequence
         '''
-        for k in self.key_source.fetch(as_dict=True):
-            self.make(k)
+
+        todo = self.key_source
+        keys = todo.fetch(dj.key, order_by='rig_search_order')
+
+        for k in keys:
+            self.make(dict(k))
 
 
 @schema
