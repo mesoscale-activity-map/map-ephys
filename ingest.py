@@ -6,8 +6,6 @@ import logging
 from itertools import chain
 from collections import namedtuple
 
-from code import interact
-
 import scipy.io as spio
 import numpy as np
 
@@ -36,8 +34,9 @@ class RigDataPath(dj.Lookup):
         if 'rig_data_paths' in dj.config:  # for local testing
             return dj.config['rig_data_paths']
 
-        return (('TRig1', r'\\data\rig1'),
-                ('TRig2', r'\\data\rig2'))
+        return (('RRig', r'H:\\data\bpodRecord'),
+                ('TRig1', r'R:\\Arduino\Bpod_Train1\Bpod Local\Data'),
+                ('TRig2', r'S:\\MATLAB\Bpod Local\Data'))
 
 
 @schema
@@ -57,9 +56,14 @@ class RigDataFile(dj.Imported):
         rig, data_path = (RigDataPath() & {'rig': key['rig']}).fetch1().values()
         log.info('RigDataFile.make(): searching %s' % rig)
 
+        # only add the new files, have to overwrite populate for this:
+        # populate checks the primary key upstream, but this is the dir which
+        # is common to all records and so will not trigger make after 1st run.
+
         initial = list(k['rig_data_file'] for k in
                        (self & key).fetch(as_dict=True))
 
+        # os.walk through the subpath
         for root, dirs, files in os.walk(data_path):
             log.debug('RigDataFile.make(): traversing %s' % root)
             subpaths = list(os.path.join(root, f)
@@ -67,8 +71,9 @@ class RigDataFile(dj.Imported):
                             for f in files if f.endswith('.mat')
                             and 'TW_autoTrain' in f)
 
-            subpaths.sort()  # ascending dates help sequential session id
+            subpaths.sort()  # sort ascending dates for sequential session id
 
+            # add the new file
             self.insert(list((rig, f,) for f in subpaths if f not in initial))
 
     def populate(self):
@@ -126,7 +131,7 @@ class RigDataFileIngest(dj.Imported):
 
         #
         # Check for split files and prepare filelists
-        # XXX: not querying by rig.. 2+ sessions on 2+ rigs possible?
+        # XXX: not querying by rig.. 2+ sessions on 2+ rigs possible for date?
         #
 
         # '%%' vs '%' due to datajoint-python/issues/376
@@ -150,7 +155,6 @@ class RigDataFileIngest(dj.Imported):
                       'state_data', 'event_data', 'event_times'))
 
         for f in daily:
-            # interact('dailyloop', local=locals())
 
             if os.stat(f).st_size/1024 < 500:
                 log.info('skipping file {f} - too small'.format(f=fullpath))
@@ -182,7 +186,7 @@ class RigDataFileIngest(dj.Imported):
 
         trials = list(trials)
 
-        # all files were invalid / size < 500k
+        # all files were internally invalid or size < 500k
         if not trials:
             log.warning('skipping date {d}, no valid files'.format(d=date))
 
@@ -254,11 +258,11 @@ class RigDataFileIngest(dj.Imported):
 
             gui = t.settings['GUI'].flatten()
 
-            # ProtocolType
+            # ProtocolType - only ingest protocol >= 4
             #
             # 1 Water-Valve-Calibration 2 Licking 3 Autoassist
             # 4 No autoassist 5 DelayEnforce 6 SampleEnforce 7 Fixed
-            # only ingest protocol >= 5
+            #
 
             if 'ProtocolType' not in gui.dtype.names:
                 log.info('skipping trial {i}; protocol undefined'
@@ -360,6 +364,16 @@ class RigDataFileIngest(dj.Imported):
             nkey['trial_note'] = str(protocol_type)
 
             log.debug('ImportedSessionFileIngest.make(): TrialNote().insert1')
+            experiment.TrialNote().insert1(nkey, ignore_extra_fields=True)
+
+            #
+            # Add 'autolearn' note
+            #
+
+            nkey = dict(tkey)
+            nkey['trial_note_type'] = 'autolearn'
+            nkey['trial_note'] = str(gui['Autolearn'][0])
+
             experiment.TrialNote().insert1(nkey, ignore_extra_fields=True)
 
             #

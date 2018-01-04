@@ -22,8 +22,7 @@ class Task(dj.Lookup):
 class Session(dj.Manual):
     definition = """
     -> lab.Animal
-    #session : smallint 		# session number (change to int for now)
-    session : int 		# session number
+    session : smallint 		# session number
     ---
     session_date  : date
     -> lab.Person
@@ -38,87 +37,6 @@ class Session(dj.Manual):
         start_time : decimal(8,4)  # (s)
         end_time : decimal(8,4)  # (s)
         """
-		
-		
-    def _make_tuples(self, key, key1):
-        import scipy.io as spio
-        import numpy as np
-        mat = spio.loadmat(key1, squeeze_me=True)
-        SessionData=mat['SessionData']
-        TrialTypes=SessionData.flatten()[0][0]
-        RawData=SessionData.flatten()[0][7]
-        TrialSettings=SessionData.flatten()[0][10]
-        OriginalStateNamesByNumber=RawData.flatten()[0][0]
-        OriginalStateData=RawData.flatten()[0][1]
-        OriginalEventData=RawData.flatten()[0][2]
-        OriginalStateTimestamps=RawData.flatten()[0][3]
-        OriginalEventTimestamps=RawData.flatten()[0][4]
-
-        for i in range(0, len(OriginalStateTimestamps)):
-            trial_instruction = 'left'
-            early_lick = 'no early'
-            outcome = 'ignore'
-            GUI = TrialSettings[i][0]
-            SampleDur = GUI.flatten()[0][1]
-            DelayDur = GUI.flatten()[0][2]
-            AnswerPeriod = GUI.flatten()[0][3]
-            ProtocolType = GUI.flatten()[0][10] # 1 Water-Valve-Calibration 2 Licking 3 Autoassist 4 No autoassist 5 DelayEnforce 6 SampleEnforce 7 Fixed
-            Reversal = GUI.flatten()[0][13]
-            StopLicking=np.where(OriginalStateNamesByNumber[i]=='StopLicking')[0]+1
-            Reward=np.where(OriginalStateNamesByNumber[i]=='Reward')[0]+1
-            TimeOut=np.where(OriginalStateNamesByNumber[i]=='TimeOut')[0]+1
-            NoResponse=np.where(OriginalStateNamesByNumber[i]=='NoResponse')[0]+1
-            EarlyLickDelay=np.where(OriginalStateNamesByNumber[i]=='EarlyLickDelay')[0]+1
-            EarlyLickSample=np.where(OriginalStateNamesByNumber[i]=='EarlyLickSample')[0]+1
-            PreSamplePeriod=np.where(OriginalStateNamesByNumber[i]=='PreSamplePeriod')[0]+1
-            SamplePeriod=np.where(OriginalStateNamesByNumber[i]=='SamplePeriod')[0]+1
-            DelayPeriod=np.where(OriginalStateNamesByNumber[i]=='DelayPeriod')[0]+1
-            ResponseCue=np.where(OriginalStateNamesByNumber[i]=='ResponseCue')[0]+1
-            startindex = np.where(OriginalStateData[i]==PreSamplePeriod)[0]
-            sampleindex = np.where(OriginalStateData[i]==SamplePeriod)[0]
-            delayindex = np.where(OriginalStateData[i]==DelayPeriod)[0]
-            responseindex = np.where(OriginalStateData[i]==ResponseCue)[0]
-            endindex = np.where(OriginalStateData[i]==StopLicking)[0]
-            lickleft = np.where(OriginalEventData[i]==69)[0]
-            lickright = np.where(OriginalEventData[i]==70)[0]
-            if np.any(OriginalStateData[i]==Reward):
-                outcome = 'hit'
-            elif np.any(OriginalStateData[i]==TimeOut):
-                outcome = 'miss'
-            elif np.any(OriginalStateData[i]==NoResponse):
-                outcome = 'ignore'
-            if ProtocolType==5:
-                if np.any(OriginalStateData[i]==EarlyLickDelay):
-                    early_lick = 'early'
-            if ProtocolType>5:
-                if np.any(OriginalStateData[i]==EarlyLickDelay) or np.any(OriginalStateData[i]==EarlyLickSample):
-                    early_lick = 'early'
-
-            Session.Trial().insert1((int(key[0]), int(key[1]), i, OriginalStateTimestamps[i][startindex][0], OriginalStateTimestamps[i][endindex[0]]))
-            
-            if Reversal==1:
-                if TrialTypes[i]==1:
-                    trial_instruction = 'left'
-                elif TrialTypes[i]==0:
-                    trial_instruction = 'right'
-            elif Reversal==2:
-                if TrialTypes[i]==1:
-                    trial_instruction = 'right'
-                elif TrialTypes[i]==0:
-                    trial_instruction = 'left'
-
-            BehaviorTrial().insert1((int(key[0]), int(key[1]), i, 'audio delay', trial_instruction, early_lick, outcome))
-            TrialNote().insert1((int(key[0]), int(key[1]), i, 'protocol #', str(ProtocolType)))
-            TrialEvent().insert([(int(key[0]), int(key[1]), i, 'presample', OriginalStateTimestamps[i][startindex][0], OriginalStateTimestamps[i][sampleindex[0]]-OriginalStateTimestamps[i][startindex][0]),
-            (int(key[0]), int(key[1]), i, 'go', OriginalStateTimestamps[i][responseindex][0], AnswerPeriod)])
-            for j in range(0, len(sampleindex)):
-                TrialEvent().insert1((int(key[0]), int(key[1]), i, 'sample', OriginalStateTimestamps[i][sampleindex[j]], SampleDur))
-            for j in range(0, len(delayindex)):
-                TrialEvent().insert1((int(key[0]), int(key[1]), i, 'delay', OriginalStateTimestamps[i][delayindex[j]], DelayDur))
-            for j in range(0, len(lickleft)):
-                ActionEvent().insert1((int(key[0]), int(key[1]), i, 'left lick', OriginalEventTimestamps[i][lickleft[j]]))
-            for j in range(0, len(lickright)):
-                ActionEvent().insert1((int(key[0]), int(key[1]), i, 'right lick', OriginalEventTimestamps[i][lickright[j]]))
 
 @schema 
 class TrialNoteType(dj.Lookup):
@@ -152,14 +70,12 @@ class TrialEventType(dj.Lookup):
     """
     contents = zip(('delay', 'go', 'sample', 'presample', 'bitcode'))
 
-
 @schema
 class Outcome(dj.Lookup):
     definition = """
     outcome : varchar(8)
     """
     contents = zip(('hit', 'miss', 'ignore'))
-
 
 @schema 
 class EarlyLick(dj.Lookup):
@@ -261,7 +177,6 @@ class Photostim(dj.Lookup):
         ---
         intensity_timecourse   :  longblob  # (mW/mm^2)
         """
-
 
 @schema
 class PhotostimTrial(dj.Imported):
