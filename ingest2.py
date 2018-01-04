@@ -6,7 +6,7 @@ import logging
 from itertools import chain
 from collections import namedtuple
 
-from code import interact
+form code import interact
 
 import scipy.io as spio
 import numpy as np
@@ -36,8 +36,8 @@ class RigDataPath(dj.Lookup):
         if 'rig_data_paths' in dj.config:  # for local testing
             return dj.config['rig_data_paths']
 
-        return (('RRig', r'Z:\\MATLAB\Bpod Local\Data'), ('TRig1', r'R:\\Arduino\Bpod_Train1\Bpod Local\Data'),
-                ('TRig2', r'Q:\\Users\labadmin\Documents\MATLAB\Bpod Local\Data'), ('TRig3', r'S:\\MATLAB\Bpod Local\Data'))
+        return (('RRig', r'H:\\data\bpodRecord'), ('TRig1', r'R:\\Arduino\Bpod_Train1\Bpod Local\Data'),
+                ('TRig2', r'S:\\MATLAB\Bpod Local\Data'))
 
 
 @schema
@@ -53,23 +53,20 @@ class RigDataFile(dj.Imported):
         return RigDataPath()
 
     def make(self, key):
-        log.info('RigDataFile.make(): key:', key)
-        rig, data_path = (RigDataPath() & {'rig': key['rig']}).fetch1().values()
+        log.info('RigDataFIle.make(): key:', key)
+        rig, data_path = (RigDataPath() & dict(rig=key['rig'])).fetch1().values()
         log.info('RigDataFile.make(): searching %s' % rig)
 
-        initial = list(k['rig_data_file'] for k in
+        initial = list(k['rig_data_file'] for k in # only add the new files, have to overwrite populate for this: populate checks the primary key upstream, but this is the dir
                        (self & key).fetch(as_dict=True))
 
-        for root, dirs, files in os.walk(data_path):
+        for root, dirs, files in os.walk(data_path): # oswalk goes through subpath
             log.debug('RigDataFile.make(): traversing %s' % root)
             subpaths = list(os.path.join(root, f)
                             .split(data_path)[1].lstrip(os.path.sep)
-                            for f in files if f.endswith('.mat')
-                            and 'TW_autoTrain' in f)
+                            for f in files if f.endswith('.mat') and 'TW_autoTrain' in f)
 
-            subpaths.sort()  # ascending dates help sequential session id
-
-            self.insert(list((rig, f,) for f in subpaths if f not in initial))
+            self.insert(list((rig, f,) for f in subpaths if f not in initial)) #add the new file
 
     def populate(self):
         '''
@@ -103,114 +100,93 @@ class RigDataFileIngest(dj.Imported):
                   .format(f=dict(rigdir=rigdir, rigfile=rigfile,
                                  filename=filename, fullpath=fullpath)))
 
+        log.info('RigDataFileIngest.make(): Loading {f}'
+                 .format(f=fullpath))
+
         # split files like 'dl7_TW_autoTrain_20171114_140357.mat'
         h2o, t1, t2, date, time = filename.split('.')[0].split('_')
+
+        if os.stat(fullpath).st_size/1024 < 500:
+            log.info('skipping file {f} - too small'.format(f=fullpath))
+            return
 
         if not (lab.AnimalWaterRestriction() & {'water_restriction': h2o}): # hack to only ingest files with a water restriction number
             log.info('skipping file {f} - no water restriction #'.format(f=fullpath))
             return
 
+        # '%%' vs '%' due to datajoint-python/issues/376
+        dups = (RigDataFile() & "rig_data_file like '%%{h2o}%%{date}%%'"
+                .format(h2o=h2o, date=date))
+
+        if len(dups) > 1:
+            # TODO: handle split file
+            log.warning('split session case detected for {h2o} on {date}'
+                        .format(h2o=h2o, date=date))
+            return
+
+        skey = {}
         # lookup animal
         log.debug('looking up animal for {h2o}'.format(h2o=h2o))
         animal = (lab.AnimalWaterRestriction()
                   & {'water_restriction': h2o}).fetch1('animal')
         log.info('animal is {animal}'.format(animal=animal))
 
-        # session record key
-        skey = {}
+        # synthesize session id
+        log.debug('synthesizing session ID')
+        session = (dj.U().aggr(experiment.Session() & {'animal': animal},
+                               n='max(session)').fetch1('n') or 0) + 1
+        log.info('generated session id: {session}'.format(session=session))
+
         skey['animal'] = animal
+        skey['session'] = session
         skey['session_date'] = date[0:4] + '-' + date[4:6] + '-' + date[6:8]
         skey['username'] = 'daveliu'
         skey['rig'] = key['rig']
+        key = dict(key, **skey)
 
-        # session:date relationship is 1:1; skip if we have a seession
         if experiment.Session() & skey:
-            log.warning("Warning! session exists for {f}".format(f=rigfile))
-            return
+            log.warning("Warning! session exists for {f}".format(rigfile))
+
+        log.debug('ImportedSessionFileIngest.make(): adding session record')
+        # XXX: note - later breaks can result in Sessions without valid trials
+        experiment.Session().insert1(skey)
 
         #
-        # Check for split files and prepare filelists
-        # XXX: not querying by rig.. 2+ sessions on 2+ rigs possible?
+        # Extract trial data from file & prepare trial loop
         #
 
-        # '%%' vs '%' due to datajoint-python/issues/376
-        daily = (RigDataFile() & "rig_data_file like '%%{h2o}%%{date}%%'"
-                 .format(h2o=h2o, date=date)).fetch('rig_data_file')
+        mat = spio.loadmat(fullpath, squeeze_me=True)
+        SessionData = mat['SessionData'].flatten()
 
-        daily = list(os.path.join(rigdir, x) for x in daily)
+        AllTrialTypes = SessionData['TrialTypes'][0]
+        AllTrialSettings = SessionData['TrialSettings'][0]
 
-        if len(daily) > 1:
-            log.warning('split session case detected for {h2o} on {date}'
-                        .format(h2o=h2o, date=date))
+        RawData = SessionData['RawData'][0].flatten()
+        AllStateNames = RawData['OriginalStateNamesByNumber'][0]
+        AllStateData = RawData['OriginalStateData'][0]
+        AllEventData = RawData['OriginalEventData'][0]
+        AllStateTimestamps = RawData['OriginalStateTimestamps'][0]
+        AllEventTimestamps = RawData['OriginalEventTimestamps'][0]
 
-        #
-        # Extract trial data from file(s) & prepare trial loop
-        #
-
-        trials = zip()
+        # verify trial-related data arrays are all same length
+        assert(all((x.shape[0] == AllStateTimestamps.shape[0] for x in
+                    (AllTrialTypes, AllTrialSettings, AllStateNames,
+                     AllStateData, AllEventData, AllEventTimestamps))))
 
         trial = namedtuple(  # simple structure to track per-trial vars
             'trial', ('ttype', 'settings', 'state_times', 'state_names',
                       'state_data', 'event_data', 'event_times'))
 
-        for f in daily:
-            # interact('dailyloop', local=locals())
-
-            if os.stat(f).st_size/1024 < 500:
-                log.info('skipping file {f} - too small'.format(f=fullpath))
-                continue
-
-            mat = spio.loadmat(f, squeeze_me=True)
-            SessionData = mat['SessionData'].flatten()
-
-            AllTrialTypes = SessionData['TrialTypes'][0]
-            AllTrialSettings = SessionData['TrialSettings'][0]
-
-            RawData = SessionData['RawData'][0].flatten()
-            AllStateNames = RawData['OriginalStateNamesByNumber'][0]
-            AllStateData = RawData['OriginalStateData'][0]
-            AllEventData = RawData['OriginalEventData'][0]
-            AllStateTimestamps = RawData['OriginalStateTimestamps'][0]
-            AllEventTimestamps = RawData['OriginalEventTimestamps'][0]
-
-            # verify trial-related data arrays are all same length
-            assert(all((x.shape[0] == AllStateTimestamps.shape[0] for x in
-                        (AllTrialTypes, AllTrialSettings, AllStateNames,
-                         AllStateData, AllEventData, AllEventTimestamps))))
-
-            z = zip(AllTrialTypes, AllTrialSettings, AllStateTimestamps,
-                    AllStateNames, AllStateData, AllEventData,
-                    AllEventTimestamps)
-
-            trials = chain(trials, z)
-
-        trials = list(trials)
-
-        # all files were invalid / size < 500k
-        if not trials:
-            log.warning('skipping date {d}, no valid files'.format(d=date))
+        AllTrials = zip(AllTrialTypes, AllTrialSettings, AllStateTimestamps,
+                        AllStateNames, AllStateData, AllEventData,
+                        AllEventTimestamps)
 
         #
-        # Trial data seems valid; synthesize session id & add session record
-        # XXX: note - later breaks can result in Sessions without valid trials
-        #
-
-        log.debug('synthesizing session ID')
-        session = (dj.U().aggr(experiment.Session() & {'animal': animal},
-                               n='max(session)').fetch1('n') or 0) + 1
-        log.info('generated session id: {session}'.format(session=session))
-        skey['session'] = session
-        key = dict(key, **skey)
-
-        log.debug('ImportedSessionFileIngest.make(): adding session record')
-        experiment.Session().insert1(skey)
-
-        #
-        # Actually load the per-trial data
+        # Actually load per-trial data
         #
 
         i = -1
-        for t in trials:
+        for t in AllTrials:
 
             #
             # Misc
@@ -262,7 +238,7 @@ class RigDataFileIngest(dj.Imported):
             #
             # 1 Water-Valve-Calibration 2 Licking 3 Autoassist
             # 4 No autoassist 5 DelayEnforce 6 SampleEnforce 7 Fixed
-            # only ingest protocol >= 5
+            # only ingest protocol >= 4
 
             if 'ProtocolType' not in gui.dtype.names:
                 log.info('skipping trial {i}; protocol undefined'
@@ -270,12 +246,13 @@ class RigDataFileIngest(dj.Imported):
                 continue
 
             protocol_type = gui['ProtocolType'][0]
-            if gui['ProtocolType'][0] < 4:
-                log.info('skipping trial {i}; protocol {n} < 4'
+            if gui['ProtocolType'][0] < 3:
+                log.info('skipping trial {i}; protocol {n} < 3'
                          .format(i=i, n=gui['ProtocolType'][0]))
                 continue
 
-            #
+            autolearn = gui['Autolearn'][0]
+
             # Top-level 'Trial' record
             #
 
@@ -367,6 +344,16 @@ class RigDataFileIngest(dj.Imported):
             experiment.TrialNote().insert1(nkey, ignore_extra_fields=True)
 
             #
+            # Add 'autolearn' note
+            #
+
+            nkey = dict(tkey)
+            nkey['trial_note_type'] = 'autolearn'
+            nkey['trial_note'] = str(autolearn)
+
+            experiment.TrialNote().insert1(nkey, ignore_extra_fields=True)
+
+            #
             # Add presample event
             #
 
@@ -430,11 +417,9 @@ class RigDataFileIngest(dj.Imported):
             lickleft = np.where(t.event_data == 69)[0]
             log.debug('... lickleft: {r}'.format(r=str(lickleft)))
             if len(lickleft):
-                # TODO: is 'sample' the type?
                 leftlicks = list(
-                    (dict(**tkey,
-                          action_event_type='left lick',
-                          action_event_time=t.event_times[l])
+                    (dict(**tkey, action_event_type='left lick',
+                          action_event_time=t.event_times[l], duration=1)
                      for l in lickleft))
 
                 experiment.ActionEvent().insert(
@@ -444,9 +429,8 @@ class RigDataFileIngest(dj.Imported):
             log.debug('... lickright: {r}'.format(r=str(lickright)))
             if len(lickright):
                 rightlicks = list(
-                    (dict(**tkey,
-                          action_event_type='right lick',
-                          action_event_time=t.event_times[r])
+                    (dict(**tkey, action_event_type='right lick',
+                          action_event_time=t.event_times[r], duration=1)
                      for r in lickright))
 
                 experiment.ActionEvent().insert(
