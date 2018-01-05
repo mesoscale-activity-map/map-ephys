@@ -125,8 +125,13 @@ class RigDataFileIngest(dj.Imported):
 
         # lookup animal
         log.debug('looking up animal for {h2o}'.format(h2o=h2o))
-        animal = (lab.AnimalWaterRestriction()
-                  & {'water_restriction': h2o}).fetch1('animal')
+        animal = (lab.AnimalWaterRestriction() & {'water_restriction': h2o})
+
+        if not len(animal):
+            log.warning('skipping - no animal found')
+            return
+
+        animal = animal.fetch1('animal')
         log.info('animal is {animal}'.format(animal=animal))
 
         # session record key
