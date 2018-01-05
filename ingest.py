@@ -120,7 +120,8 @@ class RigDataFileIngest(dj.Imported):
                                  filename=filename, fullpath=fullpath)))
 
         # split files like 'dl7_TW_autoTrain_20171114_140357.mat'
-        h2o, t1, t2, date, time = filename.split('.')[0].split('_')
+        fsplit = filename.split('.')[0].split('_')
+        h2o, date = (fsplit[0], fsplit[-2:-1][0],)
 
         # lookup animal
         log.debug('looking up animal for {h2o}'.format(h2o=h2o))
