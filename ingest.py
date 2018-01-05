@@ -276,7 +276,7 @@ class RigDataFileIngest(dj.Imported):
 
             gui = t.settings['GUI'].flatten()
 
-            # ProtocolType - only ingest protocol >= 4
+            # ProtocolType - only ingest protocol >= 3
             #
             # 1 Water-Valve-Calibration 2 Licking 3 Autoassist
             # 4 No autoassist 5 DelayEnforce 6 SampleEnforce 7 Fixed
