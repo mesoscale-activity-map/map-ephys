@@ -6,8 +6,6 @@ import logging
 from itertools import chain
 from collections import namedtuple
 
-from code import interact
-
 import scipy.io as spio
 import numpy as np
 
@@ -28,7 +26,8 @@ class RigDataPath(dj.Lookup):
     definition = """
     -> lab.Rig
     ---
-    rig_data_path:             varchar(1024)           # rig data path
+    rig_data_path:              varchar(1024)           # rig data path
+    rig_search_order:           int                     # rig search order
     """
 
     @property
@@ -36,8 +35,10 @@ class RigDataPath(dj.Lookup):
         if 'rig_data_paths' in dj.config:  # for local testing
             return dj.config['rig_data_paths']
 
-        return (('RRig', r'Z:\\MATLAB\Bpod Local\Data'), ('TRig1', r'R:\\Arduino\Bpod_Train1\Bpod Local\Data'),
-                ('TRig2', r'Q:\\Users\labadmin\Documents\MATLAB\Bpod Local\Data'), ('TRig3', r'S:\\MATLAB\Bpod Local\Data'))
+        return (('TRig1', r'R:\\Arduino\Bpod_Train1\Bpod Local\Data', 0),
+                ('TRig2', r'Q:\\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
+                ('TRig3', r'S:\\MATLAB\Bpod Local\Data', 2),
+                ('RRig', r'Z:\\MATLAB\Bpod Local\Data', 3),)
 
 
 @schema
@@ -54,12 +55,20 @@ class RigDataFile(dj.Imported):
 
     def make(self, key):
         log.info('RigDataFile.make(): key:', key)
-        rig, data_path = (RigDataPath() & {'rig': key['rig']}).fetch1().values()
+
+        rig = key['rig']
+        data_path = (RigDataPath() & {'rig': rig}).fetch1('rig_data_path')
+
         log.info('RigDataFile.make(): searching %s' % rig)
+
+        # only add the new files, have to overwrite populate for this:
+        # populate checks the primary key upstream, but this is the dir which
+        # is common to all records and so will not trigger make after 1st run.
 
         initial = list(k['rig_data_file'] for k in
                        (self & key).fetch(as_dict=True))
 
+        # os.walk through the subpath
         for root, dirs, files in os.walk(data_path):
             log.debug('RigDataFile.make(): traversing %s' % root)
             subpaths = list(os.path.join(root, f)
@@ -67,17 +76,25 @@ class RigDataFile(dj.Imported):
                             for f in files if f.endswith('.mat')
                             and 'TW_autoTrain' in f)
 
-            subpaths.sort()  # ascending dates help sequential session id
+            subpaths.sort()  # sort ascending dates for sequential session id
 
+            # add the new file
             self.insert(list((rig, f,) for f in subpaths if f not in initial))
 
     def populate(self):
         '''
-        Overriding populate since presence of any rig_data_file
-        will prevent that key to be given to Make.
+        Overriding populate:
+
+        - presence of any instance of rig_data_path in table blocks (re)make
+        - we want to guarantee a custom ingest sequence by rig_search_order
+          since synthetic session id's depend on ingest sequence
         '''
-        for k in self.key_source.fetch(as_dict=True):
-            self.make(k)
+
+        todo = self.key_source
+        keys = todo.fetch(dj.key, order_by='rig_search_order')
+
+        for k in keys:
+            self.make(dict(k))
 
 
 @schema
@@ -104,17 +121,18 @@ class RigDataFileIngest(dj.Imported):
                                  filename=filename, fullpath=fullpath)))
 
         # split files like 'dl7_TW_autoTrain_20171114_140357.mat'
-        # some files are like 'tw6_orig_TW_autoTrain_20171029_203629.mat'
-        h2o, t1, t2, date, time = filename.split('.')[0].split('_')
-
-        if not (lab.AnimalWaterRestriction() & {'water_restriction': h2o}): # hack to only ingest files with a water restriction number
-            log.info('skipping file {f} - no water restriction #'.format(f=fullpath))
-            return
+        fsplit = filename.split('.')[0].split('_')
+        h2o, date = (fsplit[0], fsplit[-2:-1][0],)
 
         # lookup animal
         log.debug('looking up animal for {h2o}'.format(h2o=h2o))
-        animal = (lab.AnimalWaterRestriction()
-                  & {'water_restriction': h2o}).fetch1('animal')
+        animal = (lab.AnimalWaterRestriction() & {'water_restriction': h2o})
+
+        if not len(animal):
+            log.warning('skipping - no animal found')
+            return
+
+        animal = animal.fetch1('animal')
         log.info('animal is {animal}'.format(animal=animal))
 
         # session record key
@@ -124,14 +142,14 @@ class RigDataFileIngest(dj.Imported):
         skey['username'] = 'daveliu'
         skey['rig'] = key['rig']
 
-        # session:date relationship is 1:1; skip if we have a session
+        # session:date relationship is 1:1; skip if we have a seession
         if experiment.Session() & skey:
             log.warning("Warning! session exists for {f}".format(f=rigfile))
             return
 
         #
         # Check for split files and prepare filelists
-        # XXX: not querying by rig.. 2+ sessions on 2+ rigs possible?
+        # XXX: not querying by rig.. 2+ sessions on 2+ rigs possible for date?
         #
 
         # '%%' vs '%' due to datajoint-python/issues/376
@@ -155,7 +173,6 @@ class RigDataFileIngest(dj.Imported):
                       'state_data', 'event_data', 'event_times'))
 
         for f in daily:
-            # interact('dailyloop', local=locals())
 
             if os.stat(f).st_size/1024 < 500:
                 log.info('skipping file {f} - too small'.format(f=fullpath))
@@ -187,7 +204,7 @@ class RigDataFileIngest(dj.Imported):
 
         trials = list(trials)
 
-        # all files were invalid / size < 500k
+        # all files were internally invalid or size < 500k
         if not trials:
             log.warning('skipping date {d}, no valid files'.format(d=date))
 
@@ -259,11 +276,11 @@ class RigDataFileIngest(dj.Imported):
 
             gui = t.settings['GUI'].flatten()
 
-            # ProtocolType
+            # ProtocolType - only ingest protocol >= 4
             #
             # 1 Water-Valve-Calibration 2 Licking 3 Autoassist
             # 4 No autoassist 5 DelayEnforce 6 SampleEnforce 7 Fixed
-            # only ingest protocol >= 5
+            #
 
             if 'ProtocolType' not in gui.dtype.names:
                 log.info('skipping trial {i}; protocol undefined'
@@ -368,6 +385,16 @@ class RigDataFileIngest(dj.Imported):
             experiment.TrialNote().insert1(nkey, ignore_extra_fields=True)
 
             #
+            # Add 'autolearn' note
+            #
+
+            nkey = dict(tkey)
+            nkey['trial_note_type'] = 'autolearn'
+            nkey['trial_note'] = str(gui['Autolearn'][0])
+
+            experiment.TrialNote().insert1(nkey, ignore_extra_fields=True)
+
+            #
             # Add presample event
             #
 
@@ -444,6 +471,7 @@ class RigDataFileIngest(dj.Imported):
             lickright = np.where(t.event_data == 70)[0]
             log.debug('... lickright: {r}'.format(r=str(lickright)))
             if len(lickright):
+                # TODO: is 'sample' the type?
                 rightlicks = list(
                     (dict(**tkey,
                           action_event_type='right lick',
