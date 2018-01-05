@@ -36,8 +36,9 @@ class RigDataPath(dj.Lookup):
             return dj.config['rig_data_paths']
 
         return (('TRig1', r'R:\\Arduino\Bpod_Train1\Bpod Local\Data', 0),
-                ('TRig2', r'S:\\MATLAB\Bpod Local\Data', 1),
-                ('RRig', r'H:\\data\bpodRecord', 2),)
+                ('TRig2', r'Q:\\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
+                ('TRig3', r'S:\\MATLAB\Bpod Local\Data', 2),
+                ('RRig', r'Z:\\MATLAB\Bpod Local\Data', 3),)
 
 
 @schema
@@ -287,8 +288,8 @@ class RigDataFileIngest(dj.Imported):
                 continue
 
             protocol_type = gui['ProtocolType'][0]
-            if gui['ProtocolType'][0] < 4:
-                log.info('skipping trial {i}; protocol {n} < 4'
+            if gui['ProtocolType'][0] < 3:
+                log.info('skipping trial {i}; protocol {n} < 3'
                          .format(i=i, n=gui['ProtocolType'][0]))
                 continue
 
@@ -459,10 +460,9 @@ class RigDataFileIngest(dj.Imported):
             if len(lickleft):
                 # TODO: is 'sample' the type?
                 leftlicks = list(
-                    (dict(**tkey, trial_event_type='sample',
-                          trial_event_time=t.event_times[l],
+                    (dict(**tkey,
                           action_event_type='left lick',
-                          action_event_time=t.event_times[l], duration=1)
+                          action_event_time=t.event_times[l])
                      for l in lickleft))
 
                 experiment.ActionEvent().insert(
@@ -473,10 +473,9 @@ class RigDataFileIngest(dj.Imported):
             if len(lickright):
                 # TODO: is 'sample' the type?
                 rightlicks = list(
-                    (dict(**tkey, trial_event_type='sample',
-                          trial_event_time=t.event_times[r],
+                    (dict(**tkey,
                           action_event_type='right lick',
-                          action_event_time=t.event_times[r], duration=1)
+                          action_event_time=t.event_times[r])
                      for r in lickright))
 
                 experiment.ActionEvent().insert(
