@@ -276,7 +276,7 @@ class RigDataFileIngest(dj.Imported):
 
             gui = t.settings['GUI'].flatten()
 
-            # ProtocolType - only ingest protocol >= 4
+            # ProtocolType - only ingest protocol >= 3
             #
             # 1 Water-Valve-Calibration 2 Licking 3 Autoassist
             # 4 No autoassist 5 DelayEnforce 6 SampleEnforce 7 Fixed
@@ -458,7 +458,6 @@ class RigDataFileIngest(dj.Imported):
             lickleft = np.where(t.event_data == 69)[0]
             log.debug('... lickleft: {r}'.format(r=str(lickleft)))
             if len(lickleft):
-                # TODO: is 'sample' the type?
                 leftlicks = list(
                     (dict(**tkey,
                           action_event_type='left lick',
@@ -471,7 +470,6 @@ class RigDataFileIngest(dj.Imported):
             lickright = np.where(t.event_data == 70)[0]
             log.debug('... lickright: {r}'.format(r=str(lickright)))
             if len(lickright):
-                # TODO: is 'sample' the type?
                 rightlicks = list(
                     (dict(**tkey,
                           action_event_type='right lick',
