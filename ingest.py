@@ -33,10 +33,11 @@ class RigDataPath(dj.Lookup):
         if 'rig_data_paths' in dj.config:  # for local testing
             return dj.config['rig_data_paths']
 
-        return (('TRig1', r'R:\\Arduino\Bpod_Train1\Bpod Local\Data', 0),
-                ('TRig2', r'Q:\\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
-                ('TRig3', r'S:\\MATLAB\Bpod Local\Data', 2),
-                ('RRig', r'Z:\\MATLAB\Bpod Local\Data', 3),)
+        return (#('TRig1', r'R:\\Arduino\Bpod_Train1\Bpod Local\Data', 0),
+                #('TRig2', r'Q:\\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
+                #('TRig3', r'S:\\MATLAB\Bpod Local\Data', 2),
+                #('RRig', r'Z:\\MATLAB\Bpod Local\Data', 3),
+                ('RRig', r'H:\data\bpodRecord', 3),)
 
 @schema
 class RigDataFile(dj.Imported):
