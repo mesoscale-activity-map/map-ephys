@@ -14,15 +14,13 @@ import datajoint as dj
 import lab
 import experiment
 
-
 log = logging.getLogger(__name__)
 schema = dj.schema(dj.config['ingest.database'], locals())
-
 
 @schema
 class RigDataPath(dj.Lookup):
     ''' rig storage locations '''
-    # todo: cross platform path mapping needed?
+    # todo: use a good_experiment_date table to constrain ingest of files in order
     definition = """
     -> lab.Rig
     ---
@@ -39,7 +37,6 @@ class RigDataPath(dj.Lookup):
                 ('TRig2', r'Q:\\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
                 ('TRig3', r'S:\\MATLAB\Bpod Local\Data', 2),
                 ('RRig', r'Z:\\MATLAB\Bpod Local\Data', 3),)
-
 
 @schema
 class RigDataFile(dj.Imported):
@@ -96,7 +93,6 @@ class RigDataFile(dj.Imported):
         for k in keys:
             self.make(dict(k))
 
-
 @schema
 class RigDataFileIngest(dj.Imported):
     definition = """
@@ -142,7 +138,7 @@ class RigDataFileIngest(dj.Imported):
         skey['username'] = 'daveliu'
         skey['rig'] = key['rig']
 
-        # session:date relationship is 1:1; skip if we have a seession
+        # session:date relationship is 1:1; skip if we have a session
         if experiment.Session() & skey:
             log.warning("Warning! session exists for {f}".format(f=rigfile))
             return
@@ -241,7 +237,7 @@ class RigDataFileIngest(dj.Imported):
 
             # covert state data names into a lookup dictionary
             #
-            # names (seem to be? are?):
+            # names
             #
             # Trigtrialstart
             # PreSamplePeriod
