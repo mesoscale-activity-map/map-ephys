@@ -1,7 +1,7 @@
 # map-ephys
 Mesoscale activity ephys ingest schema
 
-For testing the schema, the dj_local_conf.json should have the following configuartion variables to modify data without affecting  others's databases
+For testing the schema, the dj_local_conf.json should have the following configuration variables to modify data without affecting  others's databases
 
 "ingest.database": "[username]_ingest",
 "ccf.database": "[username]_ccf",
@@ -9,7 +9,7 @@ For testing the schema, the dj_local_conf.json should have the following configu
 "experiment.database": "[username]_map_experi",
 "lab.database": "[username]_map",
 
-ingest.py requires the rig_data_path and the username to be specified.
+ingest.py requires the rig_data_path and the username to be specified in the code.
 
 See Ingest Behavior Data.ipynb for the required tables to be inserted. The example behavioral data file is 'tw5_TW_autoTrain_20171021_150914.mat'.
 
