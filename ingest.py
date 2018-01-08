@@ -1,11 +1,12 @@
 #! /usr/bin/env python
 
 import os
+import glob
 import logging
+import datetime
 
 from itertools import chain
 from collections import namedtuple
-import datetime
 
 import scipy.io as spio
 import numpy as np
@@ -81,7 +82,7 @@ class SessionDiscovery(dj.Manual):
             data_path = r['rig_data_path']
             for root, dirs, files in os.walk(data_path):
 
-                log.debug('RigDataFile.make(): traversing %s' % root)
+                log.info('RigDataFile.make(): traversing %s' % root)
                 subpaths = list(os.path.join(root, f)
                                 .split(data_path)[1].lstrip(os.path.sep)
                                 for f in files if f.endswith('.mat')
@@ -96,12 +97,13 @@ class SessionDiscovery(dj.Manual):
                     h2o, date = (fsplit[0], fsplit[-2:-1][0],)
 
                     if h2o not in h2os:
-                        log.warning('skipping - no animal for h2o %s' % h2o)
+                        log.warning('{f} skipped - no animal for {h2o}'.format(
+                            f=filename, h2o=h2o))
                         continue
                     else:
                         animal = h2os[h2o]
 
-                    log.info('animal is {animal}'.format(animal=animal))
+                    log.debug('animal is {animal}'.format(animal=animal))
 
                     key = {
                         'animal': animal,
@@ -119,125 +121,75 @@ class SessionDiscovery(dj.Manual):
 
 
 @schema
-class RigDataFile(dj.Imported):
-    ''' files in rig-specific storage '''
-    definition = """
-    -> RigDataPath
-    rig_data_file:              varchar(255)          # rig file subpath
-    """
-
-    @property
-    def key_source(self):
-        return RigDataPath()
-
-    def make(self, key):
-        log.info('RigDataFile.make(): key:', key)
-
-        rig = key['rig']
-        data_path = (RigDataPath() & {'rig': rig}).fetch1('rig_data_path')
-
-        log.info('RigDataFile.make(): searching %s' % rig)
-
-        # only add the new files, have to overwrite populate for this:
-        # populate checks the primary key upstream, but this is the dir which
-        # is common to all records and so will not trigger make after 1st run.
-
-        initial = list(k['rig_data_file'] for k in
-                       (self & key).fetch(as_dict=True))
-
-        # os.walk through the subpath
-        for root, dirs, files in os.walk(data_path):
-            log.debug('RigDataFile.make(): traversing %s' % root)
-            subpaths = list(os.path.join(root, f)
-                            .split(data_path)[1].lstrip(os.path.sep)
-                            for f in files if f.endswith('.mat')
-                            and 'TW_autoTrain' in f)
-
-            subpaths.sort()  # sort ascending dates for sequential session id
-
-            # add the new file
-            self.insert(list((rig, f,) for f in subpaths if f not in initial))
-
-    def populate(self):
-        '''
-        Overriding populate:
-
-        - presence of any instance of rig_data_path in table blocks (re)make
-        - we want to guarantee a custom ingest sequence by rig_search_order
-          since synthetic session id's depend on ingest sequence
-        '''
-
-        todo = self.key_source
-        keys = todo.fetch(dj.key, order_by='rig_search_order')
-
-        for k in keys:
-            self.make(dict(k))
-
-
-@schema
 class BehaviorIngest(dj.Imported):
     definition = """
-    -> RigDataFile
+    -> SessionDiscovery
     ---
     -> experiment.Session
     """
 
+    class BehaviorFile(dj.Part):
+        # TODO: track files
+        ''' files in rig-specific storage '''
+        definition = """
+        -> BehaviorIngest
+        behavior_file:              varchar(255)          # rig file subpath
+        """
+
     def make(self, key):
+        log.info('BehaviorIngest.make(): key: {key}'.format(key=key))
+        rigpaths = [p for p in RigDataPath().fetch(order_by='rig_data_path')
+                    if 'TRig' in p['rig']]
 
-        #
-        # Handle filename & Construct Session
-        #
-
-        rigdir = (RigDataPath() & key).fetch1('rig_data_path')
-        rigfile = key['rig_data_file']
-        filename = os.path.basename(rigfile)
-        fullpath = os.path.join(rigdir, rigfile)
-
-        log.debug('RigDataFileIngest.make(): {f}'
-                  .format(f=dict(rigdir=rigdir, rigfile=rigfile,
-                                 filename=filename, fullpath=fullpath)))
-
-        # split files like 'dl7_TW_autoTrain_20171114_140357.mat'
-        fsplit = filename.split('.')[0].split('_')
-        h2o, date = (fsplit[0], fsplit[-2:-1][0],)
-
-        # lookup animal
-        log.debug('looking up animal for {h2o}'.format(h2o=h2o))
-        animal = (lab.AnimalWaterRestriction() & {'water_restriction': h2o})
-
-        if not len(animal):
-            log.warning('skipping - no animal found')
-            return
-
-        animal = animal.fetch1('animal')
-        log.info('animal is {animal}'.format(animal=animal))
+        animal = key['animal']
+        h2o = key['water_restriction']
+        date = key['session_date']
+        datestr = date.strftime('%Y%m%d')
+        log.debug('h2o: {h2o}, date: {d}'.format(h2o=h2o, d=datestr))
 
         # session record key
         skey = {}
         skey['animal'] = animal
-        skey['session_date'] = date[0:4] + '-' + date[4:6] + '-' + date[6:8]
+        skey['session_date'] = date
         skey['username'] = 'daveliu'
-        skey['rig'] = key['rig']
 
-        # session:date relationship is 1:1; skip if we have a seession
-        if experiment.Session() & skey:
-            log.warning("Warning! session exists for {f}".format(f=rigfile))
+        # e.g: Data/dl7/TW_autoTrain/dl7_TW_autoTrain_20180104_132813.mat
+        #         # p.split('/foo/bar')[1]
+        for rp in rigpaths:
+            root = rp['rig_data_path']
+            path = root
+            path = os.path.join(path, 'Data')
+            path = os.path.join(path, h2o)
+            path = os.path.join(path, 'TW_autoTrain')
+            path = os.path.join(
+                path, '{h2o}_TW_autoTrain_{d}*.mat'.format(h2o=h2o, d=datestr))
+
+            log.debug('rigpath {p}'.format(p=path))
+
+            matches = glob.glob(path)
+            if len(matches):
+                log.debug('found files, this is the rig')
+                skey['rig'] = rp['rig']
+                break
+
+        if not len(matches):
+            log.warning('no file matches found.. check directories')
             return
 
         #
-        # Check for split files and prepare filelists
-        # XXX: not querying by rig.. 2+ sessions on 2+ rigs possible for date?
+        # Find files & Check for split files
+        # XXX: not checking rig.. 2+ sessions on 2+ rigs possible for date?
         #
 
-        # '%%' vs '%' due to datajoint-python/issues/376
-        daily = (RigDataFile() & "rig_data_file like '%%{h2o}%%{date}%%'"
-                 .format(h2o=h2o, date=date)).fetch('rig_data_file')
-
-        daily = list(os.path.join(rigdir, x) for x in daily)
-
-        if len(daily) > 1:
+        if len(matches) > 1:
             log.warning('split session case detected for {h2o} on {date}'
                         .format(h2o=h2o, date=date))
+
+        # session:date relationship is 1:1; skip if we have a seession
+        if experiment.Session() & skey:
+            log.warning("Warning! session exists for {h2o} on {d}".format(
+                h2o=h2o, d=date))
+            return
 
         #
         # Extract trial data from file(s) & prepare trial loop
@@ -249,10 +201,10 @@ class BehaviorIngest(dj.Imported):
             'trial', ('ttype', 'settings', 'state_times', 'state_names',
                       'state_data', 'event_data', 'event_times'))
 
-        for f in daily:
+        for f in matches:
 
             if os.stat(f).st_size/1024 < 500:
-                log.info('skipping file {f} - too small'.format(f=fullpath))
+                log.info('skipping file {f} - too small'.format(f=f))
                 continue
 
             mat = spio.loadmat(f, squeeze_me=True)
@@ -297,7 +249,7 @@ class BehaviorIngest(dj.Imported):
         skey['session'] = session
         key = dict(key, **skey)
 
-        log.debug('ImportedSessionFileIngest.make(): adding session record')
+        log.debug('BehaviorIngest.make(): adding session record')
         experiment.Session().insert1(skey)
 
         #
@@ -314,7 +266,7 @@ class BehaviorIngest(dj.Imported):
             t = trial(*t)  # convert list of items to a 'trial' structure
             i += 1  # increment trial counter
 
-            log.info('ImportedSessionFileIngest.make(): trial {i}'.format(i=i))
+            log.info('BehaviorIngest.make(): trial {i}'.format(i=i))
 
             # covert state data names into a lookup dictionary
             #
@@ -390,7 +342,7 @@ class BehaviorIngest(dj.Imported):
             tkey['start_time'] = t.state_times[startindex][0]
             tkey['end_time'] = t.state_times[endindex][0]
 
-            log.debug('ImportedSessionFileIngest.make(): Trial().insert1')
+            log.debug('BehaviorIngest.make(): Trial().insert1')
             log.debug('tkey' + str(tkey))
             experiment.Session.Trial().insert1(tkey, ignore_extra_fields=True)
 
@@ -447,7 +399,7 @@ class BehaviorIngest(dj.Imported):
             bkey['outcome'] = outcome
 
             # add behavior record
-            log.debug('ImportedSessionFileIngest.make(): BehaviorTrial()')
+            log.debug('BehaviorIngest.make(): BehaviorTrial()')
             experiment.BehaviorTrial().insert1(bkey, ignore_extra_fields=True)
 
             #
@@ -458,7 +410,7 @@ class BehaviorIngest(dj.Imported):
             nkey['trial_note_type'] = 'protocol #'
             nkey['trial_note'] = str(protocol_type)
 
-            log.debug('ImportedSessionFileIngest.make(): TrialNote().insert1')
+            log.debug('BehaviorIngest.make(): TrialNote().insert1')
             experiment.TrialNote().insert1(nkey, ignore_extra_fields=True)
 
             #
@@ -483,7 +435,7 @@ class BehaviorIngest(dj.Imported):
             ekey['duration'] = (t.state_times[sampleindex[0]]
                                 - t.state_times[startindex])[0]
 
-            log.debug('ImportedSessionFileIngest.make(): presample')
+            log.debug('BehaviorIngest.make(): presample')
             experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
 
             #
@@ -497,14 +449,14 @@ class BehaviorIngest(dj.Imported):
             ekey['trial_event_time'] = t.state_times[responseindex][0]
             ekey['duration'] = gui['AnswerPeriod'][0]
 
-            log.debug('ImportedSessionFileIngest.make(): go')
+            log.debug('BehaviorIngest.make(): go')
             experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
 
             #
             # Add other 'sample' events
             #
 
-            log.debug('ImportedSessionFileIngest.make(): sample events')
+            log.debug('BehaviorIngest.make(): sample events')
             for s in sampleindex:  # in protocol > 6 ~-> n>1
                 # todo: batch events
                 ekey = dict(tkey)
@@ -519,7 +471,7 @@ class BehaviorIngest(dj.Imported):
 
             delayindex = np.where(t.state_data == states['DelayPeriod'])[0]
 
-            log.debug('ImportedSessionFileIngest.make(): delay events')
+            log.debug('BehaviorIngest.make(): delay events')
             for d in delayindex:  # protocol > 6 ~-> n>1
                 # todo: batch events
                 ekey = dict(tkey)
@@ -560,5 +512,10 @@ class BehaviorIngest(dj.Imported):
 
             # end of trial loop.
 
-        log.debug('RigDataFileIngest.make(): saving ingest {d}'.format(d=key))
+        log.debug('BehaviorIngest.make(): saving ingest {d}'.format(d=key))
+
         self.insert1(key, ignore_extra_fields=True)
+
+        BehaviorIngest.BehaviorFile().insert(
+            (dict(key, behavior_file=f.split(root)[1]) for f in matches),
+            ignore_extra_fields=True)
