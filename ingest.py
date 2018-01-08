@@ -42,6 +42,15 @@ class RigDataPath(dj.Lookup):
 
 
 @schema
+class SessionDiscovery(dj.Manual):
+    # table to populate sessions available in filesystem for discovery
+    definition = """
+    -> AnimalWaterRestriction
+    session_date:               date                    # discovered date
+    """
+
+
+@schema
 class RigDataFile(dj.Imported):
     ''' files in rig-specific storage '''
     definition = """
