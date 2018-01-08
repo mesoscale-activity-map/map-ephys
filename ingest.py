@@ -5,6 +5,7 @@ import logging
 
 from itertools import chain
 from collections import namedtuple
+import datetime
 
 import scipy.io as spio
 import numpy as np
@@ -43,11 +44,78 @@ class RigDataPath(dj.Lookup):
 
 @schema
 class SessionDiscovery(dj.Manual):
-    # table to populate sessions available in filesystem for discovery
+    '''
+    Table to populate sessions available in filesystem for discovery
+
+    Note: session date is duplicated w/r/t actual Session table;
+    this is somewhat unavoidable since session requires the
+    synthetic session ID and we are not quite ready to generate it;
+    put another way, this table helps to map one session ID (h2o+date)
+    into the 'official' sequential session ID of the main schema
+    '''
+
     definition = """
-    -> AnimalWaterRestriction
+    -> lab.AnimalWaterRestriction
     session_date:               date                    # discovered date
     """
+
+    def populate(self):
+        '''
+        Scan the RigDataPath records, looking for new unknown sesssions.
+
+        Local implementation, since we aren't really a computed table.
+        '''
+
+        rigs = [r for r in RigDataPath().fetch(as_dict=True)
+                if r['rig'].startswith('TRig')]  # todo?: rig 'type'?
+
+        h2os = {k: v for k, v in
+                zip(*lab.AnimalWaterRestriction().fetch(
+                    'water_restriction', 'animal'))}
+
+        initial = SessionDiscovery().fetch(as_dict=True)
+        log.debug('initial: %s' % initial)
+        found = []
+
+        for r in rigs:
+            data_path = r['rig_data_path']
+            for root, dirs, files in os.walk(data_path):
+
+                log.debug('RigDataFile.make(): traversing %s' % root)
+                subpaths = list(os.path.join(root, f)
+                                .split(data_path)[1].lstrip(os.path.sep)
+                                for f in files if f.endswith('.mat')
+                                and 'TW_autoTrain' in f)
+
+                for filename in subpaths:
+                    log.debug('found file %s' % filename)
+
+                    # split files like 'dl7_TW_autoTrain_20171114_140357.mat'
+                    filename = os.path.basename(filename)
+                    fsplit = filename.split('.')[0].split('_')
+                    h2o, date = (fsplit[0], fsplit[-2:-1][0],)
+
+                    if h2o not in h2os:
+                        log.warning('skipping - no animal for h2o %s' % h2o)
+                        continue
+                    else:
+                        animal = h2os[h2o]
+
+                    log.info('animal is {animal}'.format(animal=animal))
+
+                    key = {
+                        'animal': animal,
+                        'water_restriction': h2o,
+                        'session_date': datetime.date(
+                            int(date[0:4]), int(date[4:6]), int(date[6:8]))
+                    }
+
+                    if key not in found and key not in initial:
+                        log.info('found session: %s' % key)
+                        found.append(key)
+
+        # add the new sessions
+        self.insert(found)
 
 
 @schema

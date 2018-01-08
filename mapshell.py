@@ -19,7 +19,7 @@ __all__ = [ephys, lab, experiment, ccf, ingest]
 
 
 def usage_exit():
-    print("usage: {p} [populate|shell]"
+    print("usage: {p} [discover|populate|shell]"
           .format(p=os.path.basename(sys.argv[0])))
     sys.exit(0)
 
@@ -28,6 +28,10 @@ def logsetup(*args):
     logging.basicConfig(level=logging.ERROR)
     log.setLevel(logging.INFO)
     logging.getLogger('ingest').setLevel(logging.INFO)
+
+
+def discover(*args):
+    ingest.SessionDiscovery().populate()
 
 
 def populate(*args):
@@ -51,7 +55,8 @@ def shell(*args):
 
 actions = {
     'shell': shell,
-    'populate': populate
+    'discover': discover,
+    'populate': populate,
 }
 
 
