@@ -27,7 +27,6 @@ class ElectrodeGroup(dj.Manual):
     electrode_group : tinyint # Electrode_group is like the probe
     ---
     -> Probe
-    ephys_filepath  : varchar(255)   #  
     """
     
     class Electrode(dj.Part): # Can we force insert the electrode here? I am running into a lot of problems with the datatype cannot be inserted
