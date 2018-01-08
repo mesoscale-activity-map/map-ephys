@@ -107,7 +107,7 @@ class RigDataFile(dj.Imported):
 
 
 @schema
-class RigDataFileIngest(dj.Imported):
+class BehaviorIngest(dj.Imported):
     definition = """
     -> RigDataFile
     ---

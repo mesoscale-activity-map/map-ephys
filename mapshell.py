@@ -32,7 +32,7 @@ def logsetup(*args):
 
 def populate(*args):
     ingest.RigDataFile().populate()  # populate overridden; jobs n/a & ni
-    ingest.RigDataFileIngest().populate(
+    ingest.BehaviorIngest().populate(
         reserve_jobs=True, suppress_errors=True)
     ephys.ElectrodeGroup().insert1(
         (123456, 1, 1, '15131808323',
