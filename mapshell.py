@@ -37,7 +37,8 @@ def discover(*args):
 def populate(*args):
     # ingest.RigDataFile().populate()  # populate overridden; jobs n/a & ni
     ingest.BehaviorIngest().populate()
-    # 
+    ingest.EphysIngest().populate()
+    #
     # ephys.ElectrodeGroup().insert1(
     #     (123456, 1, 1, '15131808323',
     #      './data_all/RRig/real5ap_imec3_opt3_jrc.mat'))

@@ -40,7 +40,8 @@ class RigDataPath(dj.Lookup):
         return (('TRig1', r'R:\\Arduino\Bpod_Train1\Bpod Local\Data', 0),
                 ('TRig2', r'Q:\\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
                 ('TRig3', r'S:\\MATLAB\Bpod Local\Data', 2),
-                ('RRig', r'Z:\\MATLAB\Bpod Local\Data', 3),)
+                ('RRig', r'Z:\\MATLAB\Bpod Local\Data', 3),
+                ('EPhys1', r'H:\data\MAP', 4),)
 
 
 @schema
@@ -519,3 +520,39 @@ class BehaviorIngest(dj.Imported):
         BehaviorIngest.BehaviorFile().insert(
             (dict(key, behavior_file=f.split(root)[1]) for f in matches),
             ignore_extra_fields=True)
+
+
+@schema
+class EphysIngest(dj.Imported):
+    # subpaths like: \Spike\2017-10-21\tw5_imec3_opt3_jrc.mat
+
+    definition = """
+    -> SessionDiscovery
+    """
+
+    class EphysFile(dj.Part):
+        # TODO: track files
+        ''' files in rig-specific storage '''
+        definition = """
+        -> EphysIngest
+        ephys_file:              varchar(255)          # rig file subpath
+        """
+
+    def make(self, key):
+        log.info('EphysIngest().make(): key: {k}'.format(k=key))
+
+        rigpath = (RigDataPath() & {'rig': 'EPhys1'}).fetch1('rig_data_path')
+
+        date = key['session_date'].strftime('%Y-%m-%d')
+        file = '{h2o}_imec3_opt3_jrc.mat'.format(h2o=key['water_restriction'])
+
+        subpath = os.path.join('Spike', date, file)
+        fullpath = os.path.join(rigpath, subpath)
+
+        if not os.path.exists(fullpath):
+            log.info('EphysIngest().make(): skipping - no file in %s'
+                     % fullpath)
+            return
+
+        log.info('EphysIngest().make(): found ephys recording in %s'
+                 % fullpath)
