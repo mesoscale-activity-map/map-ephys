@@ -1,7 +1,7 @@
 # map-ephys
 Mesoscale activity ephys ingest schema
 
-For testing the schema, the dj_local_conf.json should have the following configuration variables to modify data without affecting  others's databases
+For testing the schema, the dj_local_conf.json should have the following configuration variables to modify data without affecting  others' databases
 
 "ingest.database": "[username]_ingest",
 "ccf.database": "[username]_ccf",
