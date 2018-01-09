@@ -9,8 +9,9 @@ For testing the schema, the dj_local_conf.json should have the following configu
 "experiment.database": "[username]_map_experi",
 "lab.database": "[username]_map",
 
-ingest.py requires the rig_data_path and the username to be specified in the code.
+ingest.py requires the rig_data_path and the username to be specified in the code. Also, SessionDiscoverty has the RigDataPath hard coded for now. We will probably have a RigType key to track the training and recording rigs.
 
-See Ingest Behavior Data.ipynb for the required tables to be inserted. The example behavioral data file is 'tw5_TW_autoTrain_20171021_150914.mat'.
+See Overview.ipynb for the required tables to be inserted.
 
-See Ingest Ephys Data for an example of the Ephys data ingestion. The example Ephys data file is 'real5ap_imec3_opt3_jrc.mat'.
+The example behavioral data file is 'tw5_TW_autoTrain_20171021_150914.mat'.
+The example Ephys data file is 'tw5ap_imec3_opt3_jrc.mat'.
