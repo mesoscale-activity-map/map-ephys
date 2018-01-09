@@ -71,7 +71,7 @@ class SessionDiscovery(dj.Manual):
         '''
 
         rigs = [r for r in RigDataPath().fetch(as_dict=True)
-                if r['rig'].startswith('TRig')]  # todo?: rig 'type'?
+                if r['rig'].startswith('RRig')]  # todo?: rig 'type'? Change between TRig and RRig for now
 
         h2os = {k: v for k, v in
                 zip(*lab.AnimalWaterRestriction().fetch(
@@ -142,7 +142,7 @@ class BehaviorIngest(dj.Imported):
     def make(self, key):
         log.info('BehaviorIngest.make(): key: {key}'.format(key=key))
         rigpaths = [p for p in RigDataPath().fetch(order_by='rig_data_path')
-                    if 'TRig' in p['rig']]
+                    if 'RRig' in p['rig']] # change between TRig and RRig
 
         animal = key['animal']
         h2o = key['water_restriction']
@@ -156,14 +156,14 @@ class BehaviorIngest(dj.Imported):
         skey['session_date'] = date
         skey['username'] = 'daveliu'
 
-        # e.g: Data/dl7/TW_autoTrain/dl7_TW_autoTrain_20180104_132813.mat
+        # e.g: dl7/TW_autoTrain/Session Data/dl7_TW_autoTrain_20180104_132813.mat
         #         # p.split('/foo/bar')[1]
         for rp in rigpaths:
             root = rp['rig_data_path']
             path = root
-            path = os.path.join(path, 'Data')
             path = os.path.join(path, h2o)
             path = os.path.join(path, 'TW_autoTrain')
+            path = os.path.join(path, 'Session Data')
             path = os.path.join(
                 path, '{h2o}_TW_autoTrain_{d}*.mat'.format(h2o=h2o, d=datestr))
 
@@ -188,7 +188,7 @@ class BehaviorIngest(dj.Imported):
             log.warning('split session case detected for {h2o} on {date}'
                         .format(h2o=h2o, date=date))
 
-        # session:date relationship is 1:1; skip if we have a seession
+        # session:date relationship is 1:1; skip if we have a session
         if experiment.Session() & skey:
             log.warning("Warning! session exists for {h2o} on {d}".format(
                 h2o=h2o, d=date))
@@ -525,7 +525,7 @@ class BehaviorIngest(dj.Imported):
 
 @schema
 class EphysIngest(dj.Imported):
-    # subpaths like: \Spike\2017-10-21\tw5_imec3_opt3_jrc.mat
+    # subpaths like: \Spike\2017-10-21\tw5ap_imec3_opt3_jrc.mat
 
     definition = """
     -> SessionDiscovery
@@ -548,7 +548,7 @@ class EphysIngest(dj.Imported):
 
         rigpath = (RigDataPath() & {'rig': 'EPhys1'}).fetch1('rig_data_path')
         date = key['session_date'].strftime('%Y-%m-%d')
-        file = '{h2o}_imec3_opt3_jrc.mat'.format(h2o=key['water_restriction'])
+        file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=key['water_restriction'])
         subpath = os.path.join('Spike', date, file)
         fullpath = os.path.join(rigpath, subpath)
 
