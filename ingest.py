@@ -39,7 +39,7 @@ class RigDataPath(dj.Lookup):
         if 'rig_data_paths' in dj.config:  # for local testing
             return dj.config['rig_data_paths']
 
-        return (('TRig1', r'R:\\Arduino\Bpod_Train1\Bpod Local\Data', 0),
+        return (('TRig1', r'R:\\Arduino\Bpod_Train1\Bpod Local\Data', 0), # Hardcode the rig path
                 ('TRig2', r'Q:\\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
                 ('TRig3', r'S:\\MATLAB\Bpod Local\Data', 2),
                 ('RRig', r'Z:\\MATLAB\Bpod Local\Data', 3),
@@ -75,9 +75,9 @@ class SessionDiscovery(dj.Manual):
 
         h2os = {k: v for k, v in
                 zip(*lab.AnimalWaterRestriction().fetch(
-                    'water_restriction', 'animal'))}
+                    'water_restriction', 'animal'))} # fetch existing water_restriction
 
-        initial = SessionDiscovery().fetch(as_dict=True)
+        initial = SessionDiscovery().fetch(as_dict=True) # sessions already discovered
         log.debug('initial: %s' % initial)
         found = []
 
@@ -89,7 +89,7 @@ class SessionDiscovery(dj.Manual):
                 subpaths = list(os.path.join(root, f)
                                 .split(data_path)[1].lstrip(os.path.sep)
                                 for f in files if f.endswith('.mat')
-                                and 'TW_autoTrain' in f)
+                                and 'TW_autoTrain' in f) # find files with TW_autoTrain for now
 
                 for filename in subpaths:
                     log.debug('found file %s' % filename)
@@ -117,7 +117,7 @@ class SessionDiscovery(dj.Manual):
 
                     if key not in found and key not in initial:
                         log.info('found session: %s' % key)
-                        found.append(key)
+                        found.append(key) # finding new sessions
 
         # add the new sessions
         self.insert(found)
@@ -154,7 +154,7 @@ class BehaviorIngest(dj.Imported):
         skey = {}
         skey['animal'] = animal
         skey['session_date'] = date
-        skey['username'] = 'daveliu'
+        skey['username'] = 'daveliu' # username has to be changed
 
         # e.g: dl7/TW_autoTrain/Session Data/dl7_TW_autoTrain_20180104_132813.mat
         #         # p.split('/foo/bar')[1]
@@ -232,7 +232,7 @@ class BehaviorIngest(dj.Imported):
                     AllStateNames, AllStateData, AllEventData,
                     AllEventTimestamps)
 
-            trials = chain(trials, z)
+            trials = chain(trials, z) # concatenate the files
 
         trials = list(trials)
 
