@@ -615,7 +615,7 @@ class EphysIngest(dj.Imported):
             trialunits2 = np.append(trialunits2, np.unique(trialunits[i]))
             trialunits1 = np.append(trialunits1, np.zeros(len(np.unique(trialunits[i])))+i)
         ephys.Ephys.Unit().insert(list(dict(ekey, unit = x, spike_times = units[x]) for x in unit_ids)) # batch insert the units
-        #experiment.Session.Trial() #TODO: fetch the trial from experiment.Session.Trial and realign
+        #experiment.Session.Trial() #TODO: fetch the trial from experiment.Session.Trial and realign?
         ephys.Ephys.TrialUnit().insert(list(dict(ekey, unit = trialunits1[x], trial = trialunits2[x]) for x in range(0, len(trialunits2)))) # batch insert the TrialUnit (key, unit, trial)
         ephys.Ephys.Spike().insert(list(dict(ekey, unit = cluster_ids[x], spike_time = spike_times2[x], electrode = viSite_spk[x], trial = spike_trials[x]) for x in range(0, len(spike_times2))), skip_duplicates=True) # batch insert the Spikes (key, unit, spike_time, electrode, trial)
 
