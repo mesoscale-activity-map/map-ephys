@@ -29,7 +29,7 @@ class ElectrodeGroup(dj.Manual):
     -> Probe
     """
     
-    class Electrode(dj.Part): # Can we force insert the electrode here? I am running into a lot of problems with the datatype cannot be inserted
+    class Electrode(dj.Part):
         definition = """
         -> ElectrodeGroup
         electrode : smallint # sites on the electrode

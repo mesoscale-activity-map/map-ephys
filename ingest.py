@@ -39,10 +39,10 @@ class RigDataPath(dj.Lookup):
         if 'rig_data_paths' in dj.config:  # for local testing
             return dj.config['rig_data_paths']
 
-        return (('TRig1', r'R:\\Arduino\Bpod_Train1\Bpod Local\Data', 0), # Hardcode the rig path
-                ('TRig2', r'Q:\\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
-                ('TRig3', r'S:\\MATLAB\Bpod Local\Data', 2),
-                ('RRig', r'Z:\\MATLAB\Bpod Local\Data', 3),
+        return (('TRig1', r'\MOHARB-NUC1\Document\Arduino\Bpod_Train1\Bpod Local\Data', 0), # Hardcode the rig path
+                ('TRig2', r'\MOHARB-WW2\C:\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
+                ('TRig3', r'\WANGT-NUC\documents\MATLAB\Bpod Local\Data', 2),
+                ('RRig', r'\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3),
                 ('EPhys1', r'H:\\data\MAP', 4),)
 
 
@@ -71,7 +71,7 @@ class SessionDiscovery(dj.Manual):
         '''
 
         rigs = [r for r in RigDataPath().fetch(as_dict=True)
-                if r['rig'].startswith('RRig')]  # todo?: rig 'type'? Change between TRig and RRig for now
+                if r['rig'].startswith('TRig')]  # todo?: rig 'type'? Change between TRig and RRig for now
 
         h2os = {k: v for k, v in
                 zip(*lab.AnimalWaterRestriction().fetch(
