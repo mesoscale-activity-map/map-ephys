@@ -41,19 +41,19 @@ def mockdata():
             'water_restriction': 'dl7'
         })
         lab.Animal().insert1({
-            'animal': 123455,  # bogus id
+            'animal': 397853,
             'dob':  '2017-08-01'
         })
         lab.AnimalWaterRestriction().insert1({
-            'animal': 123455,  # bogus id
-            'water_restriction': 'dl8'
+            'animal': 397853,  # bogus id
+            'water_restriction': 'dl14'
         })
         lab.Animal().insert1({
-            'animal': 123456,  # bogus id
+            'animal': 123457,  # bogus id
             'dob':  '2017-08-01'
         })
         lab.AnimalWaterRestriction().insert1({
-            'animal': 123456,  # bogus id
+            'animal': 123457,  # bogus id
             'water_restriction': 'tw5'
         })
 

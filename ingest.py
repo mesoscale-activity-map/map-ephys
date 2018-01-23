@@ -39,11 +39,11 @@ class RigDataPath(dj.Lookup):
         if 'rig_data_paths' in dj.config:  # for local testing
             return dj.config['rig_data_paths']
 
-        return (('TRig1', r'R:\\Arduino\Bpod_Train1\Bpod Local\Data', 0),
-                ('TRig2', r'Q:\\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
-                ('TRig3', r'S:\\MATLAB\Bpod Local\Data', 2),
-                ('RRig', r'Z:\\MATLAB\Bpod Local\Data', 3),
-                ('EPhys1', r'H:\data\MAP', 4),)
+        return (('TRig1', r'\MOHARB-NUC1\Document\Arduino\Bpod_Train1\Bpod Local\Data', 0), # Hardcode the rig path
+                ('TRig2', r'\MOHARB-WW2\C:\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
+                ('TRig3', r'\WANGT-NUC\documents\MATLAB\Bpod Local\Data', 2),
+                ('RRig', r'\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3),
+                ('EPhys1', r'H:\\data\MAP', 4),)
 
 
 @schema
@@ -65,19 +65,19 @@ class SessionDiscovery(dj.Manual):
 
     def populate(self):
         '''
-        Scan the RigDataPath records, looking for new unknown sesssions.
+        Scan the RigDataPath records, looking for new unknown sessions.
 
         Local implementation, since we aren't really a computed table.
         '''
 
         rigs = [r for r in RigDataPath().fetch(as_dict=True)
-                if r['rig'].startswith('TRig')]  # todo?: rig 'type'?
+                if r['rig'].startswith('TRig')]  # todo?: rig 'type'? Change between TRig and RRig for now
 
         h2os = {k: v for k, v in
                 zip(*lab.AnimalWaterRestriction().fetch(
-                    'water_restriction', 'animal'))}
+                    'water_restriction', 'animal'))} # fetch existing water_restriction
 
-        initial = SessionDiscovery().fetch(as_dict=True)
+        initial = SessionDiscovery().fetch(as_dict=True) # sessions already discovered
         log.debug('initial: %s' % initial)
         found = []
 
@@ -89,7 +89,7 @@ class SessionDiscovery(dj.Manual):
                 subpaths = list(os.path.join(root, f)
                                 .split(data_path)[1].lstrip(os.path.sep)
                                 for f in files if f.endswith('.mat')
-                                and 'TW_autoTrain' in f)
+                                and 'TW_autoTrain' in f) # find files with TW_autoTrain for now
 
                 for filename in subpaths:
                     log.debug('found file %s' % filename)
@@ -117,7 +117,7 @@ class SessionDiscovery(dj.Manual):
 
                     if key not in found and key not in initial:
                         log.info('found session: %s' % key)
-                        found.append(key)
+                        found.append(key) # finding new sessions
 
         # add the new sessions
         self.insert(found)
@@ -142,7 +142,7 @@ class BehaviorIngest(dj.Imported):
     def make(self, key):
         log.info('BehaviorIngest.make(): key: {key}'.format(key=key))
         rigpaths = [p for p in RigDataPath().fetch(order_by='rig_data_path')
-                    if 'TRig' in p['rig']]
+                    if 'RRig' in p['rig']] # change between TRig and RRig
 
         animal = key['animal']
         h2o = key['water_restriction']
@@ -154,16 +154,16 @@ class BehaviorIngest(dj.Imported):
         skey = {}
         skey['animal'] = animal
         skey['session_date'] = date
-        skey['username'] = 'daveliu'
+        skey['username'] = 'daveliu' # username has to be changed
 
-        # e.g: Data/dl7/TW_autoTrain/dl7_TW_autoTrain_20180104_132813.mat
+        # e.g: dl7/TW_autoTrain/Session Data/dl7_TW_autoTrain_20180104_132813.mat
         #         # p.split('/foo/bar')[1]
         for rp in rigpaths:
             root = rp['rig_data_path']
             path = root
-            path = os.path.join(path, 'Data')
             path = os.path.join(path, h2o)
             path = os.path.join(path, 'TW_autoTrain')
+            path = os.path.join(path, 'Session Data')
             path = os.path.join(
                 path, '{h2o}_TW_autoTrain_{d}*.mat'.format(h2o=h2o, d=datestr))
 
@@ -188,7 +188,7 @@ class BehaviorIngest(dj.Imported):
             log.warning('split session case detected for {h2o} on {date}'
                         .format(h2o=h2o, date=date))
 
-        # session:date relationship is 1:1; skip if we have a seession
+        # session:date relationship is 1:1; skip if we have a session
         if experiment.Session() & skey:
             log.warning("Warning! session exists for {h2o} on {d}".format(
                 h2o=h2o, d=date))
@@ -232,7 +232,7 @@ class BehaviorIngest(dj.Imported):
                     AllStateNames, AllStateData, AllEventData,
                     AllEventTimestamps)
 
-            trials = chain(trials, z)
+            trials = chain(trials, z) # concatenate the files
 
         trials = list(trials)
 
@@ -490,7 +490,6 @@ class BehaviorIngest(dj.Imported):
             lickleft = np.where(t.event_data == 69)[0]
             log.debug('... lickleft: {r}'.format(r=str(lickleft)))
             if len(lickleft):
-                # TODO: is 'sample' the type?
                 leftlicks = list(
                     (dict(**tkey,
                           action_event_type='left lick',
@@ -503,7 +502,6 @@ class BehaviorIngest(dj.Imported):
             lickright = np.where(t.event_data == 70)[0]
             log.debug('... lickright: {r}'.format(r=str(lickright)))
             if len(lickright):
-                # TODO: is 'sample' the type?
                 rightlicks = list(
                     (dict(**tkey,
                           action_event_type='right lick',
@@ -525,7 +523,7 @@ class BehaviorIngest(dj.Imported):
 
 @schema
 class EphysIngest(dj.Imported):
-    # subpaths like: \Spike\2017-10-21\tw5_imec3_opt3_jrc.mat
+    # subpaths like: \Spike\2017-10-21\tw5ap_imec3_opt3_jrc.mat
 
     definition = """
     -> SessionDiscovery
@@ -548,7 +546,7 @@ class EphysIngest(dj.Imported):
 
         rigpath = (RigDataPath() & {'rig': 'EPhys1'}).fetch1('rig_data_path')
         date = key['session_date'].strftime('%Y-%m-%d')
-        file = '{h2o}_imec3_opt3_jrc.mat'.format(h2o=key['water_restriction'])
+        file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=key['water_restriction'])
         subpath = os.path.join('Spike', date, file)
         fullpath = os.path.join(rigpath, subpath)
 
@@ -615,7 +613,7 @@ class EphysIngest(dj.Imported):
             trialunits2 = np.append(trialunits2, np.unique(trialunits[i]))
             trialunits1 = np.append(trialunits1, np.zeros(len(np.unique(trialunits[i])))+i)
         ephys.Ephys.Unit().insert(list(dict(ekey, unit = x, spike_times = units[x]) for x in unit_ids)) # batch insert the units
-        #experiment.Session.Trial() #TODO: fetch the trial from experiment.Session.Trial and realign
+        #experiment.Session.Trial() #TODO: fetch the trial from experiment.Session.Trial and realign?
         ephys.Ephys.TrialUnit().insert(list(dict(ekey, unit = trialunits1[x], trial = trialunits2[x]) for x in range(0, len(trialunits2)))) # batch insert the TrialUnit (key, unit, trial)
         ephys.Ephys.Spike().insert(list(dict(ekey, unit = cluster_ids[x], spike_time = spike_times2[x], electrode = viSite_spk[x], trial = spike_trials[x]) for x in range(0, len(spike_times2))), skip_duplicates=True) # batch insert the Spikes (key, unit, spike_time, electrode, trial)
 
