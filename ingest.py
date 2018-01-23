@@ -490,7 +490,6 @@ class BehaviorIngest(dj.Imported):
             lickleft = np.where(t.event_data == 69)[0]
             log.debug('... lickleft: {r}'.format(r=str(lickleft)))
             if len(lickleft):
-                # TODO: is 'sample' the type?
                 leftlicks = list(
                     (dict(**tkey,
                           action_event_type='left lick',
@@ -503,7 +502,6 @@ class BehaviorIngest(dj.Imported):
             lickright = np.where(t.event_data == 70)[0]
             log.debug('... lickright: {r}'.format(r=str(lickright)))
             if len(lickright):
-                # TODO: is 'sample' the type?
                 rightlicks = list(
                     (dict(**tkey,
                           action_event_type='right lick',
