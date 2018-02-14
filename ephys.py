@@ -68,6 +68,7 @@ class Ephys(dj.Imported):
         unit  : smallint
         ---        
         spike_times  : longblob  #  (s)
+        waveform : blob # average spike waveform
         """
         
     class TrialUnit(dj.Part):
