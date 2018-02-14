@@ -1,6 +1,6 @@
 import datajoint as dj
 
-schema = dj.schema(dj.config['lab.database'], locals())
+schema = dj.schema(dj.config['lab.database'])
 
 
 @schema

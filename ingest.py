@@ -20,7 +20,7 @@ import ephys
 
 
 log = logging.getLogger(__name__)
-schema = dj.schema(dj.config['ingest.database'], locals())
+schema = dj.schema(dj.config['ingest.database'])
 
 
 @schema

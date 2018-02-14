@@ -1,9 +1,8 @@
 import datajoint as dj
 import ccf, experiment
 import numpy as np
-import h5py
 
-schema = dj.schema(dj.config['ephys.database'], locals())
+schema = dj.schema(dj.config['ephys.database'])
 
 
 @schema

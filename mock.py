@@ -16,7 +16,7 @@ def dropdbs():
     for a in range(3):
         for d in ['ingest', 'ccf', 'ephys', 'experiment', 'lab', 'prototype']:
             try:
-                schema = dj.schema(dj.config['%s.database' % d], locals())
+                schema = dj.schema(dj.config['%s.database' % d])
                 schema.drop(force=True)
             except Exception as e:
                 print('error dropping {d} in attempt {a}: {e}'

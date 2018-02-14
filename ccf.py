@@ -1,7 +1,7 @@
 import datajoint as dj
 
 
-schema = dj.schema(dj.config['ccf.database'], locals())
+schema = dj.schema(dj.config['ccf.database'])
 
 
 @schema

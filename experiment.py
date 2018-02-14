@@ -1,7 +1,7 @@
 import datajoint as dj
 import lab, ccf
 
-schema = dj.schema(dj.config['experiment.database'], locals())
+schema = dj.schema(dj.config['experiment.database'])
 
 @schema
 class Task(dj.Lookup):
