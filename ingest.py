@@ -71,7 +71,7 @@ class SessionDiscovery(dj.Manual):
         '''
 
         rigs = [r for r in RigDataPath().fetch(as_dict=True)
-                if r['rig'].startswith('TRig')]  # todo?: rig 'type'? Change between TRig and RRig for now
+                if r['rig'].startswith('RRig')]  # todo?: rig 'type'? Change between TRig and RRig for now
 
         h2os = {k: v for k, v in
                 zip(*lab.AnimalWaterRestriction().fetch(
@@ -86,6 +86,8 @@ class SessionDiscovery(dj.Manual):
             for root, dirs, files in os.walk(data_path):
 
                 log.info('RigDataFile.make(): traversing %s' % root)
+                log.debug('RigDataFile.make(): dirs %s' % dirs)
+                log.debug('RigDataFile.make(): files %s' % files)
                 subpaths = list(os.path.join(root, f)
                                 .split(data_path)[1].lstrip(os.path.sep)
                                 for f in files if f.endswith('.mat')
@@ -174,9 +176,12 @@ class BehaviorIngest(dj.Imported):
                 log.debug('found files, this is the rig')
                 skey['rig'] = rp['rig']
                 break
+            else:
+                log.info('no file matches found in {p}'.format(p=path))
 
         if not len(matches):
-            log.warning('no file matches found.. check directories')
+            log.warning('no file matches found for {h2o} / {d}'.format(
+                h2o=h2o, d=datestr))
             return
 
         #
@@ -232,7 +237,7 @@ class BehaviorIngest(dj.Imported):
                     AllStateNames, AllStateData, AllEventData,
                     AllEventTimestamps)
 
-            trials = chain(trials, z) # concatenate the files
+            trials = chain(trials, z)  # concatenate the files
 
         trials = list(trials)
 
@@ -258,6 +263,11 @@ class BehaviorIngest(dj.Imported):
         #
         # Actually load the per-trial data
         #
+        log.info('BehaviorIngest.make(): trial parsing phase')
+
+        # lists of various records for batch-insert
+        rows = {k: list() for k in ('trial', 'behavior_trial', 'trial_note',
+                                    'trial_event', 'action_event')}
 
         i = -1
         for t in trials:
@@ -269,7 +279,7 @@ class BehaviorIngest(dj.Imported):
             t = trial(*t)  # convert list of items to a 'trial' structure
             i += 1  # increment trial counter
 
-            log.info('BehaviorIngest.make(): trial {i}'.format(i=i))
+            log.info('BehaviorIngest.make(): parsing trial {i}'.format(i=i))
 
             # covert state data names into a lookup dictionary
             #
@@ -345,9 +355,9 @@ class BehaviorIngest(dj.Imported):
             tkey['start_time'] = t.state_times[startindex][0]
             tkey['end_time'] = t.state_times[endindex][0]
 
-            log.debug('BehaviorIngest.make(): Trial().insert1')
+            log.debug('BehaviorIngest.make(): Trial().insert1')  # TODO msg
             log.debug('tkey' + str(tkey))
-            experiment.Session.Trial().insert1(tkey, ignore_extra_fields=True)
+            rows['trial'].append(tkey)
 
             #
             # Specific BehaviorTrial information for this trial
@@ -403,7 +413,7 @@ class BehaviorIngest(dj.Imported):
 
             # add behavior record
             log.debug('BehaviorIngest.make(): BehaviorTrial()')
-            experiment.BehaviorTrial().insert1(bkey, ignore_extra_fields=True)
+            rows['behavior_trial'].append(bkey)
 
             #
             # Add 'protocol' note
@@ -414,7 +424,7 @@ class BehaviorIngest(dj.Imported):
             nkey['trial_note'] = str(protocol_type)
 
             log.debug('BehaviorIngest.make(): TrialNote().insert1')
-            experiment.TrialNote().insert1(nkey, ignore_extra_fields=True)
+            rows['trial_note'].append(nkey)
 
             #
             # Add 'autolearn' note
@@ -423,8 +433,7 @@ class BehaviorIngest(dj.Imported):
             nkey = dict(tkey)
             nkey['trial_note_type'] = 'autolearn'
             nkey['trial_note'] = str(gui['Autolearn'][0])
-
-            experiment.TrialNote().insert1(nkey, ignore_extra_fields=True)
+            rows['trial_note'].append(nkey)
 
             #
             # Add presample event
@@ -439,7 +448,7 @@ class BehaviorIngest(dj.Imported):
                                 - t.state_times[startindex])[0]
 
             log.debug('BehaviorIngest.make(): presample')
-            experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
+            rows['trial_event'].append(ekey)
 
             #
             # Add 'go' event
@@ -453,7 +462,7 @@ class BehaviorIngest(dj.Imported):
             ekey['duration'] = gui['AnswerPeriod'][0]
 
             log.debug('BehaviorIngest.make(): go')
-            experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
+            rows['trial_event'].append(ekey)
 
             #
             # Add other 'sample' events
@@ -466,7 +475,7 @@ class BehaviorIngest(dj.Imported):
                 ekey['trial_event_type'] = 'sample'
                 ekey['trial_event_time'] = t.state_times[s]
                 ekey['duration'] = gui['SamplePeriod'][0]
-                experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
+                rows['trial_event'].append(ekey)
 
             #
             # Add 'delay' events
@@ -481,7 +490,7 @@ class BehaviorIngest(dj.Imported):
                 ekey['trial_event_type'] = 'delay'
                 ekey['trial_event_time'] = t.state_times[d]
                 ekey['duration'] = gui['DelayPeriod'][0]
-                experiment.TrialEvent().insert1(ekey, ignore_extra_fields=True)
+                rows['trial_event'].append(ekey)
 
             #
             # Add lick events
@@ -489,31 +498,47 @@ class BehaviorIngest(dj.Imported):
 
             lickleft = np.where(t.event_data == 69)[0]
             log.debug('... lickleft: {r}'.format(r=str(lickleft)))
-            if len(lickleft):
-                leftlicks = list(
-                    (dict(**tkey,
-                          action_event_type='left lick',
-                          action_event_time=t.event_times[l])
-                     for l in lickleft))
 
-                experiment.ActionEvent().insert(
-                    leftlicks, ignore_extra_fields=True)
+            if len(lickleft):
+                [rows['action_event'].append(
+                    dict(**tkey, action_event_type='left lick',
+                         action_event_time=t.event_times[l]))
+                 for l in lickleft]
 
             lickright = np.where(t.event_data == 70)[0]
             log.debug('... lickright: {r}'.format(r=str(lickright)))
-            if len(lickright):
-                rightlicks = list(
-                    (dict(**tkey,
-                          action_event_type='right lick',
-                          action_event_time=t.event_times[r])
-                     for r in lickright))
 
-                experiment.ActionEvent().insert(
-                    rightlicks, ignore_extra_fields=True)
+            if len(lickright):
+                [rows['action_event'].append(
+                    dict(**tkey, action_event_type='right lick',
+                         action_event_time=t.event_times[r]))
+                    for r in lickright]
 
             # end of trial loop.
-        log.debug('BehaviorIngest.make(): saving ingest {d}'.format(d=key))
 
+        log.info('BehaviorIngest.make(): bulk insert phase')
+
+        log.info('BehaviorIngest.make(): ... experiment.Session.Trial')
+        experiment.Session.Trial().insert(
+            rows['trial'], ignore_extra_fields=True)
+
+        log.info('BehaviorIngest.make(): ... experiment.BehaviorTrial')
+        experiment.BehaviorTrial().insert(
+            rows['behavior_trial'], ignore_extra_fields=True)
+
+        log.info('BehaviorIngest.make(): ... experiment.TrialNote')
+        experiment.TrialNote().insert(
+            rows['trial_note'], ignore_extra_fields=True)
+
+        log.info('BehaviorIngest.make(): ... experiment.TrialEvent')
+        experiment.TrialEvent().insert(
+            rows['trial_event'], ignore_extra_fields=True)
+
+        log.info('BehaviorIngest.make(): ... experiment.ActionEvent')
+        experiment.ActionEvent().insert(
+            rows['action_event'], ignore_extra_fields=True)
+
+        log.info('BehaviorIngest.make(): saving ingest {d}'.format(d=key))
         self.insert1(key, ignore_extra_fields=True)
 
         BehaviorIngest.BehaviorFile().insert(
@@ -591,6 +616,8 @@ class EphysIngest(dj.Imported):
         f = h5py.File(fullpath,'r')
         ind = np.argsort(f['S_clu']['viClu'][0]) # index sorted by cluster
         cluster_ids = f['S_clu']['viClu'][0][ind] # cluster (unit) number
+        trWav_raw_clu = f['S_clu']['trWav_raw_clu'] # spike waveform
+        trWav_raw_clu1 = np.concatenate((trWav_raw_clu[0:1][:][:],trWav_raw_clu),axis=0) # add a spike waveform of cluster 0
         spike_times = f['viTime_spk'][0][ind] # spike times
         viSite_spk = f['viSite_spk'][0][ind] # electrode site for the spike
         viT_offset_file = f['viT_offset_file'][:] # start of each trial, subtract this number for each trial
@@ -603,7 +630,7 @@ class EphysIngest(dj.Imported):
         spike_times2[np.where(spike_times2 >= viT_offset_file[-1])] = spike_times[np.where(spike_times2 >= viT_offset_file[-1])] - viT_offset_file[-1] # subtract the viT_offset_file from each trial
         spike_times2 = spike_times2 / sRateHz # divide the sampling rate, sRateHz
         clu_ids_diff = np.diff(cluster_ids) # where the units seperate
-        clu_ids_diff = np.where(clu_ids_diff != 0)[0] + 1 # seperate the spike_times
+        clu_ids_diff = np.where(clu_ids_diff != 0)[0] + 1 # separate the spike_times
         units = np.split(spike_times, clu_ids_diff) / sRateHz # sub arrays of spike_times
         trialunits = np.split(spike_trials, clu_ids_diff) # sub arrays of spike_trials
         unit_ids = np.arange(len(clu_ids_diff) + 1) # unit number
@@ -612,7 +639,7 @@ class EphysIngest(dj.Imported):
         for i in range(0,len(trialunits)):
             trialunits2 = np.append(trialunits2, np.unique(trialunits[i]))
             trialunits1 = np.append(trialunits1, np.zeros(len(np.unique(trialunits[i])))+i)
-        ephys.Ephys.Unit().insert(list(dict(ekey, unit = x, spike_times = units[x]) for x in unit_ids)) # batch insert the units
+        ephys.Ephys.Unit().insert(list(dict(ekey, unit = x, spike_times = units[x], waveform = trWav_raw_clu1[x][0]) for x in unit_ids)) # batch insert the units
         #experiment.Session.Trial() #TODO: fetch the trial from experiment.Session.Trial and realign?
         ephys.Ephys.TrialUnit().insert(list(dict(ekey, unit = trialunits1[x], trial = trialunits2[x]) for x in range(0, len(trialunits2)))) # batch insert the TrialUnit (key, unit, trial)
         ephys.Ephys.Spike().insert(list(dict(ekey, unit = cluster_ids[x], spike_time = spike_times2[x], electrode = viSite_spk[x], trial = spike_trials[x]) for x in range(0, len(spike_times2))), skip_duplicates=True) # batch insert the Spikes (key, unit, spike_time, electrode, trial)

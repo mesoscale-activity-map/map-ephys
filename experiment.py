@@ -159,7 +159,7 @@ class PhotostimDevice(dj.Lookup):
     """
 
 @schema 
-class Photostim(dj.Lookup):
+class Photostim(dj.Manual):
     definition = """
     -> PhotostimDevice
     photo_stim :  smallint 
