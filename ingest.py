@@ -59,7 +59,7 @@ class SessionDiscovery(dj.Manual):
     '''
 
     definition = """
-    -> lab.AnimalWaterRestriction
+    -> lab.WaterRestriction
     session_date:               date                    # discovered date
     """
 
@@ -74,8 +74,8 @@ class SessionDiscovery(dj.Manual):
                 if r['rig'].startswith('RRig')]  # todo?: rig 'type'? Change between TRig and RRig for now
 
         h2os = {k: v for k, v in
-                zip(*lab.AnimalWaterRestriction().fetch(
-                    'water_restriction', 'animal'))} # fetch existing water_restriction
+                zip(*lab.WaterRestriction().fetch(
+                    'water_restriction', 'subject_id'))} # fetch existing water_restriction
 
         initial = SessionDiscovery().fetch(as_dict=True) # sessions already discovered
         log.debug('initial: %s' % initial)
@@ -111,7 +111,7 @@ class SessionDiscovery(dj.Manual):
                     log.debug('animal is {animal}'.format(animal=animal))
 
                     key = {
-                        'animal': animal,
+                        'subject_id': subject_id,
                         'water_restriction': h2o,
                         'session_date': datetime.date(
                             int(date[0:4]), int(date[4:6]), int(date[6:8]))
@@ -146,7 +146,7 @@ class BehaviorIngest(dj.Imported):
         rigpaths = [p for p in RigDataPath().fetch(order_by='rig_data_path')
                     if 'RRig' in p['rig']] # change between TRig and RRig
 
-        animal = key['animal']
+        subject_id = key['subject_id']
         h2o = key['water_restriction']
         date = key['session_date']
         datestr = date.strftime('%Y%m%d')
@@ -154,7 +154,7 @@ class BehaviorIngest(dj.Imported):
 
         # session record key
         skey = {}
-        skey['animal'] = animal
+        skey['subject_id'] = subject_id
         skey['session_date'] = date
         skey['username'] = 'daveliu' # username has to be changed
 
@@ -251,7 +251,7 @@ class BehaviorIngest(dj.Imported):
         #
 
         log.debug('synthesizing session ID')
-        session = (dj.U().aggr(experiment.Session() & {'animal': animal},
+        session = (dj.U().aggr(experiment.Session() & {'subject_id': subject_id},
                                n='max(session)').fetch1('n') or 0) + 1
         log.info('generated session id: {session}'.format(session=session))
         skey['session'] = session
@@ -604,7 +604,7 @@ class EphysIngest(dj.Imported):
         # better would be to have this encoded in filename or similar.
 
         ekey = {
-            'animal': behavior['animal'],
+            'subject_id': behavior['subject_id'],
             'session': behavior['session'],
             'electrode_group': 1,
         }

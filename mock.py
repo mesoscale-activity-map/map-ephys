@@ -32,28 +32,28 @@ def mockdata():
     reload(ephys)
     try:
         # TODO: these should be loaded in a more 'official' way
-        lab.Animal().insert1({
-            'animal': 399752,
+        lab.Subject().insert1({
+            'subject_id': 399752,
             'dob':  '2017-08-01'
         })
-        lab.AnimalWaterRestriction().insert1({
-            'animal': 399752,
+        lab.WaterRestriction().insert1({
+            'subject_id': 399752,
             'water_restriction': 'dl7'
         })
-        lab.Animal().insert1({
-            'animal': 397853,
+        lab.Subject().insert1({
+            'subject_id': 397853,
             'dob':  '2017-08-01'
         })
-        lab.AnimalWaterRestriction().insert1({
-            'animal': 397853,  # bogus id
+        lab.WaterRestriction().insert1({
+            'subject_id': 397853,  # bogus id
             'water_restriction': 'dl14'
         })
-        lab.Animal().insert1({
-            'animal': 123457,  # bogus id
+        lab.Subject().insert1({
+            'subject_id': 123457,  # bogus id
             'dob':  '2017-08-01'
         })
-        lab.AnimalWaterRestriction().insert1({
-            'animal': 123457,  # bogus id
+        lab.WaterRestriction().insert1({
+            'subject_id': 123457,  # bogus id
             'water_restriction': 'tw5'
         })
 

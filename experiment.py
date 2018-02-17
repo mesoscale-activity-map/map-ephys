@@ -20,7 +20,7 @@ class Task(dj.Lookup):
 @schema
 class Session(dj.Manual):
     definition = """
-    -> lab.Animal
+    -> lab.Subject
     session : smallint 		# session number
     ---
     session_date  : date
@@ -108,7 +108,7 @@ class TrialEvent(dj.Manual):
     definition = """
     -> BehaviorTrial 
     -> TrialEventType
-    trial_event_time : decimal(8, 4)   # (s) from trial start, not session start (depends)
+    trial_event_time : decimal(8, 4)   # (s) from trial start, not session start
     ---
     duration : decimal(8,4)  #  (s)  
     """
@@ -129,7 +129,7 @@ class ActionEvent(dj.Manual):
     definition = """
     -> BehaviorTrial
     -> ActionEventType
-    action_event_time : decimal(8,4)  # (s) from trial or session (it depends but please figure it out)
+    action_event_time : decimal(8,4)  # (s) from trial start
     """
 
 @schema
