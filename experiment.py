@@ -138,6 +138,7 @@ class TrackingDevice(dj.Lookup):
     tracking_device  : varchar(8)  # e.g. camera, microphone
     ---
     sampling_rate  :  decimal(8, 4)   # Hz
+    tracking_device_description: varchar(255) # 
     """
 
 @schema
@@ -147,6 +148,7 @@ class Tracking(dj.Imported):
     -> TrackingDevice
     ---
     tracking_data_path  : varchar(255)
+    start_time : decimal(8,4) # (s) from trial star
     """
 
 @schema

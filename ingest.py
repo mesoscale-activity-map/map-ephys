@@ -75,7 +75,7 @@ class SessionDiscovery(dj.Manual):
 
         h2os = {k: v for k, v in
                 zip(*lab.WaterRestriction().fetch(
-                    'water_restriction', 'subject_id'))} # fetch existing water_restriction
+                    'water_restriction_number', 'subject_id'))} # fetch existing water_restriction_number
 
         initial = SessionDiscovery().fetch(as_dict=True) # sessions already discovered
         log.debug('initial: %s' % initial)
@@ -112,7 +112,7 @@ class SessionDiscovery(dj.Manual):
 
                     key = {
                         'subject_id': subject_id,
-                        'water_restriction': h2o,
+                        'water_restriction_number': h2o,
                         'session_date': datetime.date(
                             int(date[0:4]), int(date[4:6]), int(date[6:8]))
                     }
@@ -147,7 +147,7 @@ class BehaviorIngest(dj.Imported):
                     if 'RRig' in p['rig']] # change between TRig and RRig
 
         subject_id = key['subject_id']
-        h2o = key['water_restriction']
+        h2o = key['water_restriction_number']
         date = key['session_date']
         datestr = date.strftime('%Y%m%d')
         log.debug('h2o: {h2o}, date: {d}'.format(h2o=h2o, d=datestr))
@@ -571,7 +571,7 @@ class EphysIngest(dj.Imported):
 
         rigpath = (RigDataPath() & {'rig': 'EPhys1'}).fetch1('rig_data_path')
         date = key['session_date'].strftime('%Y-%m-%d')
-        file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=key['water_restriction'])
+        file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=key['water_restriction_number'])
         subpath = os.path.join('Spike', date, file)
         fullpath = os.path.join(rigpath, subpath)
 

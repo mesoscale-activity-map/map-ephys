@@ -32,59 +32,100 @@ def mockdata():
     reload(ephys)
     try:
         # TODO: these should be loaded in a more 'official' way
-        lab.Subject().insert1({
-            'subject_id': 399752,
-            'dob':  '2017-08-01'
-        })
-        lab.WaterRestriction().insert1({
-            'subject_id': 399752,
-            'water_restriction': 'dl7'
-        })
-        lab.Subject().insert1({
-            'subject_id': 397853,
-            'dob':  '2017-08-01'
-        })
-        lab.WaterRestriction().insert1({
-            'subject_id': 397853,  # bogus id
-            'water_restriction': 'dl14'
-        })
-        lab.Subject().insert1({
-            'subject_id': 123457,  # bogus id
-            'dob':  '2017-08-01'
-        })
-        lab.WaterRestriction().insert1({
-            'subject_id': 123457,  # bogus id
-            'water_restriction': 'tw5'
-        })
-
         lab.Person().insert1({
             'username': 'daveliu',
-            'fullname': 'Dave Liu'
-        })
+            'fullname': 'Dave Liu'},
+            skip_duplicates = True
+        )
+        lab.ModifiedGene().insert1({
+            'gene_modification': 'VGAT-Chr2-EYFP Jax',
+            'description': 'VGAT'},
+            skip_duplicates = True
+        )
+        lab.Subject().insert1({
+            'subject_id': 399752,
+            'username': 'daveliu',
+            'cage_number': 145375,
+            'date_of_birth': '2017-08-03',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates = True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 399752,
+            'water_restriction_number': 'dl7',
+            'cage_number': 148861,
+            'wr_start_date': '2017-11-07',
+            'wr_start_weight': 20.5},
+            skip_duplicates = True
+        )
+        lab.Subject().insert1({
+            'subject_id': 397853,
+            'username': 'daveliu',
+            'cage_number': 144545,
+            'date_of_birth': '2017-08-03',
+            'sex':  'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates = True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 397853,
+            'water_restriction_number': 'dl14',
+            'cage_number': 149595,
+            'wr_start_date': '2017-11-27',
+            'wr_start_weight': 20.5},
+            skip_duplicates = True
+        )
+        lab.Subject().insert1({
+            'subject_id': 123457,
+            'username': 'daveliu',
+            'cage_number': 145375,
+            'date_of_birth': '2017-08-03',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates = True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 123457,
+            'water_restriction_number': 'tw5',
+            'cage_number': 148861,
+            'wr_start_date': '2017-11-07',
+            'wr_start_weight': 20.5},
+            skip_duplicates = True
+        )
         lab.Rig().insert1({
             'rig': 'TRig1',
-            'rig_description': 'Training rig 1',
-        })
+            'room': '2w.334',
+            'rig_description': 'Training rig 1'},
+            skip_duplicates = True
+        )
         lab.Rig().insert1({
             'rig': 'TRig2',
-            'rig_description': 'Training rig 2',
-        })
+            'room': '2w.334',
+            'rig_description': 'Training rig 2'},
+            skip_duplicates = True
+        )
         lab.Rig().insert1({
             'rig': 'TRig3',
-            'rig_description': 'Training rig 3',
-        })
+            'room': '2w.334',
+            'rig_description': 'Training rig 3'},
+            skip_duplicates = True
+        )
         lab.Rig().insert1({
             'rig': 'RRig',
-            'rig_description': 'Recording rig',
-        })
+            'room': '2w.334',
+            'rig_description': 'Recording rig'},
+            skip_duplicates = True
+        )
         lab.Rig().insert1({
-            'rig': 'EPhys1',
-            'rig_description': 'Ephys rig 1',
-        })
+            'rig': 'Ephys1',
+            'room': '2w.334',
+            'rig_description': 'Recording computer'},
+            skip_duplicates = True
+        )
     except Exception as e:
         print("error creating mock data: {e}".format(e=e), file=sys.stderr)
         raise
-
 
 if __name__ == '__main__':
     dropdbs()
