@@ -27,7 +27,7 @@ class AnimalSource(dj.Lookup):
     definition = """
     animal_source       : varchar(30)
     """
-    contents = zip(['Jackson Labs', 'Charles River', 'MMRRC', 'Taconic', 'Other'])
+    contents = zip(['Jackson Labs', 'Allen Institute', 'Charles River', 'MMRRC', 'Taconic', 'Other'])
 
 
 @schema

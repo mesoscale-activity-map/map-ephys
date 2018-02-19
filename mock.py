@@ -42,13 +42,23 @@ def mockdata():
             'description': 'VGAT'},
             skip_duplicates = True
         )
+        lab.ModifiedGene().insert1({
+            'gene_modification': 'PV-ires-Cre X Ai32',
+            'description': 'PV'},
+            skip_duplicates = True
+        )
+        lab.ModifiedGene().insert1({
+            'gene_modification': 'Rosa26 Cag lsl reachR-citrine 1A4 X PV-ires-Cre',
+            'description': 'reachR PV'},
+            skip_duplicates = True
+        )
         lab.Subject().insert1({
             'subject_id': 399752,
             'username': 'daveliu',
             'cage_number': 145375,
             'date_of_birth': '2017-08-03',
             'sex': 'M',
-            'animal_source': 'Jackson labs'},
+            'animal_source': 'Jackson lab'},
             skip_duplicates = True
         )
         lab.WaterRestriction().insert1({
@@ -65,7 +75,7 @@ def mockdata():
             'cage_number': 144545,
             'date_of_birth': '2017-08-03',
             'sex':  'M',
-            'animal_source': 'Jackson labs'},
+            'animal_source': 'Allen Institute'},
             skip_duplicates = True
         )
         lab.WaterRestriction().insert1({
@@ -73,6 +83,125 @@ def mockdata():
             'water_restriction_number': 'dl14',
             'cage_number': 149595,
             'wr_start_date': '2017-11-27',
+            'wr_start_weight': 20.5},
+            skip_duplicates = True
+        )
+        lab.Subject().insert1({
+            'subject_id': 400480,
+            'username': 'daveliu',
+            'cage_number': 145700,
+            'date_of_birth': '2017-08-03',
+            'sex':  'M',
+            'animal_source': 'Allen Institute'},
+            skip_duplicates = True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 400480,
+            'water_restriction_number': 'dl15',
+            'cage_number': 149598,
+            'wr_start_date': '2017-11-27',
+            'wr_start_weight': 20.5},
+            skip_duplicates = True
+        )
+        lab.Subject().insert1({
+            'subject_id': 406680,
+            'username': 'daveliu',
+            'cage_number': 148859,
+            'date_of_birth': '2017-08-03',
+            'sex':  'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates = True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 406680,
+            'water_restriction_number': 'dl20',
+            'cage_number': 151282,
+            'wr_start_date': '2018-01-10',
+            'wr_start_weight': 20.5},
+            skip_duplicates = True
+        )
+        lab.Subject().insert1({
+            'subject_id': 408022,
+            'username': 'daveliu',
+            'cage_number': 148859,
+            'date_of_birth': '2017-08-03',
+            'sex':  'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates = True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 408022,
+            'water_restriction_number': 'dl21',
+            'cage_number': 151283,
+            'wr_start_date': '2018-01-10',
+            'wr_start_weight': 20.5},
+            skip_duplicates = True
+        )
+        lab.Subject().insert1({
+            'subject_id': 408021,
+            'username': 'daveliu',
+            'cage_number': 148859,
+            'date_of_birth': '2017-08-03',
+            'sex':  'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates = True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 408021,
+            'water_restriction_number': 'dl22',
+            'cage_number': 151704,
+            'wr_start_date': '2018-01-19',
+            'wr_start_weight': 20.5},
+            skip_duplicates = True
+        )
+        lab.Subject().insert1({
+            'subject_id': 407512,
+            'username': 'daveliu',
+            'cage_number': 151629,
+            'date_of_birth': '2017-08-03',
+            'sex':  'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates = True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 407512,
+            'water_restriction_number': 'dl24',
+            'cage_number': 151793,
+            'wr_start_date': '2018-01-22',
+            'wr_start_weight': 20.5},
+            skip_duplicates = True
+        )
+        lab.Subject().insert1({
+            'subject_id': 407513,
+            'username': 'daveliu',
+            'cage_number': 148636,
+            'date_of_birth': '2017-08-03',
+            'sex':  'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates = True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 407513,
+            'water_restriction_number': 'dl25',
+            'cage_number': 151794,
+            'wr_start_date': '2018-01-22',
+            'wr_start_weight': 20.5},
+            skip_duplicates = True
+        )
+        lab.Subject().insert1({
+            'subject_id': 407986,
+            'username': 'daveliu',
+            'cage_number': 152268,
+            'date_of_birth': '2017-08-03',
+            'sex':  'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates = True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 407986,
+            'water_restriction_number': 'dl28',
+            'cage_number': 152312,
+            'wr_start_date': '2018-02-05',
             'wr_start_weight': 20.5},
             skip_duplicates = True
         )
