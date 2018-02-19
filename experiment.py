@@ -1,7 +1,7 @@
 import datajoint as dj
 import lab, ccf
 
-schema = dj.schema('dimitri_map_experi', locals())
+schema = dj.schema(dj.config['experiment.database'])
 
 @schema
 class Task(dj.Lookup):
@@ -20,8 +20,8 @@ class Task(dj.Lookup):
 @schema
 class Session(dj.Manual):
     definition = """
-    -> lab.Animal
-    session : smallint 
+    -> lab.Subject
+    session : smallint 		# session number
     ---
     session_date  : date
     -> lab.Person
@@ -33,8 +33,8 @@ class Session(dj.Manual):
         -> Session
         trial   : smallint
         ---
-        start_time : decimal(9,3)  # (s)
-        end_time : decimal(9,3)  # (s)
+        start_time : decimal(8,4)  # (s)
+        end_time : decimal(8,4)  # (s)
         """
 
 @schema 
@@ -69,14 +69,12 @@ class TrialEventType(dj.Lookup):
     """
     contents = zip(('delay', 'go', 'sample', 'presample', 'bitcode'))
 
-
 @schema
 class Outcome(dj.Lookup):
     definition = """
     outcome : varchar(8)
     """
     contents = zip(('hit', 'miss', 'ignore'))
-
 
 @schema 
 class EarlyLick(dj.Lookup):
@@ -110,9 +108,9 @@ class TrialEvent(dj.Manual):
     definition = """
     -> BehaviorTrial 
     -> TrialEventType
-    trial_event_time : decimal(8, 3)   # (s) from session and trial start (depends)
+    trial_event_time : decimal(8, 4)   # (s) from trial start, not session start
     ---
-    duration : decimal(8,3)  #  (s)  
+    duration : decimal(8,4)  #  (s)  
     """
 
 @schema
@@ -131,7 +129,7 @@ class ActionEvent(dj.Manual):
     definition = """
     -> BehaviorTrial
     -> ActionEventType
-    action_event_time : decimal(8,3)  # (s) from trial or session (it depends but please figure it out)
+    action_event_time : decimal(8,4)  # (s) from trial start
     """
 
 @schema
@@ -139,7 +137,8 @@ class TrackingDevice(dj.Lookup):
     definition = """
     tracking_device  : varchar(8)  # e.g. camera, microphone
     ---
-    sampling_rate  :  decimal(9, 3)   # Hz
+    sampling_rate  :  decimal(8, 4)   # Hz
+    tracking_device_description: varchar(255) # 
     """
 
 @schema
@@ -149,6 +148,7 @@ class Tracking(dj.Imported):
     -> TrackingDevice
     ---
     tracking_data_path  : varchar(255)
+    start_time : decimal(8,4) # (s) from trial star
     """
 
 @schema
@@ -161,13 +161,13 @@ class PhotostimDevice(dj.Lookup):
     """
 
 @schema 
-class Photostim(dj.Lookup):
+class Photostim(dj.Manual):
     definition = """
     -> PhotostimDevice
     photo_stim :  smallint 
     ---
     -> ccf.CCF
-    duration  :  decimal(5,3)   # (s)
+    duration  :  decimal(8,4)   # (s)
     waveform  :  longblob       # (mW)
     """
 
@@ -178,7 +178,6 @@ class Photostim(dj.Lookup):
         ---
         intensity_timecourse   :  longblob  # (mW/mm^2)
         """
-
 
 @schema
 class PhotostimTrial(dj.Imported):
