@@ -1,6 +1,5 @@
 #! /usr/bin/env python
 
-import pdb # debug
 import os
 import glob
 import logging
