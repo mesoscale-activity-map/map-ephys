@@ -26,8 +26,8 @@ def usage_exit():
 
 def logsetup(*args):
     logging.basicConfig(level=logging.ERROR)
-    log.setLevel(logging.INFO)
-    logging.getLogger('ingest').setLevel(logging.INFO)
+    log.setLevel(logging.DEBUG)
+    logging.getLogger('ingest').setLevel(logging.DEBUG)
 
 
 def discover(*args):
