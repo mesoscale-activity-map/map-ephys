@@ -571,7 +571,9 @@ class EphysIngest(dj.Imported):
 
         rigpath = (RigDataPath() & {'rig': 'EPhys1'}).fetch1('rig_data_path')
         date = key['session_date'].strftime('%Y-%m-%d')
-        file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=key['water_restriction_number'])
+        subject_id = key['subject_id']
+        water = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
+        file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water)
         subpath = os.path.join('Spike', date, file)
         fullpath = os.path.join(rigpath, subpath)
 
