@@ -43,8 +43,8 @@ class RigDataPath(dj.Lookup):
         return (('TRig1', r'\\MOHARB-NUC1\Documents\Arduino\Bpod_Train1\Bpod Local\Data', 0), # Hardcode the rig path
                 ('TRig2', r'\\MOHARB-WW2\C\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
                 ('TRig3', r'\\WANGT-NUC\Documents\MATLAB\Bpod Local\Data', 2),
-                ('RRig', r'\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3),
-                ('EPhys1', r'H:\\data\MAP', 4),)
+                ('RRig', r'\\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3),
+                ('EPhys1', r'H:\\data\MAP', 4),) # Testing the JRClust output files on my computer
 
 
 @schema
@@ -112,8 +112,7 @@ class SessionDiscovery(dj.Manual):
                     log.debug('animal is {animal}'.format(animal=animal))
 
                     key = {
-                        'subject_id': subject_id,
-                        'water_restriction_number': h2o,
+                        'subject_id': animal,
                         'session_date': datetime.date(
                             int(date[0:4]), int(date[4:6]), int(date[6:8]))
                     }
@@ -148,7 +147,7 @@ class BehaviorIngest(dj.Imported):
                     if 'TRig' in p['rig']] # change between TRig and RRig
 
         subject_id = key['subject_id']
-        h2o = key['water_restriction_number']
+        h2o = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
         date = key['session_date']
         datestr = date.strftime('%Y%m%d')
         log.debug('h2o: {h2o}, date: {d}'.format(h2o=h2o, d=datestr))
