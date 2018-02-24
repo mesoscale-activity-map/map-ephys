@@ -72,14 +72,14 @@ class TrialEventType(dj.Lookup):
 @schema
 class Outcome(dj.Lookup):
     definition = """
-    outcome : varchar(8)
+    outcome : varchar(32)
     """
     contents = zip(('hit', 'miss', 'ignore'))
 
 @schema 
 class EarlyLick(dj.Lookup):
     definition = """
-    early_lick  :  varchar(12)
+    early_lick  :  varchar(32)
     """ 
     contents = zip(('early', 'no early'))
 
@@ -116,7 +116,7 @@ class TrialEvent(dj.Manual):
 @schema
 class ActionEventType(dj.Lookup):
     definition = """
-    action_event_type : varchar(12)
+    action_event_type : varchar(32)
     ----
     action_event_description : varchar(1000)
     """
