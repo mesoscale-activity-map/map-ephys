@@ -1,9 +1,8 @@
 import datajoint as dj
 import ccf, experiment
 import numpy as np
-import h5py
 
-schema = dj.schema(dj.config['ephys.database'], locals())
+schema = dj.schema(dj.config['ephys.database'])
 
 
 @schema
@@ -68,6 +67,7 @@ class Ephys(dj.Imported):
         unit  : smallint
         ---        
         spike_times  : longblob  #  (s)
+        waveform : blob # average spike waveform
         """
         
     class TrialUnit(dj.Part):

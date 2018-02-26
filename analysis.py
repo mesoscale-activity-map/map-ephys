@@ -4,7 +4,7 @@ import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
 
-schema = dj.schema(dj.config['analysis.database'], locals())
+schema = dj.schema(dj.config['analysis.database'])
 
 @schema
 class PSTH(dj.computed):

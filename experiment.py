@@ -1,7 +1,7 @@
 import datajoint as dj
 import lab, ccf
 
-schema = dj.schema(dj.config['experiment.database'], locals())
+schema = dj.schema(dj.config['experiment.database'])
 
 @schema
 class Task(dj.Lookup):
@@ -21,7 +21,7 @@ class Task(dj.Lookup):
 @schema
 class Session(dj.Manual):
     definition = """
-    -> lab.Animal
+    -> lab.Subject
     session : smallint 		# session number
     ---
     session_date  : date
@@ -73,14 +73,14 @@ class TrialEventType(dj.Lookup):
 @schema
 class Outcome(dj.Lookup):
     definition = """
-    outcome : varchar(8)
+    outcome : varchar(32)
     """
     contents = zip(('hit', 'miss', 'ignore'))
 
 @schema 
 class EarlyLick(dj.Lookup):
     definition = """
-    early_lick  :  varchar(12)
+    early_lick  :  varchar(32)
     """ 
     contents = zip(('early', 'no early'))
 
@@ -109,7 +109,7 @@ class TrialEvent(dj.Manual):
     definition = """
     -> BehaviorTrial 
     -> TrialEventType
-    trial_event_time : decimal(8, 4)   # (s) from trial start, not session start (depends)
+    trial_event_time : decimal(8, 4)   # (s) from trial start, not session start
     ---
     duration : decimal(8,4)  #  (s)  
     """
@@ -117,7 +117,7 @@ class TrialEvent(dj.Manual):
 @schema
 class ActionEventType(dj.Lookup):
     definition = """
-    action_event_type : varchar(12)
+    action_event_type : varchar(32)
     ----
     action_event_description : varchar(1000)
     """
@@ -130,7 +130,7 @@ class ActionEvent(dj.Manual):
     definition = """
     -> BehaviorTrial
     -> ActionEventType
-    action_event_time : decimal(8,4)  # (s) from trial or session (it depends but please figure it out)
+    action_event_time : decimal(8,4)  # (s) from trial start
     """
 
 @schema
@@ -139,6 +139,7 @@ class TrackingDevice(dj.Lookup):
     tracking_device  : varchar(8)  # e.g. camera, microphone
     ---
     sampling_rate  :  decimal(8, 4)   # Hz
+    tracking_device_description: varchar(255) # 
     """
 
 @schema
@@ -148,6 +149,7 @@ class Tracking(dj.Imported):
     -> TrackingDevice
     ---
     tracking_data_path  : varchar(255)
+    start_time : decimal(8,4) # (s) from trial star
     """
 
 @schema
@@ -160,7 +162,7 @@ class PhotostimDevice(dj.Lookup):
     """
 
 @schema 
-class Photostim(dj.Lookup):
+class Photostim(dj.Manual):
     definition = """
     -> PhotostimDevice
     photo_stim :  smallint 

@@ -20,7 +20,7 @@ import ephys
 
 
 log = logging.getLogger(__name__)
-schema = dj.schema(dj.config['ingest.database'], locals())
+schema = dj.schema(dj.config['ingest.database'])
 
 
 @schema
@@ -39,11 +39,11 @@ class RigDataPath(dj.Lookup):
         if 'rig_data_paths' in dj.config:  # for local testing
             return dj.config['rig_data_paths']
 
-        return (('TRig1', r'\MOHARB-NUC1\Document\Arduino\Bpod_Train1\Bpod Local\Data', 0), # Hardcode the rig path
-                ('TRig2', r'\MOHARB-WW2\C:\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
-                ('TRig3', r'\WANGT-NUC\documents\MATLAB\Bpod Local\Data', 2),
-                ('RRig', r'\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3),
-                ('EPhys1', r'H:\\data\MAP', 4),)
+        return (('TRig1', r'\\MOHARB-NUC1\Documents\Arduino\Bpod_Train1\Bpod Local\Data', 0), # Hardcode the rig path
+                ('TRig2', r'\\MOHARB-WW2\C\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
+                ('TRig3', r'\\WANGT-NUC\Documents\MATLAB\Bpod Local\Data', 2),
+                ('RRig', r'\\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3),
+                ('EPhys1', r'H:\\data\MAP', 4),) # Testing the JRClust output files on my computer
 
 
 @schema
@@ -59,7 +59,7 @@ class SessionDiscovery(dj.Manual):
     '''
 
     definition = """
-    -> lab.AnimalWaterRestriction
+    -> lab.WaterRestriction
     session_date:               date                    # discovered date
     """
 
@@ -74,11 +74,11 @@ class SessionDiscovery(dj.Manual):
                 if r['rig'].startswith('RRig')]  # todo?: rig 'type'? Change between TRig and RRig for now
 
         h2os = {k: v for k, v in
-                zip(*lab.AnimalWaterRestriction().fetch(
-                    'water_restriction', 'animal'))} # fetch existing water_restriction
+                zip(*lab.WaterRestriction().fetch(
+                    'water_restriction_number', 'subject_id'))} # fetch existing water_restriction_number
 
         initial = SessionDiscovery().fetch(as_dict=True) # sessions already discovered
-        log.debug('initial: %s' % initial)
+        log.debug('initial: %s' % rigs)
         found = []
 
         for r in rigs:
@@ -99,7 +99,7 @@ class SessionDiscovery(dj.Manual):
                     # split files like 'dl7_TW_autoTrain_20171114_140357.mat'
                     filename = os.path.basename(filename)
                     fsplit = filename.split('.')[0].split('_')
-                    h2o, date = (fsplit[0], fsplit[-2:-1][0],)
+                    h2o, date = (fsplit[0], fsplit[-2:-1][0],) # first is the water restriction, second last is the date
 
                     if h2o not in h2os:
                         log.warning('{f} skipped - no animal for {h2o}'.format(
@@ -111,8 +111,7 @@ class SessionDiscovery(dj.Manual):
                     log.debug('animal is {animal}'.format(animal=animal))
 
                     key = {
-                        'animal': animal,
-                        'water_restriction': h2o,
+                        'subject_id': animal,
                         'session_date': datetime.date(
                             int(date[0:4]), int(date[4:6]), int(date[6:8]))
                     }
@@ -144,17 +143,17 @@ class BehaviorIngest(dj.Imported):
     def make(self, key):
         log.info('BehaviorIngest.make(): key: {key}'.format(key=key))
         rigpaths = [p for p in RigDataPath().fetch(order_by='rig_data_path')
-                    if 'RRig' in p['rig']] # change between TRig and RRig
+                    if 'TRig' in p['rig']] # change between TRig and RRig
 
-        animal = key['animal']
-        h2o = key['water_restriction']
+        subject_id = key['subject_id']
+        h2o = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
         date = key['session_date']
         datestr = date.strftime('%Y%m%d')
         log.debug('h2o: {h2o}, date: {d}'.format(h2o=h2o, d=datestr))
 
         # session record key
         skey = {}
-        skey['animal'] = animal
+        skey['subject_id'] = subject_id
         skey['session_date'] = date
         skey['username'] = 'daveliu' # username has to be changed
 
@@ -251,7 +250,7 @@ class BehaviorIngest(dj.Imported):
         #
 
         log.debug('synthesizing session ID')
-        session = (dj.U().aggr(experiment.Session() & {'animal': animal},
+        session = (dj.U().aggr(experiment.Session() & {'subject_id': subject_id},
                                n='max(session)').fetch1('n') or 0) + 1
         log.info('generated session id: {session}'.format(session=session))
         skey['session'] = session
@@ -571,7 +570,9 @@ class EphysIngest(dj.Imported):
 
         rigpath = (RigDataPath() & {'rig': 'EPhys1'}).fetch1('rig_data_path')
         date = key['session_date'].strftime('%Y-%m-%d')
-        file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=key['water_restriction'])
+        subject_id = key['subject_id']
+        water = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
+        file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water)
         subpath = os.path.join('Spike', date, file)
         fullpath = os.path.join(rigpath, subpath)
 
@@ -604,7 +605,7 @@ class EphysIngest(dj.Imported):
         # better would be to have this encoded in filename or similar.
 
         ekey = {
-            'animal': behavior['animal'],
+            'subject_id': behavior['subject_id'],
             'session': behavior['session'],
             'electrode_group': 1,
         }
@@ -616,6 +617,8 @@ class EphysIngest(dj.Imported):
         f = h5py.File(fullpath,'r')
         ind = np.argsort(f['S_clu']['viClu'][0]) # index sorted by cluster
         cluster_ids = f['S_clu']['viClu'][0][ind] # cluster (unit) number
+        trWav_raw_clu = f['S_clu']['trWav_raw_clu'] # spike waveform
+        trWav_raw_clu1 = np.concatenate((trWav_raw_clu[0:1][:][:],trWav_raw_clu),axis=0) # add a spike waveform of cluster 0
         spike_times = f['viTime_spk'][0][ind] # spike times
         viSite_spk = f['viSite_spk'][0][ind] # electrode site for the spike
         viT_offset_file = f['viT_offset_file'][:] # start of each trial, subtract this number for each trial
@@ -628,7 +631,7 @@ class EphysIngest(dj.Imported):
         spike_times2[np.where(spike_times2 >= viT_offset_file[-1])] = spike_times[np.where(spike_times2 >= viT_offset_file[-1])] - viT_offset_file[-1] # subtract the viT_offset_file from each trial
         spike_times2 = spike_times2 / sRateHz # divide the sampling rate, sRateHz
         clu_ids_diff = np.diff(cluster_ids) # where the units seperate
-        clu_ids_diff = np.where(clu_ids_diff != 0)[0] + 1 # seperate the spike_times
+        clu_ids_diff = np.where(clu_ids_diff != 0)[0] + 1 # separate the spike_times
         units = np.split(spike_times, clu_ids_diff) / sRateHz # sub arrays of spike_times
         trialunits = np.split(spike_trials, clu_ids_diff) # sub arrays of spike_trials
         unit_ids = np.arange(len(clu_ids_diff) + 1) # unit number
@@ -637,7 +640,7 @@ class EphysIngest(dj.Imported):
         for i in range(0,len(trialunits)):
             trialunits2 = np.append(trialunits2, np.unique(trialunits[i]))
             trialunits1 = np.append(trialunits1, np.zeros(len(np.unique(trialunits[i])))+i)
-        ephys.Ephys.Unit().insert(list(dict(ekey, unit = x, spike_times = units[x]) for x in unit_ids)) # batch insert the units
+        ephys.Ephys.Unit().insert(list(dict(ekey, unit = x, spike_times = units[x], waveform = trWav_raw_clu1[x][0]) for x in unit_ids)) # batch insert the units
         #experiment.Session.Trial() #TODO: fetch the trial from experiment.Session.Trial and realign?
         ephys.Ephys.TrialUnit().insert(list(dict(ekey, unit = trialunits1[x], trial = trialunits2[x]) for x in range(0, len(trialunits2)))) # batch insert the TrialUnit (key, unit, trial)
         ephys.Ephys.Spike().insert(list(dict(ekey, unit = cluster_ids[x], spike_time = spike_times2[x], electrode = viSite_spk[x], trial = spike_trials[x]) for x in range(0, len(spike_times2))), skip_duplicates=True) # batch insert the Spikes (key, unit, spike_time, electrode, trial)
