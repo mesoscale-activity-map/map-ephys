@@ -90,7 +90,7 @@ def mockdata():
             'water_restriction_number': 'dl7',
             'cage_number': 148861,
             'wr_start_date': '2017-11-07',
-            'wr_start_weight': 20.5},
+            'wr_start_weight': 25},
             skip_duplicates = True
         )
         lab.Subject().insert1({
@@ -131,7 +131,7 @@ def mockdata():
             'water_restriction_number': 'dl14',
             'cage_number': 149595,
             'wr_start_date': '2017-11-27',
-            'wr_start_weight': 20.5},
+            'wr_start_weight': 24.1},
             skip_duplicates = True
         )
         lab.Subject().insert1({
@@ -172,7 +172,7 @@ def mockdata():
             'water_restriction_number': 'dl15',
             'cage_number': 149598,
             'wr_start_date': '2017-11-27',
-            'wr_start_weight': 20.5},
+            'wr_start_weight': 27.6},
             skip_duplicates = True
         )
         lab.Subject().insert1({
@@ -180,7 +180,7 @@ def mockdata():
             'username': 'daveliu',
             'cage_number': 148859,
             'date_of_birth': '2017-10-06',
-            'sex':  'M',
+            'sex':  'F',
             'animal_source': 'Jackson labs'},
             skip_duplicates = True
         )
@@ -213,15 +213,15 @@ def mockdata():
             'water_restriction_number': 'dl20',
             'cage_number': 151282,
             'wr_start_date': '2018-01-10',
-            'wr_start_weight': 20.5},
+            'wr_start_weight': 22.7},
             skip_duplicates = True
         )
         lab.Subject().insert1({
             'subject_id': 408022,
             'username': 'daveliu',
             'cage_number': 148859,
-            'date_of_birth': '2017-10-06',
-            'sex':  'M',
+            'date_of_birth': '2017-10-19',
+            'sex':  'F',
             'animal_source': 'Jackson labs'},
             skip_duplicates = True
         )
@@ -254,15 +254,15 @@ def mockdata():
             'water_restriction_number': 'dl21',
             'cage_number': 151283,
             'wr_start_date': '2018-01-10',
-            'wr_start_weight': 20.5},
+            'wr_start_weight': 21.1},
             skip_duplicates = True
         )
         lab.Subject().insert1({
             'subject_id': 408021,
             'username': 'daveliu',
             'cage_number': 148859,
-            'date_of_birth': '2017-10-06',
-            'sex':  'M',
+            'date_of_birth': '2017-10-19',
+            'sex':  'F',
             'animal_source': 'Jackson labs'},
             skip_duplicates = True
         )
@@ -295,7 +295,7 @@ def mockdata():
             'water_restriction_number': 'dl22',
             'cage_number': 151704,
             'wr_start_date': '2018-01-19',
-            'wr_start_weight': 20.5},
+            'wr_start_weight': 21},
             skip_duplicates = True
         )
         lab.Subject().insert1({
@@ -336,7 +336,7 @@ def mockdata():
             'water_restriction_number': 'dl24',
             'cage_number': 151793,
             'wr_start_date': '2018-01-22',
-            'wr_start_weight': 20.5},
+            'wr_start_weight': 26},
             skip_duplicates = True
         )
         lab.Subject().insert1({
@@ -377,7 +377,7 @@ def mockdata():
             'water_restriction_number': 'dl25',
             'cage_number': 151794,
             'wr_start_date': '2018-01-22',
-            'wr_start_weight': 20.5},
+            'wr_start_weight': 25.5},
             skip_duplicates = True
         )
         lab.Subject().insert1({
@@ -385,7 +385,7 @@ def mockdata():
             'username': 'daveliu',
             'cage_number': 152268,
             'date_of_birth': '2017-10-18',
-            'sex':  'M',
+            'sex':  'F',
             'animal_source': 'Jackson labs'},
             skip_duplicates = True
         )
@@ -418,7 +418,7 @@ def mockdata():
             'water_restriction_number': 'dl28',
             'cage_number': 152312,
             'wr_start_date': '2018-02-05',
-            'wr_start_weight': 20.5},
+            'wr_start_weight': 19.8},
             skip_duplicates = True
         )
         lab.Subject().insert1({

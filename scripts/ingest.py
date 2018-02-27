@@ -39,11 +39,11 @@ class RigDataPath(dj.Lookup):
         if 'rig_data_paths' in dj.config:  # for local testing
             return dj.config['rig_data_paths']
 
-        return (('TRig1', r'\MOHARB-NUC1\Document\Arduino\Bpod_Train1\Bpod Local\Data', 0), # Hardcode the rig path
-                ('TRig2', r'\MOHARB-WW2\C:\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
-                ('TRig3', r'\WANGT-NUC\documents\MATLAB\Bpod Local\Data', 2),
-                ('RRig', r'\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3),
-                ('EPhys1', r'H:\\data\MAP', 4),)
+        return (('TRig1', r'\\MOHARB-NUC1\Documents\Arduino\Bpod_Train1\Bpod Local\Data', 0), # Hardcode the rig path
+                ('TRig2', r'\\MOHARB-WW2\C\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
+                ('TRig3', r'\\WANGT-NUC\Documents\MATLAB\Bpod Local\Data', 2),
+                ('RRig', r'\\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3),
+                ('EPhys1', r'H:\\data\MAP', 4),) # Testing the JRClust output files on my computer
 
 
 @schema
@@ -71,14 +71,14 @@ class SessionDiscovery(dj.Manual):
         '''
 
         rigs = [r for r in RigDataPath().fetch(as_dict=True)
-                if r['rig'].startswith('RRig')]  # todo?: rig 'type'? Change between TRig and RRig for now
+                if r['rig'].startswith('TRig')]  # todo?: rig 'type'? Change between TRig and RRig for now
 
         h2os = {k: v for k, v in
                 zip(*lab.WaterRestriction().fetch(
                     'water_restriction_number', 'subject_id'))} # fetch existing water_restriction_number
 
         initial = SessionDiscovery().fetch(as_dict=True) # sessions already discovered
-        log.debug('initial: %s' % initial)
+        log.debug('initial: %s' % rigs)
         found = []
 
         for r in rigs:
@@ -99,7 +99,7 @@ class SessionDiscovery(dj.Manual):
                     # split files like 'dl7_TW_autoTrain_20171114_140357.mat'
                     filename = os.path.basename(filename)
                     fsplit = filename.split('.')[0].split('_')
-                    h2o, date = (fsplit[0], fsplit[-2:-1][0],)
+                    h2o, date = (fsplit[0], fsplit[-2:-1][0],) # first is the water restriction, second last is the date
 
                     if h2o not in h2os:
                         log.warning('{f} skipped - no animal for {h2o}'.format(
@@ -111,8 +111,7 @@ class SessionDiscovery(dj.Manual):
                     log.debug('animal is {animal}'.format(animal=animal))
 
                     key = {
-                        'subject_id': subject_id,
-                        'water_restriction_number': h2o,
+                        'subject_id': animal,
                         'session_date': datetime.date(
                             int(date[0:4]), int(date[4:6]), int(date[6:8]))
                     }
@@ -144,10 +143,10 @@ class BehaviorIngest(dj.Imported):
     def make(self, key):
         log.info('BehaviorIngest.make(): key: {key}'.format(key=key))
         rigpaths = [p for p in RigDataPath().fetch(order_by='rig_data_path')
-                    if 'RRig' in p['rig']] # change between TRig and RRig
+                    if 'TRig' in p['rig']] # change between TRig and RRig
 
         subject_id = key['subject_id']
-        h2o = key['water_restriction_number']
+        h2o = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
         date = key['session_date']
         datestr = date.strftime('%Y%m%d')
         log.debug('h2o: {h2o}, date: {d}'.format(h2o=h2o, d=datestr))
@@ -571,7 +570,9 @@ class EphysIngest(dj.Imported):
 
         rigpath = (RigDataPath() & {'rig': 'EPhys1'}).fetch1('rig_data_path')
         date = key['session_date'].strftime('%Y-%m-%d')
-        file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=key['water_restriction_number'])
+        subject_id = key['subject_id']
+        water = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
+        file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water)
         subpath = os.path.join('Spike', date, file)
         fullpath = os.path.join(rigpath, subpath)
 
