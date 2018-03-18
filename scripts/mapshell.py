@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+#shell script to discover and populate the sessions
 
 import os
 import sys
