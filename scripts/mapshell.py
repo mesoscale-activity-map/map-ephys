@@ -11,10 +11,11 @@ import ephys
 import lab
 import experiment
 import ccf
-import ingest
+import ingestBehavior
+import ingestEphys
 
 log = logging.getLogger(__name__)
-__all__ = [ephys, lab, experiment, ccf, ingest]
+__all__ = [ephys, lab, experiment, ccf, ingestBehavior, ingestEphys]
 [ dj ]  # NOQA flake8 
 
 
@@ -31,12 +32,12 @@ def logsetup(*args):
 
 
 def discover(*args):
-    ingest.SessionDiscovery().populate()
+    ingestBehavior.SessionDiscovery().populate()
 
 
 def populate(*args):
-    ingest.BehaviorIngest().populate()
-    ingest.EphysIngest().populate()
+    ingestBehavior.BehaviorIngest().populate()
+    ingestEphys.EphysIngest().populate()
 
 
 def shell(*args):
