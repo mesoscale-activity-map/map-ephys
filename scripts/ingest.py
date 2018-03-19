@@ -15,8 +15,8 @@ import numpy as np
 import datajoint as dj
 
 import lab
-import experiment
-import ephys
+import pipeline.experiment
+import pipeline.ephys
 
 
 log = logging.getLogger(__name__)
@@ -129,7 +129,7 @@ class BehaviorIngest(dj.Imported):
     definition = """
     -> SessionDiscovery
     ---
-    -> experiment.Session
+    -> pipeline.experiment.Session
     """
 
     class BehaviorFile(dj.Part):

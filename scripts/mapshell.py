@@ -7,14 +7,14 @@ from code import interact
 
 import datajoint as dj
 
-import ephys
 import lab
-import experiment
-import ccf
+import pipeline.ephys
+import pipeline.experiment
+import pipeline.ccf
 import ingest
 
 log = logging.getLogger(__name__)
-__all__ = [ephys, lab, experiment, ccf, ingest]
+__all__ = [lab, pipeline.ephys, pipeline.experiment, pipeline.ccf, ingest]
 [ dj ]  # NOQA flake8 
 
 
