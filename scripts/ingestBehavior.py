@@ -11,6 +11,7 @@ from collections import namedtuple
 import scipy.io as spio
 import h5py
 import numpy as np
+import warnings
 
 import datajoint as dj
 
@@ -18,6 +19,7 @@ import lab
 import experiment
 import ephys
 
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 log = logging.getLogger(__name__)
 schema = dj.schema(dj.config['ingestBehavior.database'])
@@ -437,11 +439,11 @@ class BehaviorIngest(dj.Imported):
             #
             # Add 'bitcode' note
             #
-            
-            nkey = dict(tkey)
-            nkey['trial_note_type'] = 'bitcode'
-            nkey['trial_note'] = gui['randomID'][0]
-            rows['trial_note'].append(nkey)
+            if 'randomID' in gui:
+                nkey = dict(tkey)
+                nkey['trial_note_type'] = 'bitcode'
+                nkey['trial_note'] = str(gui['randomID'][0])
+                rows['trial_note'].append(nkey)
 
             #
             # Add presample event
