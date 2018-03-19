@@ -20,7 +20,7 @@ import lab
 import experiment
 import ephys
 
-warnings.simplefilter(action='ignore', category=FutureWarning)
+#warnings.simplefilter(action='ignore', category=FutureWarning)
 
 log = logging.getLogger(__name__)
 schema = dj.schema(dj.config['ingestBehavior.database'])
@@ -48,7 +48,6 @@ class RigDataPath(dj.Lookup):
                 ('RRig', r'\\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3)
                 ) # Testing the JRClust output files on my computer
 
-
 @schema
 class SessionDiscovery(dj.Manual):
     '''
@@ -74,7 +73,7 @@ class SessionDiscovery(dj.Manual):
         '''
 
         rigs = [r for r in RigDataPath().fetch(as_dict=True)
-                if r['rig'].startswith('TRig')]  # todo?: rig 'type'? Change between TRig and RRig for now
+                if r['rig'].startswith('RRig')]  # todo?: rig 'type'? Change between TRig and RRig for now
 
         h2os = {k: v for k, v in
                 zip(*lab.WaterRestriction().fetch(
@@ -146,7 +145,7 @@ class BehaviorIngest(dj.Imported):
     def make(self, key):
         log.info('BehaviorIngest.make(): key: {key}'.format(key=key))
         rigpaths = [p for p in RigDataPath().fetch(order_by='rig_data_path')
-                    if 'TRig' in p['rig']] # change between TRig and RRig
+                    if 'RRig' in p['rig']] # change between TRig and RRig
 
         subject_id = key['subject_id']
         h2o = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
@@ -344,9 +343,9 @@ class BehaviorIngest(dj.Imported):
             tkey = dict(skey)
             startindex = np.where(t.state_data == states['PreSamplePeriod'])[0]
 
-            # should be only end of 1st StopLicking;
-            # rest of data is irrelevant w/r/t separately ingested ephys
-            endindex = np.where(t.state_data == states['StopLicking'])[0]
+            # pdb.set_trace()
+            # Go to TrialEnd
+            endindex = np.where(t.state_data == states['TrialEnd'])[0]
 
             log.debug('states\n' + str(states))
             log.debug('state_data\n' + str(t.state_data))
@@ -437,11 +436,12 @@ class BehaviorIngest(dj.Imported):
             nkey['trial_note'] = str(gui['Autolearn'][0])
             rows['trial_note'].append(nkey)
             
-            pdb.set_trace()
+            
             #
             # Add 'bitcode' note
             #
-            if 'randomID' in gui:
+            if 'randomID' in gui.dtype.names:
+
                 nkey = dict(tkey)
                 nkey['trial_note_type'] = 'bitcode'
                 nkey['trial_note'] = str(gui['randomID'][0])

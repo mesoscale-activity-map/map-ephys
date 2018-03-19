@@ -16,7 +16,20 @@ class Probe(dj.Lookup):
     contents = [
         ('15131808323', 'neuropixels probe O3')
     ]
-
+      
+@schema
+class UnitQualityType(dj.Lookup):
+    definition = """
+    # Quality
+    unit_quality  :  varchar(100)
+    ---
+    unit_quality_description :  varchar(4000)
+    """
+    contents = [
+        ('good', 'single unit'),
+        ('ok', 'probably a single unit, but could be contaminated'),
+        ('multi', 'multi unit')
+    ]
 
 @schema
 class ElectrodeGroup(dj.Manual):
@@ -65,7 +78,8 @@ class Ephys(dj.Imported):
         # Sorted unit
         -> Ephys
         unit  : smallint
-        ---        
+        ---
+        -> UnitQualityType
         spike_times  : longblob  #  (s)
         waveform : blob # average spike waveform
         """
