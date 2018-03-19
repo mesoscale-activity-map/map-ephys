@@ -4,6 +4,7 @@ import os
 import glob
 import logging
 import datetime
+import pdb
 
 from itertools import chain
 from collections import namedtuple
@@ -436,6 +437,7 @@ class BehaviorIngest(dj.Imported):
             nkey['trial_note'] = str(gui['Autolearn'][0])
             rows['trial_note'].append(nkey)
             
+            pdb.set_trace()
             #
             # Add 'bitcode' note
             #
