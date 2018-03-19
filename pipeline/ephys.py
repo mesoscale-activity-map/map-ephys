@@ -1,6 +1,9 @@
+
 import datajoint as dj
-import ccf, experiment
 import numpy as np
+
+import pipeline.ccf
+import pipeline.experiment
 
 schema = dj.schema(dj.config['ephys.database'])
 
@@ -22,7 +25,7 @@ class Probe(dj.Lookup):
 class ElectrodeGroup(dj.Manual):
     definition = """
     # Electrode
-    -> experiment.Session
+    -> pipeline.experiment.Session
     electrode_group : tinyint # Electrode_group is like the probe
     ---
     -> Probe
@@ -51,7 +54,7 @@ class LabeledTrack(dj.Manual):
     class Point(dj.Part):
         definition = """
         -> LabeledTrack
-        -> ccf.CCF
+        -> pipeline.ccf.CCF
         """
 
 @schema
@@ -74,7 +77,7 @@ class Ephys(dj.Imported):
         definition = """
         # Entries for trials a unit is in
         -> Ephys.Unit
-        -> experiment.Session.Trial
+        -> pipeline.experiment.Session.Trial
         """
     
     class Spike(dj.Part):
@@ -84,7 +87,7 @@ class Ephys(dj.Imported):
         spike_time : decimal(9,4)   # (s)
         ---
         -> ElectrodeGroup.Electrode
-        -> experiment.Session.Trial
+        -> pipeline.experiment.Session.Trial
         """
 
 
@@ -93,5 +96,5 @@ class ElectrodePosition(dj.Manual):
     definition = """
     -> ElectrodeGroup.Electrode
     ---
-    -> ccf.CCF
+    -> pipeline.ccf.CCF
     """

@@ -1,5 +1,7 @@
 import datajoint as dj
-import lab, ccf
+
+import lab
+import pipeline.ccf
 
 schema = dj.schema(dj.config['experiment.database'])
 
@@ -166,7 +168,7 @@ class Photostim(dj.Manual):
     -> PhotostimDevice
     photo_stim :  smallint 
     ---
-    -> ccf.CCF
+    -> pipeline.ccf.CCF
     duration  :  decimal(8,4)   # (s)
     waveform  :  longblob       # (mW)
     """
@@ -174,7 +176,7 @@ class Photostim(dj.Manual):
     class Profile(dj.Part):
         definition = """
         -> master
-        (profile_x, profile_y, profile_z) -> ccf.CCF(x, y, z)
+        (profile_x, profile_y, profile_z) -> pipeline.ccf.CCF(x, y, z)
         ---
         intensity_timecourse   :  longblob  # (mW/mm^2)
         """
