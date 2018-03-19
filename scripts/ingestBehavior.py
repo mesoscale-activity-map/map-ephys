@@ -42,8 +42,8 @@ class RigDataPath(dj.Lookup):
         return (('TRig1', r'\\MOHARB-NUC1\Documents\Arduino\Bpod_Train1\Bpod Local\Data', 0), # Hardcode the rig path
                 ('TRig2', r'\\MOHARB-WW2\C\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
                 ('TRig3', r'\\WANGT-NUC\Documents\MATLAB\Bpod Local\Data', 2),
-                ('RRig', r'\\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3),
-                ('EPhys1', r'H:\\data\MAP', 4),) # Testing the JRClust output files on my computer
+                ('RRig', r'\\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3)
+                ) # Testing the JRClust output files on my computer
 
 
 @schema
@@ -433,6 +433,15 @@ class BehaviorIngest(dj.Imported):
             nkey['trial_note_type'] = 'autolearn'
             nkey['trial_note'] = str(gui['Autolearn'][0])
             rows['trial_note'].append(nkey)
+            
+            #
+            # Add 'bitcode' note
+            #
+            
+            nkey = dict(tkey)
+            nkey['trial_note_type'] = 'bitcode'
+            nkey['trial_note'] = gui['randomID'][0]
+            rows['trial_note'].append(nkey)
 
             #
             # Add presample event
@@ -490,7 +499,7 @@ class BehaviorIngest(dj.Imported):
                 ekey['trial_event_time'] = t.state_times[d]
                 ekey['duration'] = gui['DelayPeriod'][0]
                 rows['trial_event'].append(ekey)
-
+                
             #
             # Add lick events
             #

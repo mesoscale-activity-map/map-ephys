@@ -14,7 +14,7 @@ import experiment
 def dropdbs():
     print('dropping databases')
     for a in range(3):
-        for d in ['ingestEphys', 'ingestBehavior', 'ccf', 'ephys', 'experiment', 'lab', 'prototype']:
+        for d in ['ingestEphys', 'ingestBehavior', 'ccf', 'ephys', 'experiment']:
             try:
                 schema = dj.schema(dj.config['%s.database' % d])
                 schema.drop(force=True)

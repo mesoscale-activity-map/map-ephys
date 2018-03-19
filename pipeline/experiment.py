@@ -42,7 +42,7 @@ class TrialNoteType(dj.Lookup):
     definition = """
     trial_note_type : varchar(12)
     """
-    contents = zip(('autolearn', 'protocol #', 'bad'))
+    contents = zip(('autolearn', 'protocol #', 'bad', 'bitcode'))
 
 @schema
 class TrialNote(dj.Manual):
@@ -54,12 +54,24 @@ class TrialNote(dj.Manual):
     """
 
 @schema
-class TaskTraining(dj.Manual):
+class TrainingType(dj.Lookup):
+    definition = """
+    # Mouse training
+    training_type : varchar(100) # mouse training
+    ---
+    training_type_description : varchar(2000) # description
+    """
+    contents = [
+         ('regular', ''),
+         ('regular + distractor', 'mice were first trained on the regular S1 photostimulation task  without distractors, then the training continued in the presence of distractors'),
+         ('regular or regular + distractor', 'includes both training options')
+         ]
+    
+@schema
+class SessionTraining(dj.Manual):
     definition = """
     -> Session
-    -> Task
-    ----
-    training_status :  enum('naive', 'expert', 'overtrained')   
+    -> TrainingType
     """
 
 @schema
@@ -67,7 +79,7 @@ class TrialEventType(dj.Lookup):
     definition = """
     trial_event_type  : varchar(12)  
     """
-    contents = zip(('delay', 'go', 'sample', 'presample', 'bitcode'))
+    contents = zip(('delay', 'go', 'sample', 'presample'))
 
 @schema
 class Outcome(dj.Lookup):
@@ -201,3 +213,30 @@ class PassivePhotostimTrial(dj.Computed):
 
     def make(self, key):
         self.insert1(key)
+
+@schema
+class TaskProtocol(dj.Lookup):
+    definition = """
+    # SessionType
+    -> Task
+    task_protocol : tinyint # task protocol
+    ---
+    task_protocol_description : varchar(4000)
+    """
+    contents = [
+         ('s1 stim', 2, 'mini-distractors'),
+         ('s1 stim', 3, 'full distractors, with 2 distractors (at different times) on some of the left trials'),
+         ('s1 stim', 4, 'full distractors'),
+         ('s1 stim', 5, 'mini-distractors, with different levels of the mini-stim during sample period'),
+         ('s1 stim', 6, 'full distractors; same as protocol 4 but with a no-chirp trial-type'),
+         ('s1 stim', 7, 'mini-distractors and full distractors (only at late delay)'),
+         ('s1 stim', 8, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample                 period'),
+         ('s1 stim', 9, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample period')
+         ]
+        
+@schema
+class SessionTask(dj.Manual):
+    definition = """
+    -> Session
+    -> TaskProtocol
+    """

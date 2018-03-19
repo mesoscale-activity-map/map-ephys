@@ -23,6 +23,17 @@ log = logging.getLogger(__name__)
 schema = dj.schema(dj.config['ingestEphys.database'])
 
 @schema
+class EphysDataPath(dj.Lookup):
+    # ephys data storage location(s)
+    definition = """
+    data_path:              varchar(255)           # rig data path
+    ---
+    search_order:           int                     # rig search order
+    """
+
+    contents = [(r'H:\\data\MAP', 1)] # Testing the JRClust output files on my computer
+
+@schema
 class EphysIngest(dj.Imported):
     # subpaths like: \Spike\2017-10-21\tw5ap_imec3_opt3_jrc.mat
 
@@ -45,7 +56,7 @@ class EphysIngest(dj.Imported):
         # Find Ephys Recording
         #
 
-        rigpath = (RigDataPath() & {'rig': 'EPhys1'}).fetch1('rig_data_path')
+        rigpath = EphysDataPath().fetch1('data_path')
         date = key['session_date'].strftime('%Y-%m-%d')
         subject_id = key['subject_id']
         water = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
