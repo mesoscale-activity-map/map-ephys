@@ -61,8 +61,8 @@ class EphysIngest(dj.Imported):
         date = key['session_date'].strftime('%Y-%m-%d')
         subject_id = key['subject_id']
         water = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
-#        file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water)
-        file = '{h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water)
+        file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water)
+#        file = '{h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water)
         subpath = os.path.join('Spike', date, file)
         fullpath = os.path.join(rigpath, subpath)
 
@@ -113,10 +113,10 @@ class EphysIngest(dj.Imported):
 #        trWav_raw_clu1 = np.concatenate((trWav_raw_clu[0:1][:][:],trWav_raw_clu),axis=0) # add a spike waveform of cluster 0
         csNote_clu=f['S_clu']['csNote_clu'][0] # manual sorting note
         strs = ["multi" for x in range(len(csNote_clu))] # all units are multi by definition
-        for iU in range(0, len(csNote_clu)):
+        for iU in range(0, len(csNote_clu)): # read the manual curation of each unit
             unitQ = f[csNote_clu[iU]]
             str1 = ''.join(chr(i) for i in unitQ[:])
-            if str1 == 'single':
+            if str1 == 'single': # definitions in unit quality
                 strs[iU] = 'good'
             elif str1 =='multi':
                 strs[iU] = 'ok'
