@@ -15,8 +15,8 @@ import numpy as np
 import datajoint as dj
 
 import lab
-import pipeline.experiment
-import pipeline.ephys
+import pipeline.experiment as experiment
+import pipeline.ephys as ephys
 
 
 log = logging.getLogger(__name__)
@@ -129,7 +129,7 @@ class BehaviorIngest(dj.Imported):
     definition = """
     -> SessionDiscovery
     ---
-    -> pipeline.experiment.Session
+    -> experiment.Session
     """
 
     class BehaviorFile(dj.Part):
@@ -306,7 +306,8 @@ class BehaviorIngest(dj.Imported):
 
             states = {k: (v+1) for v, k in enumerate(t.state_names)}
             required_states = ('PreSamplePeriod', 'SamplePeriod',
-                               'DelayPeriod', 'ResponseCue', 'TrialEnd')
+                               'DelayPeriod', 'ResponseCue', 'StopLicking',
+                               'TrialEnd')
 
             missing = list(k for k in required_states if k not in states)
 
@@ -348,11 +349,22 @@ class BehaviorIngest(dj.Imported):
             log.debug('states\n' + str(states))
             log.debug('state_data\n' + str(t.state_data))
             log.debug('startindex\n' + str(startindex))
-            log.debug('endendex\n' + str(endindex))
+            log.debug('endindex\n' + str(endindex))
 
-            tkey['trial'] = i
-            tkey['start_time'] = t.state_times[startindex][0]
-            tkey['end_time'] = t.state_times[endindex][0]
+            if not(len(startindex) and len(endindex)):
+                log.info('skipping trial {i}: start/end index error: {s}/{e}'
+                         .format(i=i,s=str(startindex), e=str(endindex)))
+                continue
+
+            try:
+                tkey['trial'] = i
+                tkey['start_time'] = t.state_times[startindex][0]
+                tkey['end_time'] = t.state_times[endindex][0]
+            except IndexError:
+                log.info('skipping trial {i}: error indexing {s}/{e} into {t}'
+                         .format(i=i,s=str(startindex), e=str(endindex),
+                                 t=str(t.state_times)))
+                continue
 
             log.debug('BehaviorIngest.make(): Trial().insert1')  # TODO msg
             log.debug('tkey' + str(tkey))
