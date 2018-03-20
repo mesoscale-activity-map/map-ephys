@@ -36,10 +36,11 @@ def discover(*args):
     ingestBehavior.SessionDiscovery().populate()
 
 
-def populate(*args):
+def populateB(*args):
     ingestBehavior.BehaviorIngest().populate()
-    ingestEphys.EphysIngest().populate()
 
+def populateE(*args):
+    ingestEphys.EphysIngest().populate()
 
 def shell(*args):
     interact('map shell.\n\nschema modules:\n\n  - {m}\n'
@@ -50,7 +51,8 @@ def shell(*args):
 actions = {
     'shell': shell,
     'discover': discover,
-    'populate': populate,
+    'populateB': populateB,
+    'populateE': populateE
 }
 
 
