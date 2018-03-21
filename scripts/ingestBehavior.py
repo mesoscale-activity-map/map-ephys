@@ -94,7 +94,8 @@ class SessionDiscovery(dj.Manual):
                 subpaths = list(os.path.join(root, f)
                                 .split(data_path)[1].lstrip(os.path.sep)
                                 for f in files if f.endswith('.mat')
-                                and 'TW_autoTrain' in f) # find files with TW_autoTrain for now
+#                                and 'TW_autoTrain' in f) # find files with TW_autoTrain for now
+                                and 'tw2' in f) # find files with tw2
 
                 for filename in subpaths:
                     log.debug('found file %s' % filename)
@@ -166,10 +167,12 @@ class BehaviorIngest(dj.Imported):
             root = rp['rig_data_path']
             path = root
             path = os.path.join(path, h2o)
-            path = os.path.join(path, 'TW_autoTrain')
+#            path = os.path.join(path, 'TW_autoTrain')
+            path = os.path.join(path, 'tw2')
             path = os.path.join(path, 'Session Data')
             path = os.path.join(
-                path, '{h2o}_TW_autoTrain_{d}*.mat'.format(h2o=h2o, d=datestr))
+#                path, '{h2o}_TW_autoTrain_{d}*.mat'.format(h2o=h2o, d=datestr))
+                path, '{h2o}_tw2_{d}*.mat'.format(h2o=h2o, d=datestr))
 
             log.debug('rigpath {p}'.format(p=path))
 
@@ -213,7 +216,7 @@ class BehaviorIngest(dj.Imported):
 
         for f in matches:
 
-            if os.stat(f).st_size/1024 < 500:
+            if os.stat(f).st_size/1024 < 100:
                 log.info('skipping file {f} - too small'.format(f=f))
                 continue
 
