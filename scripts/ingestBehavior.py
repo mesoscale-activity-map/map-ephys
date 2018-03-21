@@ -20,7 +20,7 @@ import lab
 import experiment
 import ephys
 
-#warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 log = logging.getLogger(__name__)
 schema = dj.schema(dj.config['ingestBehavior.database'])
@@ -47,6 +47,7 @@ class RigDataPath(dj.Lookup):
                 ('TRig3', r'\\WANGT-NUC\Documents\MATLAB\Bpod Local\Data', 2),
                 ('RRig', r'\\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3)
                 ) # Testing the JRClust output files on my computer
+
 
 @schema
 class SessionDiscovery(dj.Manual):
@@ -93,8 +94,7 @@ class SessionDiscovery(dj.Manual):
                 subpaths = list(os.path.join(root, f)
                                 .split(data_path)[1].lstrip(os.path.sep)
                                 for f in files if f.endswith('.mat')
-#                                and 'TW_autoTrain' in f) # find files with TW_autoTrain for now
-                                and 'tw2' in f) # find files with TW_autoTrain for now
+                                and 'TW_autoTrain' in f) # find files with TW_autoTrain for now
 
                 for filename in subpaths:
                     log.debug('found file %s' % filename)
@@ -166,12 +166,10 @@ class BehaviorIngest(dj.Imported):
             root = rp['rig_data_path']
             path = root
             path = os.path.join(path, h2o)
-#            path = os.path.join(path, 'TW_autoTrain')
-            path = os.path.join(path, 'tw2')
+            path = os.path.join(path, 'TW_autoTrain')
             path = os.path.join(path, 'Session Data')
             path = os.path.join(
-#                path, '{h2o}_TW_autoTrain_{d}*.mat'.format(h2o=h2o, d=datestr))
-                path, '{h2o}_tw2_{d}*.mat'.format(h2o=h2o, d=datestr))
+                path, '{h2o}_TW_autoTrain_{d}*.mat'.format(h2o=h2o, d=datestr))
 
             log.debug('rigpath {p}'.format(p=path))
 
@@ -215,7 +213,7 @@ class BehaviorIngest(dj.Imported):
 
         for f in matches:
 
-            if os.stat(f).st_size/1024 < 100: # smaller than 100kb
+            if os.stat(f).st_size/1024 < 500:
                 log.info('skipping file {f} - too small'.format(f=f))
                 continue
 
@@ -311,7 +309,7 @@ class BehaviorIngest(dj.Imported):
 
             states = {k: (v+1) for v, k in enumerate(t.state_names)}
             required_states = ('PreSamplePeriod', 'SamplePeriod',
-                               'DelayPeriod', 'ResponseCue', 'TrialEnd')
+                               'DelayPeriod', 'ResponseCue', 'StopLicking', 'TrialEnd')
 
             missing = list(k for k in required_states if k not in states)
 
@@ -346,19 +344,27 @@ class BehaviorIngest(dj.Imported):
             tkey = dict(skey)
             startindex = np.where(t.state_data == states['PreSamplePeriod'])[0]
 
-            # pdb.set_trace()
-            # Go to TrialEnd
-            endindex = np.where(t.state_data == states['TrialEnd'])[0]
+            # should be only end of 1st StopLicking;
+            # rest of data is irrelevant w/r/t separately ingested ephys
+            endindex = np.where(t.state_data == states['StopLicking'])[0]
 
             log.debug('states\n' + str(states))
             log.debug('state_data\n' + str(t.state_data))
             log.debug('startindex\n' + str(startindex))
             log.debug('endendex\n' + str(endindex))
-
-            tkey['trial'] = i
-            tkey['start_time'] = t.state_times[startindex][0]
-            tkey['end_time'] = t.state_times[endindex][0]
-
+             
+            if not(len(startindex) and len(endindex)):
+                log.info('skipping trial {i}: start/end index error: {s}/{e}'.format(i=i,s=str(startindex), e=str(endindex)))
+                continue
+                   
+            try:    
+                tkey['trial'] = i
+                tkey['start_time'] = t.state_times[startindex][0]
+                tkey['end_time'] = t.state_times[endindex][0]
+            except IndexError:
+                log.info('skipping trial {i}: error indexing {s}/{e} into {t}'.format(i=i,s=str(startindex), e=str(endindex), t=str(t.state_times)))
+                continue
+               
             log.debug('BehaviorIngest.make(): Trial().insert1')  # TODO msg
             log.debug('tkey' + str(tkey))
             rows['trial'].append(tkey)
@@ -439,12 +445,11 @@ class BehaviorIngest(dj.Imported):
             nkey['trial_note'] = str(gui['Autolearn'][0])
             rows['trial_note'].append(nkey)
             
-            
+            #pdb.set_trace()
             #
             # Add 'bitcode' note
             #
             if 'randomID' in gui.dtype.names:
-
                 nkey = dict(tkey)
                 nkey['trial_note_type'] = 'bitcode'
                 nkey['trial_note'] = str(gui['randomID'][0])
