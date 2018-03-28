@@ -171,8 +171,8 @@ class BehaviorIngest(dj.Imported):
             path = os.path.join(path, 'tw2')
             path = os.path.join(path, 'Session Data')
             path = os.path.join(
-#                path, '{h2o}_TW_autoTrain_{d}*.mat'.format(h2o=h2o, d=datestr))
-                path, '{h2o}_tw2_{d}*.mat'.format(h2o=h2o, d=datestr))
+#                path, '{h2o}_TW_autoTrain_{d}*.mat'.format(h2o=h2o, d=datestr)) # earlier program protocol
+                path, '{h2o}_tw2_{d}*.mat'.format(h2o=h2o, d=datestr)) # later program protocol
 
             log.debug('rigpath {p}'.format(p=path))
 

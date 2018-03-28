@@ -61,8 +61,8 @@ class EphysIngest(dj.Imported):
         date = key['session_date'].strftime('%Y-%m-%d')
         subject_id = key['subject_id']
         water = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
-        file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water)
-#        file = '{h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water)
+        file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
+#        file = '{h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # some older files
         subpath = os.path.join('Spike', date, file)
         fullpath = os.path.join(rigpath, subpath)
 
@@ -145,25 +145,26 @@ class EphysIngest(dj.Imported):
         ephys.Ephys.Unit().insert(list(dict(ekey, unit = x, unit_quality = strs[x], spike_times = units[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids)) # batch insert the units
         #pdb.set_trace()
         
-        #TODO: fetch the bitcode and realign
-        file = '{h2o}_bitcode.mat'.format(h2o=water)
+        file = '{h2o}_bitcode.mat'.format(h2o=water) # fetch the bitcode and realign
         subpath = os.path.join('Spike', date, file)
         fullpath = os.path.join(rigpath, subpath)
         mat = spio.loadmat(fullpath, squeeze_me = True) # load the bitcode file
-        bitCodeE = mat['bitCodeS'].flatten()
+        bitCodeE = mat['bitCodeS'].flatten() # bitCodeS is the char variable
         trialNote = experiment.TrialNote()
-
-        bitCodeB=(trialNote & {'subject_id': ekey['subject_id']} & {'session': ekey['session']} & {'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial') # fetch the bitcode
-        if len(bitCodeB) < len(bitCodeE): # behavior file is shorter
-            startB=np.where(bitCodeE==bitCodeB[0])[0]
+        bitCodeB = (trialNote & {'subject_id': ekey['subject_id']} & {'session': ekey['session']} & {'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial') # fetch the bitcode from the behavior trialNote
+        if len(bitCodeB) < len(bitCodeE): # behavior file is shorter; e.g. seperate protocols were used
+            startB = np.where(bitCodeE==bitCodeB[0])[0]
+        elif len(bitCodeB) > len(bitCodeE): # behavior file is longer; e.g. only some trials are sorted, the bitdode.mat should reflect this
+            startE = np.where(bitCodeB[0]==bitCodeE)[0]
         else:
-            startB=0
+            startB = 0
+            startE = 0
          
-        trialunits2=trialunits2-startB
+        trialunits2 = trialunits2-startB
         indT = np.where(trialunits2 > -1)[0] # get rid of the -ve trials
         trialunits1 = trialunits1[indT]
         trialunits2 = trialunits2[indT]
-        spike_trials = spike_trials -startB
+        spike_trials = spike_trials - startB
         indT = np.where(spike_trials > -1)[0] # get rid of the -ve trials
         cluster_ids = cluster_ids[indT]
         spike_times2 = spike_times2[indT]
