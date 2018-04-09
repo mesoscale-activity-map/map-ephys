@@ -4,6 +4,7 @@
 import os
 import sys
 import logging
+import warnings
 from code import interact
 
 import datajoint as dj
@@ -19,22 +20,20 @@ log = logging.getLogger(__name__)
 __all__ = [ephys, lab, experiment, ccf, ingestBehavior, ingestEphys]
 [ dj ]  # NOQA flake8 
 
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def usage_exit():
     print("usage: {p} [discover|populate|shell]"
           .format(p=os.path.basename(sys.argv[0])))
     sys.exit(0)
 
-
 def logsetup(*args):
     logging.basicConfig(level=logging.ERROR)
     log.setLevel(logging.DEBUG)
     logging.getLogger('ingest').setLevel(logging.DEBUG)
 
-
 def discover(*args):
     ingestBehavior.SessionDiscovery().populate()
-
 
 def populateB(*args):
     ingestBehavior.BehaviorIngest().populate()
@@ -47,14 +46,12 @@ def shell(*args):
              .format(m='\n  - '.join(str(m.__name__) for m in __all__)),
              local=globals())
 
-
 actions = {
     'shell': shell,
     'discover': discover,
     'populateB': populateB,
     'populateE': populateE
 }
-
 
 if __name__ == '__main__':
 

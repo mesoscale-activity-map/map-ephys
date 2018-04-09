@@ -37,6 +37,17 @@ class Session(dj.Manual):
         end_time : decimal(8,4)  # (s)
         """
 
+@schema
+class SessionTrial(dj.Imported):
+    definition = """
+    -> Session
+    session : smallint 		# session number
+    ---
+    session_date  : date
+    -> lab.Person
+    -> lab.Rig
+    """
+    
 @schema 
 class TrialNoteType(dj.Lookup):
     definition = """

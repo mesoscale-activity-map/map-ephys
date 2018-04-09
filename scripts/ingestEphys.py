@@ -152,19 +152,20 @@ class EphysIngest(dj.Imported):
         bitCodeE = mat['bitCodeS'].flatten() # bitCodeS is the char variable
         trialNote = experiment.TrialNote()
         bitCodeB = (trialNote & {'subject_id': ekey['subject_id']} & {'session': ekey['session']} & {'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial') # fetch the bitcode from the behavior trialNote
-        if len(bitCodeB) < len(bitCodeE): # behavior file is shorter; e.g. seperate protocols were used
+        if len(bitCodeB) < len(bitCodeE): # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
             startB = np.where(bitCodeE==bitCodeB[0])[0]
-        elif len(bitCodeB) > len(bitCodeE): # behavior file is longer; e.g. only some trials are sorted, the bitdode.mat should reflect this
+        elif len(bitCodeB) > len(bitCodeE): # behavior file is longer; e.g. only some trials are sorted, the bitdode.mat should reflect this; Sometimes SpikeGLX can skip a trial, I need to check the last trial
             startE = np.where(bitCodeB[0]==bitCodeE)[0]
+            startB = -startE
         else:
             startB = 0
             startE = 0
          
-        trialunits2 = trialunits2-startB
+        trialunits2 = trialunits2-startB # behavior has less trials if startB is +ve, behavior has more trials if startB is -ve
         indT = np.where(trialunits2 > -1)[0] # get rid of the -ve trials
         trialunits1 = trialunits1[indT]
         trialunits2 = trialunits2[indT]
-        spike_trials = spike_trials - startB
+        spike_trials = spike_trials - startB # behavior has less trials
         indT = np.where(spike_trials > -1)[0] # get rid of the -ve trials
         cluster_ids = cluster_ids[indT]
         spike_times2 = spike_times2[indT]
