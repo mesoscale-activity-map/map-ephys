@@ -88,7 +88,7 @@ class Ephys(dj.Imported):
         definition = """
         # Entries for trials a unit is in
         -> Ephys.Unit
-        -> experiment.Session.Trial
+        -> experiment.SessionTrial
         """
     
     class Spike(dj.Part):
@@ -98,7 +98,7 @@ class Ephys(dj.Imported):
         spike_time : decimal(9,4)   # (s)
         ---
         -> ElectrodeGroup.Electrode
-        -> experiment.Session.Trial
+        -> experiment.SessionTrial
         """
 
 

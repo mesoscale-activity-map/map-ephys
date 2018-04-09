@@ -362,8 +362,8 @@ class BehaviorIngest(dj.Imported):
                    
             try:    
                 tkey['trial'] = i
+                tkey['trial_uid'] = i
                 tkey['start_time'] = t.state_times[startindex][0]
-                tkey['end_time'] = t.state_times[endindex][0]
             except IndexError:
                 log.info('skipping trial {i}: error indexing {s}/{e} into {t}'.format(i=i,s=str(startindex), e=str(endindex), t=str(t.state_times)))
                 continue
@@ -378,6 +378,7 @@ class BehaviorIngest(dj.Imported):
 
             bkey = dict(tkey)
             bkey['task'] = 'audio delay'
+            bkey['task_protocol'] = 1
 
             # determine trial instruction
             trial_instruction = 'left'
@@ -542,7 +543,7 @@ class BehaviorIngest(dj.Imported):
         log.info('BehaviorIngest.make(): bulk insert phase')
 
         log.info('BehaviorIngest.make(): ... experiment.Session.Trial')
-        experiment.Session.Trial().insert(
+        experiment.SessionTrial().insert(
             rows['trial'], ignore_extra_fields=True)
 
         log.info('BehaviorIngest.make(): ... experiment.BehaviorTrial')

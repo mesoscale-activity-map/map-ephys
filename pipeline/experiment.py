@@ -27,25 +27,15 @@ class Session(dj.Manual):
     -> lab.Person
     -> lab.Rig
     """
-    
-    class Trial(dj.Part):
-        definition = """
-        -> Session
-        trial   : smallint
-        ---
-        start_time : decimal(8,4)  # (s)
-        end_time : decimal(8,4)  # (s)
-        """
 
 @schema
 class SessionTrial(dj.Imported):
     definition = """
     -> Session
-    session : smallint 		# session number
+    trial : smallint 		# trial number
     ---
-    session_date  : date
-    -> lab.Person
-    -> lab.Rig
+    trial_uid : int  # unique across sessions/animals
+    start_time : decimal(8,4)  # (s) relative to session beginning
     """
     
 @schema 
@@ -56,9 +46,9 @@ class TrialNoteType(dj.Lookup):
     contents = zip(('autolearn', 'protocol #', 'bad', 'bitcode'))
 
 @schema
-class TrialNote(dj.Manual):
+class TrialNote(dj.Imported):
     definition = """
-    -> Session.Trial
+    -> SessionTrial
     -> TrialNoteType
     ---
     trial_note  : varchar(255) 
@@ -116,11 +106,32 @@ class TrialInstruction(dj.Lookup):
     contents = zip(('left', 'right'))
 
 @schema
+class TaskProtocol(dj.Lookup):
+    definition = """
+    # SessionType
+    -> Task
+    task_protocol : tinyint # task protocol
+    ---
+    task_protocol_description : varchar(4000)
+    """
+    contents = [
+         ('audio delay', 1, 'high tone vs. low tone'),
+         ('s1 stim', 2, 'mini-distractors'),
+         ('s1 stim', 3, 'full distractors, with 2 distractors (at different times) on some of the left trials'),
+         ('s1 stim', 4, 'full distractors'),
+         ('s1 stim', 5, 'mini-distractors, with different levels of the mini-stim during sample period'),
+         ('s1 stim', 6, 'full distractors; same as protocol 4 but with a no-chirp trial-type'),
+         ('s1 stim', 7, 'mini-distractors and full distractors (only at late delay)'),
+         ('s1 stim', 8, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample                 period'),
+         ('s1 stim', 9, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample period')
+         ]
+
+@schema
 class BehaviorTrial(dj.Manual):
     definition = """
-    -> Session.Trial
+    -> SessionTrial
     ----
-    -> Task
+    -> TaskProtocol
     -> TrialInstruction
     -> EarlyLick
     -> Outcome
@@ -167,7 +178,7 @@ class TrackingDevice(dj.Lookup):
 @schema
 class Tracking(dj.Imported):
     definition = """
-    -> Session.Trial 
+    -> SessionTrial 
     -> TrackingDevice
     ---
     tracking_data_path  : varchar(255)
@@ -205,7 +216,7 @@ class Photostim(dj.Manual):
 @schema
 class PhotostimTrial(dj.Imported):
     definition = """
-    -> Session.Trial
+    -> SessionTrial
     """
 
     class Event(dj.Part):
@@ -225,26 +236,6 @@ class PassivePhotostimTrial(dj.Computed):
     def make(self, key):
         self.insert1(key)
 
-@schema
-class TaskProtocol(dj.Lookup):
-    definition = """
-    # SessionType
-    -> Task
-    task_protocol : tinyint # task protocol
-    ---
-    task_protocol_description : varchar(4000)
-    """
-    contents = [
-         ('s1 stim', 2, 'mini-distractors'),
-         ('s1 stim', 3, 'full distractors, with 2 distractors (at different times) on some of the left trials'),
-         ('s1 stim', 4, 'full distractors'),
-         ('s1 stim', 5, 'mini-distractors, with different levels of the mini-stim during sample period'),
-         ('s1 stim', 6, 'full distractors; same as protocol 4 but with a no-chirp trial-type'),
-         ('s1 stim', 7, 'mini-distractors and full distractors (only at late delay)'),
-         ('s1 stim', 8, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample                 period'),
-         ('s1 stim', 9, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample period')
-         ]
-        
 @schema
 class SessionTask(dj.Manual):
     definition = """
