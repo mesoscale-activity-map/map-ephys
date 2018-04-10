@@ -93,8 +93,13 @@ class Outcome(dj.Lookup):
 class EarlyLick(dj.Lookup):
     definition = """
     early_lick  :  varchar(32)
+    ---
+    early_lick_description : varchar(4000)
     """ 
-    contents = zip(('early', 'no early'))
+    contents = [
+        ('early', 'early lick during sample and/or delay'),
+        ('early, presample only', 'early lick in the presample period, after the onset of the scheduled wave but before the sample period'),
+        ('no early', '')]
 
      
 @schema 
@@ -127,7 +132,7 @@ class TaskProtocol(dj.Lookup):
          ]
 
 @schema
-class BehaviorTrial(dj.Manual):
+class BehaviorTrial(dj.Imported):
     definition = """
     -> SessionTrial
     ----
@@ -159,7 +164,7 @@ class ActionEventType(dj.Lookup):
        ('right lick', '')]
 
 @schema
-class ActionEvent(dj.Manual):
+class ActionEvent(dj.Imported):
     definition = """
     -> BehaviorTrial
     -> ActionEventType
@@ -169,11 +174,14 @@ class ActionEvent(dj.Manual):
 @schema
 class TrackingDevice(dj.Lookup):
     definition = """
-    tracking_device  : varchar(8)  # e.g. camera, microphone
+    tracking_device  : varchar(20)  # e.g. camera, microphone
     ---
     sampling_rate  :  decimal(8, 4)   # Hz
-    tracking_device_description: varchar(255) # 
+    tracking_device_description: varchar(100) # 
     """
+    contents =[  
+       ('Camera 0, side', 400, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)'),
+       ('Camera 1, bottom', 400, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)')]
 
 @schema
 class Tracking(dj.Imported):
@@ -181,8 +189,9 @@ class Tracking(dj.Imported):
     -> SessionTrial 
     -> TrackingDevice
     ---
-    tracking_data_path  : varchar(255)
-    start_time : decimal(8,4) # (s) from trial star
+    tracking_data_path  : varchar(1000)
+    start_time = null : decimal(8,4) # (s) from trial start (which should coincide with the beginning of the ephys recordings)
+    duration = null : decimal(8,4)                   # (s)
     """
 
 @schema
@@ -193,16 +202,20 @@ class PhotostimDevice(dj.Lookup):
     excitation_wavelength :  decimal(5,1)  # (nm) 
     photostim_device_description : varchar(255)
     """
+    contents =[  
+       ('LaserGem473', 473, 'Laser (Laser Quantum, Gem 473)'), 
+       ('LED470', 470, 'LED (Thor Labs, M470F3 - 470 nm, 17.2 mW (Min) Fiber-Coupled LED)'),
+       ('OBIS470', 473, 'OBIS 473nm LX 50mW Laser System: Fiber Pigtail (Coherent Inc)')]
 
 @schema 
-class Photostim(dj.Manual):
+class Photostim(dj.Imported):
     definition = """
     -> PhotostimDevice
     photo_stim :  smallint 
     ---
     -> ccf.CCF
     duration  :  decimal(8,4)   # (s)
-    waveform  :  longblob       # (mW)
+    waveform  :  longblob       # normalized to maximal power. The value of the maximal power is specified for each PhotostimTrialEvent individually
     """
 
     class Profile(dj.Part):
@@ -214,6 +227,21 @@ class Photostim(dj.Manual):
         """
 
 @schema
+class PhotostimLocation(dj.Manual):
+    definition = """
+    -> Photostim
+    ---
+    -> lab.Hemisphere
+    -> lab.BrainArea
+    -> lab.SkullReference
+    photostim_ml_location = null           : decimal(8,3)       # um from ref ; right is positive; 
+    photostim_ap_location = null           : decimal(8,3)       # um from ref; anterior is positive; 
+    photostim_dv_location = null           : decimal(8,3)       # um from dura; ventral is positive; 
+    photostim_ml_angle = null              : decimal(8,3)       # Angle between the photostim path and the Medio-Lateral axis. A tilt towards the right hemishpere is positive. 
+    photostim_ap_angle = null              : decimal(8,3)       # Angle between the photostim path and the Anterior-Posterior axis. An anterior tilt is positive. 
+    """
+
+@schema
 class PhotostimTrial(dj.Imported):
     definition = """
     -> SessionTrial
@@ -223,7 +251,8 @@ class PhotostimTrial(dj.Imported):
         definition = """
         -> master
         -> Photostim
-        photostim_event_time : decimal(8,3)   # (s) from trial or session start or whatever 
+        photostim_event_time : decimal(8,3)   # (s) from trial start
+        power : decimal(8,3)   # Maximal power (mW)
         """
 
 @schema
@@ -241,4 +270,11 @@ class SessionTask(dj.Manual):
     definition = """
     -> Session
     -> TaskProtocol
+    """
+
+@schema
+class SessionComment(dj.Manual):
+    definition = """
+    -> Session
+    session_comment : varchar(767)
     """
