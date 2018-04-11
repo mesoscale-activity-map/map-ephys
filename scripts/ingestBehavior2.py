@@ -5,7 +5,6 @@ import glob
 import logging
 import datetime
 import re
-import pdb
 
 from itertools import chain
 from collections import namedtuple
@@ -47,7 +46,7 @@ class RigDataPath(dj.Lookup):
                 ('TRig2', r'\\MOHARB-WW2\C\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
                 ('TRig3', r'\\WANGT-NUC\Documents\MATLAB\Bpod Local\Data', 2),
                 ('RRig', r'\\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3)
-                ) # A table with the data path
+                ) # Testing the JRClust output files on my computer
 
 
 @schema
@@ -84,8 +83,6 @@ class SessionDiscovery(dj.Manual):
         initial = SessionDiscovery().fetch(as_dict=True) # sessions already discovered
         log.debug('initial: %s' % rigs)
         found = []
-        
-        rexp = '^[a-zA-Z]{2}[0-9]_.*_[0-9]{8}_[0-9]{6}.mat$'
 
         for r in rigs:
             data_path = r['rig_data_path']
@@ -96,7 +93,9 @@ class SessionDiscovery(dj.Manual):
                 log.debug('RigDataFile.make(): files %s' % files)
                 subpaths = list(os.path.join(root, f)
                                 .split(data_path)[1].lstrip(os.path.sep)
-                                for f in files if re.match(rexp,f)) # find files with tw2
+                                for f in files if f.endswith('.mat')
+#                                and 'TW_autoTrain' in f) # find files with TW_autoTrain for now
+                                and 'tw2' in f) # find files with tw2
 
                 for filename in subpaths:
                     log.debug('found file %s' % filename)
