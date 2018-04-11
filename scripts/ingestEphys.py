@@ -176,5 +176,7 @@ class EphysIngest(dj.Imported):
         ephys.Unit.UnitTrial().insert(list(dict(ekey, unit = trialunits1[x], trial = trialunits2[x]) for x in range(0, len(trialunits2)))) # batch insert the TrialUnit (key, unit, trial)
         ephys.Unit.UnitSpike().insert(list(dict(ekey, unit = cluster_ids[x]-1, spike_time = spike_times2[x], electrode = viSite_spk[x], trial = spike_trials[x]) for x in range(0, len(spike_times2))), skip_duplicates=True) # batch insert the Spikes (key, unit, spike_time, electrode, trial)
 
+        #ephys.Unit.TrialSpike().insert() # batch insert TrialSpike
+
         self.insert1(key)
         EphysIngest.EphysFile().insert1(dict(key, ephys_file=subpath))
