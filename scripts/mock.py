@@ -7,9 +7,8 @@ import datajoint as dj
 
 import lab
 import ccf
-import ephys
 import experiment
-
+import ephys
 
 def dropdbs():
     print('dropping databases')

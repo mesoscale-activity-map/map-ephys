@@ -102,7 +102,6 @@ class EphysIngest(dj.Imported):
 
         ephys.ElectrodeGroup().insert1(dict(ekey, probe_part_no=15131808323))
         ephys.ElectrodeGroup().make(ekey)  # note: no locks; is dj.Manual
-        ephys.Ephys().insert1(ekey, ignore_extra_fields=True) # insert Ephys first
 
         f = h5py.File(fullpath,'r')
         ind = np.argsort(f['S_clu']['viClu'][0]) # index sorted by cluster
@@ -142,7 +141,7 @@ class EphysIngest(dj.Imported):
             trialunits2 = np.append(trialunits2, np.unique(trialunits[i]))
             trialunits1 = np.append(trialunits1, np.zeros(len(np.unique(trialunits[i])))+i)
         
-        ephys.Ephys.Unit().insert(list(dict(ekey, unit = x, unit_quality = strs[x], spike_times = units[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids)) # batch insert the units
+        ephys.Unit().insert(list(dict(ekey, unit = x, unit_uid = x, unit_quality = strs[x], spike_times = units[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids)) # batch insert the units
         #pdb.set_trace()
         
         file = '{h2o}_bitcode.mat'.format(h2o=water) # fetch the bitcode and realign
@@ -174,8 +173,8 @@ class EphysIngest(dj.Imported):
         
         #pdb.set_trace()
         
-        ephys.Ephys.TrialUnit().insert(list(dict(ekey, unit = trialunits1[x], trial = trialunits2[x]) for x in range(0, len(trialunits2)))) # batch insert the TrialUnit (key, unit, trial)
-        ephys.Ephys.Spike().insert(list(dict(ekey, unit = cluster_ids[x]-1, spike_time = spike_times2[x], electrode = viSite_spk[x], trial = spike_trials[x]) for x in range(0, len(spike_times2))), skip_duplicates=True) # batch insert the Spikes (key, unit, spike_time, electrode, trial)
+        ephys.Unit.UnitTrial().insert(list(dict(ekey, unit = trialunits1[x], trial = trialunits2[x]) for x in range(0, len(trialunits2)))) # batch insert the TrialUnit (key, unit, trial)
+        ephys.Unit.UnitSpike().insert(list(dict(ekey, unit = cluster_ids[x]-1, spike_time = spike_times2[x], electrode = viSite_spk[x], trial = spike_trials[x]) for x in range(0, len(spike_times2))), skip_duplicates=True) # batch insert the Spikes (key, unit, spike_time, electrode, trial)
 
         self.insert1(key)
         EphysIngest.EphysFile().insert1(dict(key, ephys_file=subpath))
