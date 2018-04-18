@@ -109,16 +109,16 @@ class EphysIngest(dj.Imported):
         ind = ind[np.where(cluster_ids > 0)[0]] # get rid of the -ve noise clusters
         cluster_ids = cluster_ids[np.where(cluster_ids > 0)[0]] # get rid of the -ve noise clusters
         trWav_raw_clu = f['S_clu']['trWav_raw_clu'] # spike waveform
-#        trWav_raw_clu1 = np.concatenate((trWav_raw_clu[0:1][:][:],trWav_raw_clu),axis=0) # add a spike waveform of cluster 0
+#        trWav_raw_clu1 = np.concatenate((trWav_raw_clu[0:1][:][:],trWav_raw_clu),axis=0) # add a spike waveform to cluster 0, not necessary anymore after the previous step
         csNote_clu=f['S_clu']['csNote_clu'][0] # manual sorting note
-        strs = ["multi" for x in range(len(csNote_clu))] # all units are multi by definition
+        strs = ["all" for x in range(len(csNote_clu))] # all units are "all" by definition
         for iU in range(0, len(csNote_clu)): # read the manual curation of each unit
             unitQ = f[csNote_clu[iU]]
             str1 = ''.join(chr(i) for i in unitQ[:])
             if str1 == 'single': # definitions in unit quality
                 strs[iU] = 'good'
             elif str1 =='multi':
-                strs[iU] = 'ok'
+                strs[iU] = 'multi'
         spike_times = f['viTime_spk'][0][ind] # spike times
         viSite_spk = f['viSite_spk'][0][ind] # electrode site for the spike
         viT_offset_file = f['viT_offset_file'][:] # start of each trial, subtract this number for each trial
@@ -132,14 +132,18 @@ class EphysIngest(dj.Imported):
         spike_times2 = spike_times2 / sRateHz # divide the sampling rate, sRateHz
         clu_ids_diff = np.diff(cluster_ids) # where the units seperate
         clu_ids_diff = np.where(clu_ids_diff != 0)[0] + 1 # separate the spike_times
-        units = np.split(spike_times, clu_ids_diff) / sRateHz # sub arrays of spike_times
-        trialunits = np.split(spike_trials, clu_ids_diff) # sub arrays of spike_trials
+
+        units = np.split(spike_times, clu_ids_diff) / sRateHz # sub arrays of spike_times for each unit (for ephys.Unit())
+        trialunits = np.split(spike_trials, clu_ids_diff) # sub arrays of spike_trials for each unit
         unit_ids = np.arange(len(clu_ids_diff) + 1) # unit number
-        trialunits1 = [] # array of unit number
+        
+        #trialspikes # TODO: split units based on which trial they are in (for ephys.TrialSpikes())
+        
+        trialunits1 = [] # array of unit number (for ephys.Unit.UnitTrial())
         trialunits2 = [] # array of trial number
-        for i in range(0,len(trialunits)):
-            trialunits2 = np.append(trialunits2, np.unique(trialunits[i]))
-            trialunits1 = np.append(trialunits1, np.zeros(len(np.unique(trialunits[i])))+i)
+        for i in range(0,len(trialunits)): # loop through each unit
+            trialunits2 = np.append(trialunits2, np.unique(trialunits[i])) # add the trials that a unit is in
+            trialunits1 = np.append(trialunits1, np.zeros(len(np.unique(trialunits[i])))+i) # add the unit numbers 
         
         ephys.Unit().insert(list(dict(ekey, unit = x, unit_uid = x, unit_quality = strs[x], spike_times = units[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids)) # batch insert the units
         #pdb.set_trace()
@@ -171,12 +175,12 @@ class EphysIngest(dj.Imported):
         viSite_spk = viSite_spk[indT]
         spike_trials = spike_trials[indT]
         
-        #pdb.set_trace()
+        pdb.set_trace()
         
         ephys.Unit.UnitTrial().insert(list(dict(ekey, unit = trialunits1[x], trial = trialunits2[x]) for x in range(0, len(trialunits2)))) # batch insert the TrialUnit (key, unit, trial)
         ephys.Unit.UnitSpike().insert(list(dict(ekey, unit = cluster_ids[x]-1, spike_time = spike_times2[x], electrode = viSite_spk[x], trial = spike_trials[x]) for x in range(0, len(spike_times2))), skip_duplicates=True) # batch insert the Spikes (key, unit, spike_time, electrode, trial)
 
-        #ephys.Unit.TrialSpike().insert() # batch insert TrialSpike
+        # ephys.TrialSpikes().insert(list(dict(ekey, unit = x, trial = trialunits2[y], spike_times = trialspikes[x,y]) for x in unit_ids, for y in range(0, len(trialunits2)))) # batch insert TrialSpikes
 
         self.insert1(key)
         EphysIngest.EphysFile().insert1(dict(key, ephys_file=subpath))

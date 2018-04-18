@@ -85,7 +85,7 @@ class SessionDiscovery(dj.Manual):
         log.debug('initial: %s' % rigs)
         found = []
         
-        rexp = '^[a-zA-Z]{2}[0-9]_.*_[0-9]{8}_[0-9]{6}.mat$'
+        rexp = '^[a-zA-Z]{2}.*_.*_[0-9]{8}_[0-9]{6}.mat$'
 
         for r in rigs:
             data_path = r['rig_data_path']
@@ -363,7 +363,7 @@ class BehaviorIngest(dj.Imported):
                    
             try:    
                 tkey['trial'] = i
-                tkey['trial_uid'] = i
+                tkey['trial_uid'] = i # Arseny has unique id to identify some trials
                 tkey['start_time'] = t.state_times[startindex][0]
             except IndexError:
                 log.info('skipping trial {i}: error indexing {s}/{e} into {t}'.format(i=i,s=str(startindex), e=str(endindex), t=str(t.state_times)))
