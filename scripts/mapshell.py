@@ -9,12 +9,12 @@ from code import interact
 
 import datajoint as dj
 
-import ephys
-import lab
-import experiment
-import ccf
-import ingestBehavior
-import ingestEphys
+from pipeline import ephys
+from pipeline import lab
+from pipeline import experiment
+from pipeline import ccf
+from scripts import ingestBehavior
+from scripts import ingestEphys
 
 log = logging.getLogger(__name__)
 __all__ = [ephys, lab, experiment, ccf, ingestBehavior, ingestEphys]

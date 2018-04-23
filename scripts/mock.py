@@ -5,10 +5,10 @@ from importlib import reload
 
 import datajoint as dj
 
-import lab
-import ccf
-import experiment
-import ephys
+from pipeline import lab
+from pipeline import ccf
+from pipeline import experiment
+from pipeline import ephys
 
 def dropdbs():
     print('dropping databases')
