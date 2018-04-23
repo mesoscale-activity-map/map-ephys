@@ -7,14 +7,13 @@ import datajoint as dj
 
 import lab
 import ccf
-import ephys
 import experiment
-
+import ephys
 
 def dropdbs():
     print('dropping databases')
     for a in range(3):
-        for d in ['ingest', 'ccf', 'ephys', 'experiment', 'lab', 'prototype']:
+        for d in ['ingestEphys', 'ingestBehavior', 'ccf', 'ephys', 'experiment']:
             try:
                 schema = dj.schema(dj.config['%s.database' % d])
                 schema.drop(force=True)
