@@ -17,9 +17,9 @@ import warnings
 
 import datajoint as dj
 
-import lab
-import experiment
-import ephys
+from pipeline import lab
+from pipeline import experiment
+from pipeline import ephys
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 

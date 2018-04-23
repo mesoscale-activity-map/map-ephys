@@ -1,6 +1,11 @@
+
 import datajoint as dj
-import lab, ccf, experiment
 import numpy as np
+
+from . import lab
+from . import experiment
+from . import ccf
+
 
 schema = dj.schema(dj.config['ephys.database'])
 

@@ -15,10 +15,10 @@ import numpy as np
 
 import datajoint as dj
 
-import lab
-import experiment
-import ephys
-import ingestBehavior
+from pipeline import lab
+from pipeline import experiment
+from pipeline import ephys
+from scripts import ingestBehavior
 
 log = logging.getLogger(__name__)
 schema = dj.schema(dj.config['ingestEphys.database'])
