@@ -15,7 +15,7 @@ with open(path.join(here, 'requirements.txt')) as f:
 
 setup(
     name='mapephys',
-    version=0.0.1,
+    version='0.0.1',
     description="MAP Ephys Pipeline",
     long_description=long_description,
     author='TODO: Correct Attribution',
@@ -24,6 +24,6 @@ setup(
     url='https://github.com/mesoscale-activity-map/map-ephys',
     keywords='neuroscience electrophysiology science datajoint',
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
-    scripts=['mapshell.py'],
+    scripts=['scripts/mapshell.py'],
     install_requires=requirements,
 )
