@@ -144,7 +144,6 @@ class EphysIngest(dj.Imported):
             trialunits1 = np.append(trialunits1, np.zeros(len(np.unique(trialunits[i])))+i) # add the unit numbers 
         
         ephys.Unit().insert(list(dict(ekey, unit = x, unit_uid = x, unit_quality = strs[x], spike_times = units[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids)) # batch insert the units
-        #pdb.set_trace()
         
         file = '{h2o}_bitcode.mat'.format(h2o=water) # fetch the bitcode and realign
         subpath = os.path.join('Spike', date, file)
@@ -155,40 +154,48 @@ class EphysIngest(dj.Imported):
         bitCodeB = (trialNote & {'subject_id': ekey['subject_id']} & {'session': ekey['session']} & {'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial') # fetch the bitcode from the behavior trialNote
         if len(bitCodeB) < len(bitCodeE): # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
             startB = np.where(bitCodeE==bitCodeB[0])[0]
-        elif len(bitCodeB) > len(bitCodeE): # behavior file is longer; e.g. only some trials are sorted, the bitdode.mat should reflect this; Sometimes SpikeGLX can skip a trial, I need to check the last trial
+        elif len(bitCodeB) > len(bitCodeE): # behavior file is longer; e.g. only some trials are sorted, the bitcode.mat should reflect this; Sometimes SpikeGLX can skip a trial, I need to check the last trial
             startE = np.where(bitCodeB[0]==bitCodeE)[0]
             startB = -startE
         else:
             startB = 0
             startE = 0
-         
+        
         trialunits2 = trialunits2-startB # behavior has less trials if startB is +ve, behavior has more trials if startB is -ve
         indT = np.where(trialunits2 > -1)[0] # get rid of the -ve trials
         trialunits1 = trialunits1[indT]
         trialunits2 = trialunits2[indT]
-        spike_trials = spike_trials - startB # behavior has less trials
+
+        spike_trials = spike_trials - startB # behavior has less trials if startB is +ve, behavior has more trials if startB is -ve
         indT = np.where(spike_trials > -1)[0] # get rid of the -ve trials
         cluster_ids = cluster_ids[indT]
         spike_times2 = spike_times2[indT]
         viSite_spk = viSite_spk[indT]
         spike_trials = spike_trials[indT]
-        
-        
-        ephys.Unit.UnitTrial().insert(list(dict(ekey, unit = trialunits1[x], trial = trialunits2[x]) for x in range(0, len(trialunits2)))) # batch insert the TrialUnit (key, unit, trial)
-        ephys.Unit.UnitSpike().insert(list(dict(ekey, unit = cluster_ids[x]-1, spike_time = spike_times2[x], electrode = viSite_spk[x], trial = spike_trials[x]) for x in range(0, len(spike_times2))), skip_duplicates=True) # batch insert the Spikes (key, unit, spike_time, electrode, trial)
 
-        #pdb.set_trace()
+        trialunits = np.asarray(trialunits) # convert the list to an array
+        trialunits = trialunits - startB
+
         # split units based on which trial they are in (for ephys.TrialSpikes())
+        trialPerUnit = np.copy(units) # list of trial index for each unit
         for i in unit_ids: # loop through each unit, maybe this can be avoid?
+            indT = np.where(trialunits[i] > -1)[0] # get rid of the -ve trials
+            trialunits[i] = trialunits[i][indT]
+            units[i] = units[i][indT]
             trialidx = np.argsort(trialunits[i]) # index of the sorted trials
             trialunits[i] = np.sort(trialunits[i]) # sort the trials for a given unit
             trial_ids_diff = np.diff(trialunits[i]) # where the trial index seperate
             trial_ids_diff = np.where(trial_ids_diff != 0)[0] + 1
             units[i] = units[i][trialidx] # sort the spike times based on the trial mapping
             units[i] = np.split(units[i], trial_ids_diff) # separate the spike_times based on trials
+            trialPerUnit[i] = np.arange(0, len(trial_ids_diff)+1, dtype = np.int) # list of trial index
         
+        ephys.Unit.UnitTrial().insert(list(dict(ekey, unit = trialunits1[x], trial = trialunits2[x]) for x in range(0, len(trialunits2)))) # batch insert the TrialUnit (key, unit, trial)
+        ephys.Unit.UnitSpike().insert(list(dict(ekey, unit = cluster_ids[x]-1, spike_time = spike_times2[x], electrode = viSite_spk[x], trial = spike_trials[x]) for x in range(0, len(spike_times2))), skip_duplicates=True) # batch insert the Spikes (key, unit, spike_time, electrode, trial)
+
         # TODO: 2D batch insert
-        # ephys.TrialSpikes().insert(list(dict(ekey, unit = x, trial = trialunits2[y], spike_times = units[x][y]) for x in unit_ids, for y in range(0, len(trialunits2)))) # batch insert TrialSpikes
+        pdb.set_trace()
+        ephys.TrialSpikes().insert(list(dict(ekey, unit = x[0], trial = trialunits2[x[1]], spike_times = units[x[0]][x[1]]) for x in zip(unit_ids, trialPerUnit))) # batch insert TrialSpikes
 
         self.insert1(key)
         EphysIngest.EphysFile().insert1(dict(key, ephys_file=subpath))
