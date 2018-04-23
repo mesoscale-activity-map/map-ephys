@@ -1,5 +1,5 @@
 import datajoint as dj
-# import lab, ccf
+
 from . import lab
 from . import ccf
 
