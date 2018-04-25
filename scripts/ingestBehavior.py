@@ -85,7 +85,7 @@ class SessionDiscovery(dj.Manual):
         log.debug('initial: %s' % rigs)
         found = []
         
-        rexp = '^[a-zA-Z]{2}.*_.*_[0-9]{8}_[0-9]{6}.mat$'
+        rexp = '^[a-zA-Z]{2}.*_.*_[0-9]{8}_[0-9]{6}.mat$' # 2 letters, 1-2 number, underscore, any task name, underscore, date, time
 
         for r in rigs:
             data_path = r['rig_data_path']
