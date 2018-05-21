@@ -216,9 +216,12 @@ class EphysIngest(dj.Imported):
         ephys.Unit.UnitSpike().insert(list(dict(ekey, unit = cluster_ids[x]-1, spike_time = spike_times2[x], electrode = viSite_spk[x], trial = spike_trials[x]) for x in range(0, len(spike_times2))), skip_duplicates=True) # batch insert the Spikes (key, unit, spike_time, electrode, trial)
 
         # TODO: 2D batch insert
-        pdb.set_trace()
-        log.debug('inserting TrialSpike information')
-        ephys.TrialSpikes().insert(list(dict(ekey, unit = x[0], trial = trialunits2[x[1]], spike_times = units[x[0]][x[1]]) for x in zip(unit_ids, trialPerUnit))) # batch insert TrialSpikes
+        # pdb.set_trace()
+        l = [] # list of trialSpikes to be inserted
+        for x in zip(unit_ids, trialPerUnit): # loop through the units
+            for i in x[1]: # loop through the trials for each unit
+                l.append(dict(ekey, unit=x[0], trial=int(trialunits2[x[1]][i]), spike_times=units[x[0]][x[1][i]])) # create the list
+        ephys.TrialSpikes().insert(l, skip_duplicates=True) # batch insert TrialSpikes
 
         log.debug('inserting file load information')
         self.insert1(key)
