@@ -167,10 +167,10 @@ class BehaviorIngest(dj.Imported):
         for rp in rigpaths:
             root = rp['rig_data_path']
             path = root
-            path = os.path.join(path, h2o)
+            # path = os.path.join(path, h2o)
 #            path = os.path.join(path, 'TW_autoTrain')
-            path = os.path.join(path, 'tw2')
-            path = os.path.join(path, 'Session Data')
+            # path = os.path.join(path, 'tw2')
+            # path = os.path.join(path, 'Session Data')
             path = os.path.join(
 #                path, '{h2o}_TW_autoTrain_{d}*.mat'.format(h2o=h2o, d=datestr)) # earlier program protocol
                 path, '{h2o}_tw2_{d}*.mat'.format(h2o=h2o, d=datestr)) # later program protocol
