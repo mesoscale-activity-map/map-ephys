@@ -20,6 +20,7 @@ from pipeline import experiment
 from pipeline import ephys
 from scripts import ingestBehavior
 
+
 log = logging.getLogger(__name__)
 schema = dj.schema(dj.config['ingestEphys.database'])
 
@@ -45,7 +46,7 @@ class EphysIngest(dj.Imported):
     # subpaths like: \Spike\2017-10-21\tw5ap_imec3_opt3_jrc.mat
 
     definition = """
-    -> ingestBehavior.SessionDiscovery
+    -> ingestBehavior.BehaviorIngest
     """
 
     class EphysFile(dj.Part):
@@ -62,6 +63,7 @@ class EphysIngest(dj.Imported):
         #
         # Find Ephys Recording
         #
+        key = (experiment.Session & key).fetch1()
 
         rigpath = EphysDataPath().fetch1('data_path')
         date = key['session_date'].strftime('%Y-%m-%d')
