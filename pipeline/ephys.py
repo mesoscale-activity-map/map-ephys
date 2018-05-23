@@ -20,7 +20,7 @@ class Probe(dj.Lookup):
     probe_comment :  varchar(4000)
     """
     contents = [
-        ('15131808323', 'neuropixels probe O3', ''),
+        ('1', 'neuropixels probe O3', ''),
         ('H-194', 'janelia2x32', '')
     ]
  
