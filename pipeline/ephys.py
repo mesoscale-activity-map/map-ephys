@@ -182,12 +182,3 @@ class UnitCellType(dj.Computed):
     ---
     -> CellType
     """
-
-@schema
-class ArchivedEphysFiles(dj.Imported):
-    definition = """
-    #
-    -> experiment.SessionTrial
-    ---
-    raw_doi : varchar(1000) # doi for each .bin file
-    """
