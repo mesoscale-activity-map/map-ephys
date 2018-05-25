@@ -7,10 +7,8 @@ import datetime
 import re
 import pdb
 
-
 from itertools import chain
 from collections import namedtuple
-from operator import itemgetter
 
 import scipy.io as spio
 import h5py
@@ -53,95 +51,107 @@ class RigDataPath(dj.Lookup):
 
 
 @schema
+class SessionDiscovery(dj.Manual):
+    '''
+    Table to populate sessions available in filesystem for discovery
+
+    Note: session date is duplicated w/r/t actual Session table;
+    this is somewhat unavoidable since session requires the
+    synthetic session ID and we are not quite ready to generate it;
+    put another way, this table helps to map one session ID (h2o+date)
+    into the 'official' sequential session ID of the main schema
+    '''
+
+    definition = """
+    -> lab.WaterRestriction
+    session_date:               date                    # discovered date
+    """
+
+    def populate(self):
+        '''
+        Scan the RigDataPath records, looking for new unknown sessions.
+
+        Local implementation, since we aren't really a computed table.
+        '''
+
+        rigs = [r for r in RigDataPath().fetch(as_dict=True)
+                if r['rig'].startswith('RRig')]  # todo?: rig 'type'? Change between TRig and RRig for now
+
+        h2os = {k: v for k, v in
+                zip(*lab.WaterRestriction().fetch(
+                    'water_restriction_number', 'subject_id'))} # fetch existing water_restriction_number
+
+        initial = SessionDiscovery().fetch(as_dict=True) # sessions already discovered
+        log.debug('initial: %s' % rigs)
+        found = []
+        
+        rexp = '^[a-zA-Z]{2}.*_.*_[0-9]{8}_[0-9]{6}.mat$' # 2 letters, 1-2 number, underscore, any task name, underscore, date, time
+
+        for r in rigs:
+            data_path = r['rig_data_path']
+            for root, dirs, files in os.walk(data_path):
+
+                log.info('RigDataFile.make(): traversing %s' % root)
+                log.debug('RigDataFile.make(): dirs %s' % dirs)
+                log.debug('RigDataFile.make(): files %s' % files)
+                subpaths = list(os.path.join(root, f)
+                                .split(data_path)[1].lstrip(os.path.sep)
+                                for f in files if re.match(rexp,f)) # find files with tw2
+
+                for filename in subpaths:
+                    log.debug('found file %s' % filename)
+
+                    # split files like 'dl7_TW_autoTrain_20171114_140357.mat'
+                    filename = os.path.basename(filename)
+                    fsplit = filename.split('.')[0].split('_')
+                    h2o, date = (fsplit[0], fsplit[-2:-1][0],) # first is the water restriction, second last is the date
+
+                    if h2o not in h2os:
+                        log.warning('{f} skipped - no animal for {h2o}'.format(
+                            f=filename, h2o=h2o))
+                        continue
+                    else:
+                        animal = h2os[h2o]
+
+                    log.debug('animal is {animal}'.format(animal=animal))
+
+                    key = {
+                        'subject_id': animal,
+                        'session_date': datetime.date(
+                            int(date[0:4]), int(date[4:6]), int(date[6:8]))
+                    }
+
+                    if key not in found and key not in initial:
+                        log.info('found session: %s' % key)
+                        found.append(key) # finding new sessions
+
+        # add the new sessions
+        self.insert(found)
+
+
+@schema
 class BehaviorIngest(dj.Imported):
     definition = """
+    -> SessionDiscovery
+    ---
     -> experiment.Session
     """
 
     class BehaviorFile(dj.Part):
+        # TODO: track files
         ''' files in rig-specific storage '''
         definition = """
         -> BehaviorIngest
         behavior_file:              varchar(255)          # rig file subpath
         """
 
-    @property
-    def key_source(self):
-
-        # 2 letters, anything, _, anything, 8 digits, _, 6 digits, .mat
-        # where:
-        # (2 letters, anything): water restriction
-        # (anything): task name
-        # (8 digits): date YYYYMMDD
-        # (6 digits): time HHMMSS
-
-        rexp = '^[a-zA-Z]{2}.*_.*_[0-9]{8}_[0-9]{6}.mat$'
-
-        # water_restriction_number -> subject
-        h2os = {k: v for k, v in zip(*lab.WaterRestriction().fetch(
-            'water_restriction_number', 'subject_id'))}
-
-        def buildrec(rig, rigpath, root, f):
-
-            if not re.match(rexp, f):
-                log.debug("{f} skipped - didn't match rexp".format(f=f))
-                return
-
-            log.debug('found file {f}'.format(f=f))
-
-            fullpath = os.path.join(root, f)
-            subpath = fullpath.split(rigpath)[1].lstrip(os.path.sep)
-            fsplit = f.split('.')[0].split('_')
-            h2o = fsplit[0]
-            date = fsplit[-2:-1][0]
-
-            if h2o not in h2os:
-                log.warning('{f} skipped - no animal for {h2o}'.format(
-                    f=f, h2o=h2o))
-                return
-
-            animal = h2os[h2o]
-
-            log.debug('animal is {animal}'.format(animal=animal))
-
-            return {
-                'subject_id': animal,
-                'session_date': datetime.date(
-                    int(date[0:4]), int(date[4:6]), int(date[6:8])),
-                'rig': rig,
-                'rig_data_path': rigpath,
-                'subpath': subpath
-            }
-
-        recs = []
-        found = set()
-        rigs = RigDataPath().fetch(as_dict=True, order_by='rig_search_order')
-        for r in rigs:
-            rig = r['rig']
-            rigpath = r['rig_data_path']
-            log.info('RigDataFile.make(): traversing {p}'.format(p=rigpath))
-            for root, dirs, files in os.walk(rigpath):
-                log.debug('RigDataFile.make(): entering {r}'.format(r=root))
-                for f in files:
-                    log.debug('RigDataFile.make(): visiting {f}'.format(f=f))
-                    r = buildrec(rig, rigpath, root, f)
-                    if r and r['subpath'] not in found:
-                        found.add(r['subpath'])  # block duplicate path conf
-                        recs.append(r)
-
-        return recs
-
-    def populate(self, *args, **kwargs):
-        for k in self.key_source:
-            self.make(k)
-
     def make(self, key):
         log.info('BehaviorIngest.make(): key: {key}'.format(key=key))
+        rigpaths = [p for p in RigDataPath().fetch(order_by='rig_data_path')
+                    if 'RRig' in p['rig']] # change between TRig and RRig
 
         subject_id = key['subject_id']
-        h2o = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1(
-            'water_restriction_number')
-
+        h2o = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
         date = key['session_date']
         datestr = date.strftime('%Y%m%d')
         log.debug('h2o: {h2o}, date: {d}'.format(h2o=h2o, d=datestr))
@@ -150,21 +160,30 @@ class BehaviorIngest(dj.Imported):
         skey = {}
         skey['subject_id'] = subject_id
         skey['session_date'] = date
-        skey['username'] = 'daveliu'  # username has to be changed
+        skey['username'] = 'daveliu' # username has to be changed
 
-        # e.g: dl7/TW_autoTrain/Session Data/dl7_TW_autoTrain_20180104_132813.ma
-        root = os.path.join(key['rig_data_path'], os.path.dirname(key['subpath']))
-        path = os.path.join(root, '{h2o}_*_{d}*.mat'.format(
-            h2o=h2o, d=datestr))
+        # e.g: dl7/TW_autoTrain/Session Data/dl7_TW_autoTrain_20180104_132813.mat
+        #         # p.split('/foo/bar')[1]
+        for rp in rigpaths:
+            root = rp['rig_data_path']
+            path = root
+            path = os.path.join(path, h2o)
+#            path = os.path.join(path, 'TW_autoTrain')
+            path = os.path.join(path, 'tw2')
+            path = os.path.join(path, 'Session Data')
+            path = os.path.join(
+#                path, '{h2o}_TW_autoTrain_{d}*.mat'.format(h2o=h2o, d=datestr)) # earlier program protocol
+                path, '{h2o}_tw2_{d}*.mat'.format(h2o=h2o, d=datestr)) # later program protocol
 
-        log.debug('rigpath {p}'.format(p=path))
+            log.debug('rigpath {p}'.format(p=path))
 
-        matches = glob.glob(path)
-        if len(matches):
-            log.debug('found files, this is the rig')
-            skey['rig'] = key['rig']
-        else:
-            log.info('no file matches found in {p}'.format(p=path))
+            matches = glob.glob(path)
+            if len(matches):
+                log.debug('found files, this is the rig')
+                skey['rig'] = rp['rig']
+                break
+            else:
+                log.info('no file matches found in {p}'.format(p=path))
 
         if not len(matches):
             log.warning('no file matches found for {h2o} / {d}'.format(
