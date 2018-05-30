@@ -22,33 +22,37 @@ __all__ = [ephys, lab, experiment, ccf, ingestBehavior, ingestEphys]
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
+
 def usage_exit():
-    print("usage: {p} [discover|populate|shell]"
+    print("usage: {p} [discover|populateB|populateE|shell]"
           .format(p=os.path.basename(sys.argv[0])))
     sys.exit(0)
+
 
 def logsetup(*args):
     logging.basicConfig(level=logging.ERROR)
     log.setLevel(logging.DEBUG)
     logging.getLogger('ingest').setLevel(logging.DEBUG)
+    logging.getLogger('scripts.ingestBehavior').setLevel(logging.DEBUG)
+    logging.getLogger('scripts.ingestEphys').setLevel(logging.DEBUG)
 
-def discover(*args):
-    ingestBehavior.SessionDiscovery().populate()
 
 def populateB(*args):
-    ingestBehavior.BehaviorIngest().populate()
+    ingestBehavior.BehaviorIngest().populate(display_progress=True)
+
 
 def populateE(*args):
-    ingestEphys.EphysIngest().populate()
+    ingestEphys.EphysIngest().populate(display_progress=True)
+
 
 def shell(*args):
     interact('map shell.\n\nschema modules:\n\n  - {m}\n'
              .format(m='\n  - '.join(str(m.__name__) for m in __all__)),
              local=globals())
 
+
 actions = {
     'shell': shell,
-    'discover': discover,
     'populateB': populateB,
     'populateE': populateE
 }
