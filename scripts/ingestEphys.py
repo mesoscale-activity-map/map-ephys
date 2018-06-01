@@ -173,7 +173,7 @@ class EphysIngest(dj.Imported):
         if len(bitCodeB) < len(bitCodeE): # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
             startB = np.where(bitCodeE==bitCodeB[0])[0]
         elif len(bitCodeB) > len(bitCodeE): # behavior file is longer; e.g. only some trials are sorted, the bitcode.mat should reflect this; Sometimes SpikeGLX can skip a trial, I need to check the last trial
-            startE = np.where(bitCodeB[0]==bitCodeE)[0]
+            startE = np.where(bitCodeB==bitCodeE[0])[0]
             startB = -startE
         else:
             startB = 0
