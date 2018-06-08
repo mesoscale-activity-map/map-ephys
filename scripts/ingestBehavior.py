@@ -69,6 +69,13 @@ class BehaviorIngest(dj.Imported):
         behavior_file:              varchar(255)          # rig file subpath
         """
 
+    class CorrectedTrialEvents(dj.Part):
+        ''' TrialEvents containing auto-corrected data '''
+        definition = """
+        -> BehaviorIngest
+        -> experiment.TrialEvent
+        """
+
     @property
     def key_source(self):
 
@@ -258,7 +265,8 @@ class BehaviorIngest(dj.Imported):
 
         # lists of various records for batch-insert
         rows = {k: list() for k in ('trial', 'behavior_trial', 'trial_note',
-                                    'trial_event', 'action_event')}
+                                    'trial_event', 'corrected_trial_event',
+                                    'action_event')}
 
         i = -1
         for t in trials:
@@ -448,6 +456,7 @@ class BehaviorIngest(dj.Imported):
             #
             # Add presample event
             #
+            log.debug('BehaviorIngest.make(): presample')
 
             ekey = dict(tkey)
             sampleindex = np.where(t.state_data == states['SamplePeriod'])[0]
@@ -456,16 +465,17 @@ class BehaviorIngest(dj.Imported):
             ekey['trial_event_time'] = t.state_times[startindex][0]
             ekey['duration'] = (t.state_times[sampleindex[0]]
                                 - t.state_times[startindex])[0]
+
             if math.isnan(ekey['duration']):
                 log.debug('BehaviorIngest.make(): fixing presample duration')
-                ekey['duration'] = 0.0  # FIXDUR
+                ekey['duration'] = 0.0  # FIXDUR: lookup from previous trial
 
-            log.debug('BehaviorIngest.make(): presample')
             rows['trial_event'].append(ekey)
 
             #
             # Add 'go' event
             #
+            log.debug('BehaviorIngest.make(): go')
 
             ekey = dict(tkey)
             responseindex = np.where(t.state_data == states['ResponseCue'])[0]
@@ -476,9 +486,9 @@ class BehaviorIngest(dj.Imported):
 
             if math.isnan(ekey['duration']):
                 log.debug('BehaviorIngest.make(): fixing go duration')
-                ekey['duration'] = 0.0  # FIXDUR
+                ekey['duration'] = 0.0  # FIXDUR: lookup from previous trials
+                rows['corrected_trial_event'].append(ekey)
 
-            log.debug('BehaviorIngest.make(): go')
             rows['trial_event'].append(ekey)
 
             #
@@ -486,6 +496,9 @@ class BehaviorIngest(dj.Imported):
             #
 
             log.debug('BehaviorIngest.make(): sample events')
+
+            last_dur = None
+
             for s in sampleindex:  # in protocol > 6 ~-> n>1
                 # todo: batch events
                 ekey = dict(tkey)
@@ -493,52 +506,53 @@ class BehaviorIngest(dj.Imported):
                 ekey['trial_event_time'] = t.state_times[s]
                 ekey['duration'] = gui['SamplePeriod'][0]
 
-                if math.isnan(ekey['duration']):
-                    log.debug('BehaviorIngest.make(): fixing sample duration')
-                    ekey['duration'] = 0.0  # FIXDUR
+                if math.isnan(ekey['duration']) and last_dur is None:
+                    log.warning('... bad duration, no last_edur'
+                                .format(last_dur))
+                    ekey['duration'] = 0.0  # FIXDUR: cross-trial check
+                    rows['corrected_trial_event'].append(ekey)
+
+                elif math.isnan(ekey['duration']) and last_dur is not None:
+                    log.debug('... duration using last_edur {}'
+                              .format(last_dur))
+                    ekey['duration'] = last_dur
+                    rows['corrected_trial_event'].append(ekey)
+
+                else:
+                    last_dur = ekey['duration']  # only track 'good' values.
 
                 rows['trial_event'].append(ekey)
-
-            # TEST
-            # log.debug('BehaviorIngest.make(): sample events')
-            # last_edur = None
-            # for s in sampleindex:  # in protocol > 6 ~-> n>1
-            #     # todo: batch events
-            #     ekey = dict(tkey)
-            #     ekey['trial_event_type'] = 'sample'
-            #     ekey['trial_event_time'] = t.state_times[s]
-            #     ekey['duration'] = gui['SamplePeriod'][0]
-
-            #     log.debug('sample event duration: {}'.format(ekey['duration']))
-
-            #     if math.isnan(ekey['duration']) and last_edur is None:
-            #         log.warning('... bad duration, no last_edur'
-            #                     .format(last_edur))
-
-            #     elif math.isnan(ekey['duration']) and last_edur is not None:
-            #         log.debug('... duration using last_edur {}'
-            #                   .format(last_edur))
-            #         ekey['duration'] = last_edur
-
-            #     else:
-            #         last_edur = ekey['duration']
-
-            #     rows['trial_event'].append(ekey)
 
             #
             # Add 'delay' events
             #
 
+            log.debug('BehaviorIngest.make(): delay events')
+
+            last_dur = None
             delayindex = np.where(t.state_data == states['DelayPeriod'])[0]
 
-            log.debug('BehaviorIngest.make(): delay events')
             for d in delayindex:  # protocol > 6 ~-> n>1
-                # todo: batch events
                 ekey = dict(tkey)
                 ekey['trial_event_type'] = 'delay'
                 ekey['trial_event_time'] = t.state_times[d]
-                # FIXDUR
                 ekey['duration'] = gui['DelayPeriod'][0]
+
+                if math.isnan(ekey['duration']) and last_dur is None:
+                    log.warning('... bad duration, no last_edur'
+                                .format(last_dur))
+                    ekey['duration'] = 0.0  # FIXDUR: cross-trial check
+                    rows['corrected_trial_event'].append(ekey)
+
+                elif math.isnan(ekey['duration']) and last_dur is not None:
+                    log.debug('... duration using last_edur {}'
+                              .format(last_dur))
+                    ekey['duration'] = last_dur
+                    rows['corrected_trial_event'].append(ekey)
+
+                else:
+                    last_dur = ekey['duration']  # only track 'good' values.
+
                 log.debug('delay event duration: {}'.format(ekey['duration']))
                 rows['trial_event'].append(ekey)
 
@@ -568,6 +582,9 @@ class BehaviorIngest(dj.Imported):
 
         log.info('BehaviorIngest.make(): bulk insert phase')
 
+        log.info('BehaviorIngest.make(): saving ingest {d}'.format(d=key))
+        self.insert1(key, ignore_extra_fields=True)
+
         log.info('BehaviorIngest.make(): ... experiment.Session.Trial')
         experiment.SessionTrial().insert(
             rows['trial'], ignore_extra_fields=True)
@@ -580,20 +597,17 @@ class BehaviorIngest(dj.Imported):
         experiment.TrialNote().insert(
             rows['trial_note'], ignore_extra_fields=True)
 
-        try:
-            log.info('BehaviorIngest.make(): ... experiment.TrialEvent')
-            experiment.TrialEvent().insert(
-                rows['trial_event'], ignore_extra_fields=True)
+        log.info('BehaviorIngest.make(): ... experiment.TrialEvent')
+        experiment.TrialEvent().insert(
+            rows['trial_event'], ignore_extra_fields=True)
 
-        except IntegrityError as ieeee:
-            interact('zguuey', local=locals())
+        log.info('BehaviorIngest.make(): ... CorrectedTrialEvents')
+        BehaviorIngest().CorrectedTrialEvents().insert(
+            rows['corrected_trial_event'], ignore_extra_fields=True)
 
         log.info('BehaviorIngest.make(): ... experiment.ActionEvent')
         experiment.ActionEvent().insert(
             rows['action_event'], ignore_extra_fields=True)
-
-        log.info('BehaviorIngest.make(): saving ingest {d}'.format(d=key))
-        self.insert1(key, ignore_extra_fields=True)
 
         BehaviorIngest.BehaviorFile().insert(
             (dict(key, behavior_file=f.split(root)[1]) for f in matches),
