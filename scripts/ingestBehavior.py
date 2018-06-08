@@ -6,11 +6,15 @@ import logging
 import datetime
 import re
 import pdb
+import math
 
 
 from itertools import chain
 from collections import namedtuple
 from operator import itemgetter
+
+from pymysql import IntegrityError
+from code import interact
 
 import scipy.io as spio
 import h5py
@@ -430,7 +434,7 @@ class BehaviorIngest(dj.Imported):
             nkey['trial_note_type'] = 'autolearn'
             nkey['trial_note'] = str(gui['Autolearn'][0])
             rows['trial_note'].append(nkey)
-            
+
             #pdb.set_trace()
             #
             # Add 'bitcode' note
@@ -452,6 +456,9 @@ class BehaviorIngest(dj.Imported):
             ekey['trial_event_time'] = t.state_times[startindex][0]
             ekey['duration'] = (t.state_times[sampleindex[0]]
                                 - t.state_times[startindex])[0]
+            if math.isnan(ekey['duration']):
+                log.debug('BehaviorIngest.make(): fixing presample duration')
+                ekey['duration'] = 0.0  # FIXDUR
 
             log.debug('BehaviorIngest.make(): presample')
             rows['trial_event'].append(ekey)
@@ -467,6 +474,10 @@ class BehaviorIngest(dj.Imported):
             ekey['trial_event_time'] = t.state_times[responseindex][0]
             ekey['duration'] = gui['AnswerPeriod'][0]
 
+            if math.isnan(ekey['duration']):
+                log.debug('BehaviorIngest.make(): fixing go duration')
+                ekey['duration'] = 0.0  # FIXDUR
+
             log.debug('BehaviorIngest.make(): go')
             rows['trial_event'].append(ekey)
 
@@ -481,7 +492,38 @@ class BehaviorIngest(dj.Imported):
                 ekey['trial_event_type'] = 'sample'
                 ekey['trial_event_time'] = t.state_times[s]
                 ekey['duration'] = gui['SamplePeriod'][0]
+
+                if math.isnan(ekey['duration']):
+                    log.debug('BehaviorIngest.make(): fixing sample duration')
+                    ekey['duration'] = 0.0  # FIXDUR
+
                 rows['trial_event'].append(ekey)
+
+            # TEST
+            # log.debug('BehaviorIngest.make(): sample events')
+            # last_edur = None
+            # for s in sampleindex:  # in protocol > 6 ~-> n>1
+            #     # todo: batch events
+            #     ekey = dict(tkey)
+            #     ekey['trial_event_type'] = 'sample'
+            #     ekey['trial_event_time'] = t.state_times[s]
+            #     ekey['duration'] = gui['SamplePeriod'][0]
+
+            #     log.debug('sample event duration: {}'.format(ekey['duration']))
+
+            #     if math.isnan(ekey['duration']) and last_edur is None:
+            #         log.warning('... bad duration, no last_edur'
+            #                     .format(last_edur))
+
+            #     elif math.isnan(ekey['duration']) and last_edur is not None:
+            #         log.debug('... duration using last_edur {}'
+            #                   .format(last_edur))
+            #         ekey['duration'] = last_edur
+
+            #     else:
+            #         last_edur = ekey['duration']
+
+            #     rows['trial_event'].append(ekey)
 
             #
             # Add 'delay' events
@@ -495,9 +537,11 @@ class BehaviorIngest(dj.Imported):
                 ekey = dict(tkey)
                 ekey['trial_event_type'] = 'delay'
                 ekey['trial_event_time'] = t.state_times[d]
+                # FIXDUR
                 ekey['duration'] = gui['DelayPeriod'][0]
+                log.debug('delay event duration: {}'.format(ekey['duration']))
                 rows['trial_event'].append(ekey)
-                
+
             #
             # Add lick events
             #
@@ -536,9 +580,13 @@ class BehaviorIngest(dj.Imported):
         experiment.TrialNote().insert(
             rows['trial_note'], ignore_extra_fields=True)
 
-        log.info('BehaviorIngest.make(): ... experiment.TrialEvent')
-        experiment.TrialEvent().insert(
-            rows['trial_event'], ignore_extra_fields=True)
+        try:
+            log.info('BehaviorIngest.make(): ... experiment.TrialEvent')
+            experiment.TrialEvent().insert(
+                rows['trial_event'], ignore_extra_fields=True)
+
+        except IntegrityError as ieeee:
+            interact('zguuey', local=locals())
 
         log.info('BehaviorIngest.make(): ... experiment.ActionEvent')
         experiment.ActionEvent().insert(
