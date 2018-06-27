@@ -1,14 +1,7 @@
 import datajoint as dj
 
-<<<<<<< HEAD
 from . import lab
 from . import ccf
-=======
-import lab
-import pipeline.ccf
->>>>>>> upstream/master
-
-schema = dj.schema(dj.config['experiment.database'])
 
 @schema
 class Task(dj.Lookup):
