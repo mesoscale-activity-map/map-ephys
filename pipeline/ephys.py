@@ -6,7 +6,6 @@ from . import lab
 from . import experiment
 from . import ccf
 
-
 schema = dj.schema(dj.config['ephys.database'])
 
 
@@ -59,7 +58,7 @@ class CellType(dj.Lookup):
 class ElectrodeGroup(dj.Manual):
     definition = """
     # Electrode
-    -> experiment.Session
+    -> pipeline.experiment.Session
     electrode_group : tinyint # Electrode_group is like the probe
     ---
     -> Probe
@@ -102,7 +101,7 @@ class LabeledTrack(dj.Manual):
     class Point(dj.Part):
         definition = """
         -> LabeledTrack
-        -> ccf.CCF
+        -> pipeline.ccf.CCF
         """
 
 @schema
@@ -165,7 +164,7 @@ class ElectrodePosition(dj.Manual):
     definition = """
     -> ElectrodeGroup.Electrode
     ---
-    -> ccf.CCF
+    -> pipeline.ccf.CCF
     """
 
 @schema

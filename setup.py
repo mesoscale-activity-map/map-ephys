@@ -25,5 +25,6 @@ setup(
     keywords='neuroscience electrophysiology science datajoint',
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
     scripts=['scripts/mapshell.py'],
+    scripts=['mapshell.py'],
     install_requires=requirements,
 )
