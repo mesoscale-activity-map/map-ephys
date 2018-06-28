@@ -25,10 +25,10 @@ def dropdbs():
 
 def mockdata():
     print('populating with mock data')
-    reload(ccf)
+    reload(pipeline.ccf)
     reload(lab)
-    reload(experiment)
-    reload(ephys)
+    reload(pipeline.experiment)
+    reload(pipeline.ephys)
     try:
         # TODO: these should be loaded in a more 'official' way
         lab.Person().insert1({
@@ -38,17 +38,17 @@ def mockdata():
         )
         lab.ModifiedGene().insert1({
             'gene_modification': 'VGAT-Chr2-EYFP Jax',
-            'description': 'VGAT'},
+            'gene_modification_description': 'VGAT'},
             skip_duplicates = True
         )
         lab.ModifiedGene().insert1({
             'gene_modification': 'PV-ires-Cre X Ai32',
-            'description': 'PV'},
+            'gene_modification_description': 'PV'},
             skip_duplicates = True
         )
         lab.ModifiedGene().insert1({
             'gene_modification': 'Rosa26 Cag lsl reachR-citrine 1A4 X PV-ires-Cre',
-            'description': 'reachR PV'},
+            'gene_modification_description': 'reachR PV'},
             skip_duplicates = True
         )
         lab.Subject().insert1({
@@ -71,7 +71,7 @@ def mockdata():
             'username': 'daveliu',
             'start_time': '2017-11-03',
             'end_time': '2017-11-03',
-            'description': 'Headbar anterior'},
+            'surgery_description': 'Headbar anterior'},
             skip_duplicates = True
         )
         lab.Surgery.Procedure().insert1({
@@ -81,7 +81,7 @@ def mockdata():
             'skull_reference': 'Bregma',
             'ml_location': 0,
             'ap_location': -4,
-            'description': 'Fiducial marker'},
+            'surgery_procedure_description': 'Fiducial marker'},
             skip_duplicates = True
         )
         lab.WaterRestriction().insert1({
@@ -112,7 +112,7 @@ def mockdata():
             'username': 'daveliu',
             'start_time': '2017-11-20',
             'end_time': '2017-11-20',
-            'description': 'Headbar posterior'},
+            'surgery_description': 'Headbar posterior'},
             skip_duplicates = True
         )
         lab.Surgery.Procedure().insert1({
@@ -122,7 +122,7 @@ def mockdata():
             'skull_reference': 'Bregma',
             'ml_location': 0,
             'ap_location': -1.75,
-            'description': 'Fiducial marker'},
+            'surgery_procedure_description': 'Fiducial marker'},
             skip_duplicates = True
         )
         lab.WaterRestriction().insert1({
@@ -153,7 +153,7 @@ def mockdata():
             'username': 'daveliu',
             'start_time': '2017-11-21',
             'end_time': '2017-11-21',
-            'description': 'Headbar posterior'},
+            'surgery_description': 'Headbar posterior'},
             skip_duplicates = True
         )
         lab.Surgery.Procedure().insert1({
@@ -163,7 +163,7 @@ def mockdata():
             'skull_reference': 'Bregma',
             'ml_location': 0,
             'ap_location': -1.75,
-            'description': 'Fiducial marker'},
+            'surgery_procedure_description': 'Fiducial marker'},
             skip_duplicates = True
         )
         lab.WaterRestriction().insert1({
@@ -194,7 +194,7 @@ def mockdata():
             'username': 'daveliu',
             'start_time': '2018-01-04',
             'end_time': '2018-01-04',
-            'description': 'Headbar posterior'},
+            'surgery_description': 'Headbar posterior'},
             skip_duplicates = True
         )
         lab.Surgery.Procedure().insert1({
@@ -204,7 +204,7 @@ def mockdata():
             'skull_reference': 'Bregma',
             'ml_location': 0,
             'ap_location': -1.75,
-            'description': 'Fiducial marker'},
+            'surgery_procedure_description': 'Fiducial marker'},
             skip_duplicates = True
         )
         lab.WaterRestriction().insert1({
@@ -235,7 +235,7 @@ def mockdata():
             'username': 'daveliu',
             'start_time': '2018-01-05',
             'end_time': '2018-01-05',
-            'description': 'Headbar posterior'},
+            'surgery_description': 'Headbar posterior'},
             skip_duplicates = True
         )
         lab.Surgery.Procedure().insert1({
@@ -245,7 +245,7 @@ def mockdata():
             'skull_reference': 'Bregma',
             'ml_location': 0,
             'ap_location': -1.75,
-            'description': 'Fiducial marker'},
+            'surgery_procedure_description': 'Fiducial marker'},
             skip_duplicates = True
         )
         lab.WaterRestriction().insert1({
@@ -276,7 +276,7 @@ def mockdata():
             'username': 'daveliu',
             'start_time': '2018-01-15',
             'end_time': '2018-01-15',
-            'description': 'Headbar posterior'},
+            'surgery_description': 'Headbar posterior'},
             skip_duplicates = True
         )
         lab.Surgery.Procedure().insert1({
@@ -286,7 +286,7 @@ def mockdata():
             'skull_reference': 'Bregma',
             'ml_location': 0,
             'ap_location': -1.75,
-            'description': 'Fiducial marker'},
+            'surgery_procedure_description': 'Fiducial marker'},
             skip_duplicates = True
         )
         lab.WaterRestriction().insert1({
@@ -317,7 +317,7 @@ def mockdata():
             'username': 'daveliu',
             'start_time': '2018-01-16',
             'end_time': '2018-01-16',
-            'description': 'Headbar posterior'},
+            'surgery_description': 'Headbar posterior'},
             skip_duplicates = True
         )
         lab.Surgery.Procedure().insert1({
@@ -327,7 +327,7 @@ def mockdata():
             'skull_reference': 'Bregma',
             'ml_location': 0,
             'ap_location': -1.75,
-            'description': 'Fiducial marker'},
+            'surgery_procedure_description': 'Fiducial marker'},
             skip_duplicates = True
         )
         lab.WaterRestriction().insert1({
@@ -358,7 +358,7 @@ def mockdata():
             'username': 'daveliu',
             'start_time': '2018-01-17',
             'end_time': '2018-01-17',
-            'description': 'Headbar posterior'},
+            'surgery_description': 'Headbar posterior'},
             skip_duplicates = True
         )
         lab.Surgery.Procedure().insert1({
@@ -368,7 +368,7 @@ def mockdata():
             'skull_reference': 'Bregma',
             'ml_location': 0,
             'ap_location': -1.75,
-            'description': 'Fiducial marker'},
+            'surgery_procedure_description': 'Fiducial marker'},
             skip_duplicates = True
         )
         lab.WaterRestriction().insert1({
@@ -399,7 +399,7 @@ def mockdata():
             'username': 'daveliu',
             'start_time': '2018-02-01',
             'end_time': '2018-02-01',
-            'description': 'Headbar anterior'},
+            'surgery_description': 'Headbar anterior'},
             skip_duplicates = True
         )
         lab.Surgery.Procedure().insert1({
@@ -409,7 +409,7 @@ def mockdata():
             'skull_reference': 'Bregma',
             'ml_location': 0,
             'ap_location': -4,
-            'description': 'Fiducial marker'},
+            'surgery_procedure_description': 'Fiducial marker'},
             skip_duplicates = True
         )
         lab.WaterRestriction().insert1({

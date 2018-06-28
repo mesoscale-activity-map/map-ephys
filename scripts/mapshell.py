@@ -24,7 +24,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
 def usage_exit():
-    print("usage: {p} [discover|populateB|populateE|shell]"
+    print("usage: {p} [populateB|populateE|shell]"
           .format(p=os.path.basename(sys.argv[0])))
     sys.exit(0)
 

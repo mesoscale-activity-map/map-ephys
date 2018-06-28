@@ -5,6 +5,7 @@ from . import ccf
 
 schema = dj.schema(dj.config['experiment.database'])
 
+
 @schema
 class Task(dj.Lookup):
     definition = """

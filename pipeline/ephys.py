@@ -6,7 +6,6 @@ from . import lab
 from . import experiment
 from . import ccf
 
-
 schema = dj.schema(dj.config['ephys.database'])
 
 
