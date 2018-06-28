@@ -216,7 +216,7 @@ class Photostim(dj.Imported):
     -> PhotostimDevice
     photo_stim :  smallint 
     ---
-    -> pipeline.ccf.CCF
+    -> ccf.CCF
     duration  :  decimal(8,4)   # (s)
     waveform  :  longblob       # normalized to maximal power. The value of the maximal power is specified for each PhotostimTrialEvent individually
     """
@@ -224,7 +224,7 @@ class Photostim(dj.Imported):
     class Profile(dj.Part):
         definition = """
         -> master
-        (profile_x, profile_y, profile_z) -> pipeline.ccf.CCF(x, y, z)
+        (profile_x, profile_y, profile_z) -> ccf.CCF(x, y, z)
         ---
         intensity_timecourse   :  longblob  # (mW/mm^2)
         """

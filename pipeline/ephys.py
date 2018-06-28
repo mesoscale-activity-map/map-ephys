@@ -58,7 +58,7 @@ class CellType(dj.Lookup):
 class ElectrodeGroup(dj.Manual):
     definition = """
     # Electrode
-    -> pipeline.experiment.Session
+    -> experiment.Session
     electrode_group : tinyint # Electrode_group is like the probe
     ---
     -> Probe
@@ -101,7 +101,7 @@ class LabeledTrack(dj.Manual):
     class Point(dj.Part):
         definition = """
         -> LabeledTrack
-        -> pipeline.ccf.CCF
+        -> ccf.CCF
         """
 
 @schema
@@ -164,7 +164,7 @@ class ElectrodePosition(dj.Manual):
     definition = """
     -> ElectrodeGroup.Electrode
     ---
-    -> pipeline.ccf.CCF
+    -> ccf.CCF
     """
 
 @schema

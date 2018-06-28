@@ -35,7 +35,7 @@ class ModifiedGene(dj.Manual):
     definition = """
     gene_modification   : varchar(60)
     ---
-    description = ''         : varchar(256)
+    gene_modification_description = ''         : varchar(256)
     """
 
 
@@ -161,7 +161,7 @@ class Surgery(dj.Manual):
     -> Person
     start_time          : datetime # start time
     end_time            : datetime # end time
-    description         : varchar(256)
+    surgery_description : varchar(256)
     """
 
     class VirusInjection(dj.Part):
@@ -190,7 +190,7 @@ class Surgery(dj.Manual):
         ml_location=null     : Decimal(8,3) # um from ref left is positive
         ap_location=null     : Decimal(8,3) # um from ref anterior is positive
         dv_location=null     : Decimal(8,3) # um from dura dorsal is positive 
-        description     : varchar(1000)
+        surgery_procedure_description     : varchar(1000)
         """
 
 
