@@ -1,25 +1,30 @@
 #! /usr/bin/env python
+#shell script to discover and populate the sessions
 
 import os
 import sys
 import logging
+import warnings
 from code import interact
 
 import datajoint as dj
 
-import lab
-import pipeline.ephys
-import pipeline.experiment
-import pipeline.ccf
-import ingest
+from pipeline import ephys
+from pipeline import lab
+from pipeline import experiment
+from pipeline import ccf
+from scripts import ingestBehavior
+from scripts import ingestEphys
 
 log = logging.getLogger(__name__)
-__all__ = [lab, pipeline.ephys, pipeline.experiment, pipeline.ccf, ingest]
+__all__ = [ephys, lab, experiment, ccf, ingestBehavior, ingestEphys]
 [ dj ]  # NOQA flake8 
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
 def usage_exit():
-    print("usage: {p} [discover|populate|shell]"
+    print("usage: {p} [populateB|populateE|shell]"
           .format(p=os.path.basename(sys.argv[0])))
     sys.exit(0)
 
@@ -28,15 +33,16 @@ def logsetup(*args):
     logging.basicConfig(level=logging.ERROR)
     log.setLevel(logging.DEBUG)
     logging.getLogger('ingest').setLevel(logging.DEBUG)
+    logging.getLogger('scripts.ingestBehavior').setLevel(logging.DEBUG)
+    logging.getLogger('scripts.ingestEphys').setLevel(logging.DEBUG)
 
 
-def discover(*args):
-    ingest.SessionDiscovery().populate()
+def populateB(*args):
+    ingestBehavior.BehaviorIngest().populate(display_progress=True)
 
 
-def populate(*args):
-    ingest.BehaviorIngest().populate()
-    ingest.EphysIngest().populate()
+def populateE(*args):
+    ingestEphys.EphysIngest().populate(display_progress=True)
 
 
 def shell(*args):
@@ -47,10 +53,9 @@ def shell(*args):
 
 actions = {
     'shell': shell,
-    'discover': discover,
-    'populate': populate,
+    'populateB': populateB,
+    'populateE': populateE
 }
-
 
 if __name__ == '__main__':
 

@@ -4,23 +4,33 @@ import os
 import glob
 import logging
 import datetime
+import re
+import pdb
+import math
+
 
 from itertools import chain
 from collections import namedtuple
+from operator import itemgetter
+
+from pymysql import IntegrityError
+from code import interact
 
 import scipy.io as spio
 import h5py
 import numpy as np
+import warnings
 
 import datajoint as dj
 
-import lab
-import pipeline.experiment as experiment
-import pipeline.ephys as ephys
+from pipeline import lab
+from pipeline import experiment
+from pipeline import ephys
 
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 log = logging.getLogger(__name__)
-schema = dj.schema(dj.config['ingest.database'])
+schema = dj.schema(dj.config['ingestBehavior.database'])
 
 
 @schema
@@ -42,111 +52,107 @@ class RigDataPath(dj.Lookup):
         return (('TRig1', r'\\MOHARB-NUC1\Documents\Arduino\Bpod_Train1\Bpod Local\Data', 0), # Hardcode the rig path
                 ('TRig2', r'\\MOHARB-WW2\C\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
                 ('TRig3', r'\\WANGT-NUC\Documents\MATLAB\Bpod Local\Data', 2),
-                ('RRig', r'\\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3),
-                ('EPhys1', r'H:\\data\MAP', 4),) # Testing the JRClust output files on my computer
-
-
-@schema
-class SessionDiscovery(dj.Manual):
-    '''
-    Table to populate sessions available in filesystem for discovery
-
-    Note: session date is duplicated w/r/t actual Session table;
-    this is somewhat unavoidable since session requires the
-    synthetic session ID and we are not quite ready to generate it;
-    put another way, this table helps to map one session ID (h2o+date)
-    into the 'official' sequential session ID of the main schema
-    '''
-
-    definition = """
-    -> lab.WaterRestriction
-    session_date:               date                    # discovered date
-    """
-
-    def populate(self):
-        '''
-        Scan the RigDataPath records, looking for new unknown sessions.
-
-        Local implementation, since we aren't really a computed table.
-        '''
-
-        rigs = [r for r in RigDataPath().fetch(as_dict=True)
-                if r['rig'].startswith('TRig')]  # todo?: rig 'type'? Change between TRig and RRig for now
-
-        h2os = {k: v for k, v in
-                zip(*lab.WaterRestriction().fetch(
-                    'water_restriction_number', 'subject_id'))} # fetch existing water_restriction_number
-
-        initial = SessionDiscovery().fetch(as_dict=True) # sessions already discovered
-        log.debug('initial: %s' % rigs)
-        found = []
-
-        for r in rigs:
-            data_path = r['rig_data_path']
-            for root, dirs, files in os.walk(data_path):
-
-                log.info('RigDataFile.make(): traversing %s' % root)
-                log.debug('RigDataFile.make(): dirs %s' % dirs)
-                log.debug('RigDataFile.make(): files %s' % files)
-                subpaths = list(os.path.join(root, f)
-                                .split(data_path)[1].lstrip(os.path.sep)
-                                for f in files if f.endswith('.mat')
-                                and 'TW_autoTrain' in f) # find files with TW_autoTrain for now
-
-                for filename in subpaths:
-                    log.debug('found file %s' % filename)
-
-                    # split files like 'dl7_TW_autoTrain_20171114_140357.mat'
-                    filename = os.path.basename(filename)
-                    fsplit = filename.split('.')[0].split('_')
-                    h2o, date = (fsplit[0], fsplit[-2:-1][0],) # first is the water restriction, second last is the date
-
-                    if h2o not in h2os:
-                        log.warning('{f} skipped - no animal for {h2o}'.format(
-                            f=filename, h2o=h2o))
-                        continue
-                    else:
-                        animal = h2os[h2o]
-
-                    log.debug('animal is {animal}'.format(animal=animal))
-
-                    key = {
-                        'subject_id': animal,
-                        'session_date': datetime.date(
-                            int(date[0:4]), int(date[4:6]), int(date[6:8]))
-                    }
-
-                    if key not in found and key not in initial:
-                        log.info('found session: %s' % key)
-                        found.append(key) # finding new sessions
-
-        # add the new sessions
-        self.insert(found)
+                ('RRig', r'\\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3)
+                ) # A table with the data path
 
 
 @schema
 class BehaviorIngest(dj.Imported):
     definition = """
-    -> SessionDiscovery
-    ---
     -> experiment.Session
     """
 
     class BehaviorFile(dj.Part):
-        # TODO: track files
         ''' files in rig-specific storage '''
         definition = """
         -> BehaviorIngest
         behavior_file:              varchar(255)          # rig file subpath
         """
 
+    class CorrectedTrialEvents(dj.Part):
+        ''' TrialEvents containing auto-corrected data '''
+        definition = """
+        -> BehaviorIngest
+        -> experiment.TrialEvent
+        """
+
+    @property
+    def key_source(self):
+
+        # 2 letters, anything, _, anything, 8 digits, _, 6 digits, .mat
+        # where:
+        # (2 letters, anything): water restriction
+        # (anything): task name
+        # (8 digits): date YYYYMMDD
+        # (6 digits): time HHMMSS
+
+        rexp = '^[a-zA-Z]{2}.*_.*_[0-9]{8}_[0-9]{6}.mat$'
+
+        # water_restriction_number -> subject
+        h2os = {k: v for k, v in zip(*lab.WaterRestriction().fetch(
+            'water_restriction_number', 'subject_id'))}
+
+        def buildrec(rig, rigpath, root, f):
+
+            if not re.match(rexp, f):
+                log.debug("{f} skipped - didn't match rexp".format(f=f))
+                return
+
+            log.debug('found file {f}'.format(f=f))
+
+            fullpath = os.path.join(root, f)
+            subpath = fullpath.split(rigpath)[1].lstrip(os.path.sep)
+            fsplit = f.split('.')[0].split('_')
+            h2o = fsplit[0]
+            date = fsplit[-2:-1][0]
+
+            if h2o not in h2os:
+                log.warning('{f} skipped - no animal for {h2o}'.format(
+                    f=f, h2o=h2o))
+                return
+
+            animal = h2os[h2o]
+
+            log.debug('animal is {animal}'.format(animal=animal))
+
+            return {
+                'subject_id': animal,
+                'session_date': datetime.date(
+                    int(date[0:4]), int(date[4:6]), int(date[6:8])),
+                'rig': rig,
+                'rig_data_path': rigpath,
+                'subpath': subpath
+            }
+
+        recs = []
+        found = set()
+        rigs = RigDataPath().fetch(as_dict=True, order_by='rig_search_order')
+        for r in rigs:
+            rig = r['rig']
+            rigpath = r['rig_data_path']
+            log.info('RigDataFile.make(): traversing {p}'.format(p=rigpath))
+            for root, dirs, files in os.walk(rigpath):
+                log.debug('RigDataFile.make(): entering {r}'.format(r=root))
+                for f in files:
+                    log.debug('RigDataFile.make(): visiting {f}'.format(f=f))
+                    r = buildrec(rig, rigpath, root, f)
+                    if r and r['subpath'] not in found:
+                        found.add(r['subpath'])  # block duplicate path conf
+                        recs.append(r)
+
+        return recs
+
+    def populate(self, *args, **kwargs):
+        for k in self.key_source:
+            self.make(k)
+
     def make(self, key):
         log.info('BehaviorIngest.make(): key: {key}'.format(key=key))
-        rigpaths = [p for p in RigDataPath().fetch(order_by='rig_data_path')
-                    if 'TRig' in p['rig']] # change between TRig and RRig
 
         subject_id = key['subject_id']
-        h2o = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
+        h2o = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1(
+            'water_restriction_number')
+
         date = key['session_date']
         datestr = date.strftime('%Y%m%d')
         log.debug('h2o: {h2o}, date: {d}'.format(h2o=h2o, d=datestr))
@@ -155,28 +161,21 @@ class BehaviorIngest(dj.Imported):
         skey = {}
         skey['subject_id'] = subject_id
         skey['session_date'] = date
-        skey['username'] = 'daveliu' # username has to be changed
+        skey['username'] = 'daveliu'  # username has to be changed
 
-        # e.g: dl7/TW_autoTrain/Session Data/dl7_TW_autoTrain_20180104_132813.mat
-        #         # p.split('/foo/bar')[1]
-        for rp in rigpaths:
-            root = rp['rig_data_path']
-            path = root
-            path = os.path.join(path, h2o)
-            path = os.path.join(path, 'TW_autoTrain')
-            path = os.path.join(path, 'Session Data')
-            path = os.path.join(
-                path, '{h2o}_TW_autoTrain_{d}*.mat'.format(h2o=h2o, d=datestr))
+        # e.g: dl7/TW_autoTrain/Session Data/dl7_TW_autoTrain_20180104_132813.ma
+        root = os.path.join(key['rig_data_path'], os.path.dirname(key['subpath']))
+        path = os.path.join(root, '{h2o}_*_{d}*.mat'.format(
+            h2o=h2o, d=datestr))
 
-            log.debug('rigpath {p}'.format(p=path))
+        log.debug('rigpath {p}'.format(p=path))
 
-            matches = glob.glob(path)
-            if len(matches):
-                log.debug('found files, this is the rig')
-                skey['rig'] = rp['rig']
-                break
-            else:
-                log.info('no file matches found in {p}'.format(p=path))
+        matches = glob.glob(path)
+        if len(matches):
+            log.debug('found files, this is the rig')
+            skey['rig'] = key['rig']
+        else:
+            log.info('no file matches found in {p}'.format(p=path))
 
         if not len(matches):
             log.warning('no file matches found for {h2o} / {d}'.format(
@@ -210,7 +209,7 @@ class BehaviorIngest(dj.Imported):
 
         for f in matches:
 
-            if os.stat(f).st_size/1024 < 500:
+            if os.stat(f).st_size/1024 < 100:
                 log.info('skipping file {f} - too small'.format(f=f))
                 continue
 
@@ -240,7 +239,7 @@ class BehaviorIngest(dj.Imported):
 
         trials = list(trials)
 
-        # all files were internally invalid or size < 500k
+        # all files were internally invalid or size < 100k
         if not trials:
             log.warning('skipping date {d}, no valid files'.format(d=date))
 
@@ -266,7 +265,8 @@ class BehaviorIngest(dj.Imported):
 
         # lists of various records for batch-insert
         rows = {k: list() for k in ('trial', 'behavior_trial', 'trial_note',
-                                    'trial_event', 'action_event')}
+                                    'trial_event', 'corrected_trial_event',
+                                    'action_event')}
 
         i = -1
         for t in trials:
@@ -306,8 +306,7 @@ class BehaviorIngest(dj.Imported):
 
             states = {k: (v+1) for v, k in enumerate(t.state_names)}
             required_states = ('PreSamplePeriod', 'SamplePeriod',
-                               'DelayPeriod', 'ResponseCue', 'StopLicking',
-                               'TrialEnd')
+                               'DelayPeriod', 'ResponseCue', 'StopLicking', 'TrialEnd')
 
             missing = list(k for k in required_states if k not in states)
 
@@ -349,23 +348,20 @@ class BehaviorIngest(dj.Imported):
             log.debug('states\n' + str(states))
             log.debug('state_data\n' + str(t.state_data))
             log.debug('startindex\n' + str(startindex))
-            log.debug('endindex\n' + str(endindex))
-
+            log.debug('endendex\n' + str(endindex))
+             
             if not(len(startindex) and len(endindex)):
-                log.info('skipping trial {i}: start/end index error: {s}/{e}'
-                         .format(i=i,s=str(startindex), e=str(endindex)))
+                log.info('skipping trial {i}: start/end index error: {s}/{e}'.format(i=i,s=str(startindex), e=str(endindex)))
                 continue
-
-            try:
+                   
+            try:    
                 tkey['trial'] = i
+                tkey['trial_uid'] = i # Arseny has unique id to identify some trials
                 tkey['start_time'] = t.state_times[startindex][0]
-                tkey['end_time'] = t.state_times[endindex][0]
             except IndexError:
-                log.info('skipping trial {i}: error indexing {s}/{e} into {t}'
-                         .format(i=i,s=str(startindex), e=str(endindex),
-                                 t=str(t.state_times)))
+                log.info('skipping trial {i}: error indexing {s}/{e} into {t}'.format(i=i,s=str(startindex), e=str(endindex), t=str(t.state_times)))
                 continue
-
+               
             log.debug('BehaviorIngest.make(): Trial().insert1')  # TODO msg
             log.debug('tkey' + str(tkey))
             rows['trial'].append(tkey)
@@ -376,6 +372,7 @@ class BehaviorIngest(dj.Imported):
 
             bkey = dict(tkey)
             bkey['task'] = 'audio delay'
+            bkey['task_protocol'] = 1
 
             # determine trial instruction
             trial_instruction = 'left'
@@ -446,9 +443,20 @@ class BehaviorIngest(dj.Imported):
             nkey['trial_note'] = str(gui['Autolearn'][0])
             rows['trial_note'].append(nkey)
 
+            #pdb.set_trace()
+            #
+            # Add 'bitcode' note
+            #
+            if 'randomID' in gui.dtype.names:
+                nkey = dict(tkey)
+                nkey['trial_note_type'] = 'bitcode'
+                nkey['trial_note'] = str(gui['randomID'][0])
+                rows['trial_note'].append(nkey)
+
             #
             # Add presample event
             #
+            log.debug('BehaviorIngest.make(): presample')
 
             ekey = dict(tkey)
             sampleindex = np.where(t.state_data == states['SamplePeriod'])[0]
@@ -458,12 +466,16 @@ class BehaviorIngest(dj.Imported):
             ekey['duration'] = (t.state_times[sampleindex[0]]
                                 - t.state_times[startindex])[0]
 
-            log.debug('BehaviorIngest.make(): presample')
+            if math.isnan(ekey['duration']):
+                log.debug('BehaviorIngest.make(): fixing presample duration')
+                ekey['duration'] = 0.0  # FIXDUR: lookup from previous trial
+
             rows['trial_event'].append(ekey)
 
             #
             # Add 'go' event
             #
+            log.debug('BehaviorIngest.make(): go')
 
             ekey = dict(tkey)
             responseindex = np.where(t.state_data == states['ResponseCue'])[0]
@@ -472,7 +484,11 @@ class BehaviorIngest(dj.Imported):
             ekey['trial_event_time'] = t.state_times[responseindex][0]
             ekey['duration'] = gui['AnswerPeriod'][0]
 
-            log.debug('BehaviorIngest.make(): go')
+            if math.isnan(ekey['duration']):
+                log.debug('BehaviorIngest.make(): fixing go duration')
+                ekey['duration'] = 0.0  # FIXDUR: lookup from previous trials
+                rows['corrected_trial_event'].append(ekey)
+
             rows['trial_event'].append(ekey)
 
             #
@@ -480,27 +496,64 @@ class BehaviorIngest(dj.Imported):
             #
 
             log.debug('BehaviorIngest.make(): sample events')
+
+            last_dur = None
+
             for s in sampleindex:  # in protocol > 6 ~-> n>1
                 # todo: batch events
                 ekey = dict(tkey)
                 ekey['trial_event_type'] = 'sample'
                 ekey['trial_event_time'] = t.state_times[s]
                 ekey['duration'] = gui['SamplePeriod'][0]
+
+                if math.isnan(ekey['duration']) and last_dur is None:
+                    log.warning('... bad duration, no last_edur'
+                                .format(last_dur))
+                    ekey['duration'] = 0.0  # FIXDUR: cross-trial check
+                    rows['corrected_trial_event'].append(ekey)
+
+                elif math.isnan(ekey['duration']) and last_dur is not None:
+                    log.debug('... duration using last_edur {}'
+                              .format(last_dur))
+                    ekey['duration'] = last_dur
+                    rows['corrected_trial_event'].append(ekey)
+
+                else:
+                    last_dur = ekey['duration']  # only track 'good' values.
+
                 rows['trial_event'].append(ekey)
 
             #
             # Add 'delay' events
             #
 
+            log.debug('BehaviorIngest.make(): delay events')
+
+            last_dur = None
             delayindex = np.where(t.state_data == states['DelayPeriod'])[0]
 
-            log.debug('BehaviorIngest.make(): delay events')
             for d in delayindex:  # protocol > 6 ~-> n>1
-                # todo: batch events
                 ekey = dict(tkey)
                 ekey['trial_event_type'] = 'delay'
                 ekey['trial_event_time'] = t.state_times[d]
                 ekey['duration'] = gui['DelayPeriod'][0]
+
+                if math.isnan(ekey['duration']) and last_dur is None:
+                    log.warning('... bad duration, no last_edur'
+                                .format(last_dur))
+                    ekey['duration'] = 0.0  # FIXDUR: cross-trial check
+                    rows['corrected_trial_event'].append(ekey)
+
+                elif math.isnan(ekey['duration']) and last_dur is not None:
+                    log.debug('... duration using last_edur {}'
+                              .format(last_dur))
+                    ekey['duration'] = last_dur
+                    rows['corrected_trial_event'].append(ekey)
+
+                else:
+                    last_dur = ekey['duration']  # only track 'good' values.
+
+                log.debug('delay event duration: {}'.format(ekey['duration']))
                 rows['trial_event'].append(ekey)
 
             #
@@ -529,8 +582,11 @@ class BehaviorIngest(dj.Imported):
 
         log.info('BehaviorIngest.make(): bulk insert phase')
 
+        log.info('BehaviorIngest.make(): saving ingest {d}'.format(d=key))
+        self.insert1(key, ignore_extra_fields=True)
+
         log.info('BehaviorIngest.make(): ... experiment.Session.Trial')
-        experiment.Session.Trial().insert(
+        experiment.SessionTrial().insert(
             rows['trial'], ignore_extra_fields=True)
 
         log.info('BehaviorIngest.make(): ... experiment.BehaviorTrial')
@@ -545,117 +601,14 @@ class BehaviorIngest(dj.Imported):
         experiment.TrialEvent().insert(
             rows['trial_event'], ignore_extra_fields=True)
 
+        log.info('BehaviorIngest.make(): ... CorrectedTrialEvents')
+        BehaviorIngest().CorrectedTrialEvents().insert(
+            rows['corrected_trial_event'], ignore_extra_fields=True)
+
         log.info('BehaviorIngest.make(): ... experiment.ActionEvent')
         experiment.ActionEvent().insert(
             rows['action_event'], ignore_extra_fields=True)
 
-        log.info('BehaviorIngest.make(): saving ingest {d}'.format(d=key))
-        self.insert1(key, ignore_extra_fields=True)
-
         BehaviorIngest.BehaviorFile().insert(
             (dict(key, behavior_file=f.split(root)[1]) for f in matches),
             ignore_extra_fields=True)
-
-
-@schema
-class EphysIngest(dj.Imported):
-    # subpaths like: \Spike\2017-10-21\tw5ap_imec3_opt3_jrc.mat
-
-    definition = """
-    -> SessionDiscovery
-    """
-
-    class EphysFile(dj.Part):
-        # TODO: track files
-        ''' files in rig-specific storage '''
-        definition = """
-        -> EphysIngest
-        ephys_file:              varchar(255)          # rig file subpath
-        """
-
-    def make(self, key):
-        log.info('EphysIngest().make(): key: {k}'.format(k=key))
-
-        #
-        # Find Ephys Recording
-        #
-
-        rigpath = (RigDataPath() & {'rig': 'EPhys1'}).fetch1('rig_data_path')
-        date = key['session_date'].strftime('%Y-%m-%d')
-        subject_id = key['subject_id']
-        water = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
-        file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water)
-        subpath = os.path.join('Spike', date, file)
-        fullpath = os.path.join(rigpath, subpath)
-
-        if not os.path.exists(fullpath):
-            log.info('EphysIngest().make(): skipping - no file in %s'
-                     % fullpath)
-            return
-
-        log.info('EphysIngest().make(): found ephys recording in %s'
-                 % fullpath)
-
-        #
-        # Find corresponding BehaviorIngest
-        #
-        # ... we are keying times, sessions, etc from behavior ingest;
-        # so lookup behavior ingest for session id, quit with warning otherwise
-
-        try:
-            behavior = (BehaviorIngest() & key).fetch1()
-        except dj.DataJointError:
-            log.warning('EphysIngest().make(): skip - behavior ingest error')
-            return
-
-        log.info('behavior for ephys: {b}'.format(b=behavior))
-
-        #
-        # Prepare ElectrodeGroup configuration
-        #
-        # HACK / TODO: assuming single specific ElectrodeGroup for all tests;
-        # better would be to have this encoded in filename or similar.
-
-        ekey = {
-            'subject_id': behavior['subject_id'],
-            'session': behavior['session'],
-            'electrode_group': 1,
-        }
-
-        ephys.ElectrodeGroup().insert1(dict(ekey, probe_part_no=15131808323))
-        ephys.ElectrodeGroup().make(ekey)  # note: no locks; is dj.Manual
-        ephys.Ephys().insert1(ekey, ignore_extra_fields=True) # insert Ephys first
-
-        f = h5py.File(fullpath,'r')
-        ind = np.argsort(f['S_clu']['viClu'][0]) # index sorted by cluster
-        cluster_ids = f['S_clu']['viClu'][0][ind] # cluster (unit) number
-        trWav_raw_clu = f['S_clu']['trWav_raw_clu'] # spike waveform
-        trWav_raw_clu1 = np.concatenate((trWav_raw_clu[0:1][:][:],trWav_raw_clu),axis=0) # add a spike waveform of cluster 0
-        spike_times = f['viTime_spk'][0][ind] # spike times
-        viSite_spk = f['viSite_spk'][0][ind] # electrode site for the spike
-        viT_offset_file = f['viT_offset_file'][:] # start of each trial, subtract this number for each trial
-        sRateHz = f['P']['sRateHz'][0] # sampling rate
-        spike_trials = np.ones(len(spike_times)) * (len(viT_offset_file) - 1) # every spike is in the last trial
-        spike_times2 = np.copy(spike_times)
-        for i in range(len(viT_offset_file) - 1, 0, -1): #find the trials each unit has a spike in
-            spike_trials[spike_times < viT_offset_file[i]] = i-1 # Get the trial number of each spike
-            spike_times2[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = spike_times[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] - viT_offset_file[i - 1] # subtract the viT_offset_file from each trial
-        spike_times2[np.where(spike_times2 >= viT_offset_file[-1])] = spike_times[np.where(spike_times2 >= viT_offset_file[-1])] - viT_offset_file[-1] # subtract the viT_offset_file from each trial
-        spike_times2 = spike_times2 / sRateHz # divide the sampling rate, sRateHz
-        clu_ids_diff = np.diff(cluster_ids) # where the units seperate
-        clu_ids_diff = np.where(clu_ids_diff != 0)[0] + 1 # separate the spike_times
-        units = np.split(spike_times, clu_ids_diff) / sRateHz # sub arrays of spike_times
-        trialunits = np.split(spike_trials, clu_ids_diff) # sub arrays of spike_trials
-        unit_ids = np.arange(len(clu_ids_diff) + 1) # unit number
-        trialunits1 = [] # array of unit number
-        trialunits2 = [] # array of trial number
-        for i in range(0,len(trialunits)):
-            trialunits2 = np.append(trialunits2, np.unique(trialunits[i]))
-            trialunits1 = np.append(trialunits1, np.zeros(len(np.unique(trialunits[i])))+i)
-        ephys.Ephys.Unit().insert(list(dict(ekey, unit = x, spike_times = units[x], waveform = trWav_raw_clu1[x][0]) for x in unit_ids)) # batch insert the units
-        #experiment.Session.Trial() #TODO: fetch the trial from experiment.Session.Trial and realign?
-        ephys.Ephys.TrialUnit().insert(list(dict(ekey, unit = trialunits1[x], trial = trialunits2[x]) for x in range(0, len(trialunits2)))) # batch insert the TrialUnit (key, unit, trial)
-        ephys.Ephys.Spike().insert(list(dict(ekey, unit = cluster_ids[x], spike_time = spike_times2[x], electrode = viSite_spk[x], trial = spike_trials[x]) for x in range(0, len(spike_times2))), skip_duplicates=True) # batch insert the Spikes (key, unit, spike_time, electrode, trial)
-
-        self.insert1(key)
-        EphysIngest.EphysFile().insert1(dict(key, ephys_file=subpath))

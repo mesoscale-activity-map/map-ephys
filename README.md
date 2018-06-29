@@ -3,15 +3,16 @@ Mesoscale activity ephys ingest schema
 
 For testing the schema, the dj_local_conf.json should have the following configuration variables to modify data without affecting  others' databases
 
-"ingest.database": "[username]_ingest",
+"ingestBehavior.database": "[username]_ingestBehavior",
+"ingestBehavior.database": "[username]_ingestEphys",
 "ccf.database": "[username]_ccf",
-"ephys.database": "[username]map_ephys",
-"experiment.database": "[username]_map_experi",
-"lab.database": "[username]_map",
+"ephys.database": "[username]_ephys",
+"experiment.database": "[username]_experiment",
+"lab.database": "[username]_lab",
 
-ingest.py requires the rig_data_path and the username to be specified in the code. Also, SessionDiscoverty has the RigDataPath hard coded for now. We will probably have a RigType key to track the training and recording rigs.
+For accessing the map database, replace [username] with map. Please note all users can write and Delete the databases.
 
-See Overview.ipynb for the required tables to be inserted.
+ingestBehavior.py and ingestEphys.py require the rig_data_path and the username to be specified in the code. Also, SessionDiscovery has the RigDataPath hard coded for now. We will probably have a RigType key to track the training and recording rigs.
 
-The example behavioral data file is 'tw5_TW_autoTrain_20171021_150914.mat'.
-The example Ephys data file is 'tw5ap_imec3_opt3_jrc.mat'.
+See the notebooks, Overview.ipynb, for examples
+

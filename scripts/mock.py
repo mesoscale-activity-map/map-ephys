@@ -5,16 +5,15 @@ from importlib import reload
 
 import datajoint as dj
 
-import lab
-import pipeline.ccf
-import pipeline.ephys
-import pipeline.experiment
-
+from pipeline import lab
+from pipeline import ccf
+from pipeline import experiment
+from pipeline import ephys
 
 def dropdbs():
     print('dropping databases')
     for a in range(3):
-        for d in ['ingest', 'ccf', 'ephys', 'experiment', 'lab', 'prototype']:
+        for d in ['ingestEphys', 'ingestBehavior', 'ccf', 'ephys', 'experiment']:
             try:
                 schema = dj.schema(dj.config['%s.database' % d])
                 schema.drop(force=True)
