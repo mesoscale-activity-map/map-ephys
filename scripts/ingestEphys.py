@@ -72,8 +72,9 @@ class EphysIngest(dj.Imported):
         file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
 #        file = '{h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # some older files
         # subpath = os.path.join('Spike', date, file)
-        fullpath = os.path.join(rigpath, file)
+        fullpath = os.path.join(rigpath, date, file)
 
+        #pdb.set_trace()
         if not os.path.exists(fullpath):
             log.info('EphysIngest().make(): skipping - no file in %s'
                      % fullpath)
