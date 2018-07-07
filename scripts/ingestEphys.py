@@ -227,5 +227,5 @@ class EphysIngest(dj.Imported):
         ephys.TrialSpikes().insert(l, skip_duplicates=True) # batch insert TrialSpikes
 
         log.debug('inserting file load information')
-        self.insert1(key)
-        EphysIngest.EphysFile().insert1(dict(key, ephys_file=subpath))
+        self.insert1(key, ignore_extra_fields=True)
+        EphysIngest.EphysFile().insert1(dict(key, ephys_file=fullpath), ignore_extra_fields=True)
