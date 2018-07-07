@@ -74,7 +74,6 @@ class EphysIngest(dj.Imported):
         # subpath = os.path.join('Spike', date, file)
         fullpath = os.path.join(rigpath, date, file)
 
-        #pdb.set_trace()
         if not os.path.exists(fullpath):
             log.info('EphysIngest().make(): skipping - no file in %s'
                      % fullpath)
@@ -163,10 +162,11 @@ class EphysIngest(dj.Imported):
 
         file = '{h2o}_bitcode.mat'.format(h2o=water) # fetch the bitcode and realign
         # subpath = os.path.join('Spike', date, file)
-        fullpath = os.path.join(rigpath, file)
+        fullpath = os.path.join(rigpath, date, file)
 
         log.debug('opening bitcode for {s} ({f})'.format(s=behavior['session'], f=fullpath))
 
+        #pdb.set_trace()
         mat = spio.loadmat(fullpath, squeeze_me = True) # load the bitcode file
         bitCodeE = mat['bitCodeS'].flatten() # bitCodeS is the char variable
         trialNote = experiment.TrialNote()
