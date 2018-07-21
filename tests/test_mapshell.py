@@ -2,7 +2,7 @@
 #123456789#123456789#123456789#123456789#123456789#123456789#123456789#123456789
 
 import os
-import datajoint as dj
+from datajoint import config as config
 
 #
 # Utilities
@@ -15,7 +15,7 @@ def run_system_cmd(cmdstr):
 
 def setup():
     # safety hack to prevent dropping live databasess
-    if 'map_testing_configuration' not in dj.config:
+    if 'do_unittest' not in config or config['do_unittest'] is not True:
         raise Exception("tests skipped - dj.config not testing configuration") 
 
 

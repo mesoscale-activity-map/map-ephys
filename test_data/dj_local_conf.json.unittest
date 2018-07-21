@@ -1,0 +1,32 @@
+{
+    "do_unittest": false,
+    "database.host": "localhost",
+    "database.password": "",
+    "database.user": "",
+    "database.port": 3306,
+    "ccf.database": "djtest_mape_ccf_tiny",
+    "ephys.database": "djtest_mape_ephys_tiny",
+    "experiment.database": "djtest_mape_experiment_tiny",
+    "lab.database": "djtest_mape_lab_tiny",
+    "publication.database": "djtest_mape_pub_tiny",
+    "prototype.database": "djtest_mape_prototype_tiny",
+    "ingestBehavior.database": "djtest_mape_behavioringest_tiny",
+    "ingestEphys.database": "djtest_mape_ephysingest_tiny",
+    "connection.init_function": null,
+    "database.reconnect": false,
+    "loglevel": "INFO",
+    "safemode": true,
+    "display.limit": 7,
+    "display.width": 14,
+    "display.show_tuple_count": true,
+    "external.aws_access_key_id": null,
+    "external.aws_secret_access_key": null,
+    "external.location": null,
+    "history": [
+        "No config file found, using default settings."
+    ],
+    "ephys_data_paths": [["./test_data/ephys", "0"]],
+    "rig_data_paths": [
+        ["RRig", "./test_data/behavior", "0"]
+    ]
+} 
