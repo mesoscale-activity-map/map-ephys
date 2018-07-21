@@ -227,7 +227,7 @@ class EphysIngest(dj.Imported):
 
         for x in range(len_trial_units2):
             ib.insert1(dict(ekey, unit = trialunits1[x], trial = trialunits2[x]))
-jw
+
             if ib.flush(skip_duplicates=True, chunksz=10000):
                 log.debug('... UnitTrial spike {}'.format(x))
 
