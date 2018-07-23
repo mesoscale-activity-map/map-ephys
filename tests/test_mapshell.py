@@ -2,7 +2,11 @@
 #123456789#123456789#123456789#123456789#123456789#123456789#123456789#123456789
 
 import os
+import sys
 from datajoint import config as config
+
+
+# todo: output redirect..
 
 #
 # Utilities
@@ -28,7 +32,7 @@ def test_run_system_cmd():
     run_system_cmd('echo')
 
     try:
-        run_system_cmd('sdajk jfakjdkljfk djaklj adkljf ka')
+        run_system_cmd('sdajkjfakjdkljfkdjakljadkljfka')
     except Exception:
         return True
 
@@ -36,15 +40,14 @@ def test_run_system_cmd():
 
 
 def test_mock():
-    # TODO: should be run with safeguards, or perhaps mock should have safeguards
-    run_system_cmd('./mock.py')
+    run_system_cmd('map-mock-data.py')
 
 
 def test_behavior_ingest():
     # TODO: should be run with safeguards, or perhaps mock should have safeguards
-    run_system_cmd('./mapshell.py populateB')
+    run_system_cmd('mapshell.py populateB')
 
 
 def test_ephys_ingest():
     # TODO: should be run with safeguards, or perhaps mock should have safeguards
-    run_system_cmd('./mapshell.py populateE')
+    run_system_cmd('mapshell.py populateE')
