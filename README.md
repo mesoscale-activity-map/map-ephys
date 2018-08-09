@@ -2,7 +2,22 @@
 
 Mesoscale activity ephys ingest schema
 
-## Test Configuration
+## Schema
+
+![CCF ERD](pipeline/ccf.png)
+![ephys ERD](pipeline/ephys.png)
+![experiment ERD](pipeline/experiment.png)
+![pipeline ERD](pipeline/lab.png)
+
+## Mapshell
+
+The 'mapshell.py' script contans utility functions to trigger file ingest for
+behavior and ephys ingest, a facility to launch a basic python environment with
+the various schema modules loaded, and a utlity to generate ERD diagrams from
+the current code.
+
+## Installation and Setup
+<!-- todo: setup.py, mapshell section merge here -->
 
 For testing the schema, the dj_local_conf.json should have the following
 configuration variables to modify data without affecting others' databases
@@ -22,7 +37,7 @@ to be specified in the code (see below).
 
 See the notebooks, Overview.ipynb, for examples
 
-## Ingest Logic Path Expectations
+## Ingest Path Expectations
 
 ### Behavior Files
 
@@ -67,7 +82,10 @@ Older files matched the pattern:
     {h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat
     {h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat
 
-
 ### Unit Tests
 
-TODO.
+Unit tests for ingest are present in the 'tests' directory and can be run using
+the 'nostests' command. These tests will *destructively* delete the actively
+configured databases and perform data ingest and transfer tasks using the data
+stored within the 'test_data' directory.
+
