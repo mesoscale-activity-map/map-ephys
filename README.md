@@ -1,17 +1,20 @@
 # map-ephys
+
 Mesoscale activity ephys ingest schema
+
+## Test Configuration
 
 For testing the schema, the dj_local_conf.json should have the following
 configuration variables to modify data without affecting others' databases
 
-  * "ingestBehavior.database": "[username]_ingestBehavior",
-  * "ingestBehavior.database": "[username]_ingestEphys",
-  * "ccf.database": "[username]_ccf",
-  * "ephys.database": "[username]_ephys",
-  * "experiment.database": "[username]_experiment",
-  * "lab.database": "[username]_lab",
-
-For accessing the map database, replace [username] with map. Please note all
+  * ingestBehavior.database set to "[username]_ingestBehavior"
+  * ingestBehavior.database set to "[username]_ingestEphys"
+  * ccf.database set to "[username]_ccf"
+  * ephys.database set to "[username]_ephys"
+  * experiment.database set to "[username]_experiment"
+  * lab.database set to "[username]_lab"
+  
+For accessing the map database, replace [username] with 'map'. Please note all
 users can write and Delete the databases.
 
 ingestBehavior.py and ingestEphys.py require the rig_data_path and the username
@@ -21,7 +24,7 @@ recording rigs.
 
 See the notebooks, Overview.ipynb, for examples
 
-## File path expectations of ingest logic
+## Ingest Logic Path Expectations
 
 ### Behavior Files
 
@@ -30,7 +33,7 @@ rig data paths are specified in specified dj.config.json as:
 
     "rig_data_paths": [
         ["RRig", "/Users/chris/src/djc/map/map-sharing/unittest/behavior", "0"]
-    ],
+    ]
 
 if this variable is not configured, hardcoded values in the code matching the
 experimental setup will be used.
@@ -48,7 +51,7 @@ which is, more generally:
 The ephys ingest logic searches the ephys_data_paths for processed ephys
 data files. These are specified in dj.config.json as:
 
-    "ephys_data_paths": [["/Users/chris/src/djc/map/map-sharing/unittest/ephys", "0"]],
+    "ephys_data_paths": [["/Users/chris/src/djc/map/map-sharing/unittest/ephys", "0"]]
 
 if this variable is not configured, hardcoded values in the code matching
 the experimental setup will be used.
@@ -61,8 +64,7 @@ which is, more generally:
 
     \{YYYY}-{MM}-{DD}\{h2o}_ap_imec3_opt3_jrc.mat
 
-Older files matched:
-TODO Clarify - should code include actual logic to pick these up still?
+Older files matched the pattern:
 
     {h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat
     {h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat

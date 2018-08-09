@@ -78,6 +78,7 @@ class EphysIngest(dj.Imported):
         water = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
 
         file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
+        # TODO: should code include actual logic to pick these up still?
         # file = '{h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # some older files
         subpath = os.path.join(date, file)
         fullpath = os.path.join(rigpath, subpath)
