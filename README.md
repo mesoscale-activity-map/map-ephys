@@ -4,9 +4,20 @@ Mesoscale activity ephys ingest schema
 
 ## Schema
 
+### CCF
+
 ![CCF ERD](pipeline/ccf.png)
+
+### EPhys
+
 ![ephys ERD](pipeline/ephys.png)
+
+### Experiment
+
 ![experiment ERD](pipeline/experiment.png)
+
+### Lab
+
 ![pipeline ERD](pipeline/lab.png)
 
 ## Mapshell
