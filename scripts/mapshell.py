@@ -54,7 +54,7 @@ def shell(*args):
 def erd(*args):
     for mod in (ephys, lab, experiment, ccf,):
         modname = str().join(mod.__name__.split('.')[1:])
-        fname = '{}.png'.format(modname)
+        fname = os.path.join('pipeline','{}.png'.format(modname))
         print('saving', fname)
         dj.ERD(mod, context={modname: mod}).save(fname)
 
