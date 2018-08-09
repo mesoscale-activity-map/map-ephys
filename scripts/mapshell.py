@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-#shell script to discover and populate the sessions
+# map-ephys interative shell
 
 import os
 import sys
@@ -24,7 +24,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
 def usage_exit():
-    print("usage: {p} [populateB|populateE|shell]"
+    print("usage: {p} [populateB|populateE|shell|erd]"
           .format(p=os.path.basename(sys.argv[0])))
     sys.exit(0)
 
@@ -51,10 +51,19 @@ def shell(*args):
              local=globals())
 
 
+def erd(*args):
+    for mod in (ephys, lab, experiment, ccf,):
+        modname = str().join(mod.__name__.split('.')[1:])
+        fname = '{}.png'.format(modname)
+        print('saving', fname)
+        dj.ERD(mod, context={modname: mod}).save(fname)
+
+
 actions = {
-    'shell': shell,
     'populateB': populateB,
-    'populateE': populateE
+    'populateE': populateE,
+    'shell': shell,
+    'erd': erd,
 }
 
 if __name__ == '__main__':
