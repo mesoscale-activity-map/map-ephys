@@ -18,9 +18,7 @@ For accessing the map database, replace [username] with 'map'. Please note all
 users can write and Delete the databases.
 
 ingestBehavior.py and ingestEphys.py require the rig_data_path and the username
-to be specified in the code. Also, SessionDiscovery has the RigDataPath hard
-coded for now. We will probably have a RigType key to track the training and
-recording rigs.
+to be specified in the code (see below).
 
 See the notebooks, Overview.ipynb, for examples
 
