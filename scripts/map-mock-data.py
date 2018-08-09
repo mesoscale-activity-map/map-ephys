@@ -25,10 +25,10 @@ def dropdbs():
 
 def mockdata():
     print('populating with mock data')
-    reload(pipeline.ccf)
+    reload(ccf)
     reload(lab)
-    reload(pipeline.experiment)
-    reload(pipeline.ephys)
+    reload(experiment)
+    reload(ephys)
     try:
         # TODO: these should be loaded in a more 'official' way
         lab.Person().insert1({
