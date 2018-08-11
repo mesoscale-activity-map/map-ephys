@@ -13,11 +13,11 @@ from pipeline import ephys
 from pipeline import lab
 from pipeline import experiment
 from pipeline import ccf
-from scripts import ingestBehavior
-from scripts import ingestEphys
+from pipeline.ingest import behavior as ingest_behavior
+from pipeline.ingest import ephys as ingest_ephys
 
 log = logging.getLogger(__name__)
-__all__ = [ephys, lab, experiment, ccf, ingestBehavior, ingestEphys]
+__all__ = [ephys, lab, experiment, ccf, ingest_behavior, ingest_ephys]
 [ dj ]  # NOQA flake8 
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -33,16 +33,16 @@ def logsetup(*args):
     logging.basicConfig(level=logging.ERROR)
     log.setLevel(logging.DEBUG)
     logging.getLogger('ingest').setLevel(logging.DEBUG)
-    logging.getLogger('scripts.ingestBehavior').setLevel(logging.DEBUG)
-    logging.getLogger('scripts.ingestEphys').setLevel(logging.DEBUG)
+    logging.getLogger('pipeline.ingest.behavior').setLevel(logging.DEBUG)
+    logging.getLogger('pipeline.ingest.ephys').setLevel(logging.DEBUG)
 
 
 def populateB(*args):
-    ingestBehavior.BehaviorIngest().populate(display_progress=True)
+    ingest_behavior.BehaviorIngest().populate(display_progress=True)
 
 
 def populateE(*args):
-    ingestEphys.EphysIngest().populate(display_progress=True)
+    ingest_ephys.EphysIngest().populate(display_progress=True)
 
 
 def shell(*args):
@@ -54,7 +54,7 @@ def shell(*args):
 def erd(*args):
     for mod in (ephys, lab, experiment, ccf,):
         modname = str().join(mod.__name__.split('.')[1:])
-        fname = os.path.join('pipeline','{}.png'.format(modname))
+        fname = os.path.join('pipeline', '{}.png'.format(modname))
         print('saving', fname)
         dj.ERD(mod, context={modname: mod}).save(fname)
 

@@ -5,19 +5,12 @@ import glob
 import logging
 import datetime
 import re
-import pdb
 import math
-
 
 from itertools import chain
 from collections import namedtuple
-from operator import itemgetter
-
-from pymysql import IntegrityError
-from code import interact
 
 import scipy.io as spio
-import h5py
 import numpy as np
 import warnings
 
@@ -25,12 +18,11 @@ import datajoint as dj
 
 from pipeline import lab
 from pipeline import experiment
-from pipeline import ephys
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 log = logging.getLogger(__name__)
-schema = dj.schema(dj.config['ingestBehavior.database'])
+schema = dj.schema(dj.config['ingest.behavior.database'])
 
 
 @schema

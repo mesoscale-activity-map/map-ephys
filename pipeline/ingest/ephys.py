@@ -1,13 +1,7 @@
 #! /usr/bin/env python
 
 import os
-import glob
 import logging
-import datetime
-import pdb
-
-from itertools import chain
-from collections import namedtuple
 
 import scipy.io as spio
 import h5py
@@ -19,11 +13,11 @@ from pipeline import lab
 from pipeline import experiment
 from pipeline import ephys
 from pipeline import InsertBuffer
-from scripts import ingestBehavior
+from pipeline.ingest import behavior as ingest_behavior
 
 
 log = logging.getLogger(__name__)
-schema = dj.schema(dj.config['ingestEphys.database'])
+schema = dj.schema(dj.config['ingest.ephys.database'])
 
 @schema
 class EphysDataPath(dj.Lookup):
@@ -48,7 +42,7 @@ class EphysIngest(dj.Imported):
     # now: \2017-10-21\tw5ap_imec3_opt3_jrc.mat
 
     definition = """
-    -> ingestBehavior.BehaviorIngest
+    -> ingest_behavior.BehaviorIngest
     """
 
     class EphysFile(dj.Part):
@@ -98,7 +92,7 @@ class EphysIngest(dj.Imported):
         # so lookup behavior ingest for session id, quit with warning otherwise
 
         try:
-            behavior = (ingestBehavior.BehaviorIngest() & key).fetch1()
+            behavior = (ingest_behavior.BehaviorIngest() & key).fetch1()
         except dj.DataJointError:
             log.warning('EphysIngest().make(): skip - behavior ingest error')
             return
