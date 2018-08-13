@@ -53,7 +53,7 @@ See the notebooks, Overview.ipynb, for examples
 ### Behavior Files
 
 The behavior ingest logic searches the rig_data_paths for behavior files.  The
-rig data paths are specified in specified dj.config.json as:
+rig data paths are specified in specified dj_local_conf.json as:
 
     "rig_data_paths": [
         ["RRig", "/Users/chris/src/djc/map/map-sharing/unittest/behavior", "0"]
@@ -92,6 +92,103 @@ Older files matched the pattern:
 
     {h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat
     {h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat
+
+### Raw Recording File Publication/Retrieval
+
+The map-ephys pipeline does *not* directly handle processing of raw reording
+files into the second-stage processed data used in later stages, however, some
+facility is provided for tracking raw data files and transferring them to/from
+the ANL 'petrel' faclity[1] using the `globus toolkit` and python SDK[2,3].
+
+#### Configuration
+
+To use this facility, a 'globus endpoint' should be configured and the
+following variables set in 'dj_local_conf.json' to match the configuration:
+
+    "globus.local_endpoint": "<uuid value>",
+    "globus.local_endpoint_subdir": "<path to storage inside globus>",
+    "globus.local_endpoint_local_path": "<path to storage on local filesystem>",
+
+The local endpoint UUID value can be obtained from the 'manage endpoints' screen
+within the globus web interface. The 'endpoint_subdir' should be set to the
+desired transfer location within the endpoint (as shown in the 'location' bar
+within the globus web interface 'transfer files' screen), and the
+'endpoint_local_path' should contain the 'real' filesystem location
+corresponding to this location. For example, one might have the following
+configuration on a mac or linux machine:
+
+    "globus.local_endpoint": "C40E971D-0075-4A82-B12F-8F9717762E7B",
+    "globus.local_endpoint_subdir": "map/raw",
+    "globus.local_endpoint_local_path": "/globus/map/raw"
+
+Or perhaps something like the following on a Windows machine:
+
+    "globus.local_endpoint": "C40E971D-0075-4A82-B12F-8F9717762E7B",
+    "globus.local_endpoint_subdir": "map/raw",
+    "globus.local_endpoint_local_path": "C:\globus\map\raw",
+
+please note that the 'local_endpoint_subdir' should use the globus convention of
+using forward slashes ('/') for directory separation, whereas the
+'local_endpont_local_path' should use whatever convention is used by the host
+operating system running the map-ephys code.
+
+#### Login to Globus
+
+Before the globus interface can be used, an application token must be generated.
+This can be done from within the 'mapshell.py' shell as follows:
+
+    $ ./scripts/mapshell.py shell
+    Connecting chris@localhost:3306
+    map shell.
+    
+    schema modules:
+    
+      - ephys
+      - lab
+      - experiment
+      - ccf
+      - publication
+      - ingest.behavior
+      - ingest.ephys
+    
+    >>> publication.GlobusStorageManager()
+    Please login via: https://auth.globus.org/v2/oauth2/authorize?client_id=C40E971D-0075-4A82-B12F-8F9717762E7B&redirect_uri=https%3A%2F%2Fauth.globus.org%2Fv2%2Fweb%2Fauth-code&scope=openid+profile+email+urn%3Aglobus%3Aauth%3Ascope%3Atransfer.api.globus.org%3Aall&state=_default&response_type=code&code_challenge=cb9c10826b86ff9851cf477cad554e8d01c03a2b416b0210783c544deea1f372&code_challenge_method=S256&access_type=offline
+    and enter code:f881e45fc2c52929b3924863c87f88
+    INFO:datajoint.settings:Setting globus.token to c00264046ac1d484ec8db2b8acfa1f21ef0c68939d0ce2d562b21eb400eefd7802676efe1ddcc665141ef56f44699
+    <pipeline.globus.GlobusStorageManager object at 0x10f874780>
+    >>> dj.config.save('dj_local_conf.json')
+
+As can be seen from the above, calling 'publication.GlobusStorageManager()' from
+the mapshell interpreter will prompt the user to login in a web browser, and
+paste an authrization code back to the script, which then completes the process
+of requesting an access token. From there, the configuration is saved via the
+'dj.config.save' function.
+
+This process only needs to be performed once to generate a valid
+dj_local_conf.json file suitable for future sessions. Please note that after
+login, the dj_local_conf.json file will contain a security sensitive access
+token which should not be shared with anyone who should not have access to your
+globus account.
+
+#### Usage (Data Publisher)
+
+Once the local globus endpoint has been configured, population and data transfer
+of the raw data files can be performed using the 'mapshell.py' utility function
+'publish', which simply wraps a call to 'ArchivedRawEphysTrial.populate()'.
+
+The population logic will look for files underneath the local storage path
+matching project naming conventions for the ingested experimental sessions, and
+if corresponding files are found, transfer them to petrel and log an available
+entry in the publication schema. These records can then be used by users to
+query and retrieve the raw data files (see below).
+
+#### Usage (Data Consumer)
+
+TODO: Retrieval of published data files.
+            
+.. [1] https://www.alcf.anl.gov/petrel
+.. [2] http://toolkit.globus.org/toolkit/
+.. [3] https://globus-sdk-python.readthedocs.io/en/stable/
 
 ### Unit Tests
 

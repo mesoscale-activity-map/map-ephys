@@ -13,28 +13,31 @@ from pipeline import ephys
 from pipeline import lab
 from pipeline import experiment
 from pipeline import ccf
+from pipeline import publication
 from pipeline.ingest import behavior as ingest_behavior
 from pipeline.ingest import ephys as ingest_ephys
 
 log = logging.getLogger(__name__)
-__all__ = [ephys, lab, experiment, ccf, ingest_behavior, ingest_ephys]
+__all__ = [ephys, lab, experiment, ccf, publication, ingest_behavior,
+           ingest_ephys]
 [ dj ]  # NOQA flake8 
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
 def usage_exit():
-    print("usage: {p} [populateB|populateE|shell|erd]"
-          .format(p=os.path.basename(sys.argv[0])))
+    print("usage: {p} [{c}]"
+          .format(p=os.path.basename(sys.argv[0]),
+                  c='|'.join(list(actions.keys()))))
     sys.exit(0)
 
 
 def logsetup(*args):
     logging.basicConfig(level=logging.ERROR)
     log.setLevel(logging.DEBUG)
-    logging.getLogger('ingest').setLevel(logging.DEBUG)
     logging.getLogger('pipeline.ingest.behavior').setLevel(logging.DEBUG)
     logging.getLogger('pipeline.ingest.ephys').setLevel(logging.DEBUG)
+    logging.getLogger('pipeline.publication').setLevel(logging.DEBUG)
 
 
 def populateB(*args):
@@ -45,9 +48,14 @@ def populateE(*args):
     ingest_ephys.EphysIngest().populate(display_progress=True)
 
 
+def publish(*args):
+    publication.ArchivedRawEphysTrial.populate()
+
+
 def shell(*args):
     interact('map shell.\n\nschema modules:\n\n  - {m}\n'
-             .format(m='\n  - '.join(str(m.__name__) for m in __all__)),
+             .format(m='\n  - '.join(
+                 '.'.join(m.__name__.split('.')[1:]) for m in __all__)),
              local=globals())
 
 
@@ -62,6 +70,7 @@ def erd(*args):
 actions = {
     'populateB': populateB,
     'populateE': populateE,
+    'publish': publish,
     'shell': shell,
     'erd': erd,
 }
