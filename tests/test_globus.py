@@ -21,7 +21,7 @@ test_ep = dj.config['globus.local_endpoint']
 test_ep_subdir = dj.config['globus.local_endpoint_subdir']
 
 # globus 'url' and local path for test subdirectory
-test_ep_url = '{}:/~/{}'.format(test_ep, test_ep_subdir)
+test_ep_url = '{}:{}'.format(test_ep, test_ep_subdir)
 test_ep_local_path = dj.config['globus.local_endpoint_local_path']
 
 # directory used for this test run
