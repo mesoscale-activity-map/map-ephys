@@ -22,6 +22,16 @@
     "external.aws_access_key_id": null,
     "external.aws_secret_access_key": null,
     "external.location": null,
+    "globus.storage_locations": [
+        [
+            "raw-ephys",
+            "5b875fda-4185-11e8-bb52-0ac6873fc732",
+            "test_publication/raw-ephys"
+        ]
+    ],
+    "globus.local_endpoint": "",
+    "globus.local_endpoint_subdir": "",
+    "globus.local_endpoint_local_path": "",
     "history": [
         "No config file found, using default settings."
     ],
