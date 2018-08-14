@@ -13,7 +13,7 @@ from pipeline import ephys
 def dropdbs():
     print('dropping databases')
     for a in range(3):
-        for d in ['ingestEphys', 'ingestBehavior', 'ccf', 'ephys', 'experiment']:
+        for d in ['ingest.ephys', 'ingest.behavior', 'ccf', 'ephys', 'experiment']:
             try:
                 schema = dj.schema(dj.config['%s.database' % d])
                 schema.drop(force=True)
