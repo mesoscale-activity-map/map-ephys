@@ -229,30 +229,11 @@ class EphysIngest(dj.Imported):
         if ib.flush(skip_duplicates=True):
             log.debug('... UnitTrial last spike {}'.format(x))
 
-        # UnitSpike
-        log.debug('inserting UnitSpike information')
-
-        ib = InsertBuffer(ephys.Unit.UnitSpike)
-        len_spike_times2 = len(spike_times2)
-
-        for x in range(0, len_spike_times2):
-            ib.insert1(dict(ekey,
-                       unit = cluster_ids[x]-1,
-                       spike_time = spike_times2[x],
-                       electrode = viSite_spk[x],
-                       trial = spike_trials[x]))
-
-            if ib.flush(skip_duplicates=True, chunksz=10000):
-                log.debug('... UnitSpike spike {}'.format(x))
-
-        if ib.flush(skip_duplicates=True):
-            log.debug('... UnitSpike last spike {}'.format(x))
-
         # TrialSpike
         log.debug('inserting TrialSpike information')
 
         ib = InsertBuffer(ephys.TrialSpikes)
-        
+
         n_tspike = 0
         for x in zip(unit_ids, trialPerUnit): # loop through the units
             for i in x[1]: # loop through the trials for each unit

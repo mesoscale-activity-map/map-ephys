@@ -131,16 +131,6 @@ class Unit(dj.Imported):
         -> experiment.SessionTrial
         """
 
-    class UnitSpike(dj.Part):
-        definition = """
-        # Time stamp of each spike relative to the trial start
-        -> Unit
-        spike_time : decimal(9,4)   # (s)
-        ---
-        -> ElectrodeGroup.Electrode
-        -> experiment.SessionTrial
-        """
-
     class UnitPosition(dj.Part):
         definition = """
         # Estimated unit position in the brain
