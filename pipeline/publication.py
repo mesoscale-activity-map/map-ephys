@@ -71,28 +71,22 @@ class RawEphysFileTypes(dj.Lookup):
     raw_ephys_freq=NULL:        Decimal(8, 4)   # kHz; NULL if n/a
     raw_ephys_descr:            varchar(255)    # more detailed description
     """
-
-    contents = [{
-        'raw_ephys_filetype': 'ap-30kHz',
-        'raw_ephys_suffix': '.imec.ap.bin',
-        'raw_ephys_freq': 30.0,
-        'raw_ephys_descr': 'ap channels @30kHz'
-    }, {
-        'raw_ephys_filetype': 'ap-30kHz-meta',
-        'raw_ephys_suffix': '.imec.ap.meta',
-        'raw_ephys_freq': None,
-        'raw_ephys_descr': "recording metadata for 'ap-30kHz' files"
-    }, {
-        'raw_ephys_filetype': 'lf-2.5kHz',
-        'raw_ephys_suffix': '.imec.lf.bin',
-        'raw_ephys_freq': 2.5,
-        'raw_ephys_descr': 'lf channels @2.5kHz'
-    }, {
-        'raw_ephys_filetype': 'lf-2.5kHz-meta',
-        'raw_ephys_suffix': '.imec.lf.meta',
-        'raw_ephyns_freq': None,
-        'raw_ephys_descr': "recording metadata for 'lf-2.5kHz' files"
-    }]
+    contents = [('ap-30kHz',
+                 '.imec.ap.bin',
+                 30.0,
+                 'ap channels @30kHz'),
+                ('ap-30kHz-meta',
+                 '.imec.ap.meta',
+                 None,
+                 "recording metadata for 'ap-30kHz' files"),
+                ('lf-2.5kHz',
+                 '.imec.lf.bin',
+                 2.5,
+                 'lf channels @2.5kHz'),
+                ('lf-2.5kHz-meta',
+                 '.imec.lf.meta',
+                 None,
+                 "recording metadata for 'lf-2.5kHz' files")]
 
 
 @schema
@@ -185,8 +179,8 @@ class ArchivedRawEphysTrial(dj.Imported):
         ffound = []
         ftypes = RawEphysFileTypes.contents
         for ft in ftypes:
-            fname = '{}{}'.format(fbase, ft['raw_ephys_suffix'])
-            gname = '{}{}'.format(gbase, ft['raw_ephys_suffix'])
+            fname = '{}{}'.format(fbase, ft[1])
+            gname = '{}{}'.format(gbase, ft[1])
             if not os.path.exists(fname):
                 log.debug('... {}: not found'.format(fname))
                 continue
@@ -218,7 +212,7 @@ class ArchivedRawEphysTrial(dj.Imported):
                  'lf-2.5kHz-meta': ArchivedRawEphysTrial.ArchivedLfMeta}
 
         for ft, gname in ffound:  # XXX: transfer/insert could be batched
-            ft_class = ftmap[ft['raw_ephys_filetype']]
+            ft_class = ftmap[ft[0]]
             if not ft_class & key:
                 srcp = '{}:/{}/{}'.format(lep, lep_sub, gname)
                 dstp = '{}:/{}/{}'.format(rep, rep_sub, gname)
