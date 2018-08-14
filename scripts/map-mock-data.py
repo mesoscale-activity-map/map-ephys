@@ -9,18 +9,15 @@ from pipeline import lab
 from pipeline import ccf
 from pipeline import experiment
 from pipeline import ephys
+from pipeline import publication
+
 
 def dropdbs():
     print('dropping databases')
-    for a in range(3):
-        for d in ['ingest.ephys', 'ingest.behavior', 'ccf', 'ephys', 'experiment']:
-            try:
-                schema = dj.schema(dj.config['%s.database' % d])
-                schema.drop(force=True)
-            except Exception as e:
-                print('error dropping {d} in attempt {a}: {e}'
-                      .format(d=d, a=a, e=str(e)))
-                pass
+    for d in ['ingest.ephys', 'ingest.behavior', 'publication', 'ephys',
+              'experiment', 'lab', 'ccf']:
+        schema = dj.schema(dj.config['%s.database' % d])
+        schema.drop(force=True)
 
 
 def mockdata():
@@ -29,6 +26,7 @@ def mockdata():
     reload(lab)
     reload(experiment)
     reload(ephys)
+    reload(publication)
     try:
         # TODO: these should be loaded in a more 'official' way
         lab.Person().insert1({
