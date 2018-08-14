@@ -184,11 +184,26 @@ query and retrieve the raw data files (see below).
 
 #### Usage (Data Consumer)
 
-TODO: Retrieval of published data files.
+Once the local globus endpoint has been configured, retrieval of raw data
+files can be done interactively using DataJoint operations in combination
+with the '.retrieve()' method of the ArchivedRawEphysTrial class.
+
+For example, to fetch all raw recordings related to subject #407513,
+the following DataJoint expression can be used:
+
+    >>> (publication.ArchivedRawEphysTrial() & {'subject_id': 407513}).retrieve()
+
+This will save the related files to the configured local globus storage path.
+In the event of issues, be sure to check that the endpoint is configured as
+writable. Also, to note, care should be taken not to retrieve files on the same
+computer used to transmit them, lest the original files be overwritten;
+Disabling the writable setting on machines used for data publication should 
+help prevent this issue from occurring.
+
             
-.. [1] https://www.alcf.anl.gov/petrel
-.. [2] http://toolkit.globus.org/toolkit/
-.. [3] https://globus-sdk-python.readthedocs.io/en/stable/
+[1]: https://www.alcf.anl.gov/petrel
+[2]: http://toolkit.globus.org/toolkit/
+[3]: https://globus-sdk-python.readthedocs.io/en/stable/
 
 ### Unit Tests
 

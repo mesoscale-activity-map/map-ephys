@@ -147,6 +147,7 @@ class ArchivedRawEphysTrial(dj.Imported):
     def make(self, key):
         '''
         determine available files from local endpoint and publish
+        (create database records and transfer to globus)
         '''
 
         # >>> list(key.keys())
@@ -234,3 +235,64 @@ class ArchivedRawEphysTrial(dj.Imported):
                          .format(ft_class.__name__))
 
                 ft_class.insert1(key)
+
+    def retrieve(self):
+        for key in self:
+            self.retrieve1(key)
+
+    def retrieve1(self, key):
+        '''
+        retrieve related files for a given key
+        '''
+
+        # >>> list(key.keys())
+        # ['subject_id', 'session', 'trial', 'electrode_group', 'globus_alia
+
+        log.debug(key)
+        lep, lep_sub, lep_dir = GlobusStorageLocation().local_endpoint
+        log.info('local_endpoint: {}:{} -> {}'.format(lep, lep_sub, lep_dir))
+
+        # get session related information needed for filenames/records
+        sinfo = ((lab.WaterRestriction
+                  * lab.Subject.proj()
+                  * experiment.Session()
+                  * experiment.SessionTrial) & key).fetch1()
+
+        h2o = sinfo['water_restriction_number']
+        sdate = sinfo['session_date']
+        eg = key['electrode_group']
+        trial = key['trial']
+
+        # build file locations:
+        # fpat: base file pattern for this sessions files
+        # gbase: globus-url base path for this sessions files
+
+        fpat = '{}_{}_{}_g0_t{}'.format(h2o, sdate, eg, trial)
+        gbase = '/'.join((h2o, str(sdate), str(eg), fpat))
+
+        repname, rep, rep_sub = (GlobusStorageLocation() & key).fetch()[0]
+
+        gsm = self.get_gsm()
+        gsm.activate_endpoint(lep)  # XXX: cache this / prevent duplicate RPC?
+        gsm.activate_endpoint(rep)  # XXX: cache this / prevent duplicate RPC?
+
+        sfxmap = {'.imec.ap.bin': ArchivedRawEphysTrial.ArchivedApChannel,
+                  '.imec.ap.meta': ArchivedRawEphysTrial.ArchivedApMeta,
+                  '.imec.lf.bin': ArchivedRawEphysTrial.ArchivedLfChannel,
+                  '.imec.lf.meta': ArchivedRawEphysTrial.ArchivedLfMeta}
+
+        for sfx, cls in sfxmap.items():
+            if cls & key:
+                log.debug('record found for {} & {}'.format(cls.__name__, key))
+                gname = '{}{}'.format(gbase, sfx)
+
+                srcp = '{}:/{}/{}'.format(rep, rep_sub, gname)
+                dstp = '{}:/{}/{}'.format(lep, lep_sub, gname)
+
+                log.info('transferring {} to {}'.format(srcp, dstp))
+
+                # XXX: check if exists 1st? (manually or via API copy-checksum)
+                if not gsm.cp(srcp, dstp):
+                    emsg = "couldn't transfer {} to {}".format(srcp, dstp)
+                    log.error(emsg)
+                    raise dj.DataJointError(emsg)
