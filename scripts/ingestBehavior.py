@@ -163,7 +163,7 @@ class BehaviorIngest(dj.Imported):
         skey['session_date'] = date
         skey['username'] = 'daveliu'  # username has to be changed
 
-        # e.g: dl7/TW_autoTrain/Session Data/dl7_TW_autoTrain_20180104_132813.ma
+        # e.g: dl7/anything/Session Data/dl7_anything_20180104_132813.ma
         root = os.path.join(key['rig_data_path'], os.path.dirname(key['subpath']))
         path = os.path.join(root, '{h2o}_*_{d}*.mat'.format(
             h2o=h2o, d=datestr))

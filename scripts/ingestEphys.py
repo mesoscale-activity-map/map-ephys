@@ -43,7 +43,7 @@ class EphysDataPath(dj.Lookup):
 
 @schema
 class EphysIngest(dj.Imported):
-    # subpaths like: \Spike\2017-10-21\tw5ap_imec3_opt3_jrc.mat
+    # subpaths like: \2017-10-21\tw5ap_imec3_opt3_jrc.mat
 
     definition = """
     -> ingestBehavior.BehaviorIngest
@@ -72,7 +72,7 @@ class EphysIngest(dj.Imported):
         file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
 #        file = '{h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # some older files
         # subpath = os.path.join('Spike', date, file)
-        fullpath = os.path.join(rigpath, file)
+        fullpath = os.path.join(rigpath, date, file)
 
         if not os.path.exists(fullpath):
             log.info('EphysIngest().make(): skipping - no file in %s'
@@ -162,10 +162,11 @@ class EphysIngest(dj.Imported):
 
         file = '{h2o}_bitcode.mat'.format(h2o=water) # fetch the bitcode and realign
         # subpath = os.path.join('Spike', date, file)
-        fullpath = os.path.join(rigpath, file)
+        fullpath = os.path.join(rigpath, date, file)
 
         log.debug('opening bitcode for {s} ({f})'.format(s=behavior['session'], f=fullpath))
 
+        #pdb.set_trace()
         mat = spio.loadmat(fullpath, squeeze_me = True) # load the bitcode file
         bitCodeE = mat['bitCodeS'].flatten() # bitCodeS is the char variable
         trialNote = experiment.TrialNote()
@@ -226,5 +227,5 @@ class EphysIngest(dj.Imported):
         ephys.TrialSpikes().insert(l, skip_duplicates=True) # batch insert TrialSpikes
 
         log.debug('inserting file load information')
-        self.insert1(key)
-        EphysIngest.EphysFile().insert1(dict(key, ephys_file=subpath))
+        self.insert1(key, ignore_extra_fields=True)
+        EphysIngest.EphysFile().insert1(dict(key, ephys_file=fullpath), ignore_extra_fields=True)
