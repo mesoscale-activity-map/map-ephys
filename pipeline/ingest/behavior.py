@@ -158,7 +158,7 @@ class BehaviorIngest(dj.Imported):
         # File paths conform to the pattern:
         # dl7/TW_autoTrain/Session Data/dl7_TW_autoTrain_20180104_132813.mat
         # which is, more generally:
-        # {h2o}/*/Session Data/{h2o}_{training protocol}_{YYYYMMDD}_{HHMMSS}.mat
+        # {h2o}/{training_protocol}/Session Data/{h2o}_{training protocol}_{YYYYMMDD}_{HHMMSS}.mat
         root = os.path.join(key['rig_data_path'], os.path.dirname(key['subpath']))
         path = os.path.join(root, '{h2o}_*_{d}*.mat'.format(
             h2o=h2o, d=datestr))

@@ -38,8 +38,7 @@ class EphysDataPath(dj.Lookup):
 
 @schema
 class EphysIngest(dj.Imported):
-    # subpaths like: \Spike\2017-10-21\tw5ap_imec3_opt3_jrc.mat
-    # now: \2017-10-21\tw5ap_imec3_opt3_jrc.mat
+    # subpaths like: \2017-10-21\tw5ap_imec3_opt3_jrc.mat
 
     definition = """
     -> ingest_behavior.BehaviorIngest
