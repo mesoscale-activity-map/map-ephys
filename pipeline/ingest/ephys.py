@@ -168,6 +168,7 @@ class EphysIngest(dj.Imported):
 
         log.debug('opening bitcode for {s} ({f})'.format(s=behavior['session'], f=fullpath))
 
+        #pdb.set_trace()
         mat = spio.loadmat(fullpath, squeeze_me = True) # load the bitcode file
         bitCodeE = mat['bitCodeS'].flatten() # bitCodeS is the char variable
         trialNote = experiment.TrialNote()
