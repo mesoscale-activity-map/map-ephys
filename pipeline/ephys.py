@@ -1,12 +1,12 @@
 
 import datajoint as dj
-import numpy as np
 
 from . import lab
 from . import experiment
 from . import ccf
 
 schema = dj.schema(dj.config['ephys.database'])
+[lab, experiment, ccf]  # NOQA flake8
 
 
 @schema
@@ -22,7 +22,8 @@ class Probe(dj.Lookup):
         ('15131808323', 'neuropixels probe O3', ''),
         ('H-194', 'janelia2x32', '')
     ]
- 
+
+
 @schema
 class UnitQualityType(dj.Lookup):
     definition = """
@@ -39,6 +40,7 @@ class UnitQualityType(dj.Lookup):
         ('ok or good', 'include both ok and good unit')
     ]
 
+
 @schema
 class CellType(dj.Lookup):
     definition = """
@@ -54,6 +56,7 @@ class CellType(dj.Lookup):
         ('all', 'all types')
     ]
 
+
 @schema
 class ElectrodeGroup(dj.Manual):
     definition = """
@@ -63,19 +66,20 @@ class ElectrodeGroup(dj.Manual):
     ---
     -> Probe
     """
-    
+
     class Electrode(dj.Part):
         definition = """
         -> ElectrodeGroup
         electrode : smallint # sites on the electrode
         """
+
     def make(self, key):
         part_no = (ElectrodeGroup() & key).fetch('probe_part_no')
         probe = (Probe() & {'probe_part_no': part_no[0]}).fetch1()
         if probe['probe_type'] == 'neuropixels probe O3':
             # Fetch the Probe corresponding to this session. If Neuropixel probe in the probe_description, then 374 electrodes for 1 electrode group
             ElectrodeGroup.Electrode().insert(list(dict(key, electrode = x) for x in range (1,375)))
-    
+
     class ElectrodeGroupPosition(dj.Part):
         definition = """
         -> ElectrodeGroup
@@ -89,6 +93,7 @@ class ElectrodeGroup(dj.Manual):
         ap_angle = null    : decimal(8,3) # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive.
         """
 
+
 @schema
 class LabeledTrack(dj.Manual):
     definition = """
@@ -97,12 +102,13 @@ class LabeledTrack(dj.Manual):
     labeling_date : date # in case we labeled the track not during a recorded session we can specify the exact date here
     dye_color  : varchar(32)
     """
-    
+
     class Point(dj.Part):
         definition = """
         -> LabeledTrack
         -> ccf.CCF
         """
+
 
 @schema
 class Unit(dj.Imported):
@@ -124,16 +130,6 @@ class Unit(dj.Imported):
         -> Unit
         -> experiment.SessionTrial
         """
-    
-    class UnitSpike(dj.Part):
-        definition = """
-        # Time stamp of each spike relative to the trial start
-        -> Unit
-        spike_time : decimal(9,4)   # (s)
-        ---
-        -> ElectrodeGroup.Electrode
-        -> experiment.SessionTrial
-        """
 
     class UnitPosition(dj.Part):
         definition = """
@@ -149,6 +145,7 @@ class Unit(dj.Imported):
         unit_dv_location = null : decimal(8,3) # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
         """
 
+
 @schema
 class TrialSpikes(dj.Imported):
     definition = """
@@ -159,6 +156,7 @@ class TrialSpikes(dj.Imported):
     spike_times : longblob # (s) spike times for each trial, relative to the beginning of the trial
     """
 
+
 @schema
 class ElectrodePosition(dj.Manual):
     definition = """
@@ -167,12 +165,14 @@ class ElectrodePosition(dj.Manual):
     -> ccf.CCF
     """
 
+
 @schema
 class UnitComment(dj.Manual):
     definition = """
     -> Unit
     unit_comment : varchar(767)
     """
+
 
 @schema
 class UnitCellType(dj.Computed):
