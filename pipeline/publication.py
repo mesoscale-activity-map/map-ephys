@@ -13,7 +13,7 @@ from pipeline.globus import GlobusStorageManager
 log = logging.getLogger(__name__)
 __all__ = [experiment, ephys]
 
-schema = dj.schema(dj.config.get('publication.database', 'map_ephys'))
+schema = dj.schema(dj.config.get('publication.database', 'map_publication'))
 
 
 @schema

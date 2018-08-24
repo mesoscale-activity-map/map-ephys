@@ -84,6 +84,7 @@ configuration variables to modify data without affecting others' databases
   * ephys.database set to "[username]_ephys"
   * experiment.database set to "[username]_experiment"
   * lab.database set to "[username]_lab"
+  * publication.database set to "[username]_publication"
   
 For accessing the map database, replace [username] with 'map'. Please note all
 users can write and Delete the databases.
