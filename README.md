@@ -71,7 +71,7 @@ shell is as follows:
 Direct installation without a source checkout may be desired for non-interactive
 machines - this can be done directly via pip:
 
-    $ pip install -e git+https://github.com/mesoscale-activity-map/map-ephys.git#egg=mapephys
+    $ pip install git+https://github.com/mesoscale-activity-map/map-ephys/
 
 ## Test configuration
 
