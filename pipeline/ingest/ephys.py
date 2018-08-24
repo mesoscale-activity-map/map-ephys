@@ -17,7 +17,11 @@ from pipeline.ingest import behavior as ingest_behavior
 
 
 log = logging.getLogger(__name__)
-schema = dj.schema(dj.config['ingest.ephys.database'])
+
+schema = dj.schema(dj.config.get(
+    'ingest.ephys.database',
+    '{}_ingestEphys'.format(dj.config['database.user'])))
+
 
 @schema
 class EphysDataPath(dj.Lookup):

@@ -14,12 +14,10 @@ from pipeline import lab
 from pipeline import experiment
 from pipeline import ccf
 from pipeline import publication
-from pipeline.ingest import behavior as ingest_behavior
-from pipeline.ingest import ephys as ingest_ephys
 
 log = logging.getLogger(__name__)
-__all__ = [ephys, lab, experiment, ccf, publication, ingest_behavior,
-           ingest_ephys]
+__all__ = [ephys, lab, experiment, ccf, publication]
+
 [ dj ]  # NOQA flake8 
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -41,10 +39,12 @@ def logsetup(*args):
 
 
 def populateB(*args):
+    from pipeline.ingest import behavior as ingest_behavior
     ingest_behavior.BehaviorIngest().populate(display_progress=True)
 
 
 def populateE(*args):
+    from pipeline.ingest import ephys as ingest_ephys
     ingest_ephys.EphysIngest().populate(display_progress=True)
 
 

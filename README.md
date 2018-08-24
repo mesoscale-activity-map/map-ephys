@@ -28,13 +28,58 @@ the various schema modules loaded, and a utlity to generate ERD diagrams from
 the current code.
 
 ## Installation and Setup
-<!-- todo: setup.py, mapshell section merge here -->
+
+Regular users who will be using the code for querying/analysis should
+checkout the source code from git and install the package using pythons's `pip`
+command. For example:
+
+    $ git clone https://github.com/mesoscale-activity-map/map-ephys.git
+    $ cd map-ephys
+    $ pip install -e .
+
+This will make the MAP pipeline modules available to your python interpreter as
+'pipeline'. A convenience script, `mapshell.py` is available for basic queries
+and use of administrative tasks. Account setup, test & usage synopsys using the
+shell is as follows:
+
+    $ mapshell.py shell
+    Connecting chris@localhost:3306
+    Please enter DataJoint username: chris
+    Please enter DataJoint password: 
+    map shell.
+
+    schema modules:
+
+    - ephys
+    - lab
+    - experiment
+    - ccf
+    - publication
+
+    >>> lab.Person()
+    *username    fullname
+    +----------+ +----------+
+    daveliu      Dave Liu
+    (1 tuples)
+
+    >>> dj.config.save_local()
+    >>> sys.exit()
+    $ mapshell.py 
+    Connecting user@server:3306
+    usage: mapshell.py [populateB|populateE|publish|shell|erd]
+
+Direct installation without a source checkout may be desired for non-interactive
+machines - this can be done directly via pip:
+
+    $ pip install -e git+https://github.com/mesoscale-activity-map/map-ephys.git#egg=mapephys
+
+## Test configuration
 
 For testing the schema, the dj_local_conf.json should have the following
 configuration variables to modify data without affecting others' databases
 
-  * ingestBehavior.database set to "[username]_ingestBehavior"
-  * ingestBehavior.database set to "[username]_ingestEphys"
+  * ingest.behavior.database set to "[username]_ingestBehavior"
+  * ingest.ephys.database set to "[username]_ingestEphys"
   * ccf.database set to "[username]_ccf"
   * ephys.database set to "[username]_ephys"
   * experiment.database set to "[username]_experiment"
@@ -200,7 +245,6 @@ computer used to transmit them, lest the original files be overwritten;
 Disabling the writable setting on machines used for data publication should 
 help prevent this issue from occurring.
 
-            
 [1]: https://www.alcf.anl.gov/petrel
 [2]: http://toolkit.globus.org/toolkit/
 [3]: https://globus-sdk-python.readthedocs.io/en/stable/

@@ -22,7 +22,10 @@ from pipeline import experiment
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 log = logging.getLogger(__name__)
-schema = dj.schema(dj.config['ingest.behavior.database'])
+
+schema = dj.schema(dj.config.get(
+    'ingest.behavior.database',
+    '{}_ingestBehavior'.format(dj.config['database.user'])))
 
 
 @schema
