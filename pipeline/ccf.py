@@ -1,7 +1,7 @@
 import datajoint as dj
 
 
-schema = dj.schema(dj.config['ccf.database'])
+schema = dj.schema(dj.config.get('ccf.database', 'map_ccf'))
 
 
 @schema
@@ -18,9 +18,9 @@ class CCF(dj.Lookup):
 @schema
 class AnnotationType(dj.Lookup):
     definition = """
-    annotation_type  : varchar(16)  
+    annotation_type  : varchar(16)
     """
-    
+
 @schema
 class CCFAnnotation(dj.Manual):
     definition = """

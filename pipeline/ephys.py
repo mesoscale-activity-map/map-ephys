@@ -5,7 +5,7 @@ from . import lab
 from . import experiment
 from . import ccf
 
-schema = dj.schema(dj.config['ephys.database'])
+schema = dj.schema(dj.config.get('ephys.database', 'map_ephys'))
 [lab, experiment, ccf]  # NOQA flake8
 
 

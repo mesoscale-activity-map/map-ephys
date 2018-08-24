@@ -3,7 +3,7 @@ import datajoint as dj
 from . import lab
 from . import ccf
 
-schema = dj.schema(dj.config['experiment.database'])
+schema = dj.schema(dj.config.get('experiment.database', 'map_experiment'))
 
 
 @schema
