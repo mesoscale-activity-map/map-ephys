@@ -142,16 +142,16 @@ class EphysIngest(dj.Imported):
 
         mat = spio.loadmat(fullpath, squeeze_me = True) # load the bitcode file
 
-        viT_offset_file = mat['goCue'][:]
-        #viT_offset_file = f['viT_offset_file'][:] # start of each trial, subtract this number for each trial
+        goCue = mat['goCue'][:]
+        viT_offset_file = f['viT_offset_file'][:] # start of each trial, subtract this number for each trial
         sRateHz = f['P']['sRateHz'][0] # sampling rate
         spike_trials = np.ones(len(spike_times)) * (len(viT_offset_file) - 1) # every spike is in the last trial
         spike_times2 = np.copy(spike_times)
         for i in range(len(viT_offset_file) - 1, 0, -1): #find the trials each unit has a spike in
             log.debug('locating trials with spikes {s}:{t}'.format(s=behavior['session'], t=i))
             spike_trials[spike_times < viT_offset_file[i]] = i-1 # Get the trial number of each spike
-            spike_times2[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = spike_times[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] - viT_offset_file[i - 1] # subtract the viT_offset_file from each trial
-        spike_times2[np.where(spike_times2 >= viT_offset_file[-1])] = spike_times[np.where(spike_times2 >= viT_offset_file[-1])] - viT_offset_file[-1] # subtract the viT_offset_file from each trial
+            spike_times2[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = spike_times[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] - goCue[i - 1] # subtract the viT_offset_file from each trial
+        spike_times2[np.where(spike_times2 >= viT_offset_file[-1])] = spike_times[np.where(spike_times2 >= viT_offset_file[-1])] - goCue[-1] # subtract the viT_offset_file from each trial
         spike_times2 = spike_times2 / sRateHz # divide the sampling rate, sRateHz
         clu_ids_diff = np.diff(cluster_ids) # where the units seperate
         clu_ids_diff = np.where(clu_ids_diff != 0)[0] + 1 # separate the spike_times
@@ -178,13 +178,14 @@ class EphysIngest(dj.Imported):
         elif len(bitCodeB) > len(bitCodeE): # behavior file is longer; e.g. only some trials are sorted, the bitcode.mat should reflect this; Sometimes SpikeGLX can skip a trial, I need to check the last trial
             startE = np.where(bitCodeB==bitCodeE[0])[0]
             startB = -startE
+            startB = -39 # hack to get tw34 going
         else:
             startB = 0
             startE = 0
 
         log.debug('extracting trial unit information {s} ({f})'.format(s=behavior['session'], f=fullpath))
 
-        pdb.set_trace()
+        #pdb.set_trace()
         trialunits2 = trialunits2-startB # behavior has less trials if startB is +ve, behavior has more trials if startB is -ve
         indT = np.where(trialunits2 > -1)[0] # get rid of the -ve trials
         trialunits1 = trialunits1[indT]
