@@ -133,7 +133,17 @@ class EphysIngest(dj.Imported):
                 strs[iU] = 'multi'
         spike_times = f['viTime_spk'][0][ind] # spike times
         viSite_spk = f['viSite_spk'][0][ind] # electrode site for the spike
-        viT_offset_file = f['viT_offset_file'][:] # start of each trial, subtract this number for each trial
+
+        file = '{h2o}_bitcode.mat'.format(h2o=water) # fetch the bitcode and realign
+        # subpath = os.path.join('Spike', date, file)
+        fullpath = os.path.join(rigpath, date, file)
+
+        log.debug('opening bitcode for {s} ({f})'.format(s=behavior['session'], f=fullpath))
+
+        mat = spio.loadmat(fullpath, squeeze_me = True) # load the bitcode file
+
+        viT_offset_file = mat['goCue'][:]
+        #viT_offset_file = f['viT_offset_file'][:] # start of each trial, subtract this number for each trial
         sRateHz = f['P']['sRateHz'][0] # sampling rate
         spike_trials = np.ones(len(spike_times)) * (len(viT_offset_file) - 1) # every spike is in the last trial
         spike_times2 = np.copy(spike_times)
@@ -160,14 +170,6 @@ class EphysIngest(dj.Imported):
         log.debug('inserting units for session {s}'.format(s=behavior['session']))
         ephys.Unit().insert(list(dict(ekey, unit = x, unit_uid = x, unit_quality = strs[x], spike_times = units[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids)) # batch insert the units
 
-        file = '{h2o}_bitcode.mat'.format(h2o=water) # fetch the bitcode and realign
-        # subpath = os.path.join('Spike', date, file)
-        fullpath = os.path.join(rigpath, date, file)
-
-        log.debug('opening bitcode for {s} ({f})'.format(s=behavior['session'], f=fullpath))
-
-        #pdb.set_trace()
-        mat = spio.loadmat(fullpath, squeeze_me = True) # load the bitcode file
         bitCodeE = mat['bitCodeS'].flatten() # bitCodeS is the char variable
         trialNote = experiment.TrialNote()
         bitCodeB = (trialNote & {'subject_id': ekey['subject_id']} & {'session': ekey['session']} & {'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial') # fetch the bitcode from the behavior trialNote
@@ -181,7 +183,8 @@ class EphysIngest(dj.Imported):
             startE = 0
 
         log.debug('extracting trial unit information {s} ({f})'.format(s=behavior['session'], f=fullpath))
-        
+
+        pdb.set_trace()
         trialunits2 = trialunits2-startB # behavior has less trials if startB is +ve, behavior has more trials if startB is -ve
         indT = np.where(trialunits2 > -1)[0] # get rid of the -ve trials
         trialunits1 = trialunits1[indT]
