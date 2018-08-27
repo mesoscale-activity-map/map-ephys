@@ -185,7 +185,7 @@ class EphysIngest(dj.Imported):
 
         log.debug('extracting trial unit information {s} ({f})'.format(s=behavior['session'], f=fullpath))
 
-        #pdb.set_trace()
+
         trialunits2 = trialunits2-startB # behavior has less trials if startB is +ve, behavior has more trials if startB is -ve
         indT = np.where(trialunits2 > -1)[0] # get rid of the -ve trials
         trialunits1 = trialunits1[indT]
@@ -218,6 +218,7 @@ class EphysIngest(dj.Imported):
 
 
         log.debug('inserting UnitTrial information')
+        pdb.set_trace()
         ephys.Unit.UnitTrial().insert(list(dict(ekey, unit = trialunits1[x], trial = trialunits2[x]) for x in range(0, len(trialunits2)))) # batch insert the TrialUnit (key, unit, trial)
         log.debug('inserting UnitSpike information')
         ephys.Unit.UnitSpike().insert(list(dict(ekey, unit = cluster_ids[x]-1, spike_time = spike_times2[x], electrode = viSite_spk[x], trial = spike_trials[x]) for x in range(0, len(spike_times2))), skip_duplicates=True) # batch insert the Spikes (key, unit, spike_time, electrode, trial)
