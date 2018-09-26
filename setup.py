@@ -24,6 +24,10 @@ setup(
     url='https://github.com/mesoscale-activity-map/map-ephys',
     keywords='neuroscience electrophysiology science datajoint',
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
+<<<<<<< HEAD
     scripts=['scripts/mapshell.py'],
+=======
+    scripts=['scripts/mapshell.py', 'scripts/map-mock-data.py'],
+>>>>>>> 501054a9959db869b540f76be926cd1f02eec04f
     install_requires=requirements,
 )
