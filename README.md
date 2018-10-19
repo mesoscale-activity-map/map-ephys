@@ -15,6 +15,8 @@ distributed batch computations. The pipeline is hosted in the [Amazon
 Cloud](https://aws.amazon.com) and administered by [Vathes
 LLC](https://www.vathes.com/).
 
+![MAP Data Architecture](doc/map-data-arch.png)
+
 The first part of the pipeline deals with entering manual data, and ingesting
 and preprocessing the raw acquired data.  Static information like subject
 details or experiment parameters are entered manually using
