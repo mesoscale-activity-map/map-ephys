@@ -60,7 +60,7 @@ def shell(*args):
 
 
 def erd(*args):
-    for mod in (ephys, lab, experiment, ccf,):
+    for mod in (ephys, lab, experiment, ccf, publication):
         modname = str().join(mod.__name__.split('.')[1:])
         fname = os.path.join('pipeline', '{}.png'.format(modname))
         print('saving', fname)
