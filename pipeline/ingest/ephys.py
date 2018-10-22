@@ -95,7 +95,7 @@ class EphysIngest(dj.Imported):
 
             # TODO: should code include actual logic to pick these up still?
             # file = '{h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # some older files
-            subpath = os.path.join(date, str(probe), file)
+            subpath = os.path.join('{}-{}'.format(date, probe), file)
             fullpath = os.path.join(rigpath, subpath)
 
             if not os.path.exists(fullpath):
@@ -171,7 +171,7 @@ class EphysIngest(dj.Imported):
             ephys.Unit().insert(list(dict(ekey, unit = x, unit_uid = x, unit_quality = strs[x], spike_times = units[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids)) # batch insert the units
 
             file = '{h2o}_bitcode.mat'.format(h2o=water) # fetch the bitcode and realign
-            subpath = os.path.join(date, str(probe), file)
+            subpath = os.path.join('{}-{}'.format(date, probe), file)
             fullpath = os.path.join(rigpath, subpath)
 
             log.debug('opening bitcode for {s} ({f})'.format(s=behavior['session'], f=fullpath))
