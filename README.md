@@ -242,11 +242,18 @@ the experimental setup will be used.
 
 File paths conform to the pattern:
 
-    \2017-10-21\tw5ap_imec3_opt3_jrc.mat
+    \2017-10-21-1\tw5ap_imec3_opt3_jrc.mat
 
 which is, more generally:
 
-    \{YYYY}-{MM}-{DD}\{h2o}_ap_imec3_opt3_jrc.mat
+    \{YYYY}-{MM}-{DD}-{N}\{h2o}_ap_imec3_opt3_jrc.mat
+
+Where:
+
+    - YYYY: 4-Digit Year
+    - MM: 2-Digit Month
+    - DD: 2-Digit Month
+    - N: Probe number for this probe
 
 Older files matched the pattern:
 
