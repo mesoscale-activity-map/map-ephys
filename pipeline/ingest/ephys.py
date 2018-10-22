@@ -53,7 +53,8 @@ class EphysIngest(dj.Imported):
         ''' files in rig-specific storage '''
         definition = """
         -> EphysIngest
-        ephys_file:              varchar(255)          # rig file subpath
+        electrode_group:        tinyint                 # electrode_group
+        ephys_file:             varchar(255)            # rig file subpath
         """
 
     def make(self, key):
@@ -63,6 +64,20 @@ class EphysIngest(dj.Imported):
         '''
 
         log.info('EphysIngest().make(): key: {k}'.format(k=key))
+
+        #
+        # Find corresponding BehaviorIngest
+        #
+        # ... we are keying times, sessions, etc from behavior ingest;
+        # so lookup behavior ingest for session id, quit with warning otherwise
+
+        try:
+            behavior = (ingest_behavior.BehaviorIngest() & key).fetch1()
+        except dj.DataJointError:
+            log.warning('EphysIngest().make(): skip - behavior ingest error')
+            return
+
+        log.info('behavior for ephys: {b}'.format(b=behavior))
 
         #
         # Find Ephys Recording
@@ -87,20 +102,6 @@ class EphysIngest(dj.Imported):
 
         log.info('EphysIngest().make(): found ephys recording in %s'
                  % fullpath)
-
-        #
-        # Find corresponding BehaviorIngest
-        #
-        # ... we are keying times, sessions, etc from behavior ingest;
-        # so lookup behavior ingest for session id, quit with warning otherwise
-
-        try:
-            behavior = (ingest_behavior.BehaviorIngest() & key).fetch1()
-        except dj.DataJointError:
-            log.warning('EphysIngest().make(): skip - behavior ingest error')
-            return
-
-        log.info('behavior for ephys: {b}'.format(b=behavior))
 
         #
         # Prepare ElectrodeGroup configuration
@@ -253,5 +254,9 @@ class EphysIngest(dj.Imported):
             log.debug('... TrialSpike spike {}'.format(n_tspike))
 
         log.debug('inserting file load information')
+
         self.insert1(key, ignore_extra_fields=True)
-        EphysIngest.EphysFile().insert1(dict(key, ephys_file=subpath), ignore_extra_fields=True)
+
+        EphysIngest.EphysFile().insert1(
+            dict(key, electrode_group=1, ephys_file=subpath),
+            ignore_extra_fields=True)
