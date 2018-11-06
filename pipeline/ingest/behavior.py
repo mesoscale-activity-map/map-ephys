@@ -16,6 +16,7 @@ import warnings
 
 import datajoint as dj
 
+from pipeline import ccf
 from pipeline import lab
 from pipeline import experiment
 
@@ -202,7 +203,7 @@ class BehaviorIngest(dj.Imported):
         trials = zip()
 
         trial = namedtuple(  # simple structure to track per-trial vars
-            'trial', ('ttype', 'settings', 'state_times', 'state_names',
+            'trial', ('ttype', 'stim', 'settings', 'state_times', 'state_names',
                       'state_data', 'event_data', 'event_times'))
 
         for f in matches:
@@ -216,6 +217,7 @@ class BehaviorIngest(dj.Imported):
 
             AllTrialTypes = SessionData['TrialTypes'][0]
             AllTrialSettings = SessionData['TrialSettings'][0]
+            AllStimTrials = SessionData['StimTrials'][0]  # TODO: handle n/a
 
             RawData = SessionData['RawData'][0].flatten()
             AllStateNames = RawData['OriginalStateNamesByNumber'][0]
@@ -226,12 +228,13 @@ class BehaviorIngest(dj.Imported):
 
             # verify trial-related data arrays are all same length
             assert(all((x.shape[0] == AllStateTimestamps.shape[0] for x in
-                        (AllTrialTypes, AllTrialSettings, AllStateNames,
-                         AllStateData, AllEventData, AllEventTimestamps))))
+                        (AllTrialTypes, AllStimTrials, AllTrialSettings,
+                         AllStateNames, AllStateData, AllEventData,
+                         AllEventTimestamps))))
 
-            z = zip(AllTrialTypes, AllTrialSettings, AllStateTimestamps,
-                    AllStateNames, AllStateData, AllEventData,
-                    AllEventTimestamps)
+            z = zip(AllTrialTypes, AllStimTrials, AllTrialSettings,
+                    AllStateTimestamps, AllStateNames, AllStateData,
+                    AllEventData, AllEventTimestamps)
 
             trials = chain(trials, z)  # concatenate the files
 
@@ -264,7 +267,9 @@ class BehaviorIngest(dj.Imported):
         # lists of various records for batch-insert
         rows = {k: list() for k in ('trial', 'behavior_trial', 'trial_note',
                                     'trial_event', 'corrected_trial_event',
-                                    'action_event')}
+                                    'action_event', 'photostim',
+                                    'photostim_location', 'photostim_trial',
+                                    'photostim_trial_event')}
 
         i = -1
         for t in trials:
@@ -304,7 +309,8 @@ class BehaviorIngest(dj.Imported):
 
             states = {k: (v+1) for v, k in enumerate(t.state_names)}
             required_states = ('PreSamplePeriod', 'SamplePeriod',
-                               'DelayPeriod', 'ResponseCue', 'StopLicking', 'TrialEnd')
+                               'DelayPeriod', 'ResponseCue', 'StopLicking',
+                               'TrialEnd')
 
             missing = list(k for k in required_states if k not in states)
 
@@ -416,32 +422,24 @@ class BehaviorIngest(dj.Imported):
                 outcome = 'ignore'
 
             bkey['outcome'] = outcome
-
-            # add behavior record
-            log.debug('BehaviorIngest.make(): BehaviorTrial()')
             rows['behavior_trial'].append(bkey)
 
             #
             # Add 'protocol' note
             #
-
             nkey = dict(tkey)
             nkey['trial_note_type'] = 'protocol #'
             nkey['trial_note'] = str(protocol_type)
-
-            log.debug('BehaviorIngest.make(): TrialNote().insert1')
             rows['trial_note'].append(nkey)
 
             #
             # Add 'autolearn' note
             #
-
             nkey = dict(tkey)
             nkey['trial_note_type'] = 'autolearn'
             nkey['trial_note'] = str(gui['Autolearn'][0])
             rows['trial_note'].append(nkey)
 
-            #pdb.set_trace()
             #
             # Add 'bitcode' note
             #
@@ -576,7 +574,102 @@ class BehaviorIngest(dj.Imported):
                          action_event_time=t.event_times[r]))
                     for r in lickright]
 
+            #
+            # Photostim Events
+            #
+            # TODO:
+            #
+            # - base stimulation parameters:
+            #
+            #   - should be loaded elsewhere - where
+            #   - actual ccf locations - cannot be known apriori apparently?
+            #   - Photostim.Profile: what is? fix/add
+            #
+            # - stim data
+            #
+            #   - how retrieve power from file (didn't see) or should
+            #     be statically coded here?
+            #   - how encode stim type 6?
+            #     - we have hemisphere as boolean or
+            #     - but adding an event 4 and event 5 means querying
+            #       is less straightforwrard (e.g. sessions with 5 & 6)
+
+            if t.stim:
+                ccf.CCF.insert1((0, 0, 0, 'zombie',), skip_duplicates=True)
+                pstim = {
+                    'photostim_device': 'OBIS470',
+                    'photo_stim': 0,  # TODO: correct? whatmeens?
+                    'x': 0,  # TODO ccf.CCF.x
+                    'y': 0,  # TODO ccf.CCF.y
+                    'z': 0,  # TODO ccf.CCF.z
+                    'duration': 0.5,
+                    # FIXME/TODO: .3s sin + .2s rampdown @ 100kHz. int32??
+                    'waveform': np.zeros(int((0.3+0.2)*100000), np.int32)
+                }
+                experiment.Photostim.insert1(dict(pstim, photo_stim=4),
+                                                  skip_duplicates=True)
+
+                experiment.PhotostimLocation.insert1(
+                    dict(pstim, photo_stim=4,
+                         hemisphere='left', brain_area='ALM',
+                         skull_reference='Bregma',
+                         photostim_ml_location=1.5,
+                         photostim_ap_location=2.5,
+                         photostim_dv_location=0,
+                         photostim_ml_angle=15,
+                         photostim_ap_angle=15),
+                    skip_duplicates=True, ignore_extra_fields=True)
+
+                experiment.Photostim.insert1(dict(pstim, photo_stim=5),
+                                             skip_duplicates=True)
+
+                experiment.PhotostimLocation.insert1(
+                    dict(pstim, photo_stim=5,
+                         hemisphere='right', brain_area='ALM',
+                         skull_reference='Bregma',
+                         photostim_ml_location=1.5,
+                         photostim_ap_location=2.5,
+                         photostim_dv_location=0,
+                         photostim_ml_angle=15,
+                         photostim_ap_angle=15),
+                    skip_duplicates=True, ignore_extra_fields=True)
+
+                experiment.Photostim.insert1(dict(pstim, photo_stim=6),
+                                             skip_duplicates=True)
+
+            if t.stim and t.stim == 4:  # BOOKMARK
+                log.info('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
+
+                rows['photostim_trial'].append(tkey)
+                rows['photostim_trial_event'].append(
+                    dict(tkey, photostim_device='OBIS470', photo_stim=t.stim,
+                         photostim_event_time=tkey['start_time'], power=0.0))
+
+                # interact('stimulating', local=locals())
+
+            if t.stim and t.stim == 5:
+                log.info('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
+
+                rows['photostim_trial'].append(tkey)
+                rows['photostim_trial_event'].append(
+                    dict(tkey, photostim_device='OBIS470', photo_stim=t.stim,
+                         photostim_event_time=tkey['start_time'], power=0.0))
+
+            if t.stim and t.stim == 6:
+                # 6 type is a 4+5 simultaneously
+                rows['photostim_trial'].append(tkey)
+                log.info('BehaviorIngest.make(): t.stim == 6'.format(t.stim))
+
+                rows['photostim_trial_event'].append(
+                    dict(tkey, photostim_device='OBIS470', photo_stim=4,
+                         photostim_event_time=tkey['start_time'], power=0.0))
+                rows['photostim_trial_event'].append(
+                    dict(tkey, photostim_device='OBIS470', photo_stim=5,
+                         photostim_event_time=tkey['start_time'], power=0.0))
+
             # end of trial loop.
+
+        # Behavior Insertion
 
         log.info('BehaviorIngest.make(): bulk insert phase')
 
@@ -610,3 +703,12 @@ class BehaviorIngest(dj.Imported):
         BehaviorIngest.BehaviorFile().insert(
             (dict(key, behavior_file=f.split(root)[1]) for f in matches),
             ignore_extra_fields=True)
+
+        # Photostim Inertion
+        log.info('BehaviorIngest.make(): ... experiment.PhotostimTrial')
+        experiment.PhotostimTrial.insert(rows['photostim_trial'],
+                                         ignore_extra_fields=True)
+
+        log.info('BehaviorIngest.make(): ... experiment.PhotostimTrialEvent')
+        experiment.PhotostimTrial.Event.insert(rows['photostim_trial_event'],
+                                               ignore_extra_fields=True)

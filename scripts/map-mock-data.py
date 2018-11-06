@@ -435,6 +435,23 @@ def mockdata():
             'wr_start_weight': 20.5},
             skip_duplicates = True
         )
+        lab.Subject().insert1({
+            'subject_id': 90210,
+            'username': 'daveliu',
+            'cage_number': 145375,
+            'date_of_birth': '2017-08-03',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates = True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 90210,
+            'water_restriction_number': 'tw34',
+            'cage_number': 148861,
+            'wr_start_date': '2017-11-07',
+            'wr_start_weight': 20.5},
+            skip_duplicates = True
+        )
         lab.Rig().insert1({
             'rig': 'TRig1',
             'room': '2w.334',
