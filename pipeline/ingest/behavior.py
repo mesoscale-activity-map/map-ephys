@@ -603,11 +603,12 @@ class BehaviorIngest(dj.Imported):
                     'y': 0,  # TODO ccf.CCF.y
                     'z': 0,  # TODO ccf.CCF.z
                     'duration': 0.5,
-                    # FIXME/TODO: .3s sin + .2s rampdown @ 100kHz. int32??
+                    # FIXME/TODO: .3s of 40hz sin + .2s rampdown @ 100kHz. int32??
                     'waveform': np.zeros(int((0.3+0.2)*100000), np.int32)
                 }
                 experiment.Photostim.insert1(dict(pstim, photo_stim=4),
-                                                  skip_duplicates=True)
+                                             skip_duplicates=True,
+                                             allow_direct_insert=True)
 
                 experiment.PhotostimLocation.insert1(
                     dict(pstim, photo_stim=4,
@@ -618,10 +619,12 @@ class BehaviorIngest(dj.Imported):
                          photostim_dv_location=0,
                          photostim_ml_angle=15,
                          photostim_ap_angle=15),
-                    skip_duplicates=True, ignore_extra_fields=True)
+                    skip_duplicates=True, ignore_extra_fields=True,
+                    allow_direct_insert=True)
 
                 experiment.Photostim.insert1(dict(pstim, photo_stim=5),
-                                             skip_duplicates=True)
+                                             skip_duplicates=True,
+                                             allow_direct_insert=True)
 
                 experiment.PhotostimLocation.insert1(
                     dict(pstim, photo_stim=5,
@@ -635,7 +638,8 @@ class BehaviorIngest(dj.Imported):
                     skip_duplicates=True, ignore_extra_fields=True)
 
                 experiment.Photostim.insert1(dict(pstim, photo_stim=6),
-                                             skip_duplicates=True)
+                                             skip_duplicates=True,
+                                             allow_direct_insert=True)
 
             if t.stim and t.stim == 4:  # BOOKMARK
                 log.info('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
@@ -674,41 +678,48 @@ class BehaviorIngest(dj.Imported):
         log.info('BehaviorIngest.make(): bulk insert phase')
 
         log.info('BehaviorIngest.make(): saving ingest {d}'.format(d=key))
-        self.insert1(key, ignore_extra_fields=True)
+        self.insert1(key, ignore_extra_fields=True, allow_direct_insert=True)
 
         log.info('BehaviorIngest.make(): ... experiment.Session.Trial')
         experiment.SessionTrial().insert(
-            rows['trial'], ignore_extra_fields=True)
+            rows['trial'], ignore_extra_fields=True, allow_direct_insert=True)
 
         log.info('BehaviorIngest.make(): ... experiment.BehaviorTrial')
         experiment.BehaviorTrial().insert(
-            rows['behavior_trial'], ignore_extra_fields=True)
+            rows['behavior_trial'], ignore_extra_fields=True,
+            allow_direct_insert=True)
 
         log.info('BehaviorIngest.make(): ... experiment.TrialNote')
         experiment.TrialNote().insert(
-            rows['trial_note'], ignore_extra_fields=True)
+            rows['trial_note'], ignore_extra_fields=True,
+            allow_direct_insert=True)
 
         log.info('BehaviorIngest.make(): ... experiment.TrialEvent')
         experiment.TrialEvent().insert(
-            rows['trial_event'], ignore_extra_fields=True)
+            rows['trial_event'], ignore_extra_fields=True,
+            allow_direct_insert=True)
 
         log.info('BehaviorIngest.make(): ... CorrectedTrialEvents')
         BehaviorIngest().CorrectedTrialEvents().insert(
-            rows['corrected_trial_event'], ignore_extra_fields=True)
+            rows['corrected_trial_event'], ignore_extra_fields=True,
+            allow_direct_insert=True)
 
         log.info('BehaviorIngest.make(): ... experiment.ActionEvent')
         experiment.ActionEvent().insert(
-            rows['action_event'], ignore_extra_fields=True)
+            rows['action_event'], ignore_extra_fields=True,
+            allow_direct_insert=True)
 
         BehaviorIngest.BehaviorFile().insert(
             (dict(key, behavior_file=f.split(root)[1]) for f in matches),
-            ignore_extra_fields=True)
+            ignore_extra_fields=True, allow_direct_insert=True)
 
         # Photostim Inertion
         log.info('BehaviorIngest.make(): ... experiment.PhotostimTrial')
         experiment.PhotostimTrial.insert(rows['photostim_trial'],
-                                         ignore_extra_fields=True)
+                                         ignore_extra_fields=True,
+                                         allow_direct_insert=True)
 
         log.info('BehaviorIngest.make(): ... experiment.PhotostimTrialEvent')
         experiment.PhotostimTrial.Event.insert(rows['photostim_trial_event'],
-                                               ignore_extra_fields=True)
+                                               ignore_extra_fields=True,
+                                               allow_direct_insert=True)
