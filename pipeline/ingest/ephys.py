@@ -60,7 +60,6 @@ class EphysIngest(dj.Imported):
     def make(self, key):
         '''
         Ephys .make() function
-        TODO: handle 2 probes
         '''
 
         log.info('EphysIngest().make(): key: {k}'.format(k=key))
@@ -89,13 +88,15 @@ class EphysIngest(dj.Imported):
         subject_id = key['subject_id']
         water = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
 
-        file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
-
+        self.insert1(key, ignore_extra_fields=True, allow_direct_insert=True)
         for probe in range(1,3):
 
             # TODO: should code include actual logic to pick these up still?
             # file = '{h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # some older files
-            subpath = os.path.join('{}-{}'.format(date, probe), file)
+            # subpath = os.path.join('{}-{}'.format(date, probe), file)
+            # file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
+            file = '{h2o}_g0_t20.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
+            subpath = os.path.join(date, str(probe), file)
             fullpath = os.path.join(rigpath, subpath)
 
             if not os.path.exists(fullpath):
@@ -168,19 +169,21 @@ class EphysIngest(dj.Imported):
                 trialunits1 = np.append(trialunits1, np.zeros(len(np.unique(trialunits[i])))+i) # add the unit numbers 
 
             log.debug('inserting units for session {s}'.format(s=behavior['session']))
-            ephys.Unit().insert(list(dict(ekey, unit = x, unit_uid = x, unit_quality = strs[x], spike_times = units[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids)) # batch insert the units
+            ephys.Unit().insert(list(dict(ekey, unit = x, unit_uid = x, unit_quality = strs[x], spike_times = units[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids), allow_direct_insert=True) # batch insert the units
 
             file = '{h2o}_bitcode.mat'.format(h2o=water) # fetch the bitcode and realign
-            subpath = os.path.join('{}-{}'.format(date, probe), file)
+            # subpath = os.path.join('{}-{}'.format(date, probe), file)
+            subpath = os.path.join(date, str(probe), file)
             fullpath = os.path.join(rigpath, subpath)
 
-            log.debug('opening bitcode for {s} ({f})'.format(s=behavior['session'], f=fullpath))
+            log.debug('opening bitcode for session {s} probe {p} ({f})'
+                      .format(s=behavior['session'], p=probe, f=fullpath))
 
-            #pdb.set_trace()
             mat = spio.loadmat(fullpath, squeeze_me = True) # load the bitcode file
             bitCodeE = mat['bitCodeS'].flatten() # bitCodeS is the char variable
             trialNote = experiment.TrialNote()
             bitCodeB = (trialNote & {'subject_id': ekey['subject_id']} & {'session': ekey['session']} & {'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial') # fetch the bitcode from the behavior trialNote
+
             if len(bitCodeB) < len(bitCodeE): # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
                 startB = np.where(bitCodeE==bitCodeB[0])[0]
             elif len(bitCodeB) > len(bitCodeE): # behavior file is longer; e.g. only some trials are sorted, the bitcode.mat should reflect this; Sometimes SpikeGLX can skip a trial, I need to check the last trial
@@ -231,10 +234,11 @@ class EphysIngest(dj.Imported):
             for x in range(len_trial_units2):
                 ib.insert1(dict(ekey, unit = trialunits1[x], trial = trialunits2[x]))
 
-                if ib.flush(skip_duplicates=True, chunksz=10000):
+                if ib.flush(skip_duplicates=True, allow_direct_insert=True,
+                            chunksz=10000):
                     log.debug('... UnitTrial spike {}'.format(x))
 
-            if ib.flush(skip_duplicates=True):
+            if ib.flush(skip_duplicates=True, allow_direct_insert=True):
                 log.debug('... UnitTrial last spike {}'.format(x))
 
             # TrialSpike
@@ -248,18 +252,18 @@ class EphysIngest(dj.Imported):
                     ib.insert1(dict(ekey, unit=x[0], trial=int(trialunits2[x[1]][i]),
                                     spike_times=units[x[0]][x[1][i]]))
 
-                    if ib.flush(skip_duplicates=True, chunksz=10000):
+                    if ib.flush(skip_duplicates=True, allow_direct_insert=True,
+                                chunksz=10000):
                         log.debug('... TrialSpike spike {}'.format(n_tspike))
 
                     n_tspike += 1
 
-            if ib.flush(skip_duplicates=True):
+            if ib.flush(skip_duplicates=True, allow_direct_insert=True):
                 log.debug('... TrialSpike spike {}'.format(n_tspike))
 
             log.debug('inserting file load information')
 
-            self.insert1(key, ignore_extra_fields=True)
 
             EphysIngest.EphysFile().insert1(
                 dict(key, electrode_group=probe, ephys_file=subpath),
-                ignore_extra_fields=True)
+                ignore_extra_fields=True, allow_direct_insert=True)
