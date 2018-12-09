@@ -1,4 +1,6 @@
+
 import datajoint as dj
+import numpy as np
 
 from . import lab
 from . import ccf
@@ -210,18 +212,19 @@ class PhotostimDevice(dj.Lookup):
        ('LED470', 470, 'LED (Thor Labs, M470F3 - 470 nm, 17.2 mW (Min) Fiber-Coupled LED)'),
        ('OBIS470', 473, 'OBIS 473nm LX 50mW Laser System: Fiber Pigtail (Coherent Inc)')]
 
+
 @schema 
-class Photostim(dj.Imported):
+class Photostim(dj.Lookup):
     definition = """
     -> PhotostimDevice
     photo_stim :  smallint 
     ---
-    -> ccf.CCF
     duration  :  decimal(8,4)   # (s)
     waveform  :  longblob       # normalized to maximal power. The value of the maximal power is specified for each PhotostimTrialEvent individually
     """
 
     class Profile(dj.Part):
+        # NOT USED CURRENT
         definition = """
         -> master
         (profile_x, profile_y, profile_z) -> ccf.CCF(x, y, z)
@@ -229,13 +232,21 @@ class Photostim(dj.Imported):
         intensity_timecourse   :  longblob  # (mW/mm^2)
         """
 
+    contents = [{
+        'photostim_device': 'OBIS470',
+        'photo_stim': 0,  # TODO: correct? whatmeens?
+        'duration': 0.5,
+        # FIXME/TODO: .3s of 40hz sin + .2s rampdown @ 100kHz. int32??
+        'waveform': np.zeros(int((0.3+0.2)*100000), np.int32)
+    }]
+
+
 @schema
-class PhotostimLocation(dj.Manual):
+class BrainLocation(dj.Lookup):
     definition = """
-    -> Photostim
-    ---
-    -> lab.Hemisphere
     -> lab.BrainArea
+    brainloc_id:                integer                         # id within BrainArea
+    ---
     -> lab.SkullReference
     photostim_ml_location = null           : decimal(8,3)       # um from ref ; right is positive; 
     photostim_ap_location = null           : decimal(8,3)       # um from ref; anterior is positive; 
@@ -243,6 +254,47 @@ class PhotostimLocation(dj.Manual):
     photostim_ml_angle = null              : decimal(8,3)       # Angle between the photostim path and the Medio-Lateral axis. A tilt towards the right hemishpere is positive. 
     photostim_ap_angle = null              : decimal(8,3)       # Angle between the photostim path and the Anterior-Posterior axis. An anterior tilt is positive. 
     """
+
+    contents = [{
+        'brain_area': 'ALM',
+        'brainloc_id': 0,
+        'skull_reference': 'Bregma',
+        'photostim_ml_location': 1.5,
+        'photostim_ap_location': 2.5,
+        'photostim_dv_location': 0,
+        'photostim_ml_angle': 15,
+        'photostim_ap_angle': 15
+    }]
+
+
+@schema
+class PhotostimLocation(dj.Lookup):
+    definition = """
+    -> Photostim
+    -> lab.Hemisphere
+    -> BrainLocation
+    """
+
+    contents = [{
+        'photostim_device': 'OBIS470',
+        'photo_stim': 0,
+        'hemisphere': 'left',
+        'brain_area': 'ALM',
+        'brainloc_id': 0,
+    }, {
+        'photostim_device': 'OBIS470',
+        'photo_stim': 0,
+        'hemisphere': 'right',
+        'brain_area': 'ALM',
+        'brainloc_id': 0,
+    }, {
+        'photostim_device': 'OBIS470',
+        'photo_stim': 0,
+        'hemisphere': 'both',
+        'brain_area': 'ALM',
+        'brainloc_id': 0,
+    }]
+
 
 @schema
 class PhotostimTrial(dj.Imported):
@@ -253,10 +305,11 @@ class PhotostimTrial(dj.Imported):
     class Event(dj.Part):
         definition = """
         -> master
-        -> Photostim
+        -> PhotostimLocation
         photostim_event_time : decimal(8,3)   # (s) from trial start
         power : decimal(8,3)   # Maximal power (mW)
         """
+
 
 @schema
 class PassivePhotostimTrial(dj.Computed):
@@ -268,12 +321,14 @@ class PassivePhotostimTrial(dj.Computed):
     def make(self, key):
         self.insert1(key)
 
+
 @schema
 class SessionTask(dj.Manual):
     definition = """
     -> Session
     -> TaskProtocol
     """
+
 
 @schema
 class SessionComment(dj.Manual):
