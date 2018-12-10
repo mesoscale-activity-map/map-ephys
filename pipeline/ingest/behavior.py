@@ -20,6 +20,7 @@ from pipeline import ccf
 from pipeline import lab
 from pipeline import experiment
 
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 log = logging.getLogger(__name__)
@@ -594,81 +595,31 @@ class BehaviorIngest(dj.Imported):
             #     - but adding an event 4 and event 5 means querying
             #       is less straightforwrard (e.g. sessions with 5 & 6)
 
-            if t.stim:
-                ccf.CCF.insert1((0, 0, 0, 'zombie',), skip_duplicates=True)
-                pstim = {
-                    'photostim_device': 'OBIS470',
-                    'photo_stim': 0,  # TODO: correct? whatmeens?
-                    'x': 0,  # TODO ccf.CCF.x
-                    'y': 0,  # TODO ccf.CCF.y
-                    'z': 0,  # TODO ccf.CCF.z
-                    'duration': 0.5,
-                    # FIXME/TODO: .3s of 40hz sin + .2s rampdown @ 100kHz. int32??
-                    'waveform': np.zeros(int((0.3+0.2)*100000), np.int32)
-                }
-                experiment.Photostim.insert1(dict(pstim, photo_stim=4),
-                                             skip_duplicates=True,
-                                             allow_direct_insert=True)
-
-                experiment.PhotostimLocation.insert1(
-                    dict(pstim, photo_stim=4,
-                         hemisphere='left', brain_area='ALM',
-                         skull_reference='Bregma',
-                         photostim_ml_location=1.5,
-                         photostim_ap_location=2.5,
-                         photostim_dv_location=0,
-                         photostim_ml_angle=15,
-                         photostim_ap_angle=15),
-                    skip_duplicates=True, ignore_extra_fields=True,
-                    allow_direct_insert=True)
-
-                experiment.Photostim.insert1(dict(pstim, photo_stim=5),
-                                             skip_duplicates=True,
-                                             allow_direct_insert=True)
-
-                experiment.PhotostimLocation.insert1(
-                    dict(pstim, photo_stim=5,
-                         hemisphere='right', brain_area='ALM',
-                         skull_reference='Bregma',
-                         photostim_ml_location=1.5,
-                         photostim_ap_location=2.5,
-                         photostim_dv_location=0,
-                         photostim_ml_angle=15,
-                         photostim_ap_angle=15),
-                    skip_duplicates=True, ignore_extra_fields=True)
-
-                experiment.Photostim.insert1(dict(pstim, photo_stim=6),
-                                             skip_duplicates=True,
-                                             allow_direct_insert=True)
-
-            if t.stim and t.stim == 4:  # BOOKMARK
+            if t.stim and t.stim == 4:
                 log.info('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
 
                 rows['photostim_trial'].append(tkey)
                 rows['photostim_trial_event'].append(
-                    dict(tkey, photostim_device='OBIS470', photo_stim=t.stim,
+                    dict(tkey, photostim_device='OBIS470', photo_stim=0,
+                         hemisphere='left', brain_area='ALM', brainloc_id=0,
                          photostim_event_time=tkey['start_time'], power=0.0))
-
-                # interact('stimulating', local=locals())
 
             if t.stim and t.stim == 5:
                 log.info('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
 
                 rows['photostim_trial'].append(tkey)
                 rows['photostim_trial_event'].append(
-                    dict(tkey, photostim_device='OBIS470', photo_stim=t.stim,
+                    dict(tkey, photostim_device='OBIS470', photo_stim=0,
+                         hemisphere='right', brain_area='ALM', brainloc_id=0,
                          photostim_event_time=tkey['start_time'], power=0.0))
 
             if t.stim and t.stim == 6:
-                # 6 type is a 4+5 simultaneously
-                rows['photostim_trial'].append(tkey)
-                log.info('BehaviorIngest.make(): t.stim == 6'.format(t.stim))
+                log.info('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
 
+                rows['photostim_trial'].append(tkey)
                 rows['photostim_trial_event'].append(
-                    dict(tkey, photostim_device='OBIS470', photo_stim=4,
-                         photostim_event_time=tkey['start_time'], power=0.0))
-                rows['photostim_trial_event'].append(
-                    dict(tkey, photostim_device='OBIS470', photo_stim=5,
+                    dict(tkey, photostim_device='OBIS470', photo_stim=0,
+                         hemisphere='both', brain_area='ALM', brainloc_id=0,
                          photostim_event_time=tkey['start_time'], power=0.0))
 
             # end of trial loop.
@@ -720,6 +671,6 @@ class BehaviorIngest(dj.Imported):
                                          allow_direct_insert=True)
 
         log.info('BehaviorIngest.make(): ... experiment.PhotostimTrialEvent')
-        experiment.PhotostimTrial.Event.insert(rows['photostim_trial_event'],
-                                               ignore_extra_fields=True,
-                                               allow_direct_insert=True)
+        experiment.PhotostimTrialEvent.insert(rows['photostim_trial_event'],
+                                              ignore_extra_fields=True,
+                                              allow_direct_insert=True)
