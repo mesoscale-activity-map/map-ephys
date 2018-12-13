@@ -15,7 +15,6 @@ from pipeline import ephys
 from pipeline import InsertBuffer
 from pipeline.ingest import behavior as ingest_behavior
 
-
 log = logging.getLogger(__name__)
 
 schema = dj.schema(dj.config.get(
@@ -232,7 +231,7 @@ class EphysIngest(dj.Imported):
             len_trial_units2 = len(trialunits2)
 
             for x in range(len_trial_units2):
-                ib.insert1(dict(ekey, unit = trialunits1[x], trial = trialunits2[x]))
+                ib.insert1(dict(ekey, unit=trialunits1[x], trial=trialunits2[x]))
 
                 if ib.flush(skip_duplicates=True, allow_direct_insert=True,
                             chunksz=10000):
