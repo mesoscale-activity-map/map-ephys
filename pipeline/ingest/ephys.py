@@ -87,7 +87,7 @@ class EphysIngest(dj.Imported):
         subject_id = key['subject_id']
         water = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
 
-        self.insert1(key, ignore_extra_fields=True, allow_direct_insert=True)
+
         for probe in range(1,3):
 
             # TODO: should code include actual logic to pick these up still?
@@ -262,6 +262,7 @@ class EphysIngest(dj.Imported):
 
             log.debug('inserting file load information')
 
+            self.insert1(key, ignore_extra_fields=True, allow_direct_insert=True)
 
             EphysIngest.EphysFile().insert1(
                 dict(key, electrode_group=probe, ephys_file=subpath),
