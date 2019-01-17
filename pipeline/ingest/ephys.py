@@ -155,8 +155,9 @@ class EphysIngest(dj.Imported):
             spike_times2 = spike_times2 / sRateHz # divide the sampling rate, sRateHz
             clu_ids_diff = np.diff(cluster_ids) # where the units seperate
             clu_ids_diff = np.where(clu_ids_diff != 0)[0] + 1 # separate the spike_times
+            spike_times = spike_times2  # now replace spike times with updated version
 
-            units = np.split(spike_times, clu_ids_diff) / sRateHz # sub arrays of spike_times for each unit (for ephys.Unit())
+            units = np.split(spike_times, clu_ids_diff)  # sub arrays of spike_times for each unit (for ephys.Unit())
             trialunits = np.split(spike_trials, clu_ids_diff) # sub arrays of spike_trials for each unit
             unit_ids = np.arange(len(clu_ids_diff) + 1) # unit number
 
@@ -202,7 +203,6 @@ class EphysIngest(dj.Imported):
             spike_trials = spike_trials - startB # behavior has less trials if startB is +ve, behavior has more trials if startB is -ve
             indT = np.where(spike_trials > -1)[0] # get rid of the -ve trials
             cluster_ids = cluster_ids[indT]
-            spike_times2 = spike_times2[indT]
             viSite_spk = viSite_spk[indT]
             spike_trials = spike_trials[indT]
 
@@ -262,7 +262,8 @@ class EphysIngest(dj.Imported):
 
             log.debug('inserting file load information')
 
-            self.insert1(key, ignore_extra_fields=True, allow_direct_insert=True)
+            self.insert1(key, ignore_extra_fields=True, skip_duplicates=True,
+                         allow_direct_insert=True)
 
             EphysIngest.EphysFile().insert1(
                 dict(key, electrode_group=probe, ephys_file=subpath),
