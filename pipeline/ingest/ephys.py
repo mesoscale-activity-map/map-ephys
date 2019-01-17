@@ -88,6 +88,15 @@ class EphysIngest(dj.Imported):
         water = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
 
 
+        #
+        # Fetch Go-Cue times for session as float
+        #
+
+        go_cues = np.array([float(x) for x in (experiment.TrialEvent() & {
+            'subject_id': behavior['subject_id'],
+            'session': behavior['session'],
+            'trial_event_type': 'go'}).fetch('trial_event_time')])
+
         for probe in range(1,3):
 
             # TODO: should code include actual logic to pick these up still?
@@ -146,6 +155,7 @@ class EphysIngest(dj.Imported):
             viT_offset_file = f['viT_offset_file'][:] # start of each trial, subtract this number for each trial
             sRateHz = f['P']['sRateHz'][0] # sampling rate
             spike_trials = np.ones(len(spike_times)) * (len(viT_offset_file) - 1) # every spike is in the last trial
+
             spike_times2 = np.copy(spike_times)
             for i in range(len(viT_offset_file) - 1, 0, -1): #find the trials each unit has a spike in
                 log.debug('locating trials with spikes {s}:{t}'.format(s=behavior['session'], t=i))
@@ -248,8 +258,9 @@ class EphysIngest(dj.Imported):
             n_tspike = 0
             for x in zip(unit_ids, trialPerUnit): # loop through the units
                 for i in x[1]: # loop through the trials for each unit
+
                     ib.insert1(dict(ekey, unit=x[0], trial=int(trialunits2[x[1]][i]),
-                                    spike_times=units[x[0]][x[1][i]]))
+                                    spike_times=(units[x[0]][x[1][i]]) - go_cues[int(trialunits2[x[1]][i])]))
 
                     if ib.flush(skip_duplicates=True, allow_direct_insert=True,
                                 chunksz=10000):
