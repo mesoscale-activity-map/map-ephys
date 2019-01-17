@@ -88,6 +88,15 @@ class EphysIngest(dj.Imported):
         water = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
 
 
+        #
+        # Fetch Go-Cue times for session as float
+        #
+
+        go_cues = np.array([float(x) for x in (experiment.TrialEvent() & {
+            'subject_id': behavior['subject_id'],
+            'session': behavior['session'],
+            'trial_event_type': 'go'}).fetch('trial_event_time')])
+
         for probe in range(1,3):
 
             # TODO: should code include actual logic to pick these up still?
@@ -146,6 +155,7 @@ class EphysIngest(dj.Imported):
             viT_offset_file = f['viT_offset_file'][:] # start of each trial, subtract this number for each trial
             sRateHz = f['P']['sRateHz'][0] # sampling rate
             spike_trials = np.ones(len(spike_times)) * (len(viT_offset_file) - 1) # every spike is in the last trial
+
             spike_times2 = np.copy(spike_times)
             for i in range(len(viT_offset_file) - 1, 0, -1): #find the trials each unit has a spike in
                 log.debug('locating trials with spikes {s}:{t}'.format(s=behavior['session'], t=i))
@@ -155,8 +165,9 @@ class EphysIngest(dj.Imported):
             spike_times2 = spike_times2 / sRateHz # divide the sampling rate, sRateHz
             clu_ids_diff = np.diff(cluster_ids) # where the units seperate
             clu_ids_diff = np.where(clu_ids_diff != 0)[0] + 1 # separate the spike_times
+            spike_times = spike_times2  # now replace spike times with updated version
 
-            units = np.split(spike_times, clu_ids_diff) / sRateHz # sub arrays of spike_times for each unit (for ephys.Unit())
+            units = np.split(spike_times, clu_ids_diff)  # sub arrays of spike_times for each unit (for ephys.Unit())
             trialunits = np.split(spike_trials, clu_ids_diff) # sub arrays of spike_trials for each unit
             unit_ids = np.arange(len(clu_ids_diff) + 1) # unit number
 
@@ -202,7 +213,6 @@ class EphysIngest(dj.Imported):
             spike_trials = spike_trials - startB # behavior has less trials if startB is +ve, behavior has more trials if startB is -ve
             indT = np.where(spike_trials > -1)[0] # get rid of the -ve trials
             cluster_ids = cluster_ids[indT]
-            spike_times2 = spike_times2[indT]
             viSite_spk = viSite_spk[indT]
             spike_trials = spike_trials[indT]
 
@@ -248,8 +258,9 @@ class EphysIngest(dj.Imported):
             n_tspike = 0
             for x in zip(unit_ids, trialPerUnit): # loop through the units
                 for i in x[1]: # loop through the trials for each unit
+
                     ib.insert1(dict(ekey, unit=x[0], trial=int(trialunits2[x[1]][i]),
-                                    spike_times=units[x[0]][x[1][i]]))
+                                    spike_times=(units[x[0]][x[1][i]]) - go_cues[int(trialunits2[x[1]][i])]))
 
                     if ib.flush(skip_duplicates=True, allow_direct_insert=True,
                                 chunksz=10000):
@@ -262,7 +273,8 @@ class EphysIngest(dj.Imported):
 
             log.debug('inserting file load information')
 
-            self.insert1(key, ignore_extra_fields=True, allow_direct_insert=True)
+            self.insert1(key, ignore_extra_fields=True, skip_duplicates=True,
+                         allow_direct_insert=True)
 
             EphysIngest.EphysFile().insert1(
                 dict(key, electrode_group=probe, ephys_file=subpath),
