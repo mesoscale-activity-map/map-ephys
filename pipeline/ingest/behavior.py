@@ -218,7 +218,6 @@ class BehaviorIngest(dj.Imported):
 
             AllTrialTypes = SessionData['TrialTypes'][0]
             AllTrialSettings = SessionData['TrialSettings'][0]
-            AllStimTrials = SessionData['StimTrials'][0]  # TODO: handle n/a
 
             RawData = SessionData['RawData'][0].flatten()
             AllStateNames = RawData['OriginalStateNamesByNumber'][0]
@@ -229,9 +228,16 @@ class BehaviorIngest(dj.Imported):
 
             # verify trial-related data arrays are all same length
             assert(all((x.shape[0] == AllStateTimestamps.shape[0] for x in
-                        (AllTrialTypes, AllStimTrials, AllTrialSettings,
+                        (AllTrialTypes, AllTrialSettings,
                          AllStateNames, AllStateData, AllEventData,
                          AllEventTimestamps))))
+
+            if 'StimTrials' in SessionData:
+                AllStimTrials = SessionData['StimTrials'][0]
+                assert(AllStimTrials == AllStateTimestamps.shape[0])
+            else:
+                AllStimTrials = np.array([
+                    None for i in enumerate(range(AllStateTimestamps.shape[0]))])
 
             z = zip(AllTrialTypes, AllStimTrials, AllTrialSettings,
                     AllStateTimestamps, AllStateNames, AllStateData,
@@ -354,11 +360,11 @@ class BehaviorIngest(dj.Imported):
             log.debug('state_data\n' + str(t.state_data))
             log.debug('startindex\n' + str(startindex))
             log.debug('endendex\n' + str(endindex))
-             
+
             if not(len(startindex) and len(endindex)):
                 log.info('skipping trial {i}: start/end index error: {s}/{e}'.format(i=i,s=str(startindex), e=str(endindex)))
                 continue
-                   
+
             try:    
                 tkey['trial'] = i
                 tkey['trial_uid'] = i # Arseny has unique id to identify some trials
@@ -366,7 +372,7 @@ class BehaviorIngest(dj.Imported):
             except IndexError:
                 log.info('skipping trial {i}: error indexing {s}/{e} into {t}'.format(i=i,s=str(startindex), e=str(endindex), t=str(t.state_times)))
                 continue
-               
+
             log.debug('BehaviorIngest.make(): Trial().insert1')  # TODO msg
             log.debug('tkey' + str(tkey))
             rows['trial'].append(tkey)
