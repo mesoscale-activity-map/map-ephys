@@ -8,6 +8,8 @@ import h5py
 import numpy as np
 
 import datajoint as dj
+#import pdb
+
 
 from pipeline import lab
 from pipeline import experiment
@@ -87,16 +89,6 @@ class EphysIngest(dj.Imported):
         subject_id = key['subject_id']
         water = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
 
-
-        #
-        # Fetch Go-Cue times for session as float
-        #
-
-        go_cues = np.array([float(x) for x in (experiment.TrialEvent() & {
-            'subject_id': behavior['subject_id'],
-            'session': behavior['session'],
-            'trial_event_type': 'go'}).fetch('trial_event_time')])
-
         for probe in range(1,3):
 
             # TODO: should code include actual logic to pick these up still?
@@ -152,16 +144,31 @@ class EphysIngest(dj.Imported):
                     strs[iU] = 'multi'
             spike_times = f['viTime_spk'][0][ind] # spike times
             viSite_spk = f['viSite_spk'][0][ind] # electrode site for the spike
-            viT_offset_file = f['viT_offset_file'][:] # start of each trial, subtract this number for each trial
             sRateHz = f['P']['sRateHz'][0] # sampling rate
-            spike_trials = np.ones(len(spike_times)) * (len(viT_offset_file) - 1) # every spike is in the last trial
 
+            file = '{h2o}_bitcode.mat'.format(h2o=water) # fetch the bitcode and realign
+            # subpath = os.path.join('{}-{}'.format(date, probe), file)
+            subpath = os.path.join(date, str(probe), file)
+            fullpath = os.path.join(rigpath, subpath)
+
+            log.debug('opening bitcode for session {s} probe {p} ({f})'
+                      .format(s=behavior['session'], p=probe, f=fullpath))
+
+            mat = spio.loadmat(fullpath, squeeze_me = True) # load the bitcode file
+            bitCodeE = mat['bitCodeS'].flatten() # bitCodeS is the char variable
+            goCue = mat['goCue'].flatten() # bitCodeS is the char variable
+            viT_offset_file = mat['sTrig'].flatten() # start of each trial, subtract this number for each trial
+            trialNote = experiment.TrialNote()
+            bitCodeB = (trialNote & {'subject_id': ekey['subject_id']} & {'session': ekey['session']} & {'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial') # fetch the bitcode from the behavior trialNote
+
+            spike_trials = np.ones(len(spike_times)) * (len(viT_offset_file) - 1) # every spike is in the last trial
             spike_times2 = np.copy(spike_times)
             for i in range(len(viT_offset_file) - 1, 0, -1): #find the trials each unit has a spike in
                 log.debug('locating trials with spikes {s}:{t}'.format(s=behavior['session'], t=i))
-                spike_trials[spike_times < viT_offset_file[i]] = i-1 # Get the trial number of each spike
-                spike_times2[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = spike_times[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] - viT_offset_file[i - 1] # subtract the viT_offset_file from each trial
-            spike_times2[np.where(spike_times2 >= viT_offset_file[-1])] = spike_times[np.where(spike_times2 >= viT_offset_file[-1])] - viT_offset_file[-1] # subtract the viT_offset_file from each trial
+                spike_trials[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = i-1 # Get the trial number of each spike
+                spike_times2[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = spike_times[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] - goCue[i-1] # subtract the goCue from each trial
+            spike_trials[np.where(spike_times2 >= viT_offset_file[-1])] = len(viT_offset_file) - 1 # subtract the goCue from the last trial
+            spike_times2[np.where(spike_times2 >= viT_offset_file[-1])] = spike_times[np.where(spike_times2 >= viT_offset_file[-1])] - goCue[-1] # subtract the goCue from the last trial
             spike_times2 = spike_times2 / sRateHz # divide the sampling rate, sRateHz
             clu_ids_diff = np.diff(cluster_ids) # where the units seperate
             clu_ids_diff = np.where(clu_ids_diff != 0)[0] + 1 # separate the spike_times
@@ -180,19 +187,6 @@ class EphysIngest(dj.Imported):
 
             log.debug('inserting units for session {s}'.format(s=behavior['session']))
             ephys.Unit().insert(list(dict(ekey, unit = x, unit_uid = x, unit_quality = strs[x], spike_times = units[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids), allow_direct_insert=True) # batch insert the units
-
-            file = '{h2o}_bitcode.mat'.format(h2o=water) # fetch the bitcode and realign
-            # subpath = os.path.join('{}-{}'.format(date, probe), file)
-            subpath = os.path.join(date, str(probe), file)
-            fullpath = os.path.join(rigpath, subpath)
-
-            log.debug('opening bitcode for session {s} probe {p} ({f})'
-                      .format(s=behavior['session'], p=probe, f=fullpath))
-
-            mat = spio.loadmat(fullpath, squeeze_me = True) # load the bitcode file
-            bitCodeE = mat['bitCodeS'].flatten() # bitCodeS is the char variable
-            trialNote = experiment.TrialNote()
-            bitCodeB = (trialNote & {'subject_id': ekey['subject_id']} & {'session': ekey['session']} & {'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial') # fetch the bitcode from the behavior trialNote
 
             if len(bitCodeB) < len(bitCodeE): # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
                 startB = np.where(bitCodeE==bitCodeB[0])[0]
@@ -260,7 +254,7 @@ class EphysIngest(dj.Imported):
                 for i in x[1]: # loop through the trials for each unit
 
                     ib.insert1(dict(ekey, unit=x[0], trial=int(trialunits2[x[1]][i]),
-                                    spike_times=(units[x[0]][x[1][i]]) - go_cues[int(trialunits2[x[1]][i])]))
+                                    spike_times=(units[x[0]][x[1][i]])))
 
                     if ib.flush(skip_duplicates=True, allow_direct_insert=True,
                                 chunksz=10000):

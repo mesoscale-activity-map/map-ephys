@@ -232,10 +232,12 @@ class BehaviorIngest(dj.Imported):
                          AllStateNames, AllStateData, AllEventData,
                          AllEventTimestamps))))
 
-            if 'StimTrials' in SessionData:
+            if 'StimTrials' in SessionData.dtype.fields:
+                log.info('StimTrials detected in session - will include')
                 AllStimTrials = SessionData['StimTrials'][0]
-                assert(AllStimTrials == AllStateTimestamps.shape[0])
+                assert(AllStimTrials.shape[0] == AllStateTimestamps.shape[0])
             else:
+                log.info('StimTrials not detected in session - will skip')
                 AllStimTrials = np.array([
                     None for i in enumerate(range(AllStateTimestamps.shape[0]))])
 
