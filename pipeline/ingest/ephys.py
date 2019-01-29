@@ -2,6 +2,7 @@
 
 import os
 import logging
+from glob import glob
 
 import scipy.io as spio
 import h5py
@@ -95,17 +96,17 @@ class EphysIngest(dj.Imported):
             # file = '{h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # some older files
             # subpath = os.path.join('{}-{}'.format(date, probe), file)
             # file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
-            file = '{h2o}_g0_t20.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
+            file = '{h2o}_g0_*.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
             subpath = os.path.join(date, str(probe), file)
             fullpath = os.path.join(rigpath, subpath)
+            ephys_files = glob(fullpath)
 
-            if not os.path.exists(fullpath):
-                log.info('EphysIngest().make(): skipping - no file in %s'
-                         % fullpath)
+            if not ephys_files or len(ephys_files) != 1:
+                log.info('EphysIngest().make(): skipping - incorrect files found: {}'.format(ephys_files))
                 return
 
-            log.info('EphysIngest().make(): found ephys recording in %s'
-                     % fullpath)
+            fullpath = ephys_files[0]
+            log.info('EphysIngest().make(): found ephys recording in {}'.format(fullpath))
 
             #
             # Prepare ElectrodeGroup configuration
