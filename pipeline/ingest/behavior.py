@@ -170,7 +170,7 @@ class BehaviorIngest(dj.Imported):
 
         log.debug('rigpath {p}'.format(p=path))
 
-        matches = glob.glob(path)
+        matches = sorted(glob.glob(path))
         if len(matches):
             log.debug('found files, this is the rig')
             skey['rig'] = key['rig']
