@@ -172,7 +172,7 @@ class BehaviorIngest(dj.Imported):
 
         matches = sorted(glob.glob(path))
         if len(matches):
-            log.debug('found files, this is the rig')
+            log.debug('found files: {}, this is the rig'.format(matches))
             skey['rig'] = key['rig']
         else:
             log.info('no file matches found in {p}'.format(p=path))
@@ -212,6 +212,8 @@ class BehaviorIngest(dj.Imported):
             if os.stat(f).st_size/1024 < 100:
                 log.info('skipping file {f} - too small'.format(f=f))
                 continue
+
+            log.debug('loading file {}'.format(f))
 
             mat = spio.loadmat(f, squeeze_me=True)
             SessionData = mat['SessionData'].flatten()
