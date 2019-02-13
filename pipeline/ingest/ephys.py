@@ -101,9 +101,9 @@ class EphysIngest(dj.Imported):
             fullpath = os.path.join(rigpath, subpath)
             ephys_files = glob(fullpath)
 
-            if not ephys_files or len(ephys_files) != 1:
-                log.info('EphysIngest().make(): skipping - incorrect files found: {}'.format(ephys_files))
-                return
+            if len(ephys_files) != 1:
+                log.info('EphysIngest().make(): skipping probe {} - incorrect files found: {}/{}'.format(probe, fullpath, ephys_files))
+                continue
 
             fullpath = ephys_files[0]
             log.info('EphysIngest().make(): found ephys recording in {}'.format(fullpath))
@@ -254,8 +254,10 @@ class EphysIngest(dj.Imported):
             for x in zip(unit_ids, trialPerUnit): # loop through the units
                 for i in x[1]: # loop through the trials for each unit
 
-                    ib.insert1(dict(ekey, unit=x[0], trial=int(trialunits2[x[1]][i]),
-                                    spike_times=(units[x[0]][x[1][i]])))
+                    # i_off: cumulative offset into trialunits2
+                    i_off = sum([len(i) for i in trialPerUnit[:x[0]]]) + i
+                    ib.insert1(dict(ekey, unit=x[0], trial=int(trialunits2[i_off]),
+                                   spike_times=(units[x[0]][x[1][i]])))
 
                     if ib.flush(skip_duplicates=True, allow_direct_insert=True,
                                 chunksz=10000):

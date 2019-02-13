@@ -49,6 +49,7 @@ def mockdata():
             'gene_modification_description': 'reachR PV'},
             skip_duplicates = True
         )
+        # Subject 399752
         lab.Subject().insert1({
             'subject_id': 399752,
             'username': 'daveliu',
@@ -90,6 +91,7 @@ def mockdata():
             'wr_start_weight': 25},
             skip_duplicates = True
         )
+        # Subject 397853
         lab.Subject().insert1({
             'subject_id': 397853,
             'username': 'daveliu',
@@ -131,6 +133,7 @@ def mockdata():
             'wr_start_weight': 24.1},
             skip_duplicates = True
         )
+        # Subject 400480
         lab.Subject().insert1({
             'subject_id': 400480,
             'username': 'daveliu',
@@ -172,6 +175,7 @@ def mockdata():
             'wr_start_weight': 27.6},
             skip_duplicates = True
         )
+        # Subject 406680
         lab.Subject().insert1({
             'subject_id': 406680,
             'username': 'daveliu',
@@ -213,6 +217,7 @@ def mockdata():
             'wr_start_weight': 22.7},
             skip_duplicates = True
         )
+        # Subject 408022
         lab.Subject().insert1({
             'subject_id': 408022,
             'username': 'daveliu',
@@ -254,6 +259,7 @@ def mockdata():
             'wr_start_weight': 21.1},
             skip_duplicates = True
         )
+        # Subject 408021
         lab.Subject().insert1({
             'subject_id': 408021,
             'username': 'daveliu',
@@ -295,6 +301,7 @@ def mockdata():
             'wr_start_weight': 21},
             skip_duplicates = True
         )
+        # Subject 407512
         lab.Subject().insert1({
             'subject_id': 407512,
             'username': 'daveliu',
@@ -336,6 +343,7 @@ def mockdata():
             'wr_start_weight': 26},
             skip_duplicates = True
         )
+	# 407513
         lab.Subject().insert1({
             'subject_id': 407513,
             'username': 'daveliu',
@@ -377,6 +385,7 @@ def mockdata():
             'wr_start_weight': 25.5},
             skip_duplicates = True
         )
+	# Subject 407986
         lab.Subject().insert1({
             'subject_id': 407986,
             'username': 'daveliu',
@@ -418,6 +427,7 @@ def mockdata():
             'wr_start_weight': 19.8},
             skip_duplicates = True
         )
+	# Subject 123457
         lab.Subject().insert1({
             'subject_id': 123457,
             'username': 'daveliu',
@@ -435,6 +445,7 @@ def mockdata():
             'wr_start_weight': 20.5},
             skip_duplicates = True
         )
+	# Subject 90210
         lab.Subject().insert1({
             'subject_id': 90210,
             'username': 'daveliu',
@@ -452,6 +463,25 @@ def mockdata():
             'wr_start_weight': 20.5},
             skip_duplicates = True
         )
+        # Subject 90211
+        lab.Subject().insert1({
+            'subject_id': 90211,
+            'username': 'daveliu',
+            'cage_number': 145375,
+            'date_of_birth': '2017-08-03',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates = True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 90211,
+            'water_restriction_number': 'dl59',
+            'cage_number': 148861,
+            'wr_start_date': '2017-11-07',
+            'wr_start_weight': 20.5},
+            skip_duplicates = True
+        )
+
         lab.Rig().insert1({
             'rig': 'TRig1',
             'room': '2w.334',
