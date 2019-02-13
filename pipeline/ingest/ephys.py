@@ -2,6 +2,7 @@
 
 import os
 import logging
+from glob import glob
 
 import scipy.io as spio
 import h5py
@@ -95,17 +96,17 @@ class EphysIngest(dj.Imported):
             # file = '{h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # some older files
             # subpath = os.path.join('{}-{}'.format(date, probe), file)
             # file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
-            file = '{h2o}_g0_t20.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
+            file = '{h2o}_g0_*.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
             subpath = os.path.join(date, str(probe), file)
             fullpath = os.path.join(rigpath, subpath)
+            ephys_files = glob(fullpath)
 
-            if not os.path.exists(fullpath):
-                log.info('EphysIngest().make(): skipping - no file in %s'
-                         % fullpath)
-                return
+            if len(ephys_files) != 1:
+                log.info('EphysIngest().make(): skipping probe {} - incorrect files found: {}/{}'.format(probe, fullpath, ephys_files))
+                continue
 
-            log.info('EphysIngest().make(): found ephys recording in %s'
-                     % fullpath)
+            fullpath = ephys_files[0]
+            log.info('EphysIngest().make(): found ephys recording in {}'.format(fullpath))
 
             #
             # Prepare ElectrodeGroup configuration
@@ -253,8 +254,10 @@ class EphysIngest(dj.Imported):
             for x in zip(unit_ids, trialPerUnit): # loop through the units
                 for i in x[1]: # loop through the trials for each unit
 
-                    ib.insert1(dict(ekey, unit=x[0], trial=int(trialunits2[x[1]][i]),
-                                    spike_times=(units[x[0]][x[1][i]])))
+                    # i_off: cumulative offset into trialunits2
+                    i_off = sum([len(i) for i in trialPerUnit[:x[0]]]) + i
+                    ib.insert1(dict(ekey, unit=x[0], trial=int(trialunits2[i_off]),
+                                   spike_times=(units[x[0]][x[1][i]])))
 
                     if ib.flush(skip_duplicates=True, allow_direct_insert=True,
                                 chunksz=10000):
