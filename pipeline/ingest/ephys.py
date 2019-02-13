@@ -101,8 +101,8 @@ class EphysIngest(dj.Imported):
             fullpath = os.path.join(rigpath, subpath)
             ephys_files = glob(fullpath)
 
-            if not ephys_files or len(ephys_files) != 1:
-                log.info('EphysIngest().make(): skipping probe {} - incorrect files found: {}'.format(probe, ephys_files))
+            if len(ephys_files) != 1:
+                log.info('EphysIngest().make(): skipping probe {} - incorrect files found: {}/{}'.format(probe, fullpath, ephys_files))
                 continue
 
             fullpath = ephys_files[0]
