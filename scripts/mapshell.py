@@ -17,7 +17,7 @@ from pipeline import tracking
 from pipeline import publication
 
 log = logging.getLogger(__name__)
-__all__ = [ephys, lab, experiment, ccf, publication]
+__all__ = [ephys, lab, experiment, ccf, tracking, publication]
 
 [ dj ]  # NOQA flake8 
 
