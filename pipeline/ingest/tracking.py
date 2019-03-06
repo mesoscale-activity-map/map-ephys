@@ -1,13 +1,3 @@
-# tracking_data_path removed from main; should go here += file traversal
-
-'''
-dl56_side_3-0000.csv : h2o_<camera>_3_XXXX (ignore XXXX)
-file paths: root/h2o/date/'string of tracking'/file
-(same as ephys, 'tracking' instead of '1','2',etc)
-  - values are detected positions and video frame number
-  - paths root/h2o/date/tracking/*.csv
-  - file, 'dl59_20181207_side.txt' tracking record no -> trial no
-'''
 
 import os
 import logging
@@ -20,10 +10,7 @@ from pipeline import lab
 from pipeline import tracking
 from pipeline import experiment
 from pipeline.ingest import behavior as ingest_behavior
-
-from code import interact  # HACK debug
-from collections import ChainMap  # HACK debug
-# interact('muhrepl', local=dict(ChainMap(locals(), globals())))
+[ingest_behavior]  # NOQA schema only use
 
 from collections import defaultdict
 
@@ -68,13 +55,6 @@ class TrackingIngest(dj.Imported):
     def make(self, key):
         '''
         TrackingIngest .make() function
-
-        qs:
-        - really using multiple rig paths?
-        - camera number vs name/label: splitting would be better if OK
-        - tracking files: always -0000.csv?
-        - 1321914 points in one session.. sooo probably should blobify
-          how to structure?
         '''
         log.info('TrackingIngest().make(): key: {k}'.format(k=key))
 
@@ -96,48 +76,48 @@ class TrackingIngest(dj.Imported):
             tpos = d['tracking_position']
             tdat = p['tracking_data_path']
 
-            print('key', key)  # subjectid sesssionno
+            print('key', key)  # subject_id sesssion
             print('trying {}'.format(tdat))
             print('got session: {}'.format(session))
             print('got trials: {}'.format(trials))
 
             tpath = os.path.join(tdat, h2o, sdate_iso, 'tracking')
 
-            print('trying tracking path: {}'.format(tpath))
-
             if not os.path.exists(tpath):
-                log.info('skipping {} - does not exist'.format(tpath))
+                log.info('tracking path {} n/a - skipping'.format(tpath))
                 continue
 
-            # interact('muhrepl', local=dict(ChainMap(locals(), globals())))
             camtrial = '{}_{}_{}.txt'.format(h2o, sdate_sml, tpos)
             campath = os.path.join(tpath, camtrial)
 
-            print('trying position/trial map: {}'.format(campath))
+            print('trying camera position trial map: {}'.format(campath))
+
             if not os.path.exists(campath):
-                log.info('skipping {} - does not exist'.format(tpath))
+                log.info('skipping {} - does not exist'.format(campath))
                 continue
 
             tmap = self.load_campath(campath)
 
-            for t in tmap:
+            for t in tmap:  # load tracking for trial
                 # ex: dl59_side_1-0000.csv / h2o_position_tn-0000.csv
-                # todo: glob -????.csv & err if nglob > 1
-                tfile = '{}_{}_{}-0000.csv'.format(h2o, tpos, t)
+                tfile = '{}_{}_{}-*.csv'.format(h2o, tpos, t)
                 tfull = os.path.join(tpath, tfile)
-                if not os.path.exists(tfull):
-                    log.info('tracking file {} n/a'.format(tfull))
+                tfull = glob(tfull)
 
+                if not tfull or len(tfull) > 1:
+                    log.info('tracking file {} mismatch'.format(tfull))
+                    continue
+
+                tfull = tfull[-1]
                 trk = self.load_tracking(tfull)
 
                 recs = {}
-                rec_base = dict(key, trial=tmap[t])
+                rec_base = dict(key, trial=tmap[t], tracking_device=tdev)
 
                 for k in trk:
                     if k == 'samples':
                         recs['tracking'] = {
                             **rec_base,
-                            'tracking_device': tdev,
                             'tracking_samples': len(trk['samples']['ts']),
                         }
                     else:
@@ -161,6 +141,9 @@ class TrackingIngest(dj.Imported):
                 tracking.Tracking.JawTracking.insert1(
                     recs['jaw'], allow_direct_insert=True)
 
+            self.insert1(key)
+
+
     def load_campath(self, campath):
         ''' load camera position-to-trial map '''
         log.debug("load_campath(): {}".format(campath))
@@ -171,15 +154,24 @@ class TrackingIngest(dj.Imported):
     def load_tracking(self, trkpath):
         log.info('load_tracking() {}'.format(trkpath))
         '''
-        load actual tracking data. example format:
+        load actual tracking data.
+
+        example format:
 
         scorer,DeepCut_resnet50_licking-sideAug10shuffle1_1030000,DeepCut_resnet50_licking-sideAug10shuffle1_1030000,DeepCut_resnet50_licking-sideAug10shuffle1_1030000,DeepCut_resnet50_licking-sideAug10shuffle1_1030000,DeepCut_resnet50_licking-sideAug10shuffle1_1030000,DeepCut_resnet50_licking-sideAug10shuffle1_1030000,DeepCut_resnet50_licking-sideAug10shuffle1_1030000,DeepCut_resnet50_licking-sideAug10shuffle1_1030000,DeepCut_resnet50_licking-sideAug10shuffle1_1030000
         bodyparts,nose,nose,nose,tongue,tongue,tongue,jaw,jaw,jaw
         coords,x,y,likelihood,x,y,likelihood,x,y,likelihood
         0,418.48327827453613,257.231650352478,1.0,426.47182297706604,263.82502603530884,1.796432684386673e-06,226.12365770339966,395.8081398010254,1.0
-        '''
 
-        # builds result of: {'feature': {'attr': val}}
+        results are of the form:
+
+          {'feature': {'attr': [val, ...]}}
+
+        where feature is e.g. 'nose', 'attr' is e.g. 'x'.
+
+        the special 'feature'/'attr' pair "samples"/"ts" is used to store
+        the first column/sample timestamp for each row in the input file.
+        '''
         res = defaultdict(lambda: defaultdict(list))
 
         with open(trkpath, 'r') as f:
@@ -193,7 +185,7 @@ class TrackingIngest(dj.Imported):
                 for i, v in enumerate(lv):
                     v = float(v)
                     if i == 0:
-                        res['samples']['ts'].append(v)  # todo: * Hz?
+                        res['samples']['ts'].append(v)
                     else:
                         res[parts[i]][fields[i]].append(v)
 
