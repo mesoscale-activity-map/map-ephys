@@ -47,7 +47,7 @@ class Tracking(dj.Imported):
         ---
         nose_x:                 longblob        # nose x location (px)
         nose_y:                 longblob        # nose y location (px)
-        nose_likelyhood:        longblob        # nose location likelyhood
+        nose_likelihood:        longblob        # nose location likelyhood
         """
 
     class TongueTracking(dj.Part):
@@ -56,7 +56,7 @@ class Tracking(dj.Imported):
         ---
         tongue_x:               longblob        # tongue x location (px)
         tongue_y:               longblob        # tongue y location (px)
-        tongue_likelyhood:      longblob        # tongue location likelyhood
+        tongue_likelihood:      longblob        # tongue location likelyhood
         """
 
     class JawTracking(dj.Part):
@@ -65,5 +65,5 @@ class Tracking(dj.Imported):
         ---
         jaw_x:                  longblob        # jaw x location (px)
         jaw_y:                  longblob        # jaw y location (px)
-        jaw_likelyhood:         longblob        # jaw location likelyhood
+        jaw_likelihood:         longblob        # jaw location likelyhood
         """
