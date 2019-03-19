@@ -61,3 +61,10 @@ class CellGroupPsth(dj.Computed):
     ---
     cell_group_psth:                            longblob
     """
+
+    class CellGroupPsthUnit(dj.Part):
+        definition = """
+        # unit backreference for group psth
+        -> master
+        -> ephys.Unit
+        """
