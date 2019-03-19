@@ -39,7 +39,7 @@ class CellGroupCondition(dj.Manual):
     -> Condition
     cell_group_condition_id:                    int
     ---
-    condition_desc:                             varchar(4096)
+    cell_group_condition_desc:                  varchar(4096)
     -> lab.BrainArea
     """
 
