@@ -23,13 +23,7 @@ class Condition(dj.Lookup):
     -> experiment.Outcome
     """
 
-    @property
-    def contents(self):
-        return (dj.U('task', 'task_protocol', 'trial_instruction',
-                     'early_lick', 'outcome') &
-                experiment.TaskProtocol *
-                experiment.TrialInstruction *
-                experiment.EarlyLick * experiment.Outcome)
+    # contents = []
 
 
 @schema
@@ -56,7 +50,7 @@ class CellPsth(dj.Computed):
     -> ephys.Unit
     -> Condition
     ---
-    cell_psth:          longblob
+    cell_psth:                                  longblob
     """
 
 
@@ -65,5 +59,5 @@ class CellGroupPsth(dj.Computed):
     definition = """
     -> CellGroupCondition
     ---
-    cell_group_psth:          longblob
+    cell_group_psth:                            longblob
     """
