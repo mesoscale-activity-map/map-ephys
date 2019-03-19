@@ -12,11 +12,11 @@ schema = dj.schema(dj.config.get('psth.database', 'map_psth'))
 
 @schema
 class Condition(dj.Lookup):
-    # TODO: this mirrors non-sessiontrial attrs of experiment.BehaviorTrial;
-    # should this be moved to experiment and used to build up that table?
-    # (implies reingestion, etc)
-    # TODO: condition_id pkey??
     definition = """
+    # manually curated conditions of interest
+    condition_id:                               int
+    ---
+    condition_desc:                             varchar(4096)
     -> experiment.TaskProtocol
     -> experiment.TrialInstruction
     -> experiment.EarlyLick
@@ -33,68 +33,37 @@ class Condition(dj.Lookup):
 
 
 @schema
-class BrainAreaCondition(dj.Computed):
-    # see also w/r/t PhtotstimTrial (not same functionality.. but data wise)
-    # how recover recording location otherwise?
+class CellGroupCondition(dj.Manual):
     definition = """
+    # manually curated cell groups of interest
     -> Condition
+    cell_group_condition_id:                    int
+    ---
+    condition_desc:                             varchar(4096)
     -> lab.BrainArea
     """
 
-    def make(self, key):
-        pass
-
-
-@schema
-class BACSession(dj.Computed):
-    # see 'Condition' note r.e. duplication of experiment.BehaviorTrial;
-    # essentially the same; could simply filter unique sessions from list
-    definition = """
-    -> BrainAreaCondition
-    -> experiment.Session
-    """
-
-    def make(self, key):
-        for bt in (experiment.BehaviorTrial & key):
-            self.insert1(key, skip_duplicates=True, ignore_extra_fields=True)
-
-
-@schema
-class BACTrial(dj.Computed):
-    # see 'Condition' note r.e. duplication of experiment.BehaviorTrial
-    definition = """
-    -> BrainAreaCondition
-    -> experiment.SessionTrial
-    """
-
-    def make(self, key):
-        for bt in (experiment.BehaviorTrial & key):
-            self.insert1(key, skip_duplicates=True, ignore_extra_fields=True)
+    class CellGroupConditionSessions(dj.Part):
+        definition = """
+        -> master
+        -> experiment.Session
+        """
 
 
 @schema
 class CellPsth(dj.Computed):
     definition = """
-    -> BrainAreaCondition
     -> ephys.Unit
+    -> Condition
     ---
     cell_psth:          longblob
     """
 
 
 @schema
-class CellTypePsth(dj.Computed):
-    # todo: how group? for now, used celltype as placeholder;
-    # potentially >1x tables or another intermediate table to be created..
+class CellGroupPsth(dj.Computed):
     definition = """
-    -> BrainAreaCondition
-    -> ephys.CellType
+    -> CellGroupCondition
     ---
-    cell_type_psth:          longblob
+    cell_group_psth:          longblob
     """
-
-    class CTPUnit(dj.Part):
-        definition = """
-        -> master
-        -> ephys.Unit
-        """
