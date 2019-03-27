@@ -13,10 +13,11 @@ from pipeline import ephys
 from pipeline import lab
 from pipeline import experiment
 from pipeline import ccf
+from pipeline import tracking
 from pipeline import publication
 
 log = logging.getLogger(__name__)
-__all__ = [ephys, lab, experiment, ccf, publication]
+__all__ = [ephys, lab, experiment, ccf, tracking, publication]
 
 [ dj ]  # NOQA flake8 
 
@@ -35,17 +36,22 @@ def logsetup(*args):
     log.setLevel(logging.DEBUG)
     logging.getLogger('pipeline.ingest.behavior').setLevel(logging.DEBUG)
     logging.getLogger('pipeline.ingest.ephys').setLevel(logging.DEBUG)
+    logging.getLogger('pipeline.ingest.tracking').setLevel(logging.DEBUG)
     logging.getLogger('pipeline.publication').setLevel(logging.DEBUG)
 
 
-def populateB(*args):
+def ingest_behavior(*args):
     from pipeline.ingest import behavior as ingest_behavior
     ingest_behavior.BehaviorIngest().populate(display_progress=True)
 
 
-def populateE(*args):
+def ingset_ephys(*args):
     from pipeline.ingest import ephys as ingest_ephys
     ingest_ephys.EphysIngest().populate(display_progress=True)
+
+def ingest_tracking(*args):
+    from pipeline.ingest import tracking as ingest_tracking
+    ingest_tracking.TrackingIngest().populate(display_progress=True)
 
 
 def publish(*args):
@@ -60,7 +66,7 @@ def shell(*args):
 
 
 def erd(*args):
-    for mod in (ephys, lab, experiment, ccf, publication):
+    for mod in (ephys, lab, experiment, tracking, ccf, publication):
         modname = str().join(mod.__name__.split('.')[1:])
         fname = os.path.join('pipeline', '{}.png'.format(modname))
         print('saving', fname)
@@ -68,8 +74,9 @@ def erd(*args):
 
 
 actions = {
-    'populateB': populateB,
-    'populateE': populateE,
+    'ingest-behavior': ingest_behavior,
+    'ingest-ephys': ingest_ephys,
+    'ingest-tracking': ingest_tracking,
     'publish': publish,
     'shell': shell,
     'erd': erd,
