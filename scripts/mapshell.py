@@ -45,9 +45,10 @@ def ingest_behavior(*args):
     ingest_behavior.BehaviorIngest().populate(display_progress=True)
 
 
-def ingset_ephys(*args):
+def ingest_ephys(*args):
     from pipeline.ingest import ephys as ingest_ephys
     ingest_ephys.EphysIngest().populate(display_progress=True)
+
 
 def ingest_tracking(*args):
     from pipeline.ingest import tracking as ingest_tracking
