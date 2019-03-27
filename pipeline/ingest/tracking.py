@@ -76,10 +76,10 @@ class TrackingIngest(dj.Imported):
             tpos = d['tracking_position']
             tdat = p['tracking_data_path']
 
-            #print('key', key)  # subject_id sesssion
-            #print('trying {}'.format(tdat))
-            #print('got session: {}'.format(session))
-            #print('got trials: {}'.format(trials))
+            log.info('key', key)  # subject_id sesssion
+            log.debug('trying {}'.format(tdat))
+            log.debug('got session: {}'.format(session))
+            log.debug('got trials: {}'.format(trials))
 
             tpath = os.path.join(tdat, h2o, sdate_iso, 'tracking')
 
@@ -90,7 +90,7 @@ class TrackingIngest(dj.Imported):
             camtrial = '{}_{}_{}.txt'.format(h2o, sdate_sml, tpos)
             campath = os.path.join(tpath, camtrial)
 
-            print('trying camera position trial map: {}'.format(campath))
+            log.debug('trying camera position trial map: {}'.format(campath))
 
             if not os.path.exists(campath):
                 log.info('skipping {} - does not exist'.format(campath))
