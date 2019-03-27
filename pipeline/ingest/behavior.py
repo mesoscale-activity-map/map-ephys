@@ -209,7 +209,7 @@ class BehaviorIngest(dj.Imported):
 
         for f in matches:
 
-            if os.stat(f).st_size/1024 < 100:
+            if os.stat(f).st_size/1024 < 1000:
                 log.info('skipping file {f} - too small'.format(f=f))
                 continue
 
