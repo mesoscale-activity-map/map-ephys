@@ -141,7 +141,7 @@ class BrainArea(dj.Lookup):
     ---
     description = null : varchar (4000) # name of the brain area
     """
-    contents = [('ALM', 'anterior lateral motor cortex'), ('vS1', 'vibrissal primary somatosensory cortex ("barrel cortex")')]
+    contents = [('ALM', 'anterior lateral motor cortex'), ('vS1', 'vibrissal primary somatosensory cortex ("barrel cortex")'), ('Thalamus', 'Thalamus'), ('Medulla', 'Medulla'), ('Striatum', 'Striatum')]
     
     
 @schema

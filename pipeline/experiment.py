@@ -85,7 +85,7 @@ class TrialEventType(dj.Lookup):
     definition = """
     trial_event_type  : varchar(12)  
     """
-    contents = zip(('delay', 'go', 'sample', 'presample'))
+    contents = zip(('delay', 'go', 'sample', 'presample', 'trialend'))
 
 @schema
 class Outcome(dj.Lookup):
@@ -174,6 +174,29 @@ class ActionEvent(dj.Imported):
     -> BehaviorTrial
     -> ActionEventType
     action_event_time : decimal(8,4)  # (s) from trial start
+    """
+
+@schema
+class TrackingDevice(dj.Lookup):
+    definition = """
+    tracking_device  : varchar(20)  # e.g. camera, microphone
+    ---
+    sampling_rate  :  decimal(8, 4)   # Hz
+    tracking_device_description: varchar(100) # 
+    """
+    contents =[  
+       ('Camera 0, side', 400, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)'),
+       ('Camera 1, bottom', 400, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)')]
+
+@schema
+class Tracking(dj.Imported):
+    definition = """
+    -> SessionTrial 
+    -> TrackingDevice
+    ---
+    tracking_data_path  : varchar(1000)
+    start_time = null : decimal(8,4) # (s) from trial start (which should coincide with the beginning of the ephys recordings)
+    duration = null : decimal(8,4)                   # (s)
     """
 
 @schema
