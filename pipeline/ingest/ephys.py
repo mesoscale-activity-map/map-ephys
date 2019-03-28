@@ -9,7 +9,7 @@ import h5py
 import numpy as np
 
 import datajoint as dj
-#import pdb
+import pdb
 
 
 from pipeline import lab
@@ -97,7 +97,7 @@ class EphysIngest(dj.Imported):
             # subpath = os.path.join('{}-{}'.format(date, probe), file)
             # file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
             file = '{h2o}_g0_*.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
-            subpath = os.path.join(date, str(probe), file)
+            subpath = os.path.join(water, date, str(probe), file)
             fullpath = os.path.join(rigpath, subpath)
             ephys_files = glob(fullpath)
 
@@ -133,7 +133,10 @@ class EphysIngest(dj.Imported):
             cluster_ids = cluster_ids[np.where(cluster_ids > 0)[0]] # get rid of the -ve noise clusters
             trWav_raw_clu = f['S_clu']['trWav_raw_clu'] # spike waveform
     #        trWav_raw_clu1 = np.concatenate((trWav_raw_clu[0:1][:][:],trWav_raw_clu),axis=0) # add a spike waveform to cluster 0, not necessary anymore after the previous step
-            csNote_clu=f['S_clu']['csNote_clu'][0] # manual sorting note
+            csNote_clu = f['S_clu']['csNote_clu'][0] # manual sorting note
+            viSite_clu = f['S_clu']['viSite_clu'][0] # site of the unit with the largest amplitude
+            vrPosX_clu = f['S_clu']['vrPosX_clu'][0] # x position of the unit
+            vrPosY_clu = f['S_clu']['vrPosY_clu'][0] # y position of the unit
             strs = ["all" for x in range(len(csNote_clu))] # all units are "all" by definition
             for iU in range(0, len(csNote_clu)): # read the manual curation of each unit
                 log.debug('extracting spike indicators {s}:{u}'.format(s=behavior['session'], u=iU))
@@ -141,6 +144,8 @@ class EphysIngest(dj.Imported):
                 str1 = ''.join(chr(i) for i in unitQ[:])
                 if str1 == 'single': # definitions in unit quality
                     strs[iU] = 'good'
+                elif str1 =='ok':
+                    strs[iU] = 'ok'
                 elif str1 =='multi':
                     strs[iU] = 'multi'
             spike_times = f['viTime_spk'][0][ind] # spike times
@@ -155,6 +160,7 @@ class EphysIngest(dj.Imported):
             log.debug('opening bitcode for session {s} probe {p} ({f})'
                       .format(s=behavior['session'], p=probe, f=fullpath))
 
+            pdb.set_trace()
             mat = spio.loadmat(fullpath, squeeze_me = True) # load the bitcode file
             bitCodeE = mat['bitCodeS'].flatten() # bitCodeS is the char variable
             goCue = mat['goCue'].flatten() # bitCodeS is the char variable
@@ -187,7 +193,7 @@ class EphysIngest(dj.Imported):
                 trialunits1 = np.append(trialunits1, np.zeros(len(np.unique(trialunits[i])))+i) # add the unit numbers 
 
             log.debug('inserting units for session {s}'.format(s=behavior['session']))
-            ephys.Unit().insert(list(dict(ekey, unit = x, unit_uid = x, unit_quality = strs[x], spike_times = units[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids), allow_direct_insert=True) # batch insert the units
+            ephys.Unit().insert(list(dict(ekey, unit = x, unit_uid = x, unit_quality = strs[x], unit_site = viSite_clu[x], unit_posx = vrPosX_clu[x], unit_posy = vrPosY_clu[x], spike_times = units[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids), allow_direct_insert=True) # batch insert the units
 
             if len(bitCodeB) < len(bitCodeE): # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
                 startB = np.where(bitCodeE==bitCodeB[0])[0]
