@@ -120,7 +120,7 @@ class Unit(dj.Imported):
     ---
     unit_uid : int # unique across sessions/animals
     -> UnitQualityType
-    unit_site : float # site on the electrode for which the unit has the largest amplitude
+    unit_site : smallint # site on the electrode for which the unit has the largest amplitude
     unit_posx : double # x position of the unit on the probe
     unit_posy : double # y position of the unit on the probe
     spike_times : longblob  #  (s)

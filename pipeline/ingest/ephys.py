@@ -11,7 +11,6 @@ import numpy as np
 import datajoint as dj
 import pdb
 
-
 from pipeline import lab
 from pipeline import experiment
 from pipeline import ephys
@@ -134,7 +133,7 @@ class EphysIngest(dj.Imported):
             trWav_raw_clu = f['S_clu']['trWav_raw_clu'] # spike waveform
     #        trWav_raw_clu1 = np.concatenate((trWav_raw_clu[0:1][:][:],trWav_raw_clu),axis=0) # add a spike waveform to cluster 0, not necessary anymore after the previous step
             csNote_clu = f['S_clu']['csNote_clu'][0] # manual sorting note
-            viSite_clu = f['S_clu']['viSite_clu'][0] # site of the unit with the largest amplitude
+            viSite_clu = f['S_clu']['viSite_clu'][:] # site of the unit with the largest amplitude
             vrPosX_clu = f['S_clu']['vrPosX_clu'][0] # x position of the unit
             vrPosY_clu = f['S_clu']['vrPosY_clu'][0] # y position of the unit
             strs = ["all" for x in range(len(csNote_clu))] # all units are "all" by definition
@@ -154,13 +153,12 @@ class EphysIngest(dj.Imported):
 
             file = '{h2o}_bitcode.mat'.format(h2o=water) # fetch the bitcode and realign
             # subpath = os.path.join('{}-{}'.format(date, probe), file)
-            subpath = os.path.join(date, str(probe), file)
+            subpath = os.path.join(water, date, str(probe), file)
             fullpath = os.path.join(rigpath, subpath)
 
             log.debug('opening bitcode for session {s} probe {p} ({f})'
                       .format(s=behavior['session'], p=probe, f=fullpath))
 
-            pdb.set_trace()
             mat = spio.loadmat(fullpath, squeeze_me = True) # load the bitcode file
             bitCodeE = mat['bitCodeS'].flatten() # bitCodeS is the char variable
             goCue = mat['goCue'].flatten() # bitCodeS is the char variable
@@ -193,6 +191,7 @@ class EphysIngest(dj.Imported):
                 trialunits1 = np.append(trialunits1, np.zeros(len(np.unique(trialunits[i])))+i) # add the unit numbers 
 
             log.debug('inserting units for session {s}'.format(s=behavior['session']))
+            #pdb.set_trace()
             ephys.Unit().insert(list(dict(ekey, unit = x, unit_uid = x, unit_quality = strs[x], unit_site = viSite_clu[x], unit_posx = vrPosX_clu[x], unit_posy = vrPosY_clu[x], spike_times = units[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids), allow_direct_insert=True) # batch insert the units
 
             if len(bitCodeB) < len(bitCodeE): # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
