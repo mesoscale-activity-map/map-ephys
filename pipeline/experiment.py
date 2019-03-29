@@ -85,7 +85,7 @@ class TrialEventType(dj.Lookup):
     definition = """
     trial_event_type  : varchar(12)  
     """
-    contents = zip(('delay', 'go', 'sample', 'presample'))
+    contents = zip(('delay', 'go', 'sample', 'presample', 'trialend'))
 
 @schema
 class Outcome(dj.Lookup):

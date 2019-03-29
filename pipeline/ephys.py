@@ -86,6 +86,7 @@ class ElectrodeGroup(dj.Manual):
         -> ccf.CCF
         ---
         -> lab.SkullReference
+        -> lab.BrainArea
         ml_location = null : decimal(8,3) # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
         ap_location = null : decimal(8,3) # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
         dv_location = null : decimal(8,3) # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track

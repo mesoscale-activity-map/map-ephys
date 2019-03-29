@@ -209,7 +209,7 @@ class BehaviorIngest(dj.Imported):
 
         for f in matches:
 
-            if os.stat(f).st_size/1024 < 100:
+            if os.stat(f).st_size/1024 < 1000:
                 log.info('skipping file {f} - too small'.format(f=f))
                 continue
 
@@ -564,6 +564,21 @@ class BehaviorIngest(dj.Imported):
                 rows['trial_event'].append(ekey)
 
             #
+            # Add 'trialEnd' events
+            #
+
+            log.debug('BehaviorIngest.make(): trialend events')
+
+            last_dur = None
+            trialendindex = np.where(t.state_data == states['TrialEnd'])[0]
+
+            ekey['trial_event_type'] = 'trialend'
+            ekey['trial_event_time'] = t.state_times[trialendindex][0]
+            ekey['duration'] = 0.0
+
+            rows['trial_event'].append(ekey)
+
+            #
             # Add lick events
             #
 
@@ -658,7 +673,7 @@ class BehaviorIngest(dj.Imported):
         log.info('BehaviorIngest.make(): ... experiment.TrialEvent')
         experiment.TrialEvent().insert(
             rows['trial_event'], ignore_extra_fields=True,
-            allow_direct_insert=True)
+            allow_direct_insert=True, skip_duplicates=True)
 
         log.info('BehaviorIngest.make(): ... CorrectedTrialEvents')
         BehaviorIngest().CorrectedTrialEvents().insert(
