@@ -38,6 +38,7 @@ def logsetup(*args):
     logging.getLogger('pipeline.ingest.behavior').setLevel(logging.DEBUG)
     logging.getLogger('pipeline.ingest.ephys').setLevel(logging.DEBUG)
     logging.getLogger('pipeline.ingest.tracking').setLevel(logging.DEBUG)
+    logging.getLogger('pipeline.psth').setLevel(logging.DEBUG)
     logging.getLogger('pipeline.publication').setLevel(logging.DEBUG)
 
 
@@ -54,6 +55,12 @@ def ingest_ephys(*args):
 def ingest_tracking(*args):
     from pipeline.ingest import tracking as ingest_tracking
     ingest_tracking.TrackingIngest().populate(display_progress=True)
+
+
+def populate_psth(*args):
+    psth.Condition.populate()
+    psth.CellPsth.populate()
+    
 
 
 def publish(*args):
@@ -79,6 +86,7 @@ actions = {
     'ingest-behavior': ingest_behavior,
     'ingest-ephys': ingest_ephys,
     'ingest-tracking': ingest_tracking,
+    'populate-psth': populate_psth,
     'publish': publish,
     'shell': shell,
     'erd': erd,
