@@ -58,9 +58,14 @@ def ingest_tracking(*args):
 
 
 def populate_psth(*args):
+    log.info('psth.Condition.populate()')
     psth.Condition.populate()
+
+    log.info('psth.CellPsth.populate()')
     psth.CellPsth.populate()
-    
+
+    log.info('psth.Selectivity.populate()')
+    psth.Selectivity.populate()
 
 
 def publish(*args):

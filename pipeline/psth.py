@@ -322,22 +322,73 @@ class CellPsth(dj.Computed):
 
 @schema
 class SelectivityCriteria(dj.Lookup):
+    '''
+    Celectivity Criteria -
+    significance of unit firing rate for trial type left vs right
+    significant for right
+    '''
+
     definition = """
     sample_selectivity:                         boolean
     delay_selectivity:                          boolean
     go_selectivity:                             boolean
     """
-    # trial type l vs r: firing rate for left firing rate for right;
-    # significant for right
+    contents = [(0, 0, 0,), (0, 0, 1,),
+                (0, 1, 0,), (0, 1, 1,),
+                (1, 0, 0,), (1, 0, 1,),
+                (1, 1, 0,), (1, 1, 1,)]
 
 
 @schema
 class Selectivity(dj.Computed):
+    '''
+    Unit selectivity
+    significance of unit firing rate for trial type l vs r
+    '''
     definition = """
+    # Unit Response Selectivity
     -> ephys.Unit
     ---
     -> SelectivityCriteria
     """
+
+    def make(self, key):
+        log.info('Selectivity.make(): key: {}'.format(key))
+
+        # unit = (ephys.Unit & key).fetch1()
+        # trials = (ephys.Unit.UnitTrial & key).fetch()
+
+        session = {k: key[k] for k in experiment.Session.primary_key}
+
+        active = (ephys.TrialSpikes & key).fetch()
+        trials = [{k: a[k] for k in experiment.SessionTrial.primary_key}
+                  for a in active]
+
+        events = (experiment.TrialEvent & key).fetch()
+
+        # BOOKMARK:
+        # - dealing with duplicate sample events;
+        # - building arrays so that bulk computation can be done in one shot.
+        presample = events[np.where(events['trial_event_type'] == 'presample')]
+        go = events[np.where(events['trial_event_type'] == 'go')]
+        sample = events[np.where(events['trial_event_type'] == 'sample')]
+        trialend = events[np.where(events['trial_event_type'] == 'trialend')]
+
+        # np.where((active2['subject_id'] == 90211) & (active2['session'] == 1) & (active2['trial'] == 169))
+
+        # for t in (trials[0],):
+        # for t in trials:
+        #     tevent = (experiment.TrialEvent & t).fetch(as_dict=True)
+        #     tspike_idx = np.where((active['subject_id'] == t['subject_id'])
+        #                           & (active['session'] == t['session'])
+        #                           & (active['trial'] == t['trial']))
+        #     tspike = active[tspike_idx]
+        # go, presample, sample, trialend
+
+        from code import interact
+        from collections import ChainMap
+        interact('Selectvity make REPL',
+                 local=dict(ChainMap(globals(), locals())))
 
 
 @schema
@@ -352,13 +403,6 @@ class CellGroupCondition(dj.Manual):
     -> SelectivityCriteria
     """
 
-    class Unit(dj.Part):
-        definition = """
-        # unit backreference for group psth
-        -> master
-        -> ephys.Unit
-        """
-
 
 @schema
 class CellGroupPsth(dj.Computed):
@@ -367,3 +411,10 @@ class CellGroupPsth(dj.Computed):
     ---
     cell_group_psth:                            longblob
     """
+
+    class Unit(dj.Part):
+        definition = """
+        # unit backreference for group psth
+        -> master
+        -> ephys.Unit
+        """
