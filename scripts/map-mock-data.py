@@ -15,7 +15,8 @@ from pipeline import publication
 def dropdbs():
     print('dropping databases')
     for d in ['ingest.ephys', 'ingest.tracking', 'ingest.behavior',
-              'publication', 'ephys', 'tracking', 'experiment', 'lab', 'ccf']:
+              'publication', 'psth', 'tracking', 'ephys', 'experiment', 
+              'lab', 'ccf']:
         dname = dj.config['{}.database'.format(d)]
         print('..  {} ({})'.format(d, dname))
         schema = dj.schema(dname)
