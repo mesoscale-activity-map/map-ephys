@@ -67,6 +67,12 @@ def populate_psth(*args):
     log.info('psth.Selectivity.populate()')
     psth.Selectivity.populate()
 
+    log.info('psth.CellGroupCondition.populate()')
+    psth.CellGroupCondition.populate()
+
+    log.info('psth.CellGroupPsth.populate()')
+    psth.CellGroupPsth.populate()
+
 
 def publish(*args):
     publication.ArchivedRawEphysTrial.populate()
