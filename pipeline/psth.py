@@ -347,7 +347,17 @@ class SelectivityCriteria(dj.Lookup):
 @schema
 class Selectivity(dj.Computed):
     '''
-    Unit selectivity
+    Unit Selectivity
+
+    Compute unit selectivity based on fixed time regions.
+
+    Calculation:
+    2 tail t significance of unit firing rate for trial type l vs r
+    frequency = nspikes(period)/len(period)
+
+    lick instruction(-2.4,-1.2)  # sound is playing,
+    pre trial delay wait(-1.2,0)  # delay
+    go(0,1.2)  # perform lick
     '''
 
     definition = """
@@ -357,62 +367,34 @@ class Selectivity(dj.Computed):
     -> SelectivityCriteria
     """
 
-    '''
-    segment spikes by associated time regions
-    and do nspikes(that_time_duration)/that_time_duration
-    significance of unit firing rate for trial type l vs r
-    2tail t
-
-    also:
-
-    use fixed event times; time have been calculated relative to go queue
-    already. Thes are:
-
-    experiment events: instruction, wait, go(aka lick), end
-
-    samples:
-
-    lick instruction(-2.4,-1.2)  # sound is playing,
-    pre trial delay wait(-1.2,0)  # delay
-    go(0,1.2)  # perform lick
-    '''
     def make(self, key):
         log.info('Selectivity.make(): key: {}'.format(key))
 
-        ranges = {  # TODO: correct range names, move elsewhere
-            'presample': (-2.4, -1.2),
-            'sample': (-2.4, -1.2),
-            'go': (-2.4, -1.2),
-        }
-        outs = {k: None for k in ranges}
-
-        session = {k: key[k] for k in experiment.Session.primary_key}
+        alpha = 0.05  # TODO: confirm
+        ranges = {   # time ranges in SelectivityCriteria order
+            'sample_selectivity': (-2.4, -1.2),
+            'delay_selectivity': (-1.2, 0),
+            'go_selectivity': (0, 1.2),
+        }  # TODO: verify correct range names
 
         spikes_q = ((ephys.TrialSpikes & key)
                     & (experiment.BehaviorTrial()
                        & {'early_lick': 'no early'}))
 
         lr = ['left', 'right']
-        behav = (experiment.BehaviorTrial & spikes_q.proj()).fetch()
+        behav = (experiment.BehaviorTrial & spikes_q.proj()).fetch(
+            order_by='trial asc')
         behav_lr = {k: np.where(behav['trial_instruction'] == k) for k in lr}
 
         # construct a square-shaped spike array, create 'valid value' index
-        spikes = spikes_q.fetch()
-        xdim = len(spikes)
+        spikes = spikes_q.fetch(order_by='trial asc')
         ydim = max(len(i['spike_times']) for i in spikes)
         square = np.array(
             np.array([np.concatenate([st, pad])[:ydim]
                       for st, pad in zip(spikes['spike_times'],
                                          repeat([math.nan]*ydim))]))
 
-        index = np.ma.masked_invalid(square)
-
-        '''
-        segment spikes by associated time regions
-        and do nspikes(that_time_duration)/that_time_duration
-        significance of unit firing rate for trial type l vs r
-        2tail t
-        '''
+        criteria = {}
         for name, bounds in ranges.items():
 
             lower_mask = np.ma.masked_greater_equal(square, bounds[0])
@@ -427,14 +409,9 @@ class Selectivity(dj.Computed):
             freq_r = freq[behav_lr['right']]
 
             t_stat, pval = sc.stats.ttest_ind(freq_l, freq_r)
+            criteria[name] = 1 if pval <= alpha else 0
 
-            # BOOKMARK
-            # outs[name] = {'values': out}
-
-        # from code import interact
-        # from collections import ChainMap
-        # interact('Selectvity make REPL',
-        #          local=dict(ChainMap(globals(), locals())))
+        self.insert1(dict(key, **criteria))
 
 
 @schema
