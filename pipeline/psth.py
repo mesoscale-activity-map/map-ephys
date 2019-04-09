@@ -125,7 +125,7 @@ class Condition(dj.Manual):
                         reduce(operator.add, (t.proj() for t in trials))})
 
         return [{'subject_id': t[0], 'session': t[1], 'trial': t[2]}
-                for t in set.intersection(*res)]
+                for t in sorted(set.intersection(*res))]
 
     @classmethod
     def populate(cls):
