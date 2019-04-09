@@ -426,6 +426,24 @@ class CellGroupCondition(dj.Manual):
     -> SelectivityCriteria
     """
 
+    @classmethod
+    def populate(cls):
+        """
+        Table contents for CellGroupCondition
+        """
+        self = cls()
+        self.insert1({
+            'condition_id': 0,
+            'cell_group_condition_id': 0,
+            'cell_group_condition_desc': '''
+            audio delay contra hit - high selectivity; ALM
+            ''',
+            'brain_area': 'ALM',
+            'sample_selectivity': 1,
+            'delay_selectivity': 1,
+            'go_selectivity': 1,
+        }, skip_duplicates=True)
+
 
 @schema
 class CellGroupPsth(dj.Computed):
@@ -441,3 +459,23 @@ class CellGroupPsth(dj.Computed):
         -> master
         -> ephys.Unit
         """
+
+    def make(self, key):
+        log.info('CellGroupPsth.make(): key: {}'.format(key))
+
+        # CellPsth.Unit & {k: key[k] for k in Condition.primary_key}
+
+        group_cond = (CellGroupCondition & key).fetch1()
+
+        unit_psth_q = (
+            (CellPsth.Unit & {k: key[k] for k in Condition.primary_key})
+            & (Selectivity & {k: group_cond[k]
+                              for k in SelectivityCriteria.primary_key}))
+
+        unit_psth = unit_psth_q.fetch()
+        [unit_psth]
+
+        # BOOKMARK: calculations
+        # from code import interact
+        # from collections import ChainMap
+        # interact('cellgrouppsth', local=dict(ChainMap(locals(), globals())))
