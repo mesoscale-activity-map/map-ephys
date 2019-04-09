@@ -1,11 +1,16 @@
 
 import logging
 import operator
+import math
 
 from functools import reduce
+from itertools import repeat
 
 import numpy as np
+import scipy as sc
 import datajoint as dj
+
+import scipy.stats  # NOQA
 
 from pipeline import lab
 from pipeline import experiment
@@ -343,8 +348,8 @@ class SelectivityCriteria(dj.Lookup):
 class Selectivity(dj.Computed):
     '''
     Unit selectivity
-    significance of unit firing rate for trial type l vs r
     '''
+
     definition = """
     # Unit Response Selectivity
     -> ephys.Unit
@@ -352,43 +357,84 @@ class Selectivity(dj.Computed):
     -> SelectivityCriteria
     """
 
+    '''
+    segment spikes by associated time regions
+    and do nspikes(that_time_duration)/that_time_duration
+    significance of unit firing rate for trial type l vs r
+    2tail t
+
+    also:
+
+    use fixed event times; time have been calculated relative to go queue
+    already. Thes are:
+
+    experiment events: instruction, wait, go(aka lick), end
+
+    samples:
+
+    lick instruction(-2.4,-1.2)  # sound is playing,
+    pre trial delay wait(-1.2,0)  # delay
+    go(0,1.2)  # perform lick
+    '''
     def make(self, key):
         log.info('Selectivity.make(): key: {}'.format(key))
 
-        # unit = (ephys.Unit & key).fetch1()
-        # trials = (ephys.Unit.UnitTrial & key).fetch()
+        ranges = {  # TODO: correct range names, move elsewhere
+            'presample': (-2.4, -1.2),
+            'sample': (-2.4, -1.2),
+            'go': (-2.4, -1.2),
+        }
+        outs = {k: None for k in ranges}
 
         session = {k: key[k] for k in experiment.Session.primary_key}
 
-        active = (ephys.TrialSpikes & key).fetch()
-        trials = [{k: a[k] for k in experiment.SessionTrial.primary_key}
-                  for a in active]
+        spikes_q = ((ephys.TrialSpikes & key)
+                    & (experiment.BehaviorTrial()
+                       & {'early_lick': 'no early'}))
 
-        events = (experiment.TrialEvent & key).fetch()
+        lr = ['left', 'right']
+        behav = (experiment.BehaviorTrial & spikes_q.proj()).fetch()
+        behav_lr = {k: np.where(behav['trial_instruction'] == k) for k in lr}
 
-        # BOOKMARK:
-        # - dealing with duplicate sample events;
-        # - building arrays so that bulk computation can be done in one shot.
-        presample = events[np.where(events['trial_event_type'] == 'presample')]
-        go = events[np.where(events['trial_event_type'] == 'go')]
-        sample = events[np.where(events['trial_event_type'] == 'sample')]
-        trialend = events[np.where(events['trial_event_type'] == 'trialend')]
+        # construct a square-shaped spike array, create 'valid value' index
+        spikes = spikes_q.fetch()
+        xdim = len(spikes)
+        ydim = max(len(i['spike_times']) for i in spikes)
+        square = np.array(
+            np.array([np.concatenate([st, pad])[:ydim]
+                      for st, pad in zip(spikes['spike_times'],
+                                         repeat([math.nan]*ydim))]))
 
-        # np.where((active2['subject_id'] == 90211) & (active2['session'] == 1) & (active2['trial'] == 169))
+        index = np.ma.masked_invalid(square)
 
-        # for t in (trials[0],):
-        # for t in trials:
-        #     tevent = (experiment.TrialEvent & t).fetch(as_dict=True)
-        #     tspike_idx = np.where((active['subject_id'] == t['subject_id'])
-        #                           & (active['session'] == t['session'])
-        #                           & (active['trial'] == t['trial']))
-        #     tspike = active[tspike_idx]
-        # go, presample, sample, trialend
+        '''
+        segment spikes by associated time regions
+        and do nspikes(that_time_duration)/that_time_duration
+        significance of unit firing rate for trial type l vs r
+        2tail t
+        '''
+        for name, bounds in ranges.items():
 
-        from code import interact
-        from collections import ChainMap
-        interact('Selectvity make REPL',
-                 local=dict(ChainMap(globals(), locals())))
+            lower_mask = np.ma.masked_greater_equal(square, bounds[0])
+            upper_mask = np.ma.masked_less_equal(square, bounds[1])
+            inrng_mask = np.logical_and(lower_mask.mask, upper_mask.mask)
+
+            rsum = np.sum(inrng_mask, axis=1)
+            dur = bounds[1] - bounds[0]
+            freq = rsum / dur
+
+            freq_l = freq[behav_lr['left']]
+            freq_r = freq[behav_lr['right']]
+
+            t_stat, pval = sc.stats.ttest_ind(freq_l, freq_r)
+
+            # BOOKMARK
+            # outs[name] = {'values': out}
+
+        # from code import interact
+        # from collections import ChainMap
+        # interact('Selectvity make REPL',
+        #          local=dict(ChainMap(globals(), locals())))
 
 
 @schema
