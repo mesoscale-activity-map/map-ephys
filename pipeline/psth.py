@@ -1,11 +1,16 @@
 
 import logging
 import operator
+import math
 
 from functools import reduce
+from itertools import repeat
 
 import numpy as np
+import scipy as sc
 import datajoint as dj
+
+import scipy.stats  # NOQA
 
 from pipeline import lab
 from pipeline import experiment
@@ -120,7 +125,7 @@ class Condition(dj.Manual):
                         reduce(operator.add, (t.proj() for t in trials))})
 
         return [{'subject_id': t[0], 'session': t[1], 'trial': t[2]}
-                for t in set.intersection(*res)]
+                for t in sorted(set.intersection(*res))]
 
     @classmethod
     def populate(cls):
@@ -342,9 +347,19 @@ class SelectivityCriteria(dj.Lookup):
 @schema
 class Selectivity(dj.Computed):
     '''
-    Unit selectivity
-    significance of unit firing rate for trial type l vs r
+    Unit Selectivity
+
+    Compute unit selectivity based on fixed time regions.
+
+    Calculation:
+    2 tail t significance of unit firing rate for trial type l vs r
+    frequency = nspikes(period)/len(period)
+
+    lick instruction(-2.4,-1.2)  # sound is playing,
+    pre trial delay wait(-1.2,0)  # delay
+    go(0,1.2)  # perform lick
     '''
+
     definition = """
     # Unit Response Selectivity
     -> ephys.Unit
@@ -355,40 +370,48 @@ class Selectivity(dj.Computed):
     def make(self, key):
         log.info('Selectivity.make(): key: {}'.format(key))
 
-        # unit = (ephys.Unit & key).fetch1()
-        # trials = (ephys.Unit.UnitTrial & key).fetch()
+        alpha = 0.05  # TODO: confirm
+        ranges = {   # time ranges in SelectivityCriteria order
+            'sample_selectivity': (-2.4, -1.2),
+            'delay_selectivity': (-1.2, 0),
+            'go_selectivity': (0, 1.2),
+        }  # TODO: verify correct range names
 
-        session = {k: key[k] for k in experiment.Session.primary_key}
+        spikes_q = ((ephys.TrialSpikes & key)
+                    & (experiment.BehaviorTrial()
+                       & {'early_lick': 'no early'}))
 
-        active = (ephys.TrialSpikes & key).fetch()
-        trials = [{k: a[k] for k in experiment.SessionTrial.primary_key}
-                  for a in active]
+        lr = ['left', 'right']
+        behav = (experiment.BehaviorTrial & spikes_q.proj()).fetch(
+            order_by='trial asc')
+        behav_lr = {k: np.where(behav['trial_instruction'] == k) for k in lr}
 
-        events = (experiment.TrialEvent & key).fetch()
+        # construct a square-shaped spike array, create 'valid value' index
+        spikes = spikes_q.fetch(order_by='trial asc')
+        ydim = max(len(i['spike_times']) for i in spikes)
+        square = np.array(
+            np.array([np.concatenate([st, pad])[:ydim]
+                      for st, pad in zip(spikes['spike_times'],
+                                         repeat([math.nan]*ydim))]))
 
-        # BOOKMARK:
-        # - dealing with duplicate sample events;
-        # - building arrays so that bulk computation can be done in one shot.
-        presample = events[np.where(events['trial_event_type'] == 'presample')]
-        go = events[np.where(events['trial_event_type'] == 'go')]
-        sample = events[np.where(events['trial_event_type'] == 'sample')]
-        trialend = events[np.where(events['trial_event_type'] == 'trialend')]
+        criteria = {}
+        for name, bounds in ranges.items():
 
-        # np.where((active2['subject_id'] == 90211) & (active2['session'] == 1) & (active2['trial'] == 169))
+            lower_mask = np.ma.masked_greater_equal(square, bounds[0])
+            upper_mask = np.ma.masked_less_equal(square, bounds[1])
+            inrng_mask = np.logical_and(lower_mask.mask, upper_mask.mask)
 
-        # for t in (trials[0],):
-        # for t in trials:
-        #     tevent = (experiment.TrialEvent & t).fetch(as_dict=True)
-        #     tspike_idx = np.where((active['subject_id'] == t['subject_id'])
-        #                           & (active['session'] == t['session'])
-        #                           & (active['trial'] == t['trial']))
-        #     tspike = active[tspike_idx]
-        # go, presample, sample, trialend
+            rsum = np.sum(inrng_mask, axis=1)
+            dur = bounds[1] - bounds[0]
+            freq = rsum / dur
 
-        from code import interact
-        from collections import ChainMap
-        interact('Selectvity make REPL',
-                 local=dict(ChainMap(globals(), locals())))
+            freq_l = freq[behav_lr['left']]
+            freq_r = freq[behav_lr['right']]
+
+            t_stat, pval = sc.stats.ttest_ind(freq_l, freq_r)
+            criteria[name] = 1 if pval <= alpha else 0
+
+        self.insert1(dict(key, **criteria))
 
 
 @schema
@@ -402,6 +425,24 @@ class CellGroupCondition(dj.Manual):
     -> lab.BrainArea
     -> SelectivityCriteria
     """
+
+    @classmethod
+    def populate(cls):
+        """
+        Table contents for CellGroupCondition
+        """
+        self = cls()
+        self.insert1({
+            'condition_id': 0,
+            'cell_group_condition_id': 0,
+            'cell_group_condition_desc': '''
+            audio delay contra hit - high selectivity; ALM
+            ''',
+            'brain_area': 'ALM',
+            'sample_selectivity': 1,
+            'delay_selectivity': 1,
+            'go_selectivity': 1,
+        }, skip_duplicates=True)
 
 
 @schema
@@ -418,3 +459,23 @@ class CellGroupPsth(dj.Computed):
         -> master
         -> ephys.Unit
         """
+
+    def make(self, key):
+        log.info('CellGroupPsth.make(): key: {}'.format(key))
+
+        # CellPsth.Unit & {k: key[k] for k in Condition.primary_key}
+
+        group_cond = (CellGroupCondition & key).fetch1()
+
+        unit_psth_q = (
+            (CellPsth.Unit & {k: key[k] for k in Condition.primary_key})
+            & (Selectivity & {k: group_cond[k]
+                              for k in SelectivityCriteria.primary_key}))
+
+        unit_psth = unit_psth_q.fetch()
+        [unit_psth]
+
+        # BOOKMARK: calculations
+        # from code import interact
+        # from collections import ChainMap
+        # interact('cellgrouppsth', local=dict(ChainMap(locals(), globals())))
