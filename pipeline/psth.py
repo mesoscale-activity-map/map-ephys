@@ -415,6 +415,7 @@ class Selectivity(dj.Computed):
 
             t_stat, pval = sc.stats.ttest_ind(freq_l, freq_r)
             criteria[name] = 1 if pval <= alpha else 0
+            log.info('criteria: {}'.format(criteria))
 
         self.insert1(dict(key, **criteria))
 
@@ -447,6 +448,7 @@ class CellGroupCondition(dj.Manual):
             'sample_selectivity': 1,
             'delay_selectivity': 1,
             'go_selectivity': 1,
+            'global_selectivity': 1,
         }, skip_duplicates=True)
 
         '''
