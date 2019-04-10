@@ -237,7 +237,7 @@ class Condition(dj.Manual):
         #
 
         cond_key = {
-            'condition_id': 2,
+            'condition_id': 3,
             'condition_desc': 'audio delay ipsi error'
         }
         self.insert1(cond_key, skip_duplicates=True)
@@ -337,11 +337,18 @@ class SelectivityCriteria(dj.Lookup):
     sample_selectivity:                         boolean
     delay_selectivity:                          boolean
     go_selectivity:                             boolean
+    global_selectivity:                         boolean
     """
-    contents = [(0, 0, 0,), (0, 0, 1,),
-                (0, 1, 0,), (0, 1, 1,),
-                (1, 0, 0,), (1, 0, 1,),
-                (1, 1, 0,), (1, 1, 1,)]
+    contents = [(0, 0, 0, 0,), (0, 0, 0, 1,), (0, 0, 1, 0,), (0, 0, 1, 1,),
+                (0, 1, 0, 0,), (0, 1, 0, 1,), (0, 1, 1, 0,), (0, 1, 1, 1,),
+                (1, 0, 0, 0,), (1, 0, 0, 1,), (1, 0, 1, 0,), (1, 0, 1, 1,),
+                (1, 1, 0, 0,), (1, 1, 0, 1,), (1, 1, 1, 0,), (1, 1, 1, 1,)]
+    ranges = {   # time ranges in SelectivityCriteria order
+        'sample_selectivity': (-2.4, -1.2),
+        'delay_selectivity': (-1.2, 0),
+        'go_selectivity': (0, 1.2),
+        'global_selectivity': (-2.4, 1.2),
+    }
 
 
 @schema
@@ -371,12 +378,7 @@ class Selectivity(dj.Computed):
         log.info('Selectivity.make(): key: {}'.format(key))
 
         alpha = 0.05  # TODO: confirm
-        ranges = {   # time ranges in SelectivityCriteria order
-            'sample_selectivity': (-2.4, -1.2),
-            'delay_selectivity': (-1.2, 0),
-            'go_selectivity': (0, 1.2),
-        }  # TODO: verify correct range names
-
+        ranges = SelectivityCriteria.ranges
         spikes_q = ((ephys.TrialSpikes & key)
                     & (experiment.BehaviorTrial()
                        & {'early_lick': 'no early'}))
@@ -395,6 +397,9 @@ class Selectivity(dj.Computed):
                                          repeat([math.nan]*ydim))]))
 
         criteria = {}
+        # todo: hemisphere xcheck
+        # ipsi: instruction matches eleotrode group position
+        # contra: instruction opposite eleotrode group position
         for name, bounds in ranges.items():
 
             lower_mask = np.ma.masked_greater_equal(square, bounds[0])
@@ -443,6 +448,11 @@ class CellGroupCondition(dj.Manual):
             'delay_selectivity': 1,
             'go_selectivity': 1,
         }, skip_duplicates=True)
+
+        '''
+        take average PSTH for all (contra|ipsi) trials
+        refile: bitcode checking
+        '''
 
 
 @schema
