@@ -328,7 +328,7 @@ class CellPsth(dj.Computed):
 @schema
 class SelectivityCriteria(dj.Lookup):
     '''
-    Celectivity Criteria -
+    Selectivity Criteria -
     significance of unit firing rate for trial type left vs right
     significant for right
     '''
