@@ -76,7 +76,6 @@ class ElectrodeGroup(dj.Manual):
     class ElectrodeGroupPosition(dj.Part):
         definition = """
         -> ElectrodeGroup
-        -> ccf.CCF
         ---
         -> lab.SkullReference
         -> lab.Hemisphere
@@ -88,12 +87,19 @@ class ElectrodeGroup(dj.Manual):
         ap_angle = null    : decimal(8,3) # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive.
         """
 
+    class ElectrodePosition(dj.Part):
+        definition = """
+        -> Electrode
+        -> ccf.CCF
+        """
+
     def make(self, key):
         part_no = (ElectrodeGroup() & key).fetch('probe_part_no')
         probe = (Probe() & {'probe_part_no': part_no[0]}).fetch1()
         if probe['probe_type'] == 'neuropixels probe O3':
             # Fetch the Probe corresponding to this session. If Neuropixel probe in the probe_description, then 374 electrodes for 1 electrode group
             ElectrodeGroup.Electrode().insert(list(dict(key, electrode = x) for x in range (1,375)))
+
 
 
 @schema
