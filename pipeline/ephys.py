@@ -89,7 +89,7 @@ class ElectrodeGroup(dj.Manual):
 
     class ElectrodePosition(dj.Part):
         definition = """
-        -> Electrode
+        -> ElectrodeGroup.Electrode
         -> ccf.CCF
         """
 
