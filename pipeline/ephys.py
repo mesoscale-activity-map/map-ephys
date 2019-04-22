@@ -83,7 +83,6 @@ class ElectrodeGroup(dj.Manual):
     class ElectrodeGroupPosition(dj.Part):
         definition = """
         -> ElectrodeGroup
-        -> ccf.CCF
         ---
         -> lab.SkullReference
         -> lab.Hemisphere
@@ -93,6 +92,12 @@ class ElectrodeGroup(dj.Manual):
         dv_location = null : decimal(8,3) # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
         ml_angle = null    : decimal(8,3) # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
         ap_angle = null    : decimal(8,3) # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive.
+        """
+
+    class ElectrodePosition(dj.Part):
+        definition = """
+        -> Electrode
+        -> ccf.CCF
         """
 
 
