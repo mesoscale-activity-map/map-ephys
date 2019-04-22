@@ -73,13 +73,6 @@ class ElectrodeGroup(dj.Manual):
         electrode : smallint # sites on the electrode
         """
 
-    def make(self, key):
-        part_no = (ElectrodeGroup() & key).fetch('probe_part_no')
-        probe = (Probe() & {'probe_part_no': part_no[0]}).fetch1()
-        if probe['probe_type'] == 'neuropixels probe O3':
-            # Fetch the Probe corresponding to this session. If Neuropixel probe in the probe_description, then 374 electrodes for 1 electrode group
-            ElectrodeGroup.Electrode().insert(list(dict(key, electrode = x) for x in range (1,375)))
-
     class ElectrodeGroupPosition(dj.Part):
         definition = """
         -> ElectrodeGroup
@@ -94,6 +87,13 @@ class ElectrodeGroup(dj.Manual):
         ml_angle = null    : decimal(8,3) # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
         ap_angle = null    : decimal(8,3) # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive.
         """
+
+    def make(self, key):
+        part_no = (ElectrodeGroup() & key).fetch('probe_part_no')
+        probe = (Probe() & {'probe_part_no': part_no[0]}).fetch1()
+        if probe['probe_type'] == 'neuropixels probe O3':
+            # Fetch the Probe corresponding to this session. If Neuropixel probe in the probe_description, then 374 electrodes for 1 electrode group
+            ElectrodeGroup.Electrode().insert(list(dict(key, electrode = x) for x in range (1,375)))
 
 
 @schema
