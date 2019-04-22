@@ -15,11 +15,16 @@ class CCF(dj.Lookup):
     label  : varchar(128)   # TODO
     """
 
+
 @schema
 class AnnotationType(dj.Lookup):
     definition = """
     annotation_type  : varchar(16)
     """
+    contents = [
+        ("Allen Ontology",)
+    ]
+
 
 @schema
 class CCFAnnotation(dj.Manual):
