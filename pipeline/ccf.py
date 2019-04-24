@@ -71,7 +71,6 @@ class CCFAnnotation(dj.Manual):
         """
         # TODO: scaling
         log.info('CCFAnnotation.load_ccf_r3_20um(): start')
-        dj.conn().start_transaction()
 
         self = cls()  # Instantiate self,
         stack_path = dj.config['ccf.r3_20um_path']
@@ -104,14 +103,14 @@ class CCFAnnotation(dj.Manual):
 
             log.info('.. region {} volume: shape {}'.format(num, vol.shape))
 
-            # creating corresponding base CCF records if necessary,
-            CCF.insert(((CCFLabel.CCF_R3_20UM_ID, *vox) for vox in vol),
-                       skip_duplicates=True)
+            with dj.conn().transaction:
+                # creating corresponding base CCF records if necessary,
+                CCF.insert(((CCFLabel.CCF_R3_20UM_ID, *vox) for vox in vol),
+                           skip_duplicates=True)
 
-            # and adding to the annotation set.
-            self.insert(((CCFLabel.CCF_R3_20UM_ID, *vox,
-                         CCFLabel.CCF_R3_20UM_TYPE, txt) for vox in vol),
-                        skip_duplicates=True)
+                # and adding to the annotation set.
+                self.insert(((CCFLabel.CCF_R3_20UM_ID, *vox,
+                             CCFLabel.CCF_R3_20UM_TYPE, txt) for vox in vol),
+                            skip_duplicates=True)
 
-        dj.conn().commit_transaction()
         log.info('.. done.')
