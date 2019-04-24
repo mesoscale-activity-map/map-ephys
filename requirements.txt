@@ -2,3 +2,4 @@ datajoint
 scipy
 h5py
 globus-sdk
+tifffile

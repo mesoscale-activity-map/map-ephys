@@ -519,6 +519,16 @@ def mockdata():
         print("error creating mock data: {e}".format(e=e), file=sys.stderr)
         raise
 
+
+def mock_post_load():
+    # need CCF reference data 1st
+    ephys.ElectrodeGroup.ElectrodeGroupPosition().insert1({
+        'subject_id': 90211,
+        'session': 1,
+        'electrode_group': 1,
+    })
+
+
 if __name__ == '__main__':
     dropdbs()
     mockdata()
