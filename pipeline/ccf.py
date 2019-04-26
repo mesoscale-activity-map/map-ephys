@@ -54,12 +54,26 @@ class AnnotationType(dj.Lookup):
 
 
 @schema
+class AnnotationText(dj.Manual):
+    definition = """
+    annotation_text_id:         int
+    ---
+    annotation_text :      varchar(1200)
+    """
+    contents = ((CCFLabel.CCF_R3_20UM_TYPE,),)
+
+    @classmethod
+    def get_next_id(cls):
+        return (dj.U().aggr(cls(), n='max(annotation_text_id)').fetch1('n')
+                or 0) + 1
+
+
+@schema
 class CCFAnnotation(dj.Manual):
     definition = """
     -> CCF
     -> AnnotationType
-    ---
-    annotation  : varchar(1200)
+    -> AnnotationText
     """
 
     @classmethod
@@ -104,13 +118,24 @@ class CCFAnnotation(dj.Manual):
             log.info('.. region {} volume: shape {}'.format(num, vol.shape))
 
             with dj.conn().transaction:
-                # creating corresponding base CCF records if necessary,
+
+                # creating corresponding base CCF records
                 CCF.insert(((CCFLabel.CCF_R3_20UM_ID, *vox) for vox in vol),
                            skip_duplicates=True)
 
-                # and adding to the annotation set.
+                # and annotation text
+                at = (AnnotationText & {'annotation_text': txt})
+                if not at:
+                    at = {'annotation_text_id': AnnotationText.get_next_id(),
+                          'annotation_text': txt}
+                    AnnotationText.insert1(at)
+                else:
+                    at = at.fetch1()
+
+                # and adding the annotation to the annotation set.
                 self.insert(((CCFLabel.CCF_R3_20UM_ID, *vox,
-                             CCFLabel.CCF_R3_20UM_TYPE, txt) for vox in vol),
+                              CCFLabel.CCF_R3_20UM_TYPE,
+                              at['annotation_text_id']) for vox in vol),
                             skip_duplicates=True)
 
         log.info('.. done.')
