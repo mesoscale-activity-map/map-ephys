@@ -13,9 +13,11 @@ class InsertBuffer(object):
 
     Currently requires records do not have prerequisites.
     '''
-    def __init__(self, rel):
+    def __init__(self, rel, chunksz=1, **insert_args):
         self._rel = rel
         self._queue = []
+        self._chunksz = chunksz
+        self._insert_args = insert_args
 
     def insert1(self, r):
         self._queue.append(r)
@@ -23,24 +25,22 @@ class InsertBuffer(object):
     def insert(self, recs):
         self._queue += recs
 
-    def flush(self, replace=False, skip_duplicates=False,
-              ignore_extra_fields=False, allow_direct_insert=False, chunksz=1):
+    def flush(self, chunksz=None):
         '''
         flush the buffer
-        XXX: use kwargs?
-        XXX: ignore_extra_fields na, requires .insert() support
+        XXX: also get pymysql.err.DataError, etc - catch these or pr datajoint?
+        XXX: optional flush-on-error? hmm..
         '''
         qlen = len(self._queue)
+        if chunksz is None:
+            chunksz = self._chunksz
+
         if qlen > 0 and qlen % chunksz == 0:
             try:
-                self._rel().insert(self._queue,
-                                   skip_duplicates=skip_duplicates,
-                                   ignore_extra_fields=ignore_extra_fields,
-                                   allow_direct_insert=allow_direct_insert)
+                self._rel.insert(self._queue, **self._insert_args)
                 self._queue.clear()
-                return True
+                return qlen
             except dj.DataJointError as e:
-                log.error('error in flush: {}'.format(e))
                 raise
 
     def __enter__(self):
