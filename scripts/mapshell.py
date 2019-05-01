@@ -38,6 +38,7 @@ def logsetup(*args):
     logging.getLogger('pipeline.ingest.behavior').setLevel(logging.DEBUG)
     logging.getLogger('pipeline.ingest.ephys').setLevel(logging.DEBUG)
     logging.getLogger('pipeline.ingest.tracking').setLevel(logging.DEBUG)
+    logging.getLogger('pipeline.ingest.histology').setLevel(logging.DEBUG)
     logging.getLogger('pipeline.psth').setLevel(logging.DEBUG)
     logging.getLogger('pipeline.ccf').setLevel(logging.DEBUG)
     logging.getLogger('pipeline.publication').setLevel(logging.DEBUG)
@@ -59,7 +60,7 @@ def ingest_tracking(*args):
 
 
 def ingest_histology(*args):
-    from pipeline.ingest import histolgoy as ingest_histology
+    from pipeline.ingest import histology as ingest_histology
     ingest_histology.HistologyIngest().populate(display_progress=True)
 
 
@@ -107,6 +108,7 @@ actions = {
     'ingest-behavior': ingest_behavior,
     'ingest-ephys': ingest_ephys,
     'ingest-tracking': ingest_tracking,
+    'ingest-histology': ingest_histology,
     'populate-psth': populate_psth,
     'publish': publish,
     'shell': shell,
