@@ -10,14 +10,7 @@ from pipeline import lab
 from pipeline import ephys
 from pipeline import experiment
 from pipeline import ccf
-
-from pipeline.ingest import behavior as ingest_behavior
 from pipeline.ingest import ephys as ingest_ephys
-
-
-from code import interact
-from collections import ChainMap
-
 
 
 log = logging.getLogger(__name__)
@@ -44,7 +37,8 @@ class HistologyIngest(dj.Imported):
         '''
         HistologyIngest .make() function
         '''
-
+        # todo: check the length of the `site.ont.name` variable,
+        #   and only ingest the sites with an ontology associated to it.
         log.info('HistologyIngest().make(): key: {}'.format(key))
 
         session = (experiment.Session & key).fetch1()
@@ -58,6 +52,9 @@ class HistologyIngest(dj.Imported):
 
         egmap = {e['electrode_group']: e
                  for e in (ephys.ElectrodeGroup & session).fetch('KEY')}
+
+        errlabel = (ccf.AnnotationText &
+                    {'annotation_text': ccf.CCFLabel.CCF_R3_20UM_ERROR}).fetch1()
 
         for probe in range(1, 3):
 
@@ -94,26 +91,40 @@ class HistologyIngest(dj.Imported):
             pos_z = pos['z'][0].T[0]
             pos_xyz = np.array((pos_x, pos_y, pos_z)).T * 20
 
-            # BOOKMARK - mapping positions to electrodes
-            # XXX: is there electrode off-by-one in ingest (e.g. mat->py)??
+            # XXX: to verify - electrode off-by-one in ingest (e.g. mat->py)??
             electrodes = (ephys.ElectrodeGroup.Electrode
                           & egmap[probe]).fetch()
 
             recs = ((*l[0], ccf.CCFLabel.CCF_R3_20UM_ID, *l[1]) for l in
                     zip(electrodes[:], pos_xyz[electrodes[:]['electrode']]))
 
-
-            # interact('histology', local=dict(ChainMap(locals(), globals())))
-
             # ideally:
             # ephys.ElectrodeGroup.ElectrodePosition.insert(
             #     recs, allow_direct_insert=True)
-            # but hitting ccf coordinate issues.. debuging iteratively :
+            # but hitting ccf coordinate issues..:
+
+            '''
+            pymysql.err.IntegrityError: (1452, 'Cannot add or update
+            a child row: a foreign key constraint fails
+
+            pymysql.err.IntegrityError: (1452, 'Cannot add or update a child row: a foreign key constraint fails (`djtest_mape_ephys_newfix`.`electrode_group__electrode_position`, CONSTRAINT `electrode_group__electrode_position_ibfk_2` FOREIGN KEY (`ccf_label_id`, `x`, `y`, `z`) REFERENCES `djtest_mape_cc)')
+            '''
 
             for r in recs:
-                print(r)
-                ephys.ElectrodeGroup.ElectrodePosition.insert1(
-                    r, allow_direct_insert=True)
+                try:
+                    ephys.ElectrodeGroup.ElectrodePosition.insert1(
+                        r, ignore_extra_fields=True, allow_direct_insert=True)
+                except Exception as e:
+                    log.info('... ElectrodePosition error {} - attempting fix..'.format(r))
+                    # TODO: more precise error check
+                    if 'foreign key constraint fails' in repr(e):
+                        ccf.CCF.insert1(r[-4:], allow_direct_insert=True)
+                        ccf.CCFAnnotation.insert1(
+                            r[-4:] + (ccf.CCFLabel.CCF_R3_20UM_TYPE,
+                                      errlabel['annotation_text_id'],),
+                            allow_direct_insert=True,
+                            ignore_extra_fields=True,
+                            skip_duplicates=True)
 
             log.info('... ok.')
 
