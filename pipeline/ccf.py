@@ -8,6 +8,7 @@ import datajoint as dj
 
 from tifffile import imread
 
+from pipeline import InsertBuffer
 from pipeline.reference import ccf_ontology
 
 
@@ -87,9 +88,10 @@ class CCFAnnotation(dj.Manual):
 
         # iterate over ccf ontology region id/name records,
         regions = self.get_ccf_r3_20um_ontology_regions()
+        region, nregions = 0, len(regions)
+        chunksz, ib_args = 50000, {'skip_duplicates': True,
+                                   'allow_direct_insert': True}
 
-        region = 0
-        nregions = len(regions)
         for num, txt in regions:
 
             region += 1
@@ -109,13 +111,15 @@ class CCFAnnotation(dj.Manual):
             log.info('.. region {} volume: shape {}'.format(num, vol.shape))
 
             with dj.conn().transaction:
-                # creating corresponding base CCF records if necessary,
-                CCF.insert(((CCFLabel.CCF_R3_20UM_ID, *vox) for vox in vol),
-                           skip_duplicates=True)
+                with InsertBuffer(CCF, chunksz, **ib_args) as buf:
+                    for vox in vol:
+                        buf.insert1((CCFLabel.CCF_R3_20UM_ID, *vox))
+                        buf.flush()
 
-                # and adding to the annotation set.
-                self.insert(((CCFLabel.CCF_R3_20UM_ID, *vox,
-                             CCFLabel.CCF_R3_20UM_TYPE, txt) for vox in vol),
-                            skip_duplicates=True)
+                with InsertBuffer(cls, chunksz, **ib_args) as buf:
+                    for vox in vol:
+                        buf.insert1((CCFLabel.CCF_R3_20UM_ID, *vox,
+                                     CCFLabel.CCF_R3_20UM_TYPE, txt))
+                        buf.flush()
 
         log.info('.. done.')
