@@ -28,6 +28,7 @@ class CCFLabel(dj.Lookup):
     CCF_R3_20UM_ID = 0
     CCF_R3_20UM_DESC = 'Allen Institute Mouse CCF, Rev. 3, 20uM Resolution'
     CCF_R3_20UM_TYPE = 'CCF_R3_20UM'
+    CCF_R3_20UM_ERROR = 'CCF Error'
 
     contents = [
         (CCF_R3_20UM_ID, 3, 20,
@@ -141,5 +142,10 @@ class CCFAnnotation(dj.Manual):
                               CCFLabel.CCF_R3_20UM_TYPE,
                               at['annotation_text_id']) for vox in vol),
                             skip_duplicates=True)
+
+        log.info('.. adding "error" region')
+        at = {'annotation_text_id': AnnotationText.get_next_id(),
+              'annotation_text': CCFLabel.CCF_R3_20UM_ERROR}
+        AnnotationText.insert1(at)
 
         log.info('.. done.')
