@@ -77,6 +77,11 @@ class CCFAnnotation(dj.Manual):
     """
 
     @classmethod
+    def get_ccf_r3_20um_ontology_regions(cls):
+        return [c for c in csv.reader(ccf_ontology.splitlines())
+                if len(c) == 2]
+
+    @classmethod
     def load_ccf_r3_20um(cls):
         """
         Load the CCF r3 20 uM Dataset.
@@ -94,8 +99,7 @@ class CCFAnnotation(dj.Manual):
                  .format(stack.shape, stack_path))
 
         # iterate over ccf ontology region id/name records,
-        regions = [c for c in csv.reader(ccf_ontology.splitlines())
-                   if len(c) == 2]
+        regions = self.get_ccf_r3_20um_ontology_regions()
 
         region = 0
         nregions = len(regions)
