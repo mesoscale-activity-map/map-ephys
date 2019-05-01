@@ -58,6 +58,11 @@ def ingest_tracking(*args):
     ingest_tracking.TrackingIngest().populate(display_progress=True)
 
 
+def ingest_histology(*args):
+    from pipeline.ingest import histolgoy as ingest_histology
+    ingest_histology.HistologyIngest().populate(display_progress=True)
+
+
 def populate_psth(*args):
     log.info('psth.Condition.populate()')
     psth.Condition.populate()
