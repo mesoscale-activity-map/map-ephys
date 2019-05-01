@@ -42,3 +42,12 @@ class InsertBuffer(object):
             except dj.DataJointError as e:
                 log.error('error in flush: {}'.format(e))
                 raise
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, etype, evalue, etraceback):
+        if etype:
+            raise evalue
+        else:
+            return self.flush(1)
