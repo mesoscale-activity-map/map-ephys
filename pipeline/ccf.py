@@ -61,7 +61,8 @@ class CCFAnnotation(dj.Manual):
     -> CCF
     -> AnnotationType
     ---
-    annotation  : varchar(1200)
+    annotation  : varchar(1024)
+    index (annotation)
     """
 
     @classmethod
