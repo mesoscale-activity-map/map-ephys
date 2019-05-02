@@ -38,7 +38,9 @@ def logsetup(*args):
     logging.getLogger('pipeline.ingest.behavior').setLevel(logging.DEBUG)
     logging.getLogger('pipeline.ingest.ephys').setLevel(logging.DEBUG)
     logging.getLogger('pipeline.ingest.tracking').setLevel(logging.DEBUG)
+    logging.getLogger('pipeline.ingest.histology').setLevel(logging.DEBUG)
     logging.getLogger('pipeline.psth').setLevel(logging.DEBUG)
+    logging.getLogger('pipeline.ccf').setLevel(logging.DEBUG)
     logging.getLogger('pipeline.publication').setLevel(logging.DEBUG)
 
 
@@ -55,6 +57,11 @@ def ingest_ephys(*args):
 def ingest_tracking(*args):
     from pipeline.ingest import tracking as ingest_tracking
     ingest_tracking.TrackingIngest().populate(display_progress=True)
+
+
+def ingest_histology(*args):
+    from pipeline.ingest import histology as ingest_histology
+    ingest_histology.HistologyIngest().populate(display_progress=True)
 
 
 def populate_psth(*args):
@@ -85,6 +92,10 @@ def shell(*args):
              local=globals())
 
 
+def ccfload(*args):
+    ccf.CCFAnnotation.load_ccf_r3_20um()
+
+
 def erd(*args):
     for mod in (ephys, lab, experiment, tracking, psth, ccf, publication):
         modname = str().join(mod.__name__.split('.')[1:])
@@ -97,10 +108,12 @@ actions = {
     'ingest-behavior': ingest_behavior,
     'ingest-ephys': ingest_ephys,
     'ingest-tracking': ingest_tracking,
+    'ingest-histology': ingest_histology,
     'populate-psth': populate_psth,
     'publish': publish,
     'shell': shell,
     'erd': erd,
+    'ccfload': ccfload,
 }
 
 if __name__ == '__main__':

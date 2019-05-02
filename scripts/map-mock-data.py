@@ -14,9 +14,9 @@ from pipeline import publication
 
 def dropdbs():
     print('dropping databases')
-    for d in ['ingest.ephys', 'ingest.tracking', 'ingest.behavior',
-              'publication', 'psth', 'tracking', 'ephys', 'experiment', 
-              'lab', 'ccf']:
+    for d in ['ingest.histology', 'ingest.ephys', 'ingest.tracking',
+              'ingest.behavior', 'publication', 'psth', 'tracking', 'ephys',
+              'experiment', 'lab', 'ccf']:
         dname = dj.config['{}.database'.format(d)]
         print('..  {} ({})'.format(d, dname))
         schema = dj.schema(dname)
@@ -518,6 +518,16 @@ def mockdata():
     except Exception as e:
         print("error creating mock data: {e}".format(e=e), file=sys.stderr)
         raise
+
+
+def mock_post_load():
+    # need CCF reference data 1st
+    ephys.ElectrodeGroup.ElectrodeGroupPosition().insert1({
+        'subject_id': 90211,
+        'session': 1,
+        'electrode_group': 1,
+    })
+
 
 if __name__ == '__main__':
     dropdbs()
