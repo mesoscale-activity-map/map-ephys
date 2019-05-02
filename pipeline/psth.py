@@ -415,8 +415,8 @@ class Selectivity(dj.Computed):
 
             t_stat, pval = sc.stats.ttest_ind(freq_l, freq_r)
             criteria[name] = 1 if pval <= alpha else 0
-            log.info('criteria: {}'.format(criteria))
 
+        log.info('criteria: {}'.format(criteria))
         self.insert1(dict(key, **criteria))
 
 

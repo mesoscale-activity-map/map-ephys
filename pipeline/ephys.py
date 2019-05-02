@@ -73,13 +73,6 @@ class ElectrodeGroup(dj.Manual):
         electrode : smallint # sites on the electrode
         """
 
-    def make(self, key):
-        part_no = (ElectrodeGroup() & key).fetch('probe_part_no')
-        probe = (Probe() & {'probe_part_no': part_no[0]}).fetch1()
-        if probe['probe_type'] == 'neuropixels probe O3':
-            # Fetch the Probe corresponding to this session. If Neuropixel probe in the probe_description, then 374 electrodes for 1 electrode group
-            ElectrodeGroup.Electrode().insert(list(dict(key, electrode = x) for x in range (1,375)))
-
     class ElectrodeGroupPosition(dj.Part):
         definition = """
         -> ElectrodeGroup
@@ -99,6 +92,14 @@ class ElectrodeGroup(dj.Manual):
         -> ElectrodeGroup.Electrode
         -> ccf.CCF
         """
+
+    def make(self, key):
+        part_no = (ElectrodeGroup() & key).fetch('probe_part_no')
+        probe = (Probe() & {'probe_part_no': part_no[0]}).fetch1()
+        if probe['probe_type'] == 'neuropixels probe O3':
+            # Fetch the Probe corresponding to this session. If Neuropixel probe in the probe_description, then 374 electrodes for 1 electrode group
+            ElectrodeGroup.Electrode().insert(list(dict(key, electrode = x) for x in range (1,375)))
+
 
 
 @schema

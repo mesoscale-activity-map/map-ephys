@@ -236,42 +236,39 @@ class EphysIngest(dj.Imported):
 
             # UnitTrial
             log.debug('inserting UnitTrial information')
+            with InsertBuffer(ephys.Unit.UnitTrial, 10000,
+                              skip_duplicates=True,
+                              allow_direct_insert=True) as ib:
 
-            ib = InsertBuffer(ephys.Unit.UnitTrial)
-            len_trial_units2 = len(trialunits2)
+                len_trial_units2 = len(trialunits2)
+                for x in range(len_trial_units2):
+                    ib.insert1(dict(ekey, unit=trialunits1[x],
+                                    trial=trialunits2[x]))
+                    if ib.flush():
+                        log.debug('... UnitTrial spike {}'.format(x))
 
-            for x in range(len_trial_units2):
-                ib.insert1(dict(ekey, unit=trialunits1[x], trial=trialunits2[x]))
-
-                if ib.flush(skip_duplicates=True, allow_direct_insert=True,
-                            chunksz=10000):
-                    log.debug('... UnitTrial spike {}'.format(x))
-
-            if ib.flush(skip_duplicates=True, allow_direct_insert=True):
-                log.debug('... UnitTrial last spike {}'.format(x))
+            log.debug('... UnitTrial last spike {}'.format(x))
 
             # TrialSpike
             log.debug('inserting TrialSpike information')
+            with InsertBuffer(ephys.TrialSpikes, 10000, skip_duplicates=True,
+                              allow_direct_insert=True) as ib:
 
-            ib = InsertBuffer(ephys.TrialSpikes)
+                n_tspike = -1
+                for x in zip(unit_ids, trialPerUnit):  # loop through the units
+                    for i in x[1]:  # loop through the trials for each unit
+                        n_tspike += 1
 
-            n_tspike = 0
-            for x in zip(unit_ids, trialPerUnit): # loop through the units
-                for i in x[1]: # loop through the trials for each unit
+                        # i_off: cumulative offset into trialunits2
+                        i_off = sum([len(i) for i in trialPerUnit[:x[0]]]) + i
+                        ib.insert1(dict(ekey, unit=x[0],
+                                        trial=int(trialunits2[i_off]),
+                                        spike_times=(units[x[0]][x[1][i]])))
 
-                    # i_off: cumulative offset into trialunits2
-                    i_off = sum([len(i) for i in trialPerUnit[:x[0]]]) + i
-                    ib.insert1(dict(ekey, unit=x[0], trial=int(trialunits2[i_off]),
-                                   spike_times=(units[x[0]][x[1][i]])))
+                        if ib.flush():
+                            log.debug('... TrialSpike spike {}'.format(n_tspike))
 
-                    if ib.flush(skip_duplicates=True, allow_direct_insert=True,
-                                chunksz=10000):
-                        log.debug('... TrialSpike spike {}'.format(n_tspike))
-
-                    n_tspike += 1
-
-            if ib.flush(skip_duplicates=True, allow_direct_insert=True):
-                log.debug('... TrialSpike spike {}'.format(n_tspike))
+            log.debug('... TrialSpike last spike {}'.format(n_tspike))
 
             log.debug('inserting file load information')
 
