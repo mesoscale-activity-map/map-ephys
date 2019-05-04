@@ -93,6 +93,15 @@ class ElectrodeGroup(dj.Manual):
         -> ccf.CCF
         """
 
+    class ElectrodePositionError(dj.Part):
+        definition = """
+        -> ElectrodeGroup.Electrode
+        -> ccf.CCFLabel
+        x   :  int   # (um)
+        y   :  int   # (um)
+        z   :  int   # (um)
+        """
+
     def make(self, key):
         part_no = (ElectrodeGroup() & key).fetch('probe_part_no')
         probe = (Probe() & {'probe_part_no': part_no[0]}).fetch1()
