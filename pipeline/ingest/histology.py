@@ -15,7 +15,6 @@ from pipeline.ingest import ephys as ingest_ephys
 from code import interact
 from collections import ChainMap
 
-
 log = logging.getLogger(__name__)
 
 schema = dj.schema(dj.config.get(

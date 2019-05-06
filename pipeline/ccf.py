@@ -56,21 +56,6 @@ class AnnotationType(dj.Lookup):
 
 
 @schema
-class AnnotationText(dj.Manual):
-    definition = """
-    annotation_text_id:         int
-    ---
-    annotation_text :      varchar(1200)
-    """
-    contents = ((CCFLabel.CCF_R3_20UM_TYPE,),)
-
-    @classmethod
-    def get_next_id(cls):
-        return (dj.U().aggr(cls(), n='max(annotation_text_id)').fetch1('n')
-                or 0) + 1
-
-
-@schema
 class CCFAnnotation(dj.Manual):
     definition = """
     -> CCF
@@ -137,10 +122,5 @@ class CCFAnnotation(dj.Manual):
                         buf.insert1((CCFLabel.CCF_R3_20UM_ID, *vox,
                                      CCFLabel.CCF_R3_20UM_TYPE, txt))
                         buf.flush()
-
-        log.info('.. adding "error" region')
-        at = {'annotation_text_id': AnnotationText.get_next_id(),
-              'annotation_text': CCFLabel.CCF_R3_20UM_ERROR}
-        AnnotationText.insert1(at)
 
         log.info('.. done.')
