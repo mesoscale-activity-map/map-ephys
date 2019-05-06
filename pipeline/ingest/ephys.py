@@ -95,17 +95,17 @@ class EphysIngest(dj.Imported):
             # file = '{h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # some older files
             # subpath = os.path.join('{}-{}'.format(date, probe), file)
             # file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
-            file = '{h2o}_g0_*.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
-            subpath = os.path.join(water, date, str(probe), file)
-            fullpath = os.path.join(rigpath, subpath)
-            ephys_files = glob(fullpath)
+            epfile = '{h2o}_g0_*.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water)  # current file naming format
+            epsubpath = os.path.join(water, date, str(probe), epfile)
+            epfullpath = os.path.join(rigpath, epsubpath)
+            ephys_files = glob(epfullpath)
 
             if len(ephys_files) != 1:
-                log.info('EphysIngest().make(): skipping probe {} - incorrect files found: {}/{}'.format(probe, fullpath, ephys_files))
+                log.info('EphysIngest().make(): skipping probe {} - incorrect files found: {}/{}'.format(probe, epfullpath, ephys_files))
                 continue
 
-            fullpath = ephys_files[0]
-            log.info('EphysIngest().make(): found ephys recording in {}'.format(fullpath))
+            epfullpath = ephys_files[0]
+            log.info('EphysIngest().make(): found ephys recording in {}'.format(epfullpath))
 
             #
             # Prepare ElectrodeGroup configuration
@@ -125,7 +125,7 @@ class EphysIngest(dj.Imported):
 
             log.debug('extracting spike data')
 
-            f = h5py.File(fullpath,'r')
+            f = h5py.File(epfullpath,'r')
             ind = np.argsort(f['S_clu']['viClu'][0]) # index sorted by cluster
             cluster_ids = f['S_clu']['viClu'][0][ind] # cluster (unit) number
             ind = ind[np.where(cluster_ids > 0)[0]] # get rid of the -ve noise clusters
@@ -153,13 +153,13 @@ class EphysIngest(dj.Imported):
 
             file = '{h2o}_bitcode.mat'.format(h2o=water) # fetch the bitcode and realign
             # subpath = os.path.join('{}-{}'.format(date, probe), file)
-            subpath = os.path.join(water, date, str(probe), file)
-            fullpath = os.path.join(rigpath, subpath)
+            bcsubpath = os.path.join(water, date, str(probe), file)
+            bcfullpath = os.path.join(rigpath, bcsubpath)
 
             log.debug('opening bitcode for session {s} probe {p} ({f})'
-                      .format(s=behavior['session'], p=probe, f=fullpath))
+                      .format(s=behavior['session'], p=probe, f=bcfullpath))
 
-            mat = spio.loadmat(fullpath, squeeze_me = True) # load the bitcode file
+            mat = spio.loadmat(bcfullpath, squeeze_me = True) # load the bitcode file
             bitCodeE = mat['bitCodeS'].flatten() # bitCodeS is the char variable
             goCue = mat['goCue'].flatten() # bitCodeS is the char variable
             viT_offset_file = mat['sTrig'].flatten() # start of each trial, subtract this number for each trial
@@ -203,7 +203,7 @@ class EphysIngest(dj.Imported):
                 startB = 0
                 startE = 0
 
-            log.debug('extracting trial unit information {s} ({f})'.format(s=behavior['session'], f=fullpath))
+            log.debug('extracting trial unit information {s} ({f})'.format(s=behavior['session'], f=epfullpath))
 
             trialunits2 = trialunits2-startB # behavior has less trials if startB is +ve, behavior has more trials if startB is -ve
             indT = np.where(trialunits2 > -1)[0] # get rid of the -ve trials
@@ -276,5 +276,5 @@ class EphysIngest(dj.Imported):
                          allow_direct_insert=True)
 
             EphysIngest.EphysFile().insert1(
-                dict(key, electrode_group=probe, ephys_file=subpath),
+                dict(key, electrode_group=probe, ephys_file=epsubpath),
                 ignore_extra_fields=True, allow_direct_insert=True)
