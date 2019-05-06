@@ -64,7 +64,6 @@ def ingest_histology(*args):
     ingest_histology.HistologyIngest().populate(display_progress=True)
 
 
-
 def populate_psth(*args):
     log.info('psth.Condition.populate()')
     psth.Condition.populate()

@@ -12,6 +12,9 @@ from pipeline import experiment
 from pipeline import ccf
 from pipeline.ingest import ephys as ingest_ephys
 
+from code import interact
+from collections import ChainMap
+
 
 log = logging.getLogger(__name__)
 
@@ -53,8 +56,7 @@ class HistologyIngest(dj.Imported):
         egmap = {e['electrode_group']: e
                  for e in (ephys.ElectrodeGroup & session).fetch('KEY')}
 
-        errlabel = (ccf.AnnotationText &
-                    {'annotation_text': ccf.CCFLabel.CCF_R3_20UM_ERROR}).fetch1()
+        errlabel = ccf.CCFLabel.CCF_R3_20UM_ERROR
 
         for probe in range(1, 3):
 
@@ -85,46 +87,45 @@ class HistologyIngest(dj.Imported):
 
             hist = scio.loadmat(fullpath)['site']
 
+            # probe CCF 3D positions
             pos = hist['pos'][0][0][0]
             pos_x = pos['x'][0].T[0]
             pos_y = pos['y'][0].T[0]
             pos_z = pos['z'][0].T[0]
             pos_xyz = np.array((pos_x, pos_y, pos_z)).T * 20
 
+            # probe CCF regions
+            names = hist['ont'][0][0]['name'][0][0].T[0]
+            named = {np.str_: True, np.ndarray: False}  # XXX: np.where?
+            valid = [named[type(n[0])] for n in names]
+            goodn = np.where(np.array(valid))[0]
+
             # XXX: to verify - electrode off-by-one in ingest (e.g. mat->py)??
             electrodes = (ephys.ElectrodeGroup.Electrode
-                          & egmap[probe]).fetch()
+                          & egmap[probe]).fetch(order_by='electrode asc')
 
+            # interact('histoloading', local=dict(ChainMap(locals(), globals())))
+
+            # XXX: off by one in ephys.ElectrodeGroup 'builder' routine?
+            #   .. relatedly, we index pos_xyz by 'goodn' directly,
+            #   .. rather than via electrodes[goodn]['electrode']
             recs = ((*l[0], ccf.CCFLabel.CCF_R3_20UM_ID, *l[1]) for l in
-                    zip(electrodes[:], pos_xyz[electrodes[:]['electrode']]))
+                    zip(electrodes[goodn], pos_xyz[goodn]))
 
             # ideally:
             # ephys.ElectrodeGroup.ElectrodePosition.insert(
             #     recs, allow_direct_insert=True)
             # but hitting ccf coordinate issues..:
 
-            '''
-            pymysql.err.IntegrityError: (1452, 'Cannot add or update
-            a child row: a foreign key constraint fails
-
-            pymysql.err.IntegrityError: (1452, 'Cannot add or update a child row: a foreign key constraint fails (`djtest_mape_ephys_newfix`.`electrode_group__electrode_position`, CONSTRAINT `electrode_group__electrode_position_ibfk_2` FOREIGN KEY (`ccf_label_id`, `x`, `y`, `z`) REFERENCES `djtest_mape_cc)')
-            '''
-
             for r in recs:
+                log.debug('... adding probe/position: {}'.format(r))
                 try:
                     ephys.ElectrodeGroup.ElectrodePosition.insert1(
                         r, ignore_extra_fields=True, allow_direct_insert=True)
                 except Exception as e:
-                    log.info('... ElectrodePosition error {} - attempting fix..'.format(r))
-                    # TODO: more precise error check
-                    if 'foreign key constraint fails' in repr(e):
-                        ccf.CCF.insert1(r[-4:], allow_direct_insert=True)
-                        ccf.CCFAnnotation.insert1(
-                            r[-4:] + (ccf.CCFLabel.CCF_R3_20UM_TYPE,
-                                      errlabel['annotation_text_id'],),
-                            allow_direct_insert=True,
-                            ignore_extra_fields=True,
-                            skip_duplicates=True)
+                    log.warning('... ERROR!')
+                    ephys.ElectrodeGroup.ElectrodePositionError.insert1(
+                        r, ignore_extra_fields=True, allow_direct_insert=True)
 
             log.info('... ok.')
 

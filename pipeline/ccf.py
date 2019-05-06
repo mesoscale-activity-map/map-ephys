@@ -8,6 +8,7 @@ import datajoint as dj
 
 from tifffile import imread
 
+from pipeline import InsertBuffer
 from pipeline.reference import ccf_ontology
 
 
@@ -28,7 +29,7 @@ class CCFLabel(dj.Lookup):
     CCF_R3_20UM_ID = 0
     CCF_R3_20UM_DESC = 'Allen Institute Mouse CCF, Rev. 3, 20uM Resolution'
     CCF_R3_20UM_TYPE = 'CCF_R3_20UM'
-    CCF_R3_20UM_ERROR = 'CCF Error'
+    CCF_R3_20UM_ERROR = 'CCF Error'  # annotation text for 'error' region
 
     contents = [
         (CCF_R3_20UM_ID, 3, 20,
@@ -74,7 +75,9 @@ class CCFAnnotation(dj.Manual):
     definition = """
     -> CCF
     -> AnnotationType
-    -> AnnotationText
+    ---
+    annotation  : varchar(1024)
+    index (annotation)
     """
 
     @classmethod
@@ -101,9 +104,10 @@ class CCFAnnotation(dj.Manual):
 
         # iterate over ccf ontology region id/name records,
         regions = self.get_ccf_r3_20um_ontology_regions()
+        region, nregions = 0, len(regions)
+        chunksz, ib_args = 50000, {'skip_duplicates': True,
+                                   'allow_direct_insert': True}
 
-        region = 0
-        nregions = len(regions)
         for num, txt in regions:
 
             region += 1
@@ -123,25 +127,16 @@ class CCFAnnotation(dj.Manual):
             log.info('.. region {} volume: shape {}'.format(num, vol.shape))
 
             with dj.conn().transaction:
+                with InsertBuffer(CCF, chunksz, **ib_args) as buf:
+                    for vox in vol:
+                        buf.insert1((CCFLabel.CCF_R3_20UM_ID, *vox))
+                        buf.flush()
 
-                # creating corresponding base CCF records
-                CCF.insert(((CCFLabel.CCF_R3_20UM_ID, *vox) for vox in vol),
-                           skip_duplicates=True)
-
-                # and annotation text
-                at = (AnnotationText & {'annotation_text': txt})
-                if not at:
-                    at = {'annotation_text_id': AnnotationText.get_next_id(),
-                          'annotation_text': txt}
-                    AnnotationText.insert1(at)
-                else:
-                    at = at.fetch1()
-
-                # and adding the annotation to the annotation set.
-                self.insert(((CCFLabel.CCF_R3_20UM_ID, *vox,
-                              CCFLabel.CCF_R3_20UM_TYPE,
-                              at['annotation_text_id']) for vox in vol),
-                            skip_duplicates=True)
+                with InsertBuffer(cls, chunksz, **ib_args) as buf:
+                    for vox in vol:
+                        buf.insert1((CCFLabel.CCF_R3_20UM_ID, *vox,
+                                     CCFLabel.CCF_R3_20UM_TYPE, txt))
+                        buf.flush()
 
         log.info('.. adding "error" region')
         at = {'annotation_text_id': AnnotationText.get_next_id(),
