@@ -329,8 +329,10 @@ class CellPsth(dj.Computed):
 class SelectivityCriteria(dj.Lookup):
     '''
     Selectivity Criteria -
-    significance of unit firing rate for trial type left vs right
-    significant for right
+    Indicate significance of unit firing rate for trial type left vs right.
+
+    *_selectivity variables indicate if the unit displays selectivity
+    *_preference variables indicate the unit ipsi/contra preference
     '''
 
     definition = """
@@ -338,11 +340,20 @@ class SelectivityCriteria(dj.Lookup):
     delay_selectivity:                          boolean
     go_selectivity:                             boolean
     global_selectivity:                         boolean
+    sample_preference:                          boolean
+    delay_preference:                           boolean
+    go_preference:                              boolean
+    global_preference:                          boolean
     """
-    contents = [(0, 0, 0, 0,), (0, 0, 0, 1,), (0, 0, 1, 0,), (0, 0, 1, 1,),
-                (0, 1, 0, 0,), (0, 1, 0, 1,), (0, 1, 1, 0,), (0, 1, 1, 1,),
-                (1, 0, 0, 0,), (1, 0, 0, 1,), (1, 0, 1, 0,), (1, 0, 1, 1,),
-                (1, 1, 0, 0,), (1, 1, 0, 1,), (1, 1, 1, 0,), (1, 1, 1, 1,)]
+
+    @property
+    def contents(self):
+        fourset = [(0, 0, 0, 0,), (0, 0, 0, 1,), (0, 0, 1, 0,), (0, 0, 1, 1,),
+                   (0, 1, 0, 0,), (0, 1, 0, 1,), (0, 1, 1, 0,), (0, 1, 1, 1,),
+                   (1, 0, 0, 0,), (1, 0, 0, 1,), (1, 0, 1, 0,), (1, 0, 1, 1,),
+                   (1, 1, 0, 0,), (1, 1, 0, 1,), (1, 1, 1, 0,), (1, 1, 1, 1,)]
+        return (i + j for i in fourset for j in fourset)
+
     ranges = {   # time ranges in SelectivityCriteria order
         'sample_selectivity': (-2.4, -1.2),
         'delay_selectivity': (-1.2, 0),
@@ -405,6 +416,7 @@ class Selectivity(dj.Computed):
                                          repeat([math.nan]*ydim))]))
 
         criteria = {}
+
 
         for name, bounds in ranges.items():
 
