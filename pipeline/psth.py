@@ -388,6 +388,14 @@ class Selectivity(dj.Computed):
             order_by='trial asc')
         behav_lr = {k: np.where(behav['trial_instruction'] == k) for k in lr}
 
+        try:
+            egpos = (ephys.ElectrodeGroup.ElectrodeGroupPosition()
+                     & key).fetch1()
+        except dj.DataJointError as e:
+            if 'exactly one tuple' in repr(e):
+                log.error('... ElectrodeGroupPosition missing. skipping')
+                return
+
         # construct a square-shaped spike array, create 'valid value' index
         spikes = spikes_q.fetch(order_by='trial asc')
         ydim = max(len(i['spike_times']) for i in spikes)
@@ -397,9 +405,7 @@ class Selectivity(dj.Computed):
                                          repeat([math.nan]*ydim))]))
 
         criteria = {}
-        # todo: hemisphere xcheck
-        # ipsi: instruction matches eleotrode group position
-        # contra: instruction opposite eleotrode group position
+
         for name, bounds in ranges.items():
 
             lower_mask = np.ma.masked_greater_equal(square, bounds[0])
