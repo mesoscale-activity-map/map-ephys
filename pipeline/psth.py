@@ -329,8 +329,10 @@ class CellPsth(dj.Computed):
 class SelectivityCriteria(dj.Lookup):
     '''
     Selectivity Criteria -
-    significance of unit firing rate for trial type left vs right
-    significant for right
+    Indicate significance of unit firing rate for trial type left vs right.
+
+    *_selectivity variables indicate if the unit displays selectivity
+    *_preference variables indicate the unit ipsi/contra preference
     '''
 
     definition = """
@@ -338,11 +340,20 @@ class SelectivityCriteria(dj.Lookup):
     delay_selectivity:                          boolean
     go_selectivity:                             boolean
     global_selectivity:                         boolean
+    sample_preference:                          boolean
+    delay_preference:                           boolean
+    go_preference:                              boolean
+    global_preference:                          boolean
     """
-    contents = [(0, 0, 0, 0,), (0, 0, 0, 1,), (0, 0, 1, 0,), (0, 0, 1, 1,),
-                (0, 1, 0, 0,), (0, 1, 0, 1,), (0, 1, 1, 0,), (0, 1, 1, 1,),
-                (1, 0, 0, 0,), (1, 0, 0, 1,), (1, 0, 1, 0,), (1, 0, 1, 1,),
-                (1, 1, 0, 0,), (1, 1, 0, 1,), (1, 1, 1, 0,), (1, 1, 1, 1,)]
+
+    @property
+    def contents(self):
+        fourset = [(0, 0, 0, 0,), (0, 0, 0, 1,), (0, 0, 1, 0,), (0, 0, 1, 1,),
+                   (0, 1, 0, 0,), (0, 1, 0, 1,), (0, 1, 1, 0,), (0, 1, 1, 1,),
+                   (1, 0, 0, 0,), (1, 0, 0, 1,), (1, 0, 1, 0,), (1, 0, 1, 1,),
+                   (1, 1, 0, 0,), (1, 1, 0, 1,), (1, 1, 1, 0,), (1, 1, 1, 1,)]
+        return (i + j for i in fourset for j in fourset)
+
     ranges = {   # time ranges in SelectivityCriteria order
         'sample_selectivity': (-2.4, -1.2),
         'delay_selectivity': (-1.2, 0),
@@ -388,6 +399,14 @@ class Selectivity(dj.Computed):
             order_by='trial asc')
         behav_lr = {k: np.where(behav['trial_instruction'] == k) for k in lr}
 
+        try:
+            egpos = (ephys.ElectrodeGroup.ElectrodeGroupPosition()
+                     & key).fetch1()
+        except dj.DataJointError as e:
+            if 'exactly one tuple' in repr(e):
+                log.error('... ElectrodeGroupPosition missing. skipping')
+                return
+
         # construct a square-shaped spike array, create 'valid value' index
         spikes = spikes_q.fetch(order_by='trial asc')
         ydim = max(len(i['spike_times']) for i in spikes)
@@ -397,10 +416,9 @@ class Selectivity(dj.Computed):
                                          repeat([math.nan]*ydim))]))
 
         criteria = {}
-        # todo: hemisphere xcheck
-        # ipsi: instruction matches eleotrode group position
-        # contra: instruction opposite eleotrode group position
+
         for name, bounds in ranges.items():
+            pref = name.split('_')[0] + '_preference'
 
             lower_mask = np.ma.masked_greater_equal(square, bounds[0])
             upper_mask = np.ma.masked_less_equal(square, bounds[1])
@@ -410,11 +428,19 @@ class Selectivity(dj.Computed):
             dur = bounds[1] - bounds[0]
             freq = rsum / dur
 
-            freq_l = freq[behav_lr['left']]
-            freq_r = freq[behav_lr['right']]
+            if egpos['hemisphere'] == 'left':
+                behav_i = behav_lr['left']
+                behav_c = behav_lr['right']
+            else:
+                behav_i = behav_lr['right']
+                behav_c = behav_lr['left']
 
-            t_stat, pval = sc.stats.ttest_ind(freq_l, freq_r)
+            freq_i = freq[behav_i]
+            freq_c = freq[behav_c]
+            t_stat, pval = sc.stats.ttest_ind(freq_i, freq_c, equal_var=False)
+
             criteria[name] = 1 if pval <= alpha else 0
+            criteria[pref] = 1 if np.average(freq_i) > np.average(freq_c) else 0
 
         log.info('criteria: {}'.format(criteria))
         self.insert1(dict(key, **criteria))
@@ -449,7 +475,29 @@ class CellGroupCondition(dj.Manual):
             'delay_selectivity': 1,
             'go_selectivity': 1,
             'global_selectivity': 1,
+            'sample_preference': 1,
+            'delay_preference': 1,
+            'go_preference': 1,
+            'global_preference': 1,
         }, skip_duplicates=True)
+
+        self.insert1({
+            'condition_id': 0,
+            'cell_group_condition_id': 0,
+            'cell_group_condition_desc': '''
+            audio delay contra hit - high selectivity; ALM
+            ''',
+            'brain_area': 'ALM',
+            'sample_selectivity': 1,
+            'delay_selectivity': 1,
+            'go_selectivity': 1,
+            'global_selectivity': 1,
+            'sample_preference': 0,
+            'delay_preference': 0,
+            'go_preference': 0,
+            'global_preference': 0,
+        }, skip_duplicates=True)
+
 
         '''
         take average PSTH for all (contra|ipsi) trials
