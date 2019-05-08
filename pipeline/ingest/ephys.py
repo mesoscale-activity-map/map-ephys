@@ -50,7 +50,6 @@ class EphysIngest(dj.Imported):
     """
 
     class EphysFile(dj.Part):
-        # TODO: track files
         ''' files in rig-specific storage '''
         definition = """
         -> EphysIngest
