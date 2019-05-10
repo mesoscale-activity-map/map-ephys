@@ -102,7 +102,7 @@ class CCFAnnotation(dj.Manual):
                      .format(num, region, nregions, txt))
 
             # extracting filled volumes from stack in scaled [[x,y,z]] shape,
-            vol = np.array(np.where(stack == num)).T[:, [1, 2, 0]] * 20
+            vol = np.array(np.where(stack == num)).T[:, [2, 1, 0]] * 20
 
             if not vol.shape[0]:
                 log.info('.. region {} volume: shape {} - skipping'
