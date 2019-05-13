@@ -1,0 +1,22 @@
+version: '3'
+services:
+  datajoint:
+    build: .
+    env_file: .env
+    volumes:
+      - ./notebook:/notebooks
+      - .:/src/map-ephys
+      - ./data:/data
+    ports:
+      - "8888:8888"
+    extra_hosts:
+       - "db:192.168.1.10"
+  datajoint-ingest:
+    build: .
+    env_file: .env
+    entrypoint: mapshell.py shell
+    working_dir: /src/map-ephys
+    command: ingest
+    volumes:
+      - .:/src/map-ephys
+      - ./data:/data
