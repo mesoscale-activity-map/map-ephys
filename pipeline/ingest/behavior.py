@@ -25,7 +25,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 log = logging.getLogger(__name__)
 
-schema = dj.schema(dj.config.get(
+schema = dj.schema(dj.config['custom'].get(
     'ingest.behavior.database',
     '{}_ingestBehavior'.format(dj.config['database.user'])))
 

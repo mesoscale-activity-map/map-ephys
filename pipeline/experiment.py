@@ -22,6 +22,7 @@ class Task(dj.Lookup):
          ('s1 stim', 'S1 photostimulation task (2AFC)')
          ]
 
+
 @schema
 class Session(dj.Manual):
     definition = """
@@ -33,6 +34,7 @@ class Session(dj.Manual):
     -> lab.Rig
     """
 
+
 @schema
 class SessionTrial(dj.Imported):
     definition = """
@@ -41,14 +43,23 @@ class SessionTrial(dj.Imported):
     ---
     trial_uid : int  # unique across sessions/animals
     start_time : decimal(8,4)  # (s) relative to session beginning
+    is_good_trial: bool  # is this a good or bad trial
+    is_photostim_trial: bool  # is this a photostim trial
+    is_behavior_trial: bool  # is this a behavior trial
+    -> TaskProtocol
+    -> TrialInstruction
+    -> EarlyLick
+    -> Outcome
     """
-    
+
+
 @schema 
 class TrialNoteType(dj.Lookup):
     definition = """
     trial_note_type : varchar(12)
     """
     contents = zip(('autolearn', 'protocol #', 'bad', 'bitcode'))
+
 
 @schema
 class TrialNote(dj.Imported):
@@ -58,6 +69,7 @@ class TrialNote(dj.Imported):
     ---
     trial_note  : varchar(255) 
     """
+
 
 @schema
 class TrainingType(dj.Lookup):
@@ -72,13 +84,15 @@ class TrainingType(dj.Lookup):
          ('regular + distractor', 'mice were first trained on the regular S1 photostimulation task  without distractors, then the training continued in the presence of distractors'),
          ('regular or regular + distractor', 'includes both training options')
          ]
-    
+
+
 @schema
 class SessionTraining(dj.Manual):
     definition = """
     -> Session
     -> TrainingType
     """
+
 
 @schema
 class TrialEventType(dj.Lookup):
@@ -87,12 +101,14 @@ class TrialEventType(dj.Lookup):
     """
     contents = zip(('delay', 'go', 'sample', 'presample', 'trialend'))
 
+
 @schema
 class Outcome(dj.Lookup):
     definition = """
     outcome : varchar(32)
     """
     contents = zip(('hit', 'miss', 'ignore'))
+
 
 @schema 
 class EarlyLick(dj.Lookup):
@@ -115,6 +131,7 @@ class TrialInstruction(dj.Lookup):
     """
     contents = zip(('left', 'right'))
 
+
 @schema
 class TaskProtocol(dj.Lookup):
     definition = """
@@ -136,26 +153,17 @@ class TaskProtocol(dj.Lookup):
          ('s1 stim', 9, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample period')
          ]
 
-@schema
-class BehaviorTrial(dj.Imported):
-    definition = """
-    -> SessionTrial
-    ----
-    -> TaskProtocol
-    -> TrialInstruction
-    -> EarlyLick
-    -> Outcome
-    """
 
 @schema
 class TrialEvent(dj.Manual):
     definition = """
-    -> BehaviorTrial 
+    -> SessionTrial 
     -> TrialEventType
     trial_event_time : decimal(8, 4)   # (s) from trial start, not session start
     ---
     duration : decimal(8,4)  #  (s)  
     """
+
 
 @schema
 class ActionEventType(dj.Lookup):
@@ -168,32 +176,22 @@ class ActionEventType(dj.Lookup):
        ('left lick', ''), 
        ('right lick', '')]
 
+
 @schema
 class ActionEvent(dj.Imported):
     definition = """
-    -> BehaviorTrial
+    -> SessionTrial
     -> ActionEventType
     action_event_time : decimal(8,4)  # (s) from trial start
     """
-
-@schema
-class PhotostimDevice(dj.Lookup):
-    definition = """
-    photostim_device  : varchar(20)
-    ---
-    excitation_wavelength :  decimal(5,1)  # (nm) 
-    photostim_device_description : varchar(255)
-    """
-    contents =[  
-       ('LaserGem473', 473, 'Laser (Laser Quantum, Gem 473)'), 
-       ('LED470', 470, 'LED (Thor Labs, M470F3 - 470 nm, 17.2 mW (Min) Fiber-Coupled LED)'),
-       ('OBIS470', 473, 'OBIS 473nm LX 50mW Laser System: Fiber Pigtail (Coherent Inc)')]
 
 
 @schema 
 class Photostim(dj.Lookup):
     definition = """
+    -> Session
     -> PhotostimDevice
+    -> lab.ActionPotential
     photo_stim :  smallint 
     ---
     duration  :  decimal(8,4)   # (s)
@@ -219,72 +217,10 @@ class Photostim(dj.Lookup):
 
 
 @schema
-class BrainLocation(dj.Lookup):
-    definition = """
-    -> lab.BrainArea
-    brainloc_id:                integer                         # id within BrainArea
-    ---
-    -> lab.SkullReference
-    photostim_ml_location = null           : decimal(8,3)       # um from ref ; right is positive; 
-    photostim_ap_location = null           : decimal(8,3)       # um from ref; anterior is positive; 
-    photostim_dv_location = null           : decimal(8,3)       # um from dura; ventral is positive; 
-    photostim_ml_angle = null              : decimal(8,3)       # Angle between the photostim path and the Medio-Lateral axis. A tilt towards the right hemishpere is positive. 
-    photostim_ap_angle = null              : decimal(8,3)       # Angle between the photostim path and the Anterior-Posterior axis. An anterior tilt is positive. 
-    """
-
-    contents = [{
-        'brain_area': 'ALM',
-        'brainloc_id': 0,
-        'skull_reference': 'Bregma',
-        'photostim_ml_location': 1.5,
-        'photostim_ap_location': 2.5,
-        'photostim_dv_location': 0,
-        'photostim_ml_angle': 15,
-        'photostim_ap_angle': 15
-    }]
-
-
-@schema
-class PhotostimLocation(dj.Lookup):
-    definition = """
-    -> Photostim
-    -> lab.Hemisphere
-    -> BrainLocation
-    """
-
-    contents = [{
-        'photostim_device': 'OBIS470',
-        'photo_stim': 0,
-        'hemisphere': 'left',
-        'brain_area': 'ALM',
-        'brainloc_id': 0,
-    }, {
-        'photostim_device': 'OBIS470',
-        'photo_stim': 0,
-        'hemisphere': 'right',
-        'brain_area': 'ALM',
-        'brainloc_id': 0,
-    }, {
-        'photostim_device': 'OBIS470',
-        'photo_stim': 0,
-        'hemisphere': 'both',
-        'brain_area': 'ALM',
-        'brainloc_id': 0,
-    }]
-
-
-@schema
-class PhotostimTrial(dj.Imported):
+class PhotostimEvent(dj.Imported):
     definition = """
     -> SessionTrial
-    """
-
-
-@schema
-class PhotostimTrialEvent(dj.Imported):
-    definition = """
-    -> PhotostimTrial
-    -> PhotostimLocation
+    -> Photostim
     photostim_event_time : decimal(8,3)   # (s) from trial start
     power : decimal(8,3)   # Maximal power (mW)
     """
@@ -293,9 +229,9 @@ class PhotostimTrialEvent(dj.Imported):
 @schema
 class PassivePhotostimTrial(dj.Computed):
     definition = """
-    -> PhotostimTrial
+    -> SessionTrial
     """
-    key_source = PhotostimTrial() - BehaviorTrial()
+    key_source = (SessionTrial & 'is_photostim_trial=1') - (SessionTrial & 'is_behavior_trial=1')
 
     def make(self, key):
         self.insert1(key)
@@ -315,3 +251,7 @@ class SessionComment(dj.Manual):
     -> Session
     session_comment : varchar(767)
     """
+
+
+
+

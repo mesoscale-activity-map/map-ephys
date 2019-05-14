@@ -17,7 +17,7 @@ from collections import ChainMap
 
 log = logging.getLogger(__name__)
 
-schema = dj.schema(dj.config.get(
+schema = dj.schema(dj.config['custom'].get(
     'ingest.histology.database',
     '{}_ingestHistology'.format(dj.config['database.user'])))
 

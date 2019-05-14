@@ -17,7 +17,7 @@ from collections import defaultdict
 log = logging.getLogger(__name__)
 
 
-schema = dj.schema(dj.config.get(
+schema = dj.schema(dj.config['custom'].get(
     'ingest.tracking.database',
     '{}_ingestTracking'.format(dj.config['database.user'])))
 

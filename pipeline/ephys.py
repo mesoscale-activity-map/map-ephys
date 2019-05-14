@@ -10,18 +10,14 @@ schema = dj.schema(dj.config.get('ephys.database', 'map_ephys'))
 
 
 @schema
-class Probe(dj.Lookup):
+class ProbeInsertion(dj.Manual):
     definition = """
-    # Ephys probe
-    probe_part_no  :  varchar(20)
+    -> reference.Probe
+    -> lab.Subject
+    insertion_time : datetime # When this probe was inserted
     ---
-    probe_type : varchar(32)
-    probe_comment :  varchar(4000)
+    -> lab.ActionLocation
     """
-    contents = [
-        ('15131808323', 'neuropixels probe O3', ''),
-        ('H-194', 'janelia2x32', '')
-    ]
 
 
 @schema
@@ -58,57 +54,25 @@ class CellType(dj.Lookup):
 
 
 @schema
-class ElectrodeGroup(dj.Manual):
+class ChannelCCFPosition(dj.Manual):
     definition = """
-    # Electrode
     -> experiment.Session
-    electrode_group : tinyint # Electrode_group is like the probe
-    ---
-    -> Probe
     """
-
-    class Electrode(dj.Part):
-        definition = """
-        -> ElectrodeGroup
-        electrode : smallint # sites on the electrode
-        """
-
-    class ElectrodeGroupPosition(dj.Part):
-        definition = """
-        -> ElectrodeGroup
-        ---
-        -> lab.SkullReference
-        -> lab.Hemisphere
-        -> lab.BrainArea
-        ml_location = null : decimal(8,3) # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
-        ap_location = null : decimal(8,3) # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
-        dv_location = null : decimal(8,3) # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
-        ml_angle = null    : decimal(8,3) # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
-        ap_angle = null    : decimal(8,3) # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive.
-        """
 
     class ElectrodePosition(dj.Part):
         definition = """
-        -> ElectrodeGroup.Electrode
+        -> lab.Probe.Channel
         -> ccf.CCF
         """
 
     class ElectrodePositionError(dj.Part):
         definition = """
-        -> ElectrodeGroup.Electrode
+        -> lab.Probe.Channel
         -> ccf.CCFLabel
-        x   :  int   # (um)
-        y   :  int   # (um)
-        z   :  int   # (um)
+        x   :  float   # (um)
+        y   :  float   # (um)
+        z   :  float   # (um)
         """
-
-    def make(self, key):
-        part_no = (ElectrodeGroup() & key).fetch('probe_part_no')
-        probe = (Probe() & {'probe_part_no': part_no[0]}).fetch1()
-        if probe['probe_type'] == 'neuropixels probe O3':
-            # Fetch the Probe corresponding to this session. If Neuropixel probe in the probe_description, then 374 electrodes for 1 electrode group
-            ElectrodeGroup.Electrode().insert(list(dict(key, electrode = x) for x in range (1,375)))
-
 
 
 @schema

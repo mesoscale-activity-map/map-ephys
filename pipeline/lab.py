@@ -163,16 +163,16 @@ class Surgery(dj.Manual):
     end_time            : datetime # end time
     surgery_description : varchar(256)
     """
-
+    # TODO: confirm location pos/neg convention (contradict with photostim and ephys)
     class VirusInjection(dj.Part):
         definition = """
         # Virus injections
-        -> Surgery
+        -> master
         injection_id : int
         ---
         -> Virus
         -> SkullReference
-        ml_location     : Decimal(8,3) # um from ref left is positive
+        ml_location     : Decimal(8,3) # um from ref left is positive 
         ap_location     : Decimal(8,3) # um from ref anterior is positive
         dv_location     : Decimal(8,3) # um from dura dorsal is positive 
         volume          : Decimal(10,3) # in nl
@@ -183,7 +183,7 @@ class Surgery(dj.Manual):
     class Procedure(dj.Part):
         definition = """
         # Other things you did to the animal
-        -> Surgery
+        -> master
         procedure_id : int
         ---
         -> SkullReference
@@ -202,3 +202,65 @@ class SurgeryLocation(dj.Manual):
     -> Hemisphere
     -> BrainArea 
     """
+
+
+@schema
+class ActionLocation(dj.Manual):
+    definition = """
+    -> lab.BrainArea
+    -> lab.Hemisphere
+    -> lab.SkullReference
+    ml_location = null : decimal(8,3) # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
+    ap_location = null : decimal(8,3) # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
+    dv_location = null : decimal(8,3) # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
+    ml_angle = null    : decimal(8,3) # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
+    ap_angle = null    : decimal(8,3) # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive.
+    """
+
+
+@schema
+class Probe(dj.Lookup):
+    definition = """  # represent a physical probe
+    probe: varchar(32)  # unique identifier of this probe (e.g. serial number)
+    ---
+    -> ProbeType
+    probe_model='': varchar(32)  # nick name, or other user-friendly model name of this probe
+    probe_comment='' :  varchar(4000)
+    """
+
+    class Channel(dj.Part):
+        definition = """
+        -> master
+        channel: int     # channel
+        ---
+        x_coord=NULL: float   # x coordinate of the channel within the probe
+        y_coord=NULL: float   # y coordinate of the channel within the probe
+        z_coord=NULL: float   # z coordinate of the channel within the probe
+        """
+
+    class ChannelGroup(dj.Part):
+        definition = """
+        # grouping of channels to be clustered together (e.g. a single tetrode)
+        -> master
+        channel_group: int  # channel group
+        """
+
+    class ChannelGroupMember(dj.Part):
+        definition = """
+        -> master.ChannelGroup
+        -> master.Channel
+        """
+
+
+@schema
+class PhotostimDevice(dj.Lookup):
+    definition = """
+    photostim_device  : varchar(20)s
+    ---
+    excitation_wavelength :  decimal(5,1)  # (nm) 
+    photostim_device_description : varchar(255)
+    """
+    contents =[
+       ('LaserGem473', 473, 'Laser (Laser Quantum, Gem 473)'),
+       ('LED470', 470, 'LED (Thor Labs, M470F3 - 470 nm, 17.2 mW (Min) Fiber-Coupled LED)'),
+       ('OBIS470', 473, 'OBIS 473nm LX 50mW Laser System: Fiber Pigtail (Coherent Inc)')]

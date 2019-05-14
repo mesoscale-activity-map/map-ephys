@@ -3,7 +3,13 @@
 import os
 import re
 import sys
+import pathlib
 from importlib import reload
+
+# pipeline_path = pathlib.Path('..').resolve()
+# if pipeline_path.exists():
+#     print(pipeline_path.absolute())
+#     sys.path.insert(0, str(pipeline_path))
 
 import datajoint as dj
 
@@ -26,10 +32,13 @@ def dropdbs():
     for d in ['ingest.histology', 'ingest.ephys', 'ingest.tracking',
               'ingest.behavior', 'publication', 'psth', 'tracking', 'ephys',
               'experiment', 'lab', 'ccf']:
-        dname = dj.config['{}.database'.format(d)]
+        dname = dj.config['custom'].get('{}.database'.format(d))
         print('..  {} ({})'.format(d, dname))
-        schema = dj.schema(dname)
-        schema.drop(force=True)
+        try:
+            schema = dj.schema(dname)
+            schema.drop(force=True)
+        except:
+            pass
 
 
 def mockdata():
