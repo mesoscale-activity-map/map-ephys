@@ -12,11 +12,11 @@ schema = dj.schema(dj.config.get('ephys.database', 'map_ephys'))
 @schema
 class ProbeInsertion(dj.Manual):
     definition = """
-    -> reference.Probe
+    -> lab.Probe
     -> lab.Subject
     insertion_time : datetime # When this probe was inserted
     ---
-    -> lab.ActionLocation
+    -> lab.BrainLocation
     """
 
 
@@ -64,7 +64,7 @@ class ChannelCCFPosition(dj.Manual):
         -> lab.Probe.Channel
         -> ccf.CCF
         """
-
+    # TODO: not clear the x, y, z below is in what coordinate? CCF as well?
     class ElectrodePositionError(dj.Part):
         definition = """
         -> lab.Probe.Channel
@@ -78,7 +78,7 @@ class ChannelCCFPosition(dj.Manual):
 @schema
 class LabeledTrack(dj.Manual):
     definition = """
-    -> ElectrodeGroup
+    -> ProbeInsertion
     ---
     labeling_date : date # in case we labeled the track not during a recorded session we can specify the exact date here
     dye_color  : varchar(32)
@@ -95,58 +95,34 @@ class LabeledTrack(dj.Manual):
 class Unit(dj.Imported):
     definition = """
     # Sorted unit
-    -> ElectrodeGroup
+    -> ProbeInsertion
     unit  : smallint
     ---
     unit_uid : int # unique across sessions/animals
     -> UnitQualityType
-    unit_site : smallint # site on the electrode for which the unit has the largest amplitude
+    -> lab.Probe.Channel # site on the electrode for which the unit has the largest amplitude
     unit_posx : double # x position of the unit on the probe
     unit_posy : double # y position of the unit on the probe
     spike_times : longblob  #  (s)
     waveform : blob # average spike waveform
     """
 
+    # TODO: not sure what's the purpose of this UnitTrial here
     class UnitTrial(dj.Part):
         definition = """
         # Entries for trials a unit is in
-        -> Unit
+        -> master
         -> experiment.SessionTrial
         """
 
     class UnitPosition(dj.Part):
         definition = """
         # Estimated unit position in the brain
-        -> Unit
+        -> master
         -> ccf.CCF
         ---
-        -> lab.Hemisphere
-        -> lab.BrainArea
-        -> lab.SkullReference
-        unit_ml_location = null : decimal(8,3) # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
-        unit_ap_location = null : decimal(8,3) # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
-        unit_dv_location = null : decimal(8,3) # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
+        -> lab.BrainLocation
         """
-
-
-@schema
-class TrialSpikes(dj.Imported):
-    definition = """
-    #
-    -> Unit
-    -> experiment.SessionTrial
-    ---
-    spike_times : longblob # (s) spike times for each trial, relative to go cue
-    """
-
-
-@schema
-class ElectrodePosition(dj.Manual):
-    definition = """
-    -> ElectrodeGroup.Electrode
-    ---
-    -> ccf.CCF
-    """
 
 
 @schema
@@ -163,4 +139,15 @@ class UnitCellType(dj.Computed):
     -> Unit
     ---
     -> CellType
+    """
+
+
+@schema
+class TrialSpikes(dj.Imported):
+    definition = """
+    #
+    -> Unit
+    -> experiment.SessionTrial
+    ---
+    spike_times : longblob # (s) spike times for each trial, relative to go cue
     """

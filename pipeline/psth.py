@@ -266,7 +266,6 @@ class Condition(dj.Manual):
 
 @schema
 class CellPsth(dj.Computed):
-
     definition = """
     -> Condition
     """

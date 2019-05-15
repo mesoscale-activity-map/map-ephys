@@ -205,17 +205,26 @@ class SurgeryLocation(dj.Manual):
 
 
 @schema
-class ActionLocation(dj.Manual):
+class BrainLocation(dj.Manual):
     definition = """
-    -> lab.BrainArea
-    -> lab.Hemisphere
-    -> lab.SkullReference
-    ml_location = null : decimal(8,3) # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
-    ap_location = null : decimal(8,3) # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
-    dv_location = null : decimal(8,3) # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
-    ml_angle = null    : decimal(8,3) # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
-    ap_angle = null    : decimal(8,3) # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive.
+    -> BrainArea
+    -> Hemisphere
+    -> SkullReference
+    ml_location: decimal(8,3) # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
+    ap_location: decimal(8,3) # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
+    dv_location: decimal(8,3) # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
+    ml_angle: decimal(8,3) # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
+    ap_angle: decimal(8,3) # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive.
     """
+
+
+@schema
+class ProbeType(dj.Lookup):
+    definition = """
+    probe_type: varchar(32)    
+    """
+
+    contents = zip(['tetrode_array', 'neuropixel'])
 
 
 @schema
@@ -255,7 +264,7 @@ class Probe(dj.Lookup):
 @schema
 class PhotostimDevice(dj.Lookup):
     definition = """
-    photostim_device  : varchar(20)s
+    photostim_device  : varchar(20)
     ---
     excitation_wavelength :  decimal(5,1)  # (nm) 
     photostim_device_description : varchar(255)

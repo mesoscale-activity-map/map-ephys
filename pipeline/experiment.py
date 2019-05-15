@@ -24,6 +24,58 @@ class Task(dj.Lookup):
 
 
 @schema
+class TrialInstruction(dj.Lookup):
+    definition = """
+    # Instruction to mouse 
+    trial_instruction  : varchar(8) 
+    """
+    contents = zip(('left', 'right'))
+
+
+@schema
+class TaskProtocol(dj.Lookup):
+    definition = """
+    # SessionType
+    -> Task
+    task_protocol : tinyint # task protocol
+    ---
+    task_protocol_description : varchar(4000)
+    """
+    contents = [
+         ('audio delay', 1, 'high tone vs. low tone'),
+         ('s1 stim', 2, 'mini-distractors'),
+         ('s1 stim', 3, 'full distractors, with 2 distractors (at different times) on some of the left trials'),
+         ('s1 stim', 4, 'full distractors'),
+         ('s1 stim', 5, 'mini-distractors, with different levels of the mini-stim during sample period'),
+         ('s1 stim', 6, 'full distractors; same as protocol 4 but with a no-chirp trial-type'),
+         ('s1 stim', 7, 'mini-distractors and full distractors (only at late delay)'),
+         ('s1 stim', 8, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample                 period'),
+         ('s1 stim', 9, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample period')
+         ]
+
+
+@schema
+class Outcome(dj.Lookup):
+    definition = """
+    outcome : varchar(32)
+    """
+    contents = zip(('hit', 'miss', 'ignore'))
+
+
+@schema
+class EarlyLick(dj.Lookup):
+    definition = """
+    early_lick  :  varchar(32)
+    ---
+    early_lick_description : varchar(4000)
+    """
+    contents = [
+        ('early', 'early lick during sample and/or delay'),
+        ('early, presample only', 'early lick in the presample period, after the onset of the scheduled wave but before the sample period'),
+        ('no early', '')]
+
+
+@schema
 class Session(dj.Manual):
     definition = """
     -> lab.Subject
@@ -103,58 +155,6 @@ class TrialEventType(dj.Lookup):
 
 
 @schema
-class Outcome(dj.Lookup):
-    definition = """
-    outcome : varchar(32)
-    """
-    contents = zip(('hit', 'miss', 'ignore'))
-
-
-@schema 
-class EarlyLick(dj.Lookup):
-    definition = """
-    early_lick  :  varchar(32)
-    ---
-    early_lick_description : varchar(4000)
-    """ 
-    contents = [
-        ('early', 'early lick during sample and/or delay'),
-        ('early, presample only', 'early lick in the presample period, after the onset of the scheduled wave but before the sample period'),
-        ('no early', '')]
-
-     
-@schema 
-class TrialInstruction(dj.Lookup):
-    definition = """
-    # Instruction to mouse 
-    trial_instruction  : varchar(8) 
-    """
-    contents = zip(('left', 'right'))
-
-
-@schema
-class TaskProtocol(dj.Lookup):
-    definition = """
-    # SessionType
-    -> Task
-    task_protocol : tinyint # task protocol
-    ---
-    task_protocol_description : varchar(4000)
-    """
-    contents = [
-         ('audio delay', 1, 'high tone vs. low tone'),
-         ('s1 stim', 2, 'mini-distractors'),
-         ('s1 stim', 3, 'full distractors, with 2 distractors (at different times) on some of the left trials'),
-         ('s1 stim', 4, 'full distractors'),
-         ('s1 stim', 5, 'mini-distractors, with different levels of the mini-stim during sample period'),
-         ('s1 stim', 6, 'full distractors; same as protocol 4 but with a no-chirp trial-type'),
-         ('s1 stim', 7, 'mini-distractors and full distractors (only at late delay)'),
-         ('s1 stim', 8, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample                 period'),
-         ('s1 stim', 9, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample period')
-         ]
-
-
-@schema
 class TrialEvent(dj.Manual):
     definition = """
     -> SessionTrial 
@@ -190,8 +190,8 @@ class ActionEvent(dj.Imported):
 class Photostim(dj.Lookup):
     definition = """
     -> Session
-    -> PhotostimDevice
-    -> lab.ActionPotential
+    -> lab.PhotostimDevice
+    -> lab.BrainLocation
     photo_stim :  smallint 
     ---
     duration  :  decimal(8,4)   # (s)
@@ -207,13 +207,13 @@ class Photostim(dj.Lookup):
         intensity_timecourse   :  longblob  # (mW/mm^2)
         """
 
-    contents = [{
-        'photostim_device': 'OBIS470',
-        'photo_stim': 0,  # TODO: correct? whatmeens?
-        'duration': 0.5,
-        # FIXME/TODO: .3s of 40hz sin + .2s rampdown @ 100kHz. int32??
-        'waveform': np.zeros(int((0.3+0.2)*100000), np.int32)
-    }]
+    # contents = [{
+    #     'photostim_device': 'OBIS470',
+    #     'photo_stim': 0,  # TODO: correct? whatmeens?
+    #     'duration': 0.5,
+    #     # FIXME/TODO: .3s of 40hz sin + .2s rampdown @ 100kHz. int32??
+    #     'waveform': np.zeros(int((0.3+0.2)*100000), np.int32)
+    # }]
 
 
 @schema
