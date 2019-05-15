@@ -549,7 +549,7 @@ def post_ephys(*args):
                 # ap_angle:
             }
             print('match!: {}'.format(rec))
-        elif re.mathch('.*2018-07-16.*tw34.*.mat', fname):
+        elif re.match('.*2018-07-16.*tw34.*.mat', fname):
 
             rec = {
                 'subject_id': 90211,
