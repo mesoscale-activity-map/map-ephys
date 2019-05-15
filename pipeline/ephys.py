@@ -10,13 +10,10 @@ schema = dj.schema(dj.config.get('ephys.database', 'map_ephys'))
 
 
 @schema
-class ProbeInsertion(dj.Manual):
+class ExtracellularEphys(dj.Manual):
     definition = """
-    -> lab.Probe
-    -> lab.Subject
-    insertion_time : datetime # When this probe was inserted
-    ---
-    -> lab.BrainLocation
+    -> experiment.Session
+    -> lab.ProbeInsertion
     """
 
 
@@ -56,7 +53,7 @@ class CellType(dj.Lookup):
 @schema
 class ChannelCCFPosition(dj.Manual):
     definition = """
-    -> experiment.Session
+    -> ExtracellularEphys
     """
 
     class ElectrodePosition(dj.Part):
@@ -78,7 +75,7 @@ class ChannelCCFPosition(dj.Manual):
 @schema
 class LabeledTrack(dj.Manual):
     definition = """
-    -> ProbeInsertion
+    -> ExtracellularEphys
     ---
     labeling_date : date # in case we labeled the track not during a recorded session we can specify the exact date here
     dye_color  : varchar(32)
@@ -95,7 +92,7 @@ class LabeledTrack(dj.Manual):
 class Unit(dj.Imported):
     definition = """
     # Sorted unit
-    -> ProbeInsertion
+    -> ExtracellularEphys
     unit  : smallint
     ---
     unit_uid : int # unique across sessions/animals
@@ -143,7 +140,7 @@ class UnitCellType(dj.Computed):
 
 
 @schema
-class TrialSpikes(dj.Imported):
+class TrialSpikes(dj.Computed):
     definition = """
     #
     -> Unit

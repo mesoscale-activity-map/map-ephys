@@ -4,9 +4,7 @@ import logging
 
 import datajoint as dj
 
-from pipeline import lab
-from pipeline import experiment
-from pipeline import ephys
+from . import lab, experiment, ephys
 from pipeline.globus import GlobusStorageManager
 
 
@@ -105,7 +103,7 @@ class ArchivedRawEphysTrial(dj.Imported):
 
     definition = """
     -> experiment.SessionTrial
-    -> ephys.ElectrodeGroup
+    -> ephys.ExtracellularEphys
     -> GlobusStorageLocation
     """
 

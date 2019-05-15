@@ -207,6 +207,8 @@ class SurgeryLocation(dj.Manual):
 @schema
 class BrainLocation(dj.Manual):
     definition = """
+    brain_location_name: varchar(32)  # unique name of this brain location (could be hash of the non-primary attr)
+    ---
     -> BrainArea
     -> Hemisphere
     -> SkullReference
@@ -259,6 +261,18 @@ class Probe(dj.Lookup):
         -> master.ChannelGroup
         -> master.Channel
         """
+
+
+@schema
+class ProbeInsertion(dj.Manual):
+    definition = """
+    -> Subject
+    -> Probe
+    -> BrainLocation
+    insertion_time : datetime # When this probe was inserted
+    ---
+    -> Person  
+    """
 
 
 @schema

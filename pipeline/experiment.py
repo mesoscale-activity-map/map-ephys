@@ -222,6 +222,7 @@ class PhotostimEvent(dj.Imported):
     -> SessionTrial
     -> Photostim
     photostim_event_time : decimal(8,3)   # (s) from trial start
+    ---
     power : decimal(8,3)   # Maximal power (mW)
     """
 
