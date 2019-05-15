@@ -10,7 +10,7 @@ from pipeline import lab
 from pipeline import ephys
 from pipeline import experiment
 from pipeline import ccf
-from pipeline.ingest import ephys as ingest_ephys
+from pipeline.ingest import ephys as ephys_ingest
 
 from code import interact
 from collections import ChainMap
@@ -25,7 +25,7 @@ schema = dj.schema(dj.config.get(
 @schema
 class HistologyIngest(dj.Imported):
     definition = """
-    -> ingest_ephys.EphysIngest
+    -> ephys_ingest.EphysIngest
     """
 
     class HistologyFile(dj.Part):
@@ -45,7 +45,7 @@ class HistologyIngest(dj.Imported):
 
         session = (experiment.Session & key).fetch1()
 
-        rigpath = ingest_ephys.EphysDataPath().fetch1('data_path')
+        rigpath = ephys_ingest.EphysDataPath().fetch1('data_path')
         subject_id = session['subject_id']
         session_date = session['session_date']
         water = (

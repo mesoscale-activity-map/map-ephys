@@ -9,8 +9,8 @@ import datajoint as dj
 from pipeline import lab
 from pipeline import tracking
 from pipeline import experiment
-from pipeline.ingest import behavior as ingest_behavior
-[ingest_behavior]  # NOQA schema only use
+from pipeline.ingest import behavior as behavior_ingest
+[behavior_ingest]  # NOQA schema only use
 
 from collections import defaultdict
 
@@ -41,7 +41,7 @@ class TrackingDataPath(dj.Lookup):
 @schema
 class TrackingIngest(dj.Imported):
     definition = """
-    -> ingest_behavior.BehaviorIngest
+    -> behavior_ingest.BehaviorIngest
     """
 
     class TrackingFile(dj.Part):
@@ -62,6 +62,8 @@ class TrackingIngest(dj.Imported):
         session = (experiment.Session() & key).fetch1()
         trials = (experiment.SessionTrial() & session).fetch(as_dict=True)
 
+        log.info('got session: {} ({} trials)'.format(session, len(trials)))
+
         sdate = session['session_date']
         sdate_iso = sdate.isoformat()  # YYYY-MM-DD
         sdate_sml = "{}{:02d}{:02d}".format(sdate.year, sdate.month, sdate.day)
@@ -76,21 +78,18 @@ class TrackingIngest(dj.Imported):
             tpos = d['tracking_position']
             tdat = p['tracking_data_path']
 
-            log.info('key', key)  # subject_id sesssion
-            log.debug('trying {}'.format(tdat))
-            log.debug('got session: {}'.format(session))
-            log.debug('got trials: {}'.format(trials))
+            log.info('checking {} for tracking data'.format(tdat))
 
             tpath = os.path.join(tdat, h2o, sdate_iso, 'tracking')
 
             if not os.path.exists(tpath):
-                log.info('tracking path {} n/a - skipping'.format(tpath))
+                log.warning('tracking path {} n/a - skipping'.format(tpath))
                 continue
 
             camtrial = '{}_{}_{}.txt'.format(h2o, sdate_sml, tpos)
             campath = os.path.join(tpath, camtrial)
 
-            log.debug('trying camera position trial map: {}'.format(campath))
+            log.info('trying camera position trial map: {}'.format(campath))
 
             if not os.path.exists(campath):
                 log.info('skipping {} - does not exist'.format(campath))
@@ -98,7 +97,20 @@ class TrackingIngest(dj.Imported):
 
             tmap = self.load_campath(campath)
 
+            n_tmap = len(tmap)
+            log.info('loading tracking data for {} trials'.format(n_tmap))
+
+            i = 0
             for t in tmap:  # load tracking for trial
+
+                i += 1
+                if i % 50 == 0:
+                    log.info('item {}/{}, trial #{} ({:.2f}%)'
+                             .format(i, n_tmap, t, (i/n_tmap)*100))
+                else:
+                    log.debug('item {}/{}, trial #{} ({:.2f}%)'
+                              .format(i, n_tmap, t, (i/n_tmap)*100))
+
                 # ex: dl59_side_1-0000.csv / h2o_position_tn-0000.csv
                 tfile = '{}_{}_{}-*.csv'.format(h2o, tpos, t)
                 tfull = os.path.join(tpath, tfile)
@@ -141,8 +153,12 @@ class TrackingIngest(dj.Imported):
                 tracking.Tracking.JawTracking.insert1(
                     recs['jaw'], allow_direct_insert=True)
 
+            log.info('... completed {}/{} items.'.format(i, n_tmap))
+            log.info('... saving load record')
+
             self.insert1(key)
 
+            log.info('... done.')
 
     def load_campath(self, campath):
         ''' load camera position-to-trial map '''
@@ -152,7 +168,7 @@ class TrackingIngest(dj.Imported):
                     for k, v in (i.strip().split('\t'),)}
 
     def load_tracking(self, trkpath):
-        log.info('load_tracking() {}'.format(trkpath))
+        log.debug('load_tracking() {}'.format(trkpath))
         '''
         load actual tracking data.
 
