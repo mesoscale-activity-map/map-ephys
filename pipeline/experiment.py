@@ -111,6 +111,7 @@ class SessionTrial(dj.Imported):
     ---
     trial_uid : int  # unique across sessions/animals
     start_time : decimal(8, 4)  # (s) relative to session beginning (questionable)
+    stop_time : decimal(8, 4)  # (s) relative to session beginning (more questionable)
     is_good_trial: bool  # is this a good or bad trial
     """
 
