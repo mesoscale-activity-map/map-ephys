@@ -163,7 +163,7 @@ class Surgery(dj.Manual):
     end_time            : datetime # end time
     surgery_description : varchar(256)
     """
-    # TODO: confirm location pos/neg convention (contradict with photostim and ephys)
+    # TODO: confirm location pos/neg convention (contradict with 'BrainLocation' used photostim and ephys)
     class VirusInjection(dj.Part):
         definition = """
         # Virus injections
@@ -201,22 +201,6 @@ class SurgeryLocation(dj.Manual):
     ---
     -> Hemisphere
     -> BrainArea 
-    """
-
-
-@schema
-class BrainLocation(dj.Manual):
-    definition = """
-    brain_location_name: varchar(32)  # unique name of this brain location (could be hash of the non-primary attr)
-    ---
-    -> BrainArea
-    -> Hemisphere
-    -> SkullReference
-    ml_location: decimal(8,3) # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
-    ap_location: decimal(8,3) # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
-    dv_location: decimal(8,3) # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
-    ml_angle: decimal(8,3) # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
-    ap_angle: decimal(8,3) # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive.
     """
 
 
@@ -261,18 +245,6 @@ class Probe(dj.Lookup):
         -> master.ChannelGroup
         -> master.Channel
         """
-
-
-@schema
-class ProbeInsertion(dj.Manual):
-    definition = """
-    -> Subject
-    -> Probe
-    -> BrainLocation
-    insertion_time : datetime # When this probe was inserted
-    ---
-    -> Person  
-    """
 
 
 @schema

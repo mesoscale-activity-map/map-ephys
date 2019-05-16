@@ -10,10 +10,12 @@ schema = dj.schema(dj.config.get('ephys.database', 'map_ephys'))
 
 
 @schema
-class ExtracellularEphys(dj.Manual):
+class ProbeInsertion(dj.Manual):
     definition = """
     -> experiment.Session
-    -> lab.ProbeInsertion
+    -> lab.Probe
+    -> experiment.BrainLocation
+    insertion_time : datetime # When this probe was inserted
     """
 
 
@@ -53,7 +55,7 @@ class CellType(dj.Lookup):
 @schema
 class ChannelCCFPosition(dj.Manual):
     definition = """
-    -> ExtracellularEphys
+    -> ProbeInsertion
     """
 
     class ElectrodePosition(dj.Part):
@@ -75,7 +77,7 @@ class ChannelCCFPosition(dj.Manual):
 @schema
 class LabeledTrack(dj.Manual):
     definition = """
-    -> ExtracellularEphys
+    -> ProbeInsertion
     ---
     labeling_date : date # in case we labeled the track not during a recorded session we can specify the exact date here
     dye_color  : varchar(32)
@@ -92,7 +94,7 @@ class LabeledTrack(dj.Manual):
 class Unit(dj.Imported):
     definition = """
     # Sorted unit
-    -> ExtracellularEphys
+    -> ProbeInsertion
     unit  : smallint
     ---
     unit_uid : int # unique across sessions/animals
@@ -100,7 +102,7 @@ class Unit(dj.Imported):
     -> lab.Probe.Channel # site on the electrode for which the unit has the largest amplitude
     unit_posx : double # x position of the unit on the probe
     unit_posy : double # y position of the unit on the probe
-    spike_times : longblob  #  (s)
+    spike_times : longblob  #  (s) with respect to the start of the session 
     waveform : blob # average spike waveform
     """
 
@@ -118,7 +120,7 @@ class Unit(dj.Imported):
         -> master
         -> ccf.CCF
         ---
-        -> lab.BrainLocation
+        -> experiment.BrainLocation
         """
 
 

@@ -103,7 +103,7 @@ class ArchivedRawEphysTrial(dj.Imported):
 
     definition = """
     -> experiment.SessionTrial
-    -> ephys.ExtracellularEphys
+    -> ephys.ProbeInsertion
     -> GlobusStorageLocation
     """
 

@@ -9,6 +9,33 @@ schema = dj.schema(dj.config.get('experiment.database', 'map_experiment'))
 
 
 @schema
+class BrainLocation(dj.Manual):
+    definition = """
+    brain_location_name: varchar(32)  # unique name of this brain location (could be hash of the non-primary attr)
+    ---
+    -> lab.BrainArea
+    -> lab.Hemisphere
+    -> lab.SkullReference
+    ml_location: decimal(8,3) # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
+    ap_location: decimal(8,3) # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
+    dv_location: decimal(8,3) # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
+    ml_angle: decimal(8,3) # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
+    ap_angle: decimal(8,3) # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive.
+    """
+
+
+@schema
+class Session(dj.Manual):
+    definition = """
+    -> lab.Subject
+    session : smallint 		# session number
+    ---
+    session_date  : date
+    -> lab.Person
+    -> lab.Rig
+    """
+
+@schema
 class Task(dj.Lookup):
     definition = """
     # Type of tasks
@@ -21,15 +48,6 @@ class Task(dj.Lookup):
          ('audio mem', 'auditory working memory task'),
          ('s1 stim', 'S1 photostimulation task (2AFC)')
          ]
-
-
-@schema
-class TrialInstruction(dj.Lookup):
-    definition = """
-    # Instruction to mouse 
-    trial_instruction  : varchar(8) 
-    """
-    contents = zip(('left', 'right'))
 
 
 @schema
@@ -54,37 +72,35 @@ class TaskProtocol(dj.Lookup):
          ]
 
 
-@schema
-class Outcome(dj.Lookup):
-    definition = """
-    outcome : varchar(32)
-    """
-    contents = zip(('hit', 'miss', 'ignore'))
-
 
 @schema
-class EarlyLick(dj.Lookup):
+class Photostim(dj.Lookup):
     definition = """
-    early_lick  :  varchar(32)
+    -> Session
+    -> lab.PhotostimDevice
+    -> BrainLocation
+    photo_stim :  smallint 
     ---
-    early_lick_description : varchar(4000)
+    duration  :  decimal(8,4)   # (s)
+    waveform  :  longblob       # normalized to maximal power. The value of the maximal power is specified for each PhotostimTrialEvent individually
     """
-    contents = [
-        ('early', 'early lick during sample and/or delay'),
-        ('early, presample only', 'early lick in the presample period, after the onset of the scheduled wave but before the sample period'),
-        ('no early', '')]
 
+    class Profile(dj.Part):
+        # NOT USED CURRENT
+        definition = """
+        -> master
+        (profile_x, profile_y, profile_z) -> ccf.CCF(x, y, z)
+        ---
+        intensity_timecourse   :  longblob  # (mW/mm^2)
+        """
 
-@schema
-class Session(dj.Manual):
-    definition = """
-    -> lab.Subject
-    session : smallint 		# session number
-    ---
-    session_date  : date
-    -> lab.Person
-    -> lab.Rig
-    """
+    # contents = [{
+    #     'photostim_device': 'OBIS470',
+    #     'photo_stim': 0,  # TODO: correct? whatmeens?
+    #     'duration': 0.5,
+    #     # FIXME/TODO: .3s of 40hz sin + .2s rampdown @ 100kHz. int32??
+    #     'waveform': np.zeros(int((0.3+0.2)*100000), np.int32)
+    # }]
 
 
 @schema
@@ -94,14 +110,8 @@ class SessionTrial(dj.Imported):
     trial : smallint 		# trial number
     ---
     trial_uid : int  # unique across sessions/animals
-    start_time : decimal(8,4)  # (s) relative to session beginning
+    start_time : decimal(8, 4)  # (s) relative to session beginning (questionable)
     is_good_trial: bool  # is this a good or bad trial
-    is_photostim_trial: bool  # is this a photostim trial
-    is_behavior_trial: bool  # is this a behavior trial
-    -> TaskProtocol
-    -> TrialInstruction
-    -> EarlyLick
-    -> Outcome
     """
 
 
@@ -147,6 +157,66 @@ class SessionTraining(dj.Manual):
 
 
 @schema
+class SessionTask(dj.Manual):
+    definition = """
+    -> Session
+    -> TaskProtocol
+    """
+
+
+@schema
+class SessionComment(dj.Manual):
+    definition = """
+    -> Session
+    session_comment : varchar(767)
+    """
+
+# ---- behavioral trials ----
+
+
+@schema
+class TrialInstruction(dj.Lookup):
+    definition = """
+    # Instruction to mouse 
+    trial_instruction  : varchar(8) 
+    """
+    contents = zip(('left', 'right'))
+
+
+@schema
+class Outcome(dj.Lookup):
+    definition = """
+    outcome : varchar(32)
+    """
+    contents = zip(('hit', 'miss', 'ignore'))
+
+
+@schema
+class EarlyLick(dj.Lookup):
+    definition = """
+    early_lick  :  varchar(32)
+    ---
+    early_lick_description : varchar(4000)
+    """
+    contents = [
+        ('early', 'early lick during sample and/or delay'),
+        ('early, presample only', 'early lick in the presample period, after the onset of the scheduled wave but before the sample period'),
+        ('no early', '')]
+
+
+@schema
+class BehaviorTrial(dj.Imported):
+    definition = """
+    -> SessionTrial
+    ----
+    -> TaskProtocol
+    -> TrialInstruction
+    -> EarlyLick
+    -> Outcome
+    """
+
+
+@schema
 class TrialEventType(dj.Lookup):
     definition = """
     trial_event_type  : varchar(12)  
@@ -157,7 +227,7 @@ class TrialEventType(dj.Lookup):
 @schema
 class TrialEvent(dj.Manual):
     definition = """
-    -> SessionTrial 
+    -> BehaviorTrial 
     -> TrialEventType
     trial_event_time : decimal(8, 4)   # (s) from trial start, not session start
     ---
@@ -180,46 +250,24 @@ class ActionEventType(dj.Lookup):
 @schema
 class ActionEvent(dj.Imported):
     definition = """
-    -> SessionTrial
+    -> BehaviorTrial
     -> ActionEventType
     action_event_time : decimal(8,4)  # (s) from trial start
     """
 
+# ---- Photostim trials ----
 
-@schema 
-class Photostim(dj.Lookup):
+@schema
+class PhotostimTrial(dj.Imported):
     definition = """
-    -> Session
-    -> lab.PhotostimDevice
-    -> lab.BrainLocation
-    photo_stim :  smallint 
-    ---
-    duration  :  decimal(8,4)   # (s)
-    waveform  :  longblob       # normalized to maximal power. The value of the maximal power is specified for each PhotostimTrialEvent individually
+    -> SessionTrial
     """
-
-    class Profile(dj.Part):
-        # NOT USED CURRENT
-        definition = """
-        -> master
-        (profile_x, profile_y, profile_z) -> ccf.CCF(x, y, z)
-        ---
-        intensity_timecourse   :  longblob  # (mW/mm^2)
-        """
-
-    # contents = [{
-    #     'photostim_device': 'OBIS470',
-    #     'photo_stim': 0,  # TODO: correct? whatmeens?
-    #     'duration': 0.5,
-    #     # FIXME/TODO: .3s of 40hz sin + .2s rampdown @ 100kHz. int32??
-    #     'waveform': np.zeros(int((0.3+0.2)*100000), np.int32)
-    # }]
 
 
 @schema
 class PhotostimEvent(dj.Imported):
     definition = """
-    -> SessionTrial
+    -> PhotostimTrial
     -> Photostim
     photostim_event_time : decimal(8,3)   # (s) from trial start
     ---
@@ -232,27 +280,8 @@ class PassivePhotostimTrial(dj.Computed):
     definition = """
     -> SessionTrial
     """
-    key_source = (SessionTrial & 'is_photostim_trial=1') - (SessionTrial & 'is_behavior_trial=1')
+    key_source = PhotostimTrial() - BehaviorTrial()
 
     def make(self, key):
         self.insert1(key)
-
-
-@schema
-class SessionTask(dj.Manual):
-    definition = """
-    -> Session
-    -> TaskProtocol
-    """
-
-
-@schema
-class SessionComment(dj.Manual):
-    definition = """
-    -> Session
-    session_comment : varchar(767)
-    """
-
-
-
 
