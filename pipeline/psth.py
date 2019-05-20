@@ -81,11 +81,13 @@ class Condition(dj.Manual):
         }
 
     @classmethod
-    def trials(cls, cond):
+    def trials(cls, cond, r={}):
         """
         get trials for a condition.
         accepts either a condition_id as an integer,
         or the output of the 'expand' function, above.
+
+        the parameter 'r' can be used add additional query restrictions.
         """
 
         self = cls()
@@ -118,7 +120,7 @@ class Condition(dj.Manual):
 
             tup_keys = [{k: t[k] for k in t if k in pk}
                         for t in tup]
-            trials = [(experiment.SessionTrial() & (tab() & t))
+            trials = [(experiment.SessionTrial() & (tab() & t & r))
                       for t in tup_keys]
 
             res.append({tuple(i.values()) for i in
@@ -310,8 +312,17 @@ class CellPsth(dj.Computed):
         # fetch spikes and create per-unit PSTH record
         self.insert1(key)
 
+        i = 0
+        n_units = len(units)
+
         for unit in ({k: u[k] for k in ephys.Unit.primary_key} for u in units):
-            log.debug('.. per unit psth: {}'.format(unit))
+            i += 1
+            if i % 50 == 0:
+                log.info('.. unit {}/{} ({:.2f}%)'
+                         .format(i, n_units, (i/n_units)*100))
+            else:
+                log.debug('.. unit {}/{} ({:.2f}%)'
+                          .format(i, n_units, (i/n_units)*100))
 
             q = (ephys.TrialSpikes() & unit & unstim_trials)
             spikes = q.fetch('spike_times')
@@ -321,7 +332,7 @@ class CellPsth(dj.Computed):
             psth = list(np.histogram(spikes, bins=np.arange(xmin, xmax, bins)))
             psth[0] = psth[0] / len(unstim_trials) / bins
 
-            CellPsth.Unit.insert1({**key, **unit, 'cell_psth': psth[0]},
+            CellPsth.Unit.insert1({**key, **unit, 'cell_psth': np.array(psth)},
                                   allow_direct_insert=True)
 
 
@@ -386,7 +397,11 @@ class Selectivity(dj.Computed):
     """
 
     def make(self, key):
-        log.info('Selectivity.make(): key: {}'.format(key))
+
+        if key['unit'] % 50 == 0:
+            log.info('Selectivity.make(): key % 50: {}'.format(key))
+        else:
+            log.debug('Selectivity.make(): key: {}'.format(key))
 
         alpha = 0.05  # TODO: confirm
         ranges = SelectivityCriteria.ranges
