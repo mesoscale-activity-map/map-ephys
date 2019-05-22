@@ -335,6 +335,35 @@ class CellPsth(dj.Computed):
             CellPsth.Unit.insert1({**key, **unit, 'cell_psth': np.array(psth)},
                                   allow_direct_insert=True)
 
+    @classmethod
+    def get(cls, condition_key, unit_key,
+            incl_conds=['TaskProtocol', 'TrialInstruction', 'EarlyLick',
+                        'Outcome'],
+            excl_conds=['PhotostimLocation']):
+
+        condition = Condition.expand(condition_key['condition_id'])
+        session_key = {k: unit_key[k] for k in experiment.Session.primary_key}
+
+        psth_q = (CellPsth.Unit & {**condition_key, 'unit': unit_key['unit']})
+        psth = psth_q.fetch1()['cell_psth']
+
+        i_trials = Condition.trials({k: condition[k] for k in incl_conds},
+                                    session_key)
+
+        x_trials = Condition.trials({k: condition[k] for k in excl_conds},
+                                    session_key)
+
+        st_q = ((ephys.TrialSpikes & i_trials & unit_key) -
+                (experiment.SessionTrial & x_trials & unit_key))
+
+        spikes, trials = st_q.fetch('spike_times', 'trial',
+                                    order_by='trial asc')
+
+        raster = [np.concatenate(spikes),
+                  np.concatenate([[t] * len(s) for s, t in zip(spikes, trials)])]
+
+        return dict(trials=trials, spikes=spikes, psth=psth, raster=raster)
+
 
 @schema
 class SelectivityCriteria(dj.Lookup):
