@@ -290,6 +290,9 @@ class CellPsth(dj.Computed):
 
         cond = Condition.expand(key['condition_id'])
 
+        # XXX: if / else for different conditions as needed
+        # e.g if key['condition_id'] > 3: ..., elif key['condition_id'] == 5
+
         all_trials = Condition.trials({
             'TaskProtocol': cond['TaskProtocol'],
             'TrialInstruction': cond['TrialInstruction'],
@@ -344,6 +347,7 @@ class CellPsth(dj.Computed):
         condition = Condition.expand(condition_key['condition_id'])
         session_key = {k: unit_key[k] for k in experiment.Session.primary_key}
 
+        # TODO: use full unit_key
         psth_q = (CellPsth.Unit & {**condition_key, 'unit': unit_key['unit']})
         psth = psth_q.fetch1()['cell_psth']
 
