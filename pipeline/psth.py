@@ -348,7 +348,7 @@ class UnitPsth(dj.Computed):
         session_key = {k: unit_key[k] for k in experiment.Session.primary_key}
 
         # TODO: use full unit_key
-        psth_q = (UnitPsth.Unit & {**condition_key, 'unit': unit_key['unit']})
+        psth_q = (UnitPsth.Unit & {**condition_key, **unit_key})
         psth = psth_q.fetch1()['unit_psth']
 
         i_trials = Condition.trials({k: condition[k] for k in incl_conds},
