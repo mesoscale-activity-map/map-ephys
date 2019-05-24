@@ -76,11 +76,11 @@ def unit_psth(unit_key):
     ipsi_err_cond_key = (psth.Condition() & {'condition_desc': 'audio delay ipsi error'}).fetch1('KEY')
     contra_err_cond_key = (psth.Condition() & {'condition_desc': 'audio delay contra error'}).fetch1('KEY')
     
-    ipsi_hit_cell_psth = psth.CellPsth.get(ipsi_hit_cond_key, unit_key)
-    contra_hit_cell_psth = psth.CellPsth.get(contra_hit_cond_key, unit_key)
+    ipsi_hit_unit_psth = psth.UnitPsth.get(ipsi_hit_cond_key, unit_key)
+    contra_hit_unit_psth = psth.UnitPsth.get(contra_hit_cond_key, unit_key)
 
-    ipsi_err_cell_psth = psth.CellPsth.get(ipsi_hit_cond_key, unit_key)
-    contra_err_cell_psth = psth.CellPsth.get(contra_err_cond_key, unit_key)
+    ipsi_err_unit_psth = psth.UnitPsth.get(ipsi_hit_cond_key, unit_key)
+    contra_err_unit_psth = psth.UnitPsth.get(contra_err_cond_key, unit_key)
     
-    unit_psth_ll(ipsi_hit_cell_psth, contra_hit_cell_psth, ipsi_err_cell_psth, contra_err_cell_psth)
+    unit_psth_ll(ipsi_hit_unit_psth, contra_hit_unit_psth, ipsi_err_unit_psth, contra_err_unit_psth)
 

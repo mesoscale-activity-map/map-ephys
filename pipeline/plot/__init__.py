@@ -2,5 +2,5 @@
 
 from .util import show_source
 
-from .cell_psth import unit_psth
-from .cell_psth import unit_psth_ll
+from .unit_psth import unit_psth
+from .unit_psth import unit_psth_ll
