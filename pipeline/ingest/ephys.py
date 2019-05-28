@@ -172,8 +172,12 @@ class EphysIngest(dj.Imported):
             # check ephys/bitcode match to determine trial numbering method
             bitCodeB_0 = np.where(bitCodeB == bitCodeE[0])[0][0]
             bitCodeB_ext = bitCodeB[bitCodeB_0:][:len(bitCodeE)]
+            spike_trials_fix = None
             if not np.all(np.equal(bitCodeE, bitCodeB_ext)):
-                raise Exception('Bitcode Mismatch')  # TODO: bitCodeE['trialNum']
+                if 'trialNum' in mat:
+                    spike_trials_fix = mat['trialNum']
+                else:
+                    raise Exception('Bitcode Mismatch')
 
             spike_trials = np.ones(len(spike_times)) * (len(viT_offset_file) - 1) # every spike is in the last trial
             spike_times2 = np.copy(spike_times)
@@ -186,6 +190,10 @@ class EphysIngest(dj.Imported):
             spike_times2 = spike_times2 / sRateHz # divide the sampling rate, sRateHz
             clu_ids_diff = np.diff(cluster_ids) # where the units seperate
             clu_ids_diff = np.where(clu_ids_diff != 0)[0] + 1 # separate the spike_times
+
+            if spike_trials_fix is not None:
+                spike_trials = spike_trials_fix
+
             spike_times = spike_times2  # now replace spike times with updated version
 
             units = np.split(spike_times, clu_ids_diff)  # sub arrays of spike_times for each unit (for ephys.Unit())
