@@ -43,8 +43,8 @@ class RigDataPath(dj.Lookup):
 
     @property
     def contents(self):
-        if 'rig_data_paths' in dj.config:  # for local testing
-            return dj.config['rig_data_paths']
+        if 'rig_data_paths' in dj.config['custom']:  # for local testing
+            return dj.config['custom']['rig_data_paths']
 
         return (('TRig1', r'\\MOHARB-NUC1\Documents\Arduino\Bpod_Train1\Bpod Local\Data', 0), # Hardcode the rig path
                 ('TRig2', r'\\MOHARB-WW2\C\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
@@ -196,6 +196,17 @@ class BehaviorIngest(dj.Imported):
             log.warning("Warning! session exists for {h2o} on {d}".format(
                 h2o=h2o, d=date))
             return
+
+        #
+        # Prepare PhotoStim
+        #
+
+        photostims = {4: {'photo_stim': 4, 'photostim_device': 'OBIS470',
+                          'brain_location_name': 'left_alm'},
+                      5: {'photo_stim': 5, 'photostim_device': 'OBIS470',
+                          'brain_location_name': 'right_alm'},
+                      6: {'photo_stim': 6, 'photostim_device': 'OBIS470',
+                          'brain_location_name': 'both_alm'}}
 
         #
         # Extract trial data from file(s) & prepare trial loop
@@ -373,6 +384,7 @@ class BehaviorIngest(dj.Imported):
                 tkey['trial'] = i
                 tkey['trial_uid'] = i # Arseny has unique id to identify some trials
                 tkey['start_time'] = t.state_times[startindex][0]
+                tkey['start_time'] = t.state_times[endindex][0]
             except IndexError:
                 log.info('skipping trial {i}: error indexing {s}/{e} into {t}'.format(i=i,s=str(startindex), e=str(endindex), t=str(t.state_times)))
                 continue
@@ -386,11 +398,11 @@ class BehaviorIngest(dj.Imported):
             #
 
             bkey = dict(tkey)
-            bkey['task'] = 'audio delay'
-            bkey['task_protocol'] = 1
+            bkey['task'] = 'audio delay'  # hard-coded here
+            bkey['task_protocol'] = 1     # hard-coded here
 
             # determine trial instruction
-            trial_instruction = 'left'
+            trial_instruction = 'left'    # hard-coded here
 
             if gui['Reversal'][0] == 1:
                 if t.ttype == 1:
@@ -620,34 +632,14 @@ class BehaviorIngest(dj.Imported):
             #     - but adding an event 4 and event 5 means querying
             #       is less straightforwrard (e.g. sessions with 5 & 6)
 
-            if t.stim and t.stim == 4:
+            if t.stim:
                 log.info('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
-
                 rows['photostim_trial'].append(tkey)
-                rows['photostim_trial_event'].append(
-                    dict(tkey, photostim_device='OBIS470', photo_stim=0,
-                         hemisphere='left', brain_area='ALM', brainloc_id=0,
-                         photostim_event_time=tkey['start_time'], power=0.0))
-
-            if t.stim and t.stim == 5:
-                log.info('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
-
-                rows['photostim_trial'].append(tkey)
-                rows['photostim_trial_event'].append(
-                    dict(tkey, photostim_device='OBIS470', photo_stim=0,
-                         hemisphere='right', brain_area='ALM', brainloc_id=0,
-                         photostim_event_time=tkey['start_time'], power=0.0))
-
-            if t.stim and t.stim == 6:
-                log.info('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
-
-                rows['photostim_trial'].append(tkey)
-                rows['photostim_trial_event'].append(
-                    dict(tkey, photostim_device='OBIS470', photo_stim=0,
-                         hemisphere='both', brain_area='ALM', brainloc_id=0,
-                         photostim_event_time=tkey['start_time'], power=0.0))
+                rows['photostim_trial_event'].append(dict(
+                    tkey, **photostims[t.stim], photostim_event_time=tkey['start_time'], power=0.0))
 
             # end of trial loop.
+
 
         # Behavior Insertion
 
@@ -689,13 +681,13 @@ class BehaviorIngest(dj.Imported):
             (dict(key, behavior_file=f.split(root)[1]) for f in matches),
             ignore_extra_fields=True, allow_direct_insert=True)
 
-        # Photostim Inertion
+        # Photostim Insertion
         log.info('BehaviorIngest.make(): ... experiment.PhotostimTrial')
         experiment.PhotostimTrial.insert(rows['photostim_trial'],
                                          ignore_extra_fields=True,
                                          allow_direct_insert=True)
 
         log.info('BehaviorIngest.make(): ... experiment.PhotostimTrialEvent')
-        experiment.PhotostimTrialEvent.insert(rows['photostim_trial_event'],
-                                              ignore_extra_fields=True,
-                                              allow_direct_insert=True)
+        experiment.PhotostimEvent.insert(rows['photostim_trial_event'],
+                                         ignore_extra_fields=True,
+                                         allow_direct_insert=True)

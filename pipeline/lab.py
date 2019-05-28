@@ -137,7 +137,7 @@ class SkullReference(dj.Lookup):
 @schema
 class BrainArea(dj.Lookup):
     definition = """
-    brain_area = 'ALM'  : varchar(32)
+    brain_area: varchar(32)
     ---
     description = null : varchar (4000) # name of the brain area
     """
@@ -147,7 +147,7 @@ class BrainArea(dj.Lookup):
 @schema
 class Hemisphere(dj.Lookup):
     definition = """
-    hemisphere = 'left'   : varchar(32)
+    hemisphere: varchar(32)
     """
     contents = zip(['left', 'right', 'both'])
 

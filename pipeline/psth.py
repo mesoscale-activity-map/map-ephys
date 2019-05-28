@@ -57,7 +57,7 @@ class Condition(dj.Manual):
     class PhotostimLocation(dj.Part):
         definition = """
         -> master
-        -> experiment.PhotostimLocation
+        -> experiment.Photostim
         """
 
     @classmethod

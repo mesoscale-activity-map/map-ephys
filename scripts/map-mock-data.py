@@ -533,6 +533,32 @@ def mockdata():
             'rig_description': 'Recording computer'},
             skip_duplicates=True
         )
+
+        # ---- Brain Location ----
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'left_alm',
+            'brain_area': 'ALM',
+            'hemisphere': 'left',
+            'skull_reference': 'Bregma'},
+            skip_duplicates = True
+        )
+
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'right_alm',
+            'brain_area': 'ALM',
+            'hemisphere': 'right',
+            'skull_reference': 'Bregma'},
+            skip_duplicates = True
+        )
+
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'both_alm',
+            'brain_area': 'ALM',
+            'hemisphere': 'both',
+            'skull_reference': 'Bregma'},
+            skip_duplicates = True
+        )
+
     except Exception as e:
         print("error creating mock data: {e}".format(e=e), file=sys.stderr)
         raise

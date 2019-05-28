@@ -19,7 +19,7 @@ from pipeline.ingest import behavior as ingest_behavior
 
 log = logging.getLogger(__name__)
 
-schema = dj.schema(dj.config.get(
+schema = dj.schema(dj.config['custom'].get(
     'ingest.ephys.database',
     '{}_ingestEphys'.format(dj.config['database.user'])))
 
@@ -35,8 +35,8 @@ class EphysDataPath(dj.Lookup):
 
     @property
     def contents(self):
-        if 'ephys_data_paths' in dj.config:  # for local testing
-            return dj.config['ephys_data_paths']
+        if 'ephys_data_paths' in dj.config['custom']:  # for local testing
+            return dj.config['custom']['ephys_data_paths']
 
         return ((r'H:\\data\MAP', 0),)
 
@@ -88,7 +88,7 @@ class EphysIngest(dj.Imported):
         subject_id = key['subject_id']
         water = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
 
-        for probe in range(1,3):
+        for probe in range(1, 3):
 
             # TODO: should code include actual logic to pick these up still?
             # file = '{h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # some older files

@@ -16,11 +16,6 @@ class BrainLocation(dj.Manual):
     -> lab.BrainArea
     -> lab.Hemisphere
     -> lab.SkullReference
-    ml_location: decimal(8,3) # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
-    ap_location: decimal(8,3) # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
-    dv_location: decimal(8,3) # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
-    ml_angle: decimal(8,3) # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
-    ap_angle: decimal(8,3) # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive.
     """
 
 
@@ -74,13 +69,18 @@ class TaskProtocol(dj.Lookup):
 
 
 @schema
-class Photostim(dj.Lookup):
+class Photostim(dj.Manual):
     definition = """
     -> Session
-    -> lab.PhotostimDevice
-    -> BrainLocation
     photo_stim :  smallint 
     ---
+    -> lab.PhotostimDevice
+    -> BrainLocation
+    ml_location=null: float # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
+    ap_location=null: float # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
+    dv_location=null: float # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
+    ml_angle=null: float # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
+    ap_angle=null: float # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive.
     duration  :  decimal(8,4)   # (s)
     waveform  :  longblob       # normalized to maximal power. The value of the maximal power is specified for each PhotostimTrialEvent individually
     """
@@ -110,8 +110,8 @@ class SessionTrial(dj.Imported):
     trial : smallint 		# trial number
     ---
     trial_uid : int  # unique across sessions/animals
-    start_time : decimal(8, 4)  # (s) relative to session beginning (questionable)
-    stop_time : decimal(8, 4)  # (s) relative to session beginning (more questionable)
+    start_time : decimal(8, 4)  # (s) relative to session beginning 
+    stop_time : decimal(8, 4)  # (s) relative to session beginning 
     is_good_trial: bool  # is this a good or bad trial
     """
 
@@ -226,12 +226,13 @@ class TrialEventType(dj.Lookup):
 
 
 @schema
-class TrialEvent(dj.Manual):
+class TrialEvent(dj.Imported):
     definition = """
     -> BehaviorTrial 
+    trial_event_id: smallint auto_increment
+    ---
     -> TrialEventType
     trial_event_time : decimal(8, 4)   # (s) from trial start, not session start
-    ---
     duration : decimal(8,4)  #  (s)  
     """
 
@@ -252,6 +253,8 @@ class ActionEventType(dj.Lookup):
 class ActionEvent(dj.Imported):
     definition = """
     -> BehaviorTrial
+    action_event_id: smallint auto_increment
+    ---
     -> ActionEventType
     action_event_time : decimal(8,4)  # (s) from trial start
     """
@@ -269,9 +272,10 @@ class PhotostimTrial(dj.Imported):
 class PhotostimEvent(dj.Imported):
     definition = """
     -> PhotostimTrial
+    photostim_event_id: smallint auto_increment
+    ---
     -> Photostim
     photostim_event_time : decimal(8,3)   # (s) from trial start
-    ---
     power : decimal(8,3)   # Maximal power (mW)
     """
 
