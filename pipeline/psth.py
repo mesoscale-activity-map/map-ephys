@@ -267,7 +267,7 @@ class Condition(dj.Manual):
 
 
 @schema
-class CellPsth(dj.Computed):
+class UnitPsth(dj.Computed):
 
     definition = """
     -> Condition
@@ -279,16 +279,19 @@ class CellPsth(dj.Computed):
         -> master
         -> ephys.Unit
         ---
-        cell_psth:                                  longblob
+        unit_psth:                                  longblob
         """
 
     def make(self, key):
-        log.info('CellPsth.make(): key: {}'.format(key))
+        log.info('UnitPsth.make(): key: {}'.format(key))
 
         # can e.g. if key['condition_id'] in [1,2,3]: self.make_thiskind(key)
         # for now, we assume one method of processing
 
         cond = Condition.expand(key['condition_id'])
+
+        # XXX: if / else for different conditions as needed
+        # e.g if key['condition_id'] > 3: ..., elif key['condition_id'] == 5
 
         all_trials = Condition.trials({
             'TaskProtocol': cond['TaskProtocol'],
@@ -328,11 +331,11 @@ class CellPsth(dj.Computed):
             spikes = q.fetch('spike_times')
             spikes = np.concatenate(spikes)
 
-            xmin, xmax, bins = CellPsth.psth_params.values()
+            xmin, xmax, bins = UnitPsth.psth_params.values()
             psth = list(np.histogram(spikes, bins=np.arange(xmin, xmax, bins)))
             psth[0] = psth[0] / len(unstim_trials) / bins
 
-            CellPsth.Unit.insert1({**key, **unit, 'cell_psth': np.array(psth)},
+            UnitPsth.Unit.insert1({**key, **unit, 'unit_psth': np.array(psth)},
                                   allow_direct_insert=True)
 
     @classmethod
@@ -344,8 +347,9 @@ class CellPsth(dj.Computed):
         condition = Condition.expand(condition_key['condition_id'])
         session_key = {k: unit_key[k] for k in experiment.Session.primary_key}
 
-        psth_q = (CellPsth.Unit & {**condition_key, 'unit': unit_key['unit']})
-        psth = psth_q.fetch1()['cell_psth']
+        # TODO: use full unit_key
+        psth_q = (UnitPsth.Unit & {**condition_key, **unit_key})
+        psth = psth_q.fetch1()['unit_psth']
 
         i_trials = Condition.trials({k: condition[k] for k in incl_conds},
                                     session_key)
@@ -491,13 +495,13 @@ class Selectivity(dj.Computed):
 
 
 @schema
-class CellGroupCondition(dj.Manual):
+class UnitGroupCondition(dj.Manual):
     definition = """
-    # manually curated cell groups of interest
+    # manually curated unit groups of interest
     -> Condition
-    cell_group_condition_id:                    int
+    unit_group_condition_id:                    int
     ---
-    cell_group_condition_desc:                  varchar(4096)
+    unit_group_condition_desc:                  varchar(4096)
     -> lab.BrainArea
     -> SelectivityCriteria
     """
@@ -505,13 +509,13 @@ class CellGroupCondition(dj.Manual):
     @classmethod
     def populate(cls):
         """
-        Table contents for CellGroupCondition
+        Table contents for UnitGroupCondition
         """
         self = cls()
         self.insert1({
             'condition_id': 0,
-            'cell_group_condition_id': 0,
-            'cell_group_condition_desc': '''
+            'unit_group_condition_id': 0,
+            'unit_group_condition_desc': '''
             audio delay contra hit - high selectivity; ALM
             ''',
             'brain_area': 'ALM',
@@ -527,8 +531,8 @@ class CellGroupCondition(dj.Manual):
 
         self.insert1({
             'condition_id': 0,
-            'cell_group_condition_id': 0,
-            'cell_group_condition_desc': '''
+            'unit_group_condition_id': 0,
+            'unit_group_condition_desc': '''
             audio delay contra hit - high selectivity; ALM
             ''',
             'brain_area': 'ALM',
@@ -550,11 +554,11 @@ class CellGroupCondition(dj.Manual):
 
 
 @schema
-class CellGroupPsth(dj.Computed):
+class UnitGroupPsth(dj.Computed):
     definition = """
-    -> CellGroupCondition
+    -> UnitGroupCondition
     ---
-    cell_group_psth:                            longblob
+    unit_group_psth:                            longblob
     """
 
     class Unit(dj.Part):
@@ -565,14 +569,14 @@ class CellGroupPsth(dj.Computed):
         """
 
     def make(self, key):
-        log.info('CellGroupPsth.make(): key: {}'.format(key))
+        log.info('UnitGroupPsth.make(): key: {}'.format(key))
 
-        # CellPsth.Unit & {k: key[k] for k in Condition.primary_key}
+        # UnitPsth.Unit & {k: key[k] for k in Condition.primary_key}
 
-        group_cond = (CellGroupCondition & key).fetch1()
+        group_cond = (UnitGroupCondition & key).fetch1()
 
         unit_psth_q = (
-            (CellPsth.Unit & {k: key[k] for k in Condition.primary_key})
+            (UnitPsth.Unit & {k: key[k] for k in Condition.primary_key})
             & (Selectivity & {k: group_cond[k]
                               for k in SelectivityCriteria.primary_key}))
 
@@ -582,4 +586,4 @@ class CellGroupPsth(dj.Computed):
         # BOOKMARK: calculations
         # from code import interact
         # from collections import ChainMap
-        # interact('cellgrouppsth', local=dict(ChainMap(locals(), globals())))
+        # interact('unitgrouppsth', local=dict(ChainMap(locals(), globals())))
