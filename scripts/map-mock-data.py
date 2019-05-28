@@ -559,6 +559,13 @@ def mockdata():
             skip_duplicates = True
         )
 
+        # ---- Neuropixel Probe ----
+        probe = '15131808323'  # <-- this is more of probe model number (not quite the serial number of that probe)
+        with lab.Probe.connection.transaction:
+            lab.Probe.insert1({'probe': probe, 'probe_type': 'neuropixel'})
+            lab.Probe.Channel.insert({'probe': probe, 'channel': x} for x in range (1, 375))
+
+
     except Exception as e:
         print("error creating mock data: {e}".format(e=e), file=sys.stderr)
         raise
@@ -568,12 +575,12 @@ def post_ephys(*args):
     from pipeline.ingest import ephys as ephys_ingest
     for ef in ephys_ingest.EphysIngest.EphysFile().fetch(as_dict=True):
         fname = ef['ephys_file']
-        print('attempting ElectrodeGroupPosition for fname: ', end='')
+        print('attempting Probe InsertionLocation for fname: ', end='')
         if re.match('.*2018-12-07.*dl59.*.mat', fname):
             rec = {
                 'subject_id': 90211,
                 'session': 1,
-                'electrode_group': 1,
+                'insertion_number': 1,
                 'skull_reference': 'Bregma',
                 'hemisphere': 'right',
                 'brain_area': 'ALM',
@@ -589,7 +596,7 @@ def post_ephys(*args):
             rec = {
                 'subject_id': 90211,
                 'session': 1,
-                'electrode_group': 1,
+                'insertion_number': 1,
                 'skull_reference': 'Bregma',
                 'hemisphere': 'right',
                 'brain_area': 'Medulla',
@@ -603,7 +610,7 @@ def post_ephys(*args):
         else:
             print('no match!')
 
-        ephys.ElectrodeGroup.ElectrodeGroupPosition().insert1(
+        ephys.ProbeInsertion.InsertionLocation().insert1(
             rec, skip_duplicates=True)
 
 

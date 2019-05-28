@@ -81,7 +81,7 @@ class CCFAnnotation(dj.Manual):
         log.info('CCFAnnotation.load_ccf_r3_20um(): start')
 
         self = cls()  # Instantiate self,
-        stack_path = dj.config['ccf.r3_20um_path']
+        stack_path = dj.config['custom']['ccf.r3_20um_path']
         stack = imread(stack_path)  # load reference stack,
 
         log.info('.. loaded stack of shape {} from {}'

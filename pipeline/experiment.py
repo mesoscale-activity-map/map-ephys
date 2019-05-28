@@ -81,8 +81,8 @@ class Photostim(dj.Manual):
     dv_location=null: float # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
     ml_angle=null: float # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
     ap_angle=null: float # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive.
-    duration  :  decimal(8,4)   # (s)
-    waveform  :  longblob       # normalized to maximal power. The value of the maximal power is specified for each PhotostimTrialEvent individually
+    duration=null:  decimal(8,4)   # (s)
+    waveform=null:  longblob       # normalized to maximal power. The value of the maximal power is specified for each PhotostimTrialEvent individually
     """
 
     class Profile(dj.Part):
@@ -112,7 +112,6 @@ class SessionTrial(dj.Imported):
     trial_uid : int  # unique across sessions/animals
     start_time : decimal(8, 4)  # (s) relative to session beginning 
     stop_time : decimal(8, 4)  # (s) relative to session beginning 
-    is_good_trial: bool  # is this a good or bad trial
     """
 
 
@@ -229,7 +228,7 @@ class TrialEventType(dj.Lookup):
 class TrialEvent(dj.Imported):
     definition = """
     -> BehaviorTrial 
-    trial_event_id: smallint auto_increment
+    trial_event_id: smallint
     ---
     -> TrialEventType
     trial_event_time : decimal(8, 4)   # (s) from trial start, not session start
@@ -253,7 +252,7 @@ class ActionEventType(dj.Lookup):
 class ActionEvent(dj.Imported):
     definition = """
     -> BehaviorTrial
-    action_event_id: smallint auto_increment
+    action_event_id: smallint
     ---
     -> ActionEventType
     action_event_time : decimal(8,4)  # (s) from trial start
@@ -272,7 +271,7 @@ class PhotostimTrial(dj.Imported):
 class PhotostimEvent(dj.Imported):
     definition = """
     -> PhotostimTrial
-    photostim_event_id: smallint auto_increment
+    photostim_event_id: smallint
     ---
     -> Photostim
     photostim_event_time : decimal(8,3)   # (s) from trial start

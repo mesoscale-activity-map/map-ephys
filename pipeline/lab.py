@@ -210,17 +210,16 @@ class ProbeType(dj.Lookup):
     probe_type: varchar(32)    
     """
 
-    contents = zip(['tetrode_array', 'neuropixel'])
+    contents = zip(['silicon_probe', 'tetrode_array', 'neuropixel'])
 
 
 @schema
 class Probe(dj.Lookup):
     definition = """  # represent a physical probe
-    probe: varchar(32)  # unique identifier of this probe (e.g. serial number)
+    probe: varchar(32)  # unique identifier for this model of probe (e.g. part number)
     ---
     -> ProbeType
-    probe_model='': varchar(32)  # nick name, or other user-friendly model name of this probe
-    probe_comment='' :  varchar(4000)
+    probe_comment='' :  varchar(1000)
     """
 
     class Channel(dj.Part):
@@ -231,19 +230,6 @@ class Probe(dj.Lookup):
         x_coord=NULL: float   # x coordinate of the channel within the probe
         y_coord=NULL: float   # y coordinate of the channel within the probe
         z_coord=NULL: float   # z coordinate of the channel within the probe
-        """
-
-    class ChannelGroup(dj.Part):
-        definition = """
-        # grouping of channels to be clustered together (e.g. a single tetrode)
-        -> master
-        channel_group: int  # channel group
-        """
-
-    class ChannelGroupMember(dj.Part):
-        definition = """
-        -> master.ChannelGroup
-        -> master.Channel
         """
 
 

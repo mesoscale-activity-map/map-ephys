@@ -2,6 +2,7 @@
 
 import os
 import logging
+import pathlib
 from glob import glob
 
 import scipy.io as spio
@@ -53,7 +54,7 @@ class EphysIngest(dj.Imported):
         ''' files in rig-specific storage '''
         definition = """
         -> EphysIngest
-        electrode_group:        tinyint                 # electrode_group
+        probe_insertion_number:        tinyint                 # electrode_group
         ephys_file:             varchar(255)            # rig file subpath
         """
 
@@ -95,9 +96,9 @@ class EphysIngest(dj.Imported):
             # subpath = os.path.join('{}-{}'.format(date, probe), file)
             # file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
             epfile = '{h2o}_g0_*.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water)  # current file naming format
-            epsubpath = os.path.join(water, date, str(probe), epfile)
-            epfullpath = os.path.join(rigpath, epsubpath)
-            ephys_files = glob(epfullpath)
+            epsubpath = pathlib.Path(water, date, str(probe))
+            epfullpath = pathlib.Path(rigpath, epsubpath)
+            ephys_files = list(epfullpath.glob(epfile))
 
             if len(ephys_files) != 1:
                 log.info('EphysIngest().make(): skipping probe {} - incorrect files found: {}/{}'.format(probe, epfullpath, ephys_files))
@@ -107,24 +108,24 @@ class EphysIngest(dj.Imported):
             log.info('EphysIngest().make(): found probe {} ephys recording in {}'.format(probe, epfullpath))
 
             #
-            # Prepare ElectrodeGroup configuration
+            # Prepare ProbeInsertion configuration
             #
-            # HACK / TODO: assuming single specific ElectrodeGroup for all tests;
+            # HACK / TODO: assuming single specific ProbeInsertion for all tests;
             # better would be to have this encoded in filename or similar.
+            probe_part_no = '15131808323'  # hard-coded here
 
             ekey = {
                 'subject_id': behavior['subject_id'],
                 'session': behavior['session'],
-                'electrode_group': probe,
+                'insertion_number': probe
             }
 
-            log.info('inserting electrode group')
-            ephys.ElectrodeGroup().insert1(dict(ekey, probe_part_no=15131808323))
-            ephys.ElectrodeGroup().make(ekey)  # note: no locks; is dj.Manual
+            log.info('inserting probe insertion')
+            ephys.ProbeInsertion.insert1(dict(ekey, probe=probe_part_no))
 
             log.info('extracting spike data')
 
-            f = h5py.File(epfullpath,'r')
+            f = h5py.File(epfullpath, 'r')
             ind = np.argsort(f['S_clu']['viClu'][0]) # index sorted by cluster
             cluster_ids = f['S_clu']['viClu'][0][ind] # cluster (unit) number
             ind = ind[np.where(cluster_ids > 0)[0]] # get rid of the -ve noise clusters
@@ -152,8 +153,8 @@ class EphysIngest(dj.Imported):
 
             file = '{h2o}_bitcode.mat'.format(h2o=water) # fetch the bitcode and realign
             # subpath = os.path.join('{}-{}'.format(date, probe), file)
-            bcsubpath = os.path.join(water, date, str(probe), file)
-            bcfullpath = os.path.join(rigpath, bcsubpath)
+            bcsubpath = pathlib.Path(water, date, str(probe), file)
+            bcfullpath = rigpath / bcsubpath
 
             log.info('opening bitcode for session {s} probe {p} ({f})'
                      .format(s=behavior['session'], p=probe, f=bcfullpath))
@@ -195,7 +196,11 @@ class EphysIngest(dj.Imported):
 
             log.info('inserting units for session {s}'.format(s=behavior['session']))
             #pdb.set_trace()
-            ephys.Unit().insert(list(dict(ekey, unit = x, unit_uid = x, unit_quality = strs[x], unit_site = int(viSite_clu[x]), unit_posx = vrPosX_clu[x], unit_posy = vrPosY_clu[x], spike_times = units[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids), allow_direct_insert=True) # batch insert the units
+            ephys.Unit().insert(list(dict(ekey, unit=x, unit_uid=x, unit_quality=strs[x],
+                                          probe=probe_part_no, channel=int(viSite_clu[x]),
+                                          unit_posx=vrPosX_clu[x], unit_posy=vrPosY_clu[x],
+                                          spike_times=units[x], waveform=trWav_raw_clu[x][0])
+                                     for x in unit_ids), allow_direct_insert=True)  # batch insert the units
 
             if len(bitCodeB) < len(bitCodeE): # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
                 startB = np.where(bitCodeE==bitCodeB[0])[0]
@@ -279,7 +284,7 @@ class EphysIngest(dj.Imported):
                          allow_direct_insert=True)
 
             EphysIngest.EphysFile().insert1(
-                dict(key, electrode_group=probe, ephys_file=epsubpath),
+                dict(key, probe_insertion_number=probe, ephys_file=epsubpath.as_posix()),
                 ignore_extra_fields=True, allow_direct_insert=True)
 
             log.info('ephys ingest for {} complete'.format(key))

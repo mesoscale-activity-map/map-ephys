@@ -1,6 +1,7 @@
 
 import os
 import logging
+import pathlib
 from glob import glob
 
 import numpy as np
@@ -32,8 +33,8 @@ class TrackingDataPath(dj.Lookup):
 
     @property
     def contents(self):
-        if 'tracking_data_paths' in dj.config:  # for local testing
-            return dj.config['tracking_data_paths']
+        if 'tracking_data_paths' in dj.config['custom']:  # for local testing
+            return dj.config['custom']['tracking_data_paths']
 
         return [('RRig', r'H:\\data\MAP',)]
 
@@ -80,18 +81,18 @@ class TrackingIngest(dj.Imported):
 
             log.info('checking {} for tracking data'.format(tdat))
 
-            tpath = os.path.join(tdat, h2o, sdate_iso, 'tracking')
+            tpath = pathlib.Path(tdat, h2o, sdate_iso, 'tracking')
 
-            if not os.path.exists(tpath):
+            if not tpath.exists():
                 log.warning('tracking path {} n/a - skipping'.format(tpath))
                 continue
 
             camtrial = '{}_{}_{}.txt'.format(h2o, sdate_sml, tpos)
-            campath = os.path.join(tpath, camtrial)
+            campath = tpath / camtrial
 
             log.info('trying camera position trial map: {}'.format(campath))
 
-            if not os.path.exists(campath):
+            if not campath.exists():
                 log.info('skipping {} - does not exist'.format(campath))
                 continue
 
@@ -113,8 +114,7 @@ class TrackingIngest(dj.Imported):
 
                 # ex: dl59_side_1-0000.csv / h2o_position_tn-0000.csv
                 tfile = '{}_{}_{}-*.csv'.format(h2o, tpos, t)
-                tfull = os.path.join(tpath, tfile)
-                tfull = glob(tfull)
+                tfull = list(tpath.glob(tfile))
 
                 if not tfull or len(tfull) > 1:
                     log.info('tracking file {} mismatch'.format(tfull))

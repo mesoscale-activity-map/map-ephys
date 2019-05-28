@@ -16,14 +16,19 @@ class ProbeInsertion(dj.Manual):
     insertion_number: int
     ---
     -> lab.Probe
-    -> experiment.BrainLocation
-    insertion_time : datetime # When this probe was inserted
-    ml_location=null: float # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
-    ap_location=null: float # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
-    dv_location=null: float # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
-    ml_angle=null: float # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
-    ap_angle=null: float # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive.
     """
+
+    class InsertionLocation(dj.Part):
+        definition = """
+        -> master
+        ---
+        -> experiment.BrainLocation
+        ml_location=null: float # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
+        ap_location=null: float # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
+        dv_location=null: float # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
+        ml_angle=null: float # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
+        ap_angle=null: float # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive. 
+        """
 
 
 @schema
@@ -70,7 +75,7 @@ class ChannelCCFPosition(dj.Manual):
         -> lab.Probe.Channel
         -> ccf.CCF
         """
-    # TODO: not clear the x, y, z below is in what coordinate? CCF as well?
+
     class ElectrodePositionError(dj.Part):
         definition = """
         -> lab.Probe.Channel
