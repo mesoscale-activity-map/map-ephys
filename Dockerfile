@@ -1,4 +1,4 @@
-FROM datajoint/jupyter:python3.6
+FROM datajoint/jupyter:latest
 
 RUN apt update && apt -y install mysql-client-5.7 netcat
 

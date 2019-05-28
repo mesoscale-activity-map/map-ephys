@@ -108,3 +108,4 @@ dj_local_conf.json
 **/*~
 **/#*#
 **/.#*
+docker-compose.yml
