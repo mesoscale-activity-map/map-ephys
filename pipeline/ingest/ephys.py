@@ -169,6 +169,12 @@ class EphysIngest(dj.Imported):
             trialNote = experiment.TrialNote()
             bitCodeB = (trialNote & {'subject_id': ekey['subject_id']} & {'session': ekey['session']} & {'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial') # fetch the bitcode from the behavior trialNote
 
+            # check ephys/bitcode match to determine trial numbering method
+            bitCodeB_0 = np.where(bitCodeB == bitCodeE[0])[0][0]
+            bitCodeB_ext = bitCodeB[bitCodeB_0:][:len(bitCodeE)]
+            if not np.all(np.equal(bitCodeE, bitCodeB_ext)):
+                raise Exception('Bitcode Mismatch')  # TODO: bitCodeE['trialNum']
+
             spike_trials = np.ones(len(spike_times)) * (len(viT_offset_file) - 1) # every spike is in the last trial
             spike_times2 = np.copy(spike_times)
             for i in range(len(viT_offset_file) - 1, 0, -1): #find the trials each unit has a spike in
