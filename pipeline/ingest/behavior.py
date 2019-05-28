@@ -152,7 +152,7 @@ class BehaviorIngest(dj.Imported):
 
         date = key['session_date']
         datestr = date.strftime('%Y%m%d')
-        log.debug('h2o: {h2o}, date: {d}'.format(h2o=h2o, d=datestr))
+        log.info('h2o: {h2o}, date: {d}'.format(h2o=h2o, d=datestr))
 
         # session record key
         skey = {}
@@ -168,11 +168,11 @@ class BehaviorIngest(dj.Imported):
         path = os.path.join(root, '{h2o}_*_{d}*.mat'.format(
             h2o=h2o, d=datestr))
 
-        log.debug('rigpath {p}'.format(p=path))
+        log.info('rigpath {p}'.format(p=path))
 
         matches = sorted(glob.glob(path))
         if matches:
-            log.debug('found files: {}, this is the rig'.format(matches))
+            log.info('found files: {}, this is the rig'.format(matches))
             skey['rig'] = key['rig']
         else:
             log.info('no file matches found in {p}'.format(p=path))
@@ -246,11 +246,11 @@ class BehaviorIngest(dj.Imported):
                          AllEventTimestamps))))
 
             if 'StimTrials' in SessionData.dtype.fields:
-                log.info('StimTrials detected in session - will include')
+                log.debug('StimTrials detected in session - will include')
                 AllStimTrials = SessionData['StimTrials'][0]
                 assert(AllStimTrials.shape[0] == AllStateTimestamps.shape[0])
             else:
-                log.info('StimTrials not detected in session - will skip')
+                log.debug('StimTrials not detected in session - will skip')
                 AllStimTrials = np.array([
                     None for i in enumerate(range(AllStateTimestamps.shape[0]))])
 
@@ -278,7 +278,7 @@ class BehaviorIngest(dj.Imported):
         skey['session'] = session
         key = dict(key, **skey)
 
-        log.debug('BehaviorIngest.make(): adding session record')
+        log.info('BehaviorIngest.make(): adding session record')
         experiment.Session().insert1(skey)
 
         #
@@ -303,7 +303,7 @@ class BehaviorIngest(dj.Imported):
             t = trial(*t)  # convert list of items to a 'trial' structure
             i += 1  # increment trial counter
 
-            log.info('BehaviorIngest.make(): parsing trial {i}'.format(i=i))
+            log.debug('BehaviorIngest.make(): parsing trial {i}'.format(i=i))
 
             # covert state data names into a lookup dictionary
             #
@@ -337,8 +337,8 @@ class BehaviorIngest(dj.Imported):
             missing = list(k for k in required_states if k not in states)
 
             if len(missing):
-                log.info('skipping trial {i}; missing {m}'
-                         .format(i=i, m=missing))
+                log.warning('skipping trial {i}; missing {m}'
+                            .format(i=i, m=missing))
                 continue
 
             gui = t.settings['GUI'].flatten()
@@ -350,14 +350,14 @@ class BehaviorIngest(dj.Imported):
             #
 
             if 'ProtocolType' not in gui.dtype.names:
-                log.info('skipping trial {i}; protocol undefined'
-                         .format(i=i))
+                log.warning('skipping trial {i}; protocol undefined'
+                            .format(i=i))
                 continue
 
             protocol_type = gui['ProtocolType'][0]
             if gui['ProtocolType'][0] < 3:
-                log.info('skipping trial {i}; protocol {n} < 3'
-                         .format(i=i, n=gui['ProtocolType'][0]))
+                log.warning('skipping trial {i}; protocol {n} < 3'
+                            .format(i=i, n=gui['ProtocolType'][0]))
                 continue
 
             #
@@ -377,7 +377,7 @@ class BehaviorIngest(dj.Imported):
             log.debug('endendex\n' + str(endindex))
 
             if not(len(startindex) and len(endindex)):
-                log.info('skipping trial {i}: start/end index error: {s}/{e}'.format(i=i,s=str(startindex), e=str(endindex)))
+                log.warning('skipping trial {i}: start/end index error: {s}/{e}'.format(i=i,s=str(startindex), e=str(endindex)))
                 continue
 
             try:    
@@ -386,7 +386,7 @@ class BehaviorIngest(dj.Imported):
                 tkey['start_time'] = t.state_times[startindex][0]
                 tkey['start_time'] = t.state_times[endindex][0]
             except IndexError:
-                log.info('skipping trial {i}: error indexing {s}/{e} into {t}'.format(i=i,s=str(startindex), e=str(endindex), t=str(t.state_times)))
+                log.warning('skipping trial {i}: error indexing {s}/{e} into {t}'.format(i=i,s=str(startindex), e=str(endindex), t=str(t.state_times)))
                 continue
 
             log.debug('BehaviorIngest.make(): Trial().insert1')  # TODO msg
@@ -526,14 +526,14 @@ class BehaviorIngest(dj.Imported):
                 ekey['duration'] = gui['SamplePeriod'][0]
 
                 if math.isnan(ekey['duration']) and last_dur is None:
-                    log.warning('... bad duration, no last_edur'
-                                .format(last_dur))
+                    log.warning('... trial {} bad duration, no last_edur'
+                                .format(i, last_dur))
                     ekey['duration'] = 0.0  # FIXDUR: cross-trial check
                     rows['corrected_trial_event'].append(ekey)
 
                 elif math.isnan(ekey['duration']) and last_dur is not None:
-                    log.debug('... duration using last_edur {}'
-                              .format(last_dur))
+                    log.warning('... trial {} duration using last_edur {}'
+                                .format(i, last_dur))
                     ekey['duration'] = last_dur
                     rows['corrected_trial_event'].append(ekey)
 
@@ -558,14 +558,14 @@ class BehaviorIngest(dj.Imported):
                 ekey['duration'] = gui['DelayPeriod'][0]
 
                 if math.isnan(ekey['duration']) and last_dur is None:
-                    log.warning('... bad duration, no last_edur'
-                                .format(last_dur))
+                    log.warning('... {} bad duration, no last_edur'
+                                .format(i, last_dur))
                     ekey['duration'] = 0.0  # FIXDUR: cross-trial check
                     rows['corrected_trial_event'].append(ekey)
 
                 elif math.isnan(ekey['duration']) and last_dur is not None:
-                    log.debug('... duration using last_edur {}'
-                              .format(last_dur))
+                    log.warning('... {} duration using last_edur {}'
+                                .format(i, last_dur))
                     ekey['duration'] = last_dur
                     rows['corrected_trial_event'].append(ekey)
 
@@ -612,7 +612,6 @@ class BehaviorIngest(dj.Imported):
                          action_event_time=t.event_times[r]))
                     for r in lickright]
 
-            #
             # Photostim Events
             #
             # TODO:

@@ -15,7 +15,7 @@ from pipeline import lab
 from pipeline import experiment
 from pipeline import ephys
 from pipeline import InsertBuffer
-from pipeline.ingest import behavior as ingest_behavior
+from pipeline.ingest import behavior as behavior_ingest
 
 log = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class EphysIngest(dj.Imported):
     # subpaths like: \2017-10-21\tw5ap_imec3_opt3_jrc.mat
 
     definition = """
-    -> ingest_behavior.BehaviorIngest
+    -> behavior_ingest.BehaviorIngest
     """
 
     class EphysFile(dj.Part):
@@ -71,7 +71,7 @@ class EphysIngest(dj.Imported):
         # so lookup behavior ingest for session id, quit with warning otherwise
 
         try:
-            behavior = (ingest_behavior.BehaviorIngest() & key).fetch1()
+            behavior = (behavior_ingest.BehaviorIngest() & key).fetch1()
         except dj.DataJointError:
             log.warning('EphysIngest().make(): skip - behavior ingest error')
             return
@@ -104,7 +104,7 @@ class EphysIngest(dj.Imported):
                 continue
 
             epfullpath = ephys_files[0]
-            log.info('EphysIngest().make(): found ephys recording in {}'.format(epfullpath))
+            log.info('EphysIngest().make(): found probe {} ephys recording in {}'.format(probe, epfullpath))
 
             #
             # Prepare ElectrodeGroup configuration
@@ -118,11 +118,11 @@ class EphysIngest(dj.Imported):
                 'electrode_group': probe,
             }
 
-            log.debug('inserting electrode group')
+            log.info('inserting electrode group')
             ephys.ElectrodeGroup().insert1(dict(ekey, probe_part_no=15131808323))
             ephys.ElectrodeGroup().make(ekey)  # note: no locks; is dj.Manual
 
-            log.debug('extracting spike data')
+            log.info('extracting spike data')
 
             f = h5py.File(epfullpath,'r')
             ind = np.argsort(f['S_clu']['viClu'][0]) # index sorted by cluster
@@ -155,10 +155,14 @@ class EphysIngest(dj.Imported):
             bcsubpath = os.path.join(water, date, str(probe), file)
             bcfullpath = os.path.join(rigpath, bcsubpath)
 
-            log.debug('opening bitcode for session {s} probe {p} ({f})'
-                      .format(s=behavior['session'], p=probe, f=bcfullpath))
+            log.info('opening bitcode for session {s} probe {p} ({f})'
+                     .format(s=behavior['session'], p=probe, f=bcfullpath))
 
             mat = spio.loadmat(bcfullpath, squeeze_me = True) # load the bitcode file
+
+            log.info('extracting spike information {s} probe {p} ({f})'
+                     .format(s=behavior['session'], p=probe, f=bcfullpath))
+
             bitCodeE = mat['bitCodeS'].flatten() # bitCodeS is the char variable
             goCue = mat['goCue'].flatten() # bitCodeS is the char variable
             viT_offset_file = mat['sTrig'].flatten() # start of each trial, subtract this number for each trial
@@ -189,7 +193,7 @@ class EphysIngest(dj.Imported):
                 trialunits2 = np.append(trialunits2, np.unique(trialunits[i])) # add the trials that a unit is in
                 trialunits1 = np.append(trialunits1, np.zeros(len(np.unique(trialunits[i])))+i) # add the unit numbers 
 
-            log.debug('inserting units for session {s}'.format(s=behavior['session']))
+            log.info('inserting units for session {s}'.format(s=behavior['session']))
             #pdb.set_trace()
             ephys.Unit().insert(list(dict(ekey, unit = x, unit_uid = x, unit_quality = strs[x], unit_site = int(viSite_clu[x]), unit_posx = vrPosX_clu[x], unit_posy = vrPosY_clu[x], spike_times = units[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids), allow_direct_insert=True) # batch insert the units
 
@@ -202,7 +206,7 @@ class EphysIngest(dj.Imported):
                 startB = 0
                 startE = 0
 
-            log.debug('extracting trial unit information {s} ({f})'.format(s=behavior['session'], f=epfullpath))
+            log.info('extracting trial unit information {s} ({f})'.format(s=behavior['session'], f=epfullpath))
 
             trialunits2 = trialunits2-startB # behavior has less trials if startB is +ve, behavior has more trials if startB is -ve
             indT = np.where(trialunits2 > -1)[0] # get rid of the -ve trials
@@ -234,7 +238,7 @@ class EphysIngest(dj.Imported):
                 trialPerUnit[i] = np.arange(0, len(trial_ids_diff)+1, dtype = int) # list of trial index
 
             # UnitTrial
-            log.debug('inserting UnitTrial information')
+            log.info('inserting UnitTrial information')
             with InsertBuffer(ephys.Unit.UnitTrial, 10000,
                               skip_duplicates=True,
                               allow_direct_insert=True) as ib:
@@ -246,10 +250,10 @@ class EphysIngest(dj.Imported):
                     if ib.flush():
                         log.debug('... UnitTrial spike {}'.format(x))
 
-            log.debug('... UnitTrial last spike {}'.format(x))
+            log.info('... UnitTrial last spike {}'.format(x))
 
             # TrialSpike
-            log.debug('inserting TrialSpike information')
+            log.info('inserting TrialSpike information')
             with InsertBuffer(ephys.TrialSpikes, 10000, skip_duplicates=True,
                               allow_direct_insert=True) as ib:
 
@@ -267,9 +271,9 @@ class EphysIngest(dj.Imported):
                         if ib.flush():
                             log.debug('... TrialSpike spike {}'.format(n_tspike))
 
-            log.debug('... TrialSpike last spike {}'.format(n_tspike))
+            log.info('... TrialSpike last spike {}'.format(n_tspike))
 
-            log.debug('inserting file load information')
+            log.info('inserting file load information')
 
             self.insert1(key, ignore_extra_fields=True, skip_duplicates=True,
                          allow_direct_insert=True)
@@ -277,3 +281,5 @@ class EphysIngest(dj.Imported):
             EphysIngest.EphysFile().insert1(
                 dict(key, electrode_group=probe, ephys_file=epsubpath),
                 ignore_extra_fields=True, allow_direct_insert=True)
+
+            log.info('ephys ingest for {} complete'.format(key))

@@ -3,19 +3,19 @@
 import os
 import sys
 import logging
-import warnings
 from code import interact
 
 import datajoint as dj
 
-from pipeline import ephys
 from pipeline import lab
 from pipeline import experiment
 from pipeline import ccf
+from pipeline import ephys
 from pipeline import tracking
 from pipeline import psth
 from pipeline import publication
 
+pipeline_modules = [lab, ccf, experiment, ephys, tracking, psth, publication]
 
 log = logging.getLogger(__name__)
 
@@ -28,35 +28,43 @@ def usage_exit():
 
 
 def logsetup(*args):
+    level_map = {
+        'INFO': logging.INFO,
+        'WARNING': logging.WARNING,
+        'ERROR': logging.ERROR,
+        'DEBUG': logging.DEBUG,
+    }
+    level = level_map[args[0]] if args else logging.INFO
+
     logging.basicConfig(level=logging.ERROR)
-    log.setLevel(logging.DEBUG)
-    logging.getLogger('pipeline.ingest.behavior').setLevel(logging.DEBUG)
-    logging.getLogger('pipeline.ingest.ephys').setLevel(logging.DEBUG)
-    logging.getLogger('pipeline.ingest.tracking').setLevel(logging.DEBUG)
-    logging.getLogger('pipeline.ingest.histology').setLevel(logging.DEBUG)
-    logging.getLogger('pipeline.psth').setLevel(logging.DEBUG)
-    logging.getLogger('pipeline.ccf').setLevel(logging.DEBUG)
-    logging.getLogger('pipeline.publication').setLevel(logging.DEBUG)
+    log.setLevel(level)
+    logging.getLogger('pipeline.ingest.behavior').setLevel(level)
+    logging.getLogger('pipeline.ingest.ephys').setLevel(level)
+    logging.getLogger('pipeline.ingest.tracking').setLevel(level)
+    logging.getLogger('pipeline.ingest.histology').setLevel(level)
+    logging.getLogger('pipeline.psth').setLevel(level)
+    logging.getLogger('pipeline.ccf').setLevel(level)
+    logging.getLogger('pipeline.publication').setLevel(level)
 
 
 def ingest_behavior(*args):
-    from pipeline.ingest import behavior as ingest_behavior
-    ingest_behavior.BehaviorIngest().populate(display_progress=True)
+    from pipeline.ingest import behavior as behavior_ingest
+    behavior_ingest.BehaviorIngest().populate(display_progress=True)
 
 
 def ingest_ephys(*args):
-    from pipeline.ingest import ephys as ingest_ephys
-    ingest_ephys.EphysIngest().populate(display_progress=True)
+    from pipeline.ingest import ephys as ephys_ingest
+    ephys_ingest.EphysIngest().populate(display_progress=True)
 
 
 def ingest_tracking(*args):
-    from pipeline.ingest import tracking as ingest_tracking
-    ingest_tracking.TrackingIngest().populate(display_progress=True)
+    from pipeline.ingest import tracking as tracking_ingest
+    tracking_ingest.TrackingIngest().populate(display_progress=True)
 
 
 def ingest_histology(*args):
-    from pipeline.ingest import histology as ingest_histology
-    ingest_histology.HistologyIngest().populate(display_progress=True)
+    from pipeline.ingest import histology as histology_ingest
+    histology_ingest.HistologyIngest().populate(display_progress=True)
 
 
 def populate_psth(*args):
@@ -76,15 +84,35 @@ def populate_psth(*args):
     psth.CellGroupPsth.populate()
 
 
+def nuke_all():
+    if 'nuclear_option' not in dj.config:
+        raise RuntimeError('nuke_all() function not enabled')
+
+    from pipeline.ingest import behavior as behavior_ingest
+    from pipeline.ingest import ephys as ephys_ingest
+    from pipeline.ingest import tracking as tracking_ingest
+    from pipeline.ingest import histology as histology_ingest
+
+    ingest_modules = [behavior_ingest, ephys_ingest, tracking_ingest,
+                      histology_ingest]
+
+    for m in reversed(ingest_modules):
+        m.schema.drop()
+
+    # production lab schema is not map project specific, so keep it.
+    for m in reversed([m for m in pipeline_modules if m is not lab]):
+        m.schema.drop()
+
+
 def publish(*args):
     publication.ArchivedRawEphysTrial.populate()
 
 
 def shell(*args):
-    modules = [lab, experiment, ephys, tracking, ccf, psth, publication]
     interact('map shell.\n\nschema modules:\n\n  - {m}\n'
              .format(m='\n  - '.join(
-                 '.'.join(m.__name__.split('.')[1:]) for m in modules)),
+                 '.'.join(m.__name__.split('.')[1:])
+                 for m in pipeline_modules)),
              local=globals())
 
 
