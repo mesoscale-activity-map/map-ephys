@@ -61,7 +61,7 @@ def mockdata():
             'gene_modification_description': 'reachR PV'},
             skip_duplicates=True
         )
-        # Subject 399752
+        # Subject 399752 / dl7
         lab.Subject().insert1({
             'subject_id': 399752,
             'username': 'daveliu',
@@ -103,7 +103,7 @@ def mockdata():
             'wr_start_weight': 25},
             skip_duplicates=True
         )
-        # Subject 397853
+        # Subject 397853 / dl14
         lab.Subject().insert1({
             'subject_id': 397853,
             'username': 'daveliu',
@@ -145,7 +145,7 @@ def mockdata():
             'wr_start_weight': 24.1},
             skip_duplicates=True
         )
-        # Subject 400480
+        # Subject 400480 / dl15
         lab.Subject().insert1({
             'subject_id': 400480,
             'username': 'daveliu',
@@ -187,7 +187,7 @@ def mockdata():
             'wr_start_weight': 27.6},
             skip_duplicates=True
         )
-        # Subject 406680
+        # Subject 406680 / dl20
         lab.Subject().insert1({
             'subject_id': 406680,
             'username': 'daveliu',
@@ -229,7 +229,7 @@ def mockdata():
             'wr_start_weight': 22.7},
             skip_duplicates=True
         )
-        # Subject 408022
+        # Subject 408022 / dl21
         lab.Subject().insert1({
             'subject_id': 408022,
             'username': 'daveliu',
@@ -271,7 +271,7 @@ def mockdata():
             'wr_start_weight': 21.1},
             skip_duplicates=True
         )
-        # Subject 408021
+        # Subject 408021 / dl22
         lab.Subject().insert1({
             'subject_id': 408021,
             'username': 'daveliu',
@@ -313,7 +313,7 @@ def mockdata():
             'wr_start_weight': 21},
             skip_duplicates=True
         )
-        # Subject 407512
+        # Subject 407512 / dl24
         lab.Subject().insert1({
             'subject_id': 407512,
             'username': 'daveliu',
@@ -355,7 +355,7 @@ def mockdata():
             'wr_start_weight': 26},
             skip_duplicates=True
         )
-        # 407513
+        # 407513 / dl25
         lab.Subject().insert1({
             'subject_id': 407513,
             'username': 'daveliu',
@@ -397,7 +397,7 @@ def mockdata():
             'wr_start_weight': 25.5},
             skip_duplicates=True
         )
-	# Subject 407986
+	# Subject 407986 / dl28
         lab.Subject().insert1({
             'subject_id': 407986,
             'username': 'daveliu',
@@ -439,7 +439,7 @@ def mockdata():
             'wr_start_weight': 19.8},
             skip_duplicates=True
         )
-        # Subject 123457
+        # Subject 123457 / tw5
         lab.Subject().insert1({
             'subject_id': 123457,
             'username': 'daveliu',
@@ -457,40 +457,58 @@ def mockdata():
             'wr_start_weight': 20.5},
             skip_duplicates=True
         )
-        # Subject 90210
+        # Subject 412330 / tw34
         lab.Subject().insert1({
-            'subject_id': 90210,
+            'subject_id': 412330,
             'username': 'daveliu',
-            'cage_number': 145375,
-            'date_of_birth': '2017-08-03',
+            'cage_number': 154522,
+            'date_of_birth': '2017-12-05',
             'sex': 'M',
             'animal_source': 'Jackson labs'},
             skip_duplicates=True
         )
         lab.WaterRestriction().insert1({
-            'subject_id': 90210,
+            'subject_id': 412330,
             'water_restriction_number': 'tw34',
-            'cage_number': 148861,
-            'wr_start_date': '2017-11-07',
-            'wr_start_weight': 20.5},
+            'cage_number': 154522,
+            'wr_start_date': '2018-03-18',
+            'wr_start_weight': 21.0},
             skip_duplicates=True
         )
-        # Subject 90211
+        # subject 432998 / dl55
         lab.Subject().insert1({
-            'subject_id': 90211,
+            'subject_id': 432998,
             'username': 'daveliu',
-            'cage_number': 145375,
-            'date_of_birth': '2017-08-03',
+            'cage_number': 160920,
+            'date_of_birth': '2018-07-02',
             'sex': 'M',
             'animal_source': 'Jackson labs'},
             skip_duplicates=True
         )
         lab.WaterRestriction().insert1({
-            'subject_id': 90211,
+            'subject_id': 432998,
+            'water_restriction_number': 'dl55',
+            'cage_number': 160920,
+            'wr_start_date': '2018-09-05',
+            'wr_start_weight': 21.0},
+            skip_duplicates=True
+        )
+        # Subject 435884 / dl59
+        lab.Subject().insert1({
+            'subject_id': 435884,
+            'username': 'daveliu',
+            'cage_number': 161908,
+            'date_of_birth': '2018-08-06',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates=True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 435884,
             'water_restriction_number': 'dl59',
-            'cage_number': 148861,
-            'wr_start_date': '2017-11-07',
-            'wr_start_weight': 20.5},
+            'cage_number': 154522,
+            'wr_start_date': '2018-09-30',
+            'wr_start_weight': 21.0},
             skip_duplicates=True
         )
 
@@ -536,7 +554,7 @@ def post_ephys(*args):
         print('attempting ElectrodeGroupPosition for fname: ', end='')
         if re.match('.*2018-12-07.*dl59.*.mat', fname):
             rec = {
-                'subject_id': 90211,
+                'subject_id': 435884,
                 'session': 1,
                 'electrode_group': 1,
                 'skull_reference': 'Bregma',
@@ -552,7 +570,7 @@ def post_ephys(*args):
         elif re.match('.*2018-07-16.*tw34.*.mat', fname):
 
             rec = {
-                'subject_id': 90211,
+                'subject_id': 412330,
                 'session': 1,
                 'electrode_group': 1,
                 'skull_reference': 'Bregma',
