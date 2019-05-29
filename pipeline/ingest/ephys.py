@@ -183,16 +183,16 @@ class EphysIngest(dj.Imported):
             spike_times2 = np.copy(spike_times)
             for i in range(len(viT_offset_file) - 1, 0, -1): #find the trials each unit has a spike in
                 log.debug('locating trials with spikes {s}:{t}'.format(s=behavior['session'], t=i))
-                spike_trials[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = i-1 # Get the trial number of each spike
+                if spike_trials_fix is None:
+                    spike_trials[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = i-1 # Get the trial number of each spike
+                else:
+                    spike_trials[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = spike_trials_fix[i-1] - 1  # Get the trial number of each spike
                 spike_times2[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = spike_times[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] - goCue[i-1] # subtract the goCue from each trial
             spike_trials[np.where(spike_times2 >= viT_offset_file[-1])] = len(viT_offset_file) - 1 # subtract the goCue from the last trial
             spike_times2[np.where(spike_times2 >= viT_offset_file[-1])] = spike_times[np.where(spike_times2 >= viT_offset_file[-1])] - goCue[-1] # subtract the goCue from the last trial
             spike_times2 = spike_times2 / sRateHz # divide the sampling rate, sRateHz
             clu_ids_diff = np.diff(cluster_ids) # where the units seperate
             clu_ids_diff = np.where(clu_ids_diff != 0)[0] + 1 # separate the spike_times
-
-            if spike_trials_fix is not None:
-                spike_trials = spike_trials_fix
 
             spike_times = spike_times2  # now replace spike times with updated version
 
@@ -211,12 +211,16 @@ class EphysIngest(dj.Imported):
             #pdb.set_trace()
             ephys.Unit().insert(list(dict(ekey, unit = x, unit_uid = x, unit_quality = strs[x], unit_site = int(viSite_clu[x]), unit_posx = vrPosX_clu[x], unit_posy = vrPosY_clu[x], spike_times = units[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids), allow_direct_insert=True) # batch insert the units
 
-            if len(bitCodeB) < len(bitCodeE): # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
-                startB = np.where(bitCodeE==bitCodeB[0])[0]
-            elif len(bitCodeB) > len(bitCodeE): # behavior file is longer; e.g. only some trials are sorted, the bitcode.mat should reflect this; Sometimes SpikeGLX can skip a trial, I need to check the last trial
-                startE = np.where(bitCodeB==bitCodeE[0])[0]
-                startB = -startE
-            else:
+            if spike_trials_fix is None:
+                if len(bitCodeB) < len(bitCodeE): # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
+                    startB = np.where(bitCodeE==bitCodeB[0])[0]
+                elif len(bitCodeB) > len(bitCodeE): # behavior file is longer; e.g. only some trials are sorted, the bitcode.mat should reflect this; Sometimes SpikeGLX can skip a trial, I need to check the last trial
+                    startE = np.where(bitCodeB==bitCodeE[0])[0]
+                    startB = -startE
+                else:
+                    startB = 0
+                    startE = 0
+            else:  # XXX: under test
                 startB = 0
                 startE = 0
 
@@ -249,10 +253,11 @@ class EphysIngest(dj.Imported):
                 trial_ids_diff = np.where(trial_ids_diff != 0)[0] + 1
                 units[i] = units[i][trialidx] # sort the spike times based on the trial mapping
                 units[i] = np.split(units[i], trial_ids_diff) # separate the spike_times based on trials
-                trialPerUnit[i] = np.arange(0, len(trial_ids_diff)+1, dtype = int) # list of trial index
+                trialPerUnit[i] = np.arange(0, len(trial_ids_diff), dtype = int) # list of trial index
 
             # UnitTrial
             log.info('inserting UnitTrial information')
+
             with InsertBuffer(ephys.Unit.UnitTrial, 10000,
                               skip_duplicates=True,
                               allow_direct_insert=True) as ib:
