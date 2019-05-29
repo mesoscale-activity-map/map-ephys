@@ -568,7 +568,6 @@ def post_ephys(*args):
             }
             print('match!: {}'.format(rec))
         elif re.match('.*2018-07-16.*tw34.*.mat', fname):
-
             rec = {
                 'subject_id': 412330,
                 'session': 1,
