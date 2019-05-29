@@ -30,6 +30,7 @@ class Session(dj.Manual):
     -> lab.Rig
     """
 
+
 @schema
 class Task(dj.Lookup):
     definition = """

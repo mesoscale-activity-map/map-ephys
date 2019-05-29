@@ -30,6 +30,19 @@ class ProbeInsertion(dj.Manual):
         ap_angle=null: float # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive. 
         """
 
+    class ChannelGroup(dj.Part):
+        definition = """
+        # grouping of channels to be clustered together (e.g. a neuropixel channel config - 384/960)
+        -> master
+        channel_group: int  # channel group
+        """
+
+    class ChannelGroupMember(dj.Part):
+        definition = """
+        -> master.ChannelGroup
+        -> lab.Probe.Channel
+        """
+
 
 @schema
 class UnitQualityType(dj.Lookup):
