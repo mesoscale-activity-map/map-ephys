@@ -145,6 +145,8 @@ class EphysIngest(dj.Imported):
             viSite_clu = f['S_clu']['viSite_clu'][:] # site of the unit with the largest amplitude
             vrPosX_clu = f['S_clu']['vrPosX_clu'][0] # x position of the unit
             vrPosY_clu = f['S_clu']['vrPosY_clu'][0] # y position of the unit
+            vrVpp_uv_clu = f['S_clu']['vrVpp_uv_clu'][0] # amplitude of the unit
+            vrSnr_clu = f['S_clu']['vrSnr_clu'][0] # y position of the unit
             strs = ["all" for x in range(len(csNote_clu))] # all units are "all" by definition
             for iU in range(0, len(csNote_clu)): # read the manual curation of each unit
                 log.debug('extracting spike indicators {s}:{u}'.format(s=behavior['session'], u=iU))
@@ -179,17 +181,31 @@ class EphysIngest(dj.Imported):
             trialNote = experiment.TrialNote()
             bitCodeB = (trialNote & {'subject_id': ekey['subject_id']} & {'session': ekey['session']} & {'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial') # fetch the bitcode from the behavior trialNote
 
+            # check ephys/bitcode match to determine trial numbering method
+            bitCodeB_0 = np.where(bitCodeB == bitCodeE[0])[0][0]
+            bitCodeB_ext = bitCodeB[bitCodeB_0:][:len(bitCodeE)]
+            spike_trials_fix = None
+            if not np.all(np.equal(bitCodeE, bitCodeB_ext)):
+                if 'trialNum' in mat:
+                    spike_trials_fix = mat['trialNum']
+                else:
+                    raise Exception('Bitcode Mismatch')
+
             spike_trials = np.ones(len(spike_times)) * (len(viT_offset_file) - 1) # every spike is in the last trial
             spike_times2 = np.copy(spike_times)
             for i in range(len(viT_offset_file) - 1, 0, -1): #find the trials each unit has a spike in
                 log.debug('locating trials with spikes {s}:{t}'.format(s=behavior['session'], t=i))
-                spike_trials[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = i-1 # Get the trial number of each spike
+                if spike_trials_fix is None:
+                    spike_trials[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = i-1 # Get the trial number of each spike
+                else:
+                    spike_trials[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = spike_trials_fix[i-1] - 1  # Get the trial number of each spike
                 spike_times2[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = spike_times[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] - goCue[i-1] # subtract the goCue from each trial
             spike_trials[np.where(spike_times2 >= viT_offset_file[-1])] = len(viT_offset_file) - 1 # subtract the goCue from the last trial
             spike_times2[np.where(spike_times2 >= viT_offset_file[-1])] = spike_times[np.where(spike_times2 >= viT_offset_file[-1])] - goCue[-1] # subtract the goCue from the last trial
             spike_times2 = spike_times2 / sRateHz # divide the sampling rate, sRateHz
             clu_ids_diff = np.diff(cluster_ids) # where the units seperate
             clu_ids_diff = np.where(clu_ids_diff != 0)[0] + 1 # separate the spike_times
+
             spike_times = spike_times2  # now replace spike times with updated version
 
             units = np.split(spike_times, clu_ids_diff)  # sub arrays of spike_times for each unit (for ephys.Unit())
@@ -211,12 +227,16 @@ class EphysIngest(dj.Imported):
                                           spike_times=units[x], waveform=trWav_raw_clu[x][0])
                                      for x in unit_ids), allow_direct_insert=True)  # batch insert the units
 
-            if len(bitCodeB) < len(bitCodeE): # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
-                startB = np.where(bitCodeE==bitCodeB[0])[0]
-            elif len(bitCodeB) > len(bitCodeE): # behavior file is longer; e.g. only some trials are sorted, the bitcode.mat should reflect this; Sometimes SpikeGLX can skip a trial, I need to check the last trial
-                startE = np.where(bitCodeB==bitCodeE[0])[0]
-                startB = -startE
-            else:
+            if spike_trials_fix is None:
+                if len(bitCodeB) < len(bitCodeE): # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
+                    startB = np.where(bitCodeE==bitCodeB[0])[0]
+                elif len(bitCodeB) > len(bitCodeE): # behavior file is longer; e.g. only some trials are sorted, the bitcode.mat should reflect this; Sometimes SpikeGLX can skip a trial, I need to check the last trial
+                    startE = np.where(bitCodeB==bitCodeE[0])[0]
+                    startB = -startE
+                else:
+                    startB = 0
+                    startE = 0
+            else:  # XXX: under test
                 startB = 0
                 startE = 0
 
@@ -249,10 +269,11 @@ class EphysIngest(dj.Imported):
                 trial_ids_diff = np.where(trial_ids_diff != 0)[0] + 1
                 units[i] = units[i][trialidx] # sort the spike times based on the trial mapping
                 units[i] = np.split(units[i], trial_ids_diff) # separate the spike_times based on trials
-                trialPerUnit[i] = np.arange(0, len(trial_ids_diff)+1, dtype = int) # list of trial index
+                trialPerUnit[i] = np.arange(0, len(trial_ids_diff), dtype = int) # list of trial index
 
             # UnitTrial
             log.info('inserting UnitTrial information')
+
             with InsertBuffer(ephys.Unit.UnitTrial, 10000,
                               skip_duplicates=True,
                               allow_direct_insert=True) as ib:

@@ -127,7 +127,9 @@ class Unit(dj.Imported):
     -> lab.Probe.Channel # site on the electrode for which the unit has the largest amplitude
     unit_posx : double # x position of the unit on the probe
     unit_posy : double # y position of the unit on the probe
-    spike_times : longblob  #  (s) with respect to the start of the session 
+    spike_times : longblob  #  (s)
+    unit_amp : double
+    unit_snr : double
     waveform : blob # average spike waveform
     """
 
