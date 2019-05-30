@@ -135,6 +135,8 @@ class EphysIngest(dj.Imported):
             viSite_clu = f['S_clu']['viSite_clu'][:] # site of the unit with the largest amplitude
             vrPosX_clu = f['S_clu']['vrPosX_clu'][0] # x position of the unit
             vrPosY_clu = f['S_clu']['vrPosY_clu'][0] # y position of the unit
+            vrVpp_uv_clu = f['S_clu']['vrVpp_uv_clu'][0] # amplitude of the unit
+            vrSnr_clu = f['S_clu']['vrSnr_clu'][0] # y position of the unit
             strs = ["all" for x in range(len(csNote_clu))] # all units are "all" by definition
             for iU in range(0, len(csNote_clu)): # read the manual curation of each unit
                 log.debug('extracting spike indicators {s}:{u}'.format(s=behavior['session'], u=iU))
@@ -209,7 +211,7 @@ class EphysIngest(dj.Imported):
 
             log.info('inserting units for session {s}'.format(s=behavior['session']))
             #pdb.set_trace()
-            ephys.Unit().insert(list(dict(ekey, unit = x, unit_uid = x, unit_quality = strs[x], unit_site = int(viSite_clu[x]), unit_posx = vrPosX_clu[x], unit_posy = vrPosY_clu[x], spike_times = units[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids), allow_direct_insert=True) # batch insert the units
+            ephys.Unit().insert(list(dict(ekey, unit = x, unit_uid = x, unit_quality = strs[x], unit_site = int(viSite_clu[x]), unit_posx = vrPosX_clu[x], unit_posy = vrPosY_clu[x], spike_times = units[x], unit_amp = vrVpp_uv_clu[x], unit_snr = vrSnr_clu[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids), allow_direct_insert=True) # batch insert the units
 
             if spike_trials_fix is None:
                 if len(bitCodeB) < len(bitCodeE): # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
