@@ -54,7 +54,7 @@ class LFP(dj.Imported):
     lfp_mean: longblob              # mean of LFP across electrodes
     """
 
-    class LFPChannel(dj.Part):
+    class Channel(dj.Part):
         definition = """  
         -> master
         -> lab.Probe.Electrode
