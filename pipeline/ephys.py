@@ -30,17 +30,36 @@ class ProbeInsertion(dj.Manual):
         ap_angle=null: float # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive. 
         """
 
-    class ChannelGroup(dj.Part):
+    class ElectrodeGroup(dj.Part):
         definition = """
-        # grouping of channels to be clustered together (e.g. a neuropixel channel config - 384/960)
+        # grouping of electrodes to be clustered together (e.g. a neuropixel electrode config - 384/960)
         -> master
-        channel_group: int  # channel group
+        electrode_group: int  # electrode group
         """
 
-    class ChannelGroupMember(dj.Part):
+    class Electrode(dj.Part):
         definition = """
-        -> master.ChannelGroup
-        -> lab.Probe.Channel
+        -> master.ElectrodeGroup
+        -> lab.Probe.Electrode
+        """
+
+
+@schema
+class LFP(dj.Imported):
+    definition = """
+    -> ProbeInsertion
+    ---
+    lfp_sample_rate: float          # (Hz)
+    lfp_time_stamps: longblob       # timestamps with respect to the start of the recording (recording_timestamp)
+    lfp_mean: longblob              # mean of LFP across electrodes
+    """
+
+    class ElectrodeLFP(dj.Part):
+        definition = """
+        -> master
+        -> lab.Probe.Electrode
+        ---
+        lfp: longblob           # recorded lfp at this electrode
         """
 
 
@@ -78,20 +97,20 @@ class CellType(dj.Lookup):
 
 
 @schema
-class ChannelCCFPosition(dj.Manual):
+class ElectrodeCCFPosition(dj.Manual):
     definition = """
     -> ProbeInsertion
     """
 
     class ElectrodePosition(dj.Part):
         definition = """
-        -> lab.Probe.Channel
+        -> lab.Probe.Electrode
         -> ccf.CCF
         """
 
     class ElectrodePositionError(dj.Part):
         definition = """
-        -> lab.Probe.Channel
+        -> lab.Probe.Electrode
         -> ccf.CCFLabel
         x   :  float   # (um)
         y   :  float   # (um)
@@ -124,7 +143,7 @@ class Unit(dj.Imported):
     ---
     unit_uid : int # unique across sessions/animals
     -> UnitQualityType
-    -> lab.Probe.Channel # site on the electrode for which the unit has the largest amplitude
+    -> lab.Probe.Electrode # site on the electrode for which the unit has the largest amplitude
     unit_posx : double # x position of the unit on the probe
     unit_posy : double # y position of the unit on the probe
     spike_times : longblob  #  (s)

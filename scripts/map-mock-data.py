@@ -581,7 +581,7 @@ def mockdata():
         probe = '15131808323'  # <-- this is more of probe model number (not quite the serial number of that probe)
         with lab.Probe.connection.transaction:
             lab.Probe.insert1({'probe': probe, 'probe_type': 'neuropixel'})
-            lab.Probe.Channel.insert({'probe': probe, 'channel': x} for x in range(1, 961))
+            lab.Probe.Electrode.insert({'probe': probe, 'electrode': x} for x in range(1, 961))
 
 
     except Exception as e:

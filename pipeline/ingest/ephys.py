@@ -123,9 +123,9 @@ class EphysIngest(dj.Imported):
             log.info('inserting probe insertion')
             ephys.ProbeInsertion.insert1(dict(ekey, probe=probe_part_no))
 
-            # Add channel group and group member (hard-coded to be the first 384 channel)
-            ephys.ProbeInsertion.ChannelGroup.insert1(dict(ekey, probe=probe_part_no, channel_group=0), ignore_extra_fields = True)
-            ephys.ProbeInsertion.ChannelGroupMember.insert((dict(ekey, probe=probe_part_no, channel_group=0, channel=chn)
+            # Add electrode group and group member (hard-coded to be the first 384 electrode)
+            ephys.ProbeInsertion.ElectrodeGroup.insert1(dict(ekey, probe=probe_part_no, electrode_group=0), ignore_extra_fields = True)
+            ephys.ProbeInsertion.Electrode.insert((dict(ekey, probe=probe_part_no, electrode_group=0, electrode=chn)
                                             for chn in range(1, 385)), ignore_extra_fields = True)
 
             #
@@ -222,7 +222,7 @@ class EphysIngest(dj.Imported):
             log.info('inserting units for session {s}'.format(s=behavior['session']))
             #pdb.set_trace()
             ephys.Unit().insert(list(dict(ekey, unit=x, unit_uid=x, unit_quality=strs[x],
-                                          probe=probe_part_no, channel=int(viSite_clu[x]),
+                                          probe=probe_part_no, electrode=int(viSite_clu[x]),
                                           unit_posx=vrPosX_clu[x], unit_posy=vrPosY_clu[x],
                                           spike_times=units[x], waveform=trWav_raw_clu[x][0])
                                      for x in unit_ids), allow_direct_insert=True)  # batch insert the units

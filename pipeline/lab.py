@@ -222,14 +222,14 @@ class Probe(dj.Lookup):
     probe_comment='' :  varchar(1000)
     """
 
-    class Channel(dj.Part):
+    class Electrode(dj.Part):
         definition = """
         -> master
-        channel: int     # channel
+        electrode: int     # electrode
         ---
-        x_coord=NULL: float   # x coordinate of the channel within the probe
-        y_coord=NULL: float   # y coordinate of the channel within the probe
-        z_coord=NULL: float   # z coordinate of the channel within the probe
+        x_coord=NULL: float   # (um) x coordinate of the electrode within the probe
+        y_coord=NULL: float   # (um) y coordinate of the electrode within the probe
+        z_coord=NULL: float   # (um) z coordinate of the electrode within the probe
         """
 
 
