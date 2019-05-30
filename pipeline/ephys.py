@@ -57,7 +57,7 @@ class LFP(dj.Imported):
     class Channel(dj.Part):
         definition = """  
         -> master
-        -> lab.Probe.Electrode
+        -> ProbeInsertion.Electrode
         ---
         lfp: longblob           # recorded lfp at this electrode
         """
@@ -143,7 +143,7 @@ class Unit(dj.Imported):
     ---
     unit_uid : int # unique across sessions/animals
     -> UnitQualityType
-    -> lab.Probe.Electrode # site on the electrode for which the unit has the largest amplitude
+    -> ProbeInsertion.Electrode # site on the electrode for which the unit has the largest amplitude
     unit_posx : double # x position of the unit on the probe
     unit_posy : double # y position of the unit on the probe
     spike_times : longblob  #  (s)
