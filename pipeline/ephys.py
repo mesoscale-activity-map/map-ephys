@@ -140,6 +140,8 @@ class Unit(dj.Imported):
     unit_posx : double # x position of the unit on the probe
     unit_posy : double # y position of the unit on the probe
     spike_times : longblob  #  (s)
+    unit_amp : double
+    unit_snr : double
     waveform : blob # average spike waveform
     """
 
