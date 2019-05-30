@@ -123,6 +123,15 @@ class EphysIngest(dj.Imported):
             log.info('inserting probe insertion')
             ephys.ProbeInsertion.insert1(dict(ekey, probe=probe_part_no))
 
+            # Add channel group and group member (hard-coded to be the first 384 channel)
+            ephys.ProbeInsertion.ChannelGroup.insert1(dict(ekey, probe=probe_part_no, channel_group=0), ignore_extra_fields = True)
+            ephys.ProbeInsertion.ChannelGroupMember.insert((dict(ekey, probe=probe_part_no, channel_group=0, channel=chn)
+                                            for chn in range(1, 385)), ignore_extra_fields = True)
+
+            #
+            # Extract spike data
+            #
+
             log.info('extracting spike data')
 
             f = h5py.File(epfullpath, 'r')
