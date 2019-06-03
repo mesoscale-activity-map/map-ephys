@@ -221,7 +221,7 @@ class EphysIngest(dj.Imported):
 
             log.info('inserting units for session {s}'.format(s=behavior['session']))
             #pdb.set_trace()
-            ephys.Unit().insert(list(dict(ekey, unit=x, unit_uid=x, unit_quality=strs[x],
+            ephys.Unit().insert((dict(ekey, unit=x, unit_uid=x, unit_quality=strs[x],
                                           probe=probe_part_no, electrode_group=0, electrode=int(viSite_clu[x]),
                                           unit_posx=vrPosX_clu[x], unit_posy=vrPosY_clu[x],
                                           spike_times=units[x], waveform=trWav_raw_clu[x][0])
