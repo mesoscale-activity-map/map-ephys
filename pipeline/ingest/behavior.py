@@ -613,7 +613,7 @@ class BehaviorIngest(dj.Imported):
             action_event_count = len(rows['action_event'])
             if len(lickright):
                 [rows['action_event'].append(
-                    dict(**tkey, action_event_id=action_event_count+idx, action_event_type='right lick',
+                    dict(tkey, action_event_id=action_event_count+idx, action_event_type='right lick',
                          action_event_time=t.event_times[r]))
                     for idx, r in enumerate(lickright)]
 
