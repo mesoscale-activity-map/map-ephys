@@ -364,7 +364,8 @@ class UnitPsth(dj.Computed):
                                     order_by='trial asc')
 
         raster = [np.concatenate(spikes),
-                  np.concatenate([[t] * len(s) for s, t in zip(spikes, trials)])]
+                  np.concatenate([[t] * len(s)
+                                  for s, t in zip(spikes, trials)])]
 
         return dict(trials=trials, spikes=spikes, psth=psth, raster=raster)
 
@@ -589,6 +590,72 @@ class UnitGroupCondition(dj.Manual):
             'selectivity_criteria_id': crit_ok[0]['selectivity_criteria_id']
         }, skip_duplicates=True)
 
+        #
+        # audio delay contra miss - global selectivity; ALM
+        #
+
+        crit = {
+            'sample_selectivity': None,
+            'delay_selectivity': None,
+            'go_selectivity': None,
+            'global_selectivity': 1,
+            'sample_preference': None,
+            'delay_preference': None,
+            'go_preference': None,
+            'global_preference': 1,
+        }
+
+        # XXX: TODO null key filtering fns..
+        crit_min = {i[0]: i[1] for i in crit.items() if i[1] is not None}
+        crit_match = (SelectivityCriteria & crit_min).fetch(as_dict=True)
+        crit_ok = [i for i in crit_match
+                   if {k: i[k] for k
+                       in (i - {'selectivity_criteria_id': 0}.keys())} == crit]
+        assert len(crit_ok) == 1
+
+        self.insert1({
+            'condition_id': 2,
+            'unit_group_condition_id': 2,
+            'unit_group_condition_desc': dedent('''
+            audio delay contra miss - global selectivity; ALM
+            '''),
+            'brain_area': 'ALM',
+            'selectivity_criteria_id': crit_ok[0]['selectivity_criteria_id']
+        }, skip_duplicates=True)
+
+        #
+        # audio delay ipsi miss - global selectivity; ALM
+        #
+
+        crit = {
+            'sample_selectivity': None,
+            'delay_selectivity': None,
+            'go_selectivity': None,
+            'global_selectivity': 1,
+            'sample_preference': None,
+            'delay_preference': None,
+            'go_preference': None,
+            'global_preference': 1,
+        }
+
+        # XXX: TODO null key filtering fns..
+        crit_min = {i[0]: i[1] for i in crit.items() if i[1] is not None}
+        crit_match = (SelectivityCriteria & crit_min).fetch(as_dict=True)
+        crit_ok = [i for i in crit_match
+                   if {k: i[k] for k
+                       in (i - {'selectivity_criteria_id': 0}.keys())} == crit]
+        assert len(crit_ok) == 1
+
+        self.insert1({
+            'condition_id': 3,
+            'unit_group_condition_id': 3,
+            'unit_group_condition_desc': dedent('''
+            audio delay ipsi miss - global selectivity; ALM
+            '''),
+            'brain_area': 'ALM',
+            'selectivity_criteria_id': crit_ok[0]['selectivity_criteria_id']
+        }, skip_duplicates=True)
+
 
 @schema
 class UnitGroupPsth(dj.Computed):
@@ -634,3 +701,10 @@ class UnitGroupPsth(dj.Computed):
 
         self.Unit.insert((*i[0], *i[1]) for i in
                          zip(repeat(tuple(key.values())), units))
+
+    @classmethod
+    def get(cls, group_condition_key):
+
+        return (UnitPsth.Unit
+                & (UnitGroupPsth.Unit
+                   & group_condition_key).proj()).fetch()
