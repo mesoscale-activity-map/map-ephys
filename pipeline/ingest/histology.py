@@ -86,7 +86,7 @@ class HistologyIngest(dj.Imported):
             hist = scio.loadmat(fullpath)['site']
             hist = scio.loadmat(fullpath, struct_as_record=False, squeeze_me=True)['site']
             # probe CCF 3D positions
-            pos_xyz = np.vstack([hist.pos.x, hist.pos.y, hist.pos.z]).T * 20  # why multiply by 20?
+            pos_xyz = np.vstack([hist.pos.x, hist.pos.y, hist.pos.z]).T * 20  # 20um spacing (y-wise) between channels
 
             # probe CCF regions
             names = hist.ont.name

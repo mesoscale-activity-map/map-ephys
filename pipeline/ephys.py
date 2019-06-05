@@ -15,7 +15,7 @@ class ProbeInsertion(dj.Manual):
     -> experiment.Session
     insertion_number: int
     ---
-    -> lab.Probe
+    -> lab.ElectrodeConfig
     """
 
     class InsertionLocation(dj.Part):
@@ -28,19 +28,6 @@ class ProbeInsertion(dj.Manual):
         dv_location=null: float # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
         ml_angle=null: float # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
         ap_angle=null: float # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive. 
-        """
-
-    class ElectrodeGroup(dj.Part):
-        definition = """
-        # grouping of electrodes to be clustered together (e.g. a neuropixel electrode config - 384/960)
-        -> master
-        electrode_group: int  # electrode group
-        """
-
-    class Electrode(dj.Part):
-        definition = """
-        -> master.ElectrodeGroup
-        -> lab.Probe.Electrode
         """
 
 
@@ -57,7 +44,7 @@ class LFP(dj.Imported):
     class Channel(dj.Part):
         definition = """  
         -> master
-        -> ProbeInsertion.Electrode
+        -> lab.ElectrodeConfig.Electrode
         ---
         lfp: longblob           # recorded lfp at this electrode
         """
@@ -104,14 +91,15 @@ class ElectrodeCCFPosition(dj.Manual):
 
     class ElectrodePosition(dj.Part):
         definition = """
-        -> lab.Probe.Electrode
+        -> lab.ElectrodeConfig.Electrode
         -> ccf.CCF
         """
 
     class ElectrodePositionError(dj.Part):
         definition = """
-        -> lab.Probe.Electrode
+        -> lab.ElectrodeConfig.Electrode
         -> ccf.CCFLabel
+        ---
         x   :  float   # (um)
         y   :  float   # (um)
         z   :  float   # (um)
@@ -143,16 +131,15 @@ class Unit(dj.Imported):
     ---
     unit_uid : int # unique across sessions/animals
     -> UnitQualityType
-    -> ProbeInsertion.Electrode # site on the electrode for which the unit has the largest amplitude
-    unit_posx : double # x position of the unit on the probe
-    unit_posy : double # y position of the unit on the probe
+    -> lab.ElectrodeConfig.Electrode # site on the electrode for which the unit has the largest amplitude
+    unit_posx : double # (um) x position of the unit on the probe
+    unit_posy : double # (um) y position of the unit on the probe
     spike_times : longblob  #  (s)
     unit_amp : double
     unit_snr : double
     waveform : blob # average spike waveform
     """
 
-    # TODO: not sure what's the purpose of this UnitTrial here
     class UnitTrial(dj.Part):
         definition = """
         # Entries for trials a unit is in

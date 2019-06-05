@@ -234,6 +234,29 @@ class Probe(dj.Lookup):
 
 
 @schema
+class ElectrodeConfig(dj.Lookup):
+    definition = """
+    -> Probe
+    electrode_config_id: varchar(36)  # hash of the group and group_member (ensure uniqueness)
+    ---
+    electrode_config_name: varchar(16)  # user friendly name
+    """
+
+    class ElectrodeGroup(dj.Part):
+        definition = """
+        # grouping of electrodes to be clustered together (e.g. a neuropixel electrode config - 384/960)
+        -> master
+        electrode_group: int  # electrode group
+        """
+
+    class Electrode(dj.Part):
+        definition = """
+        -> master.ElectrodeGroup
+        -> Probe.Electrode
+        """
+
+
+@schema
 class PhotostimDevice(dj.Lookup):
     definition = """
     photostim_device  : varchar(20)
