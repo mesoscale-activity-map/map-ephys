@@ -381,37 +381,40 @@ class SelectivityCriteria(dj.Lookup):
     '''
 
     definition = """
-    selectivity_criteria_id:                    int
+    selectivity_criteria_id:    int             # criteria id
     ---
-    sample_selectivity=Null:                    boolean
-    delay_selectivity=Null:                     boolean
-    go_selectivity=Null:                        boolean
-    global_selectivity=Null:                    boolean
-    sample_preference=Null:                     boolean
-    delay_preference=Null:                      boolean
-    go_preference=Null:                         boolean
-    global_preference=Null:                     boolean
+    sample_selectivity=Null:    boolean         # sample period selectivity
+    delay_selectivity=Null:     boolean         # delay period selectivity
+    go_selectivity=Null:        boolean         # go period selectivity
+    global_selectivity=Null:    boolean         # global selectivity
+    any_selectivity=Null:       boolean         # (sample|delay|go) selectivity
+    sample_preference=Null:     boolean         # sample period pref. (i|c)
+    delay_preference=Null:      boolean         # delay period pref. (i|c)
+    go_preference=Null:         boolean         # go period pref. (i|c)
+    global_preference=Null:     boolean         # global period pref. (i|c)
+    any_preference=Null:        boolean         # any period pref. (i|c)
     """
+    ranges = {   # time ranges in SelectivityCriteria order
+        'sample': (-2.4, -1.2),
+        'delay':  (-1.2, -0.0),
+        'go':     (+0.0, +1.2),
+        'global': (-2.4, +1.2),
+    }
 
     @property
     def contents(self):
-        fourset = [(0, 0, 0, 0,), (0, 0, 0, 1,), (0, 0, 1, 0,), (0, 0, 1, 1,),
-                   (0, 1, 0, 0,), (0, 1, 0, 1,), (0, 1, 1, 0,), (0, 1, 1, 1,),
-                   (1, 0, 0, 0,), (1, 0, 0, 1,), (1, 0, 1, 0,), (1, 0, 1, 1,),
-                   (1, 1, 0, 0,), (1, 1, 0, 1,), (1, 1, 1, 0,), (1, 1, 1, 1,)]
+        deflines = dedent(self.definition).splitlines()[1:]
+        nfields = len(deflines[slice(deflines.index('---')+1, None)])
 
-        eightset = [i + j for i in fourset for j in fourset]
+        nconds = 2 ** nfields
+        fmt = '{0:0' + str(nfields) + 'b}'  # 'int' -> binary formatter
+
+        recset = [tuple(int(i) for i in fmt.format(i))
+                  for i in range(nconds)]
 
         return [(j[0], *j[1]) for j in enumerate(
-            eightset + [({1: 1, 0: None}[d] for d in i)
-                        for i in eightset])][:-1]  # 0->None for all but all 1s
-
-    ranges = {   # time ranges in SelectivityCriteria order
-        'sample_selectivity': (-2.4, -1.2),
-        'delay_selectivity': (-1.2, 0),
-        'go_selectivity': (0, 1.2),
-        'global_selectivity': (-2.4, 1.2),
-    }
+            recset + [({1: 1, 0: None}[d] for d in i)
+                      for i in recset])][:-1]  # 0->None for all but all 1s
 
 
 @schema
@@ -473,8 +476,14 @@ class Selectivity(dj.Computed):
 
         criteria = {}
 
-        for name, bounds in ranges.items():
-            pref = name.split('_')[0] + '_preference'
+        periods = list(ranges.keys())
+
+        for period in periods:
+            bounds = ranges[period]
+            name = period + '_selectivity'
+            pref = period + '_preference'
+
+            # pref = name.split('_')[0] + '_preference'
 
             lower_mask = np.ma.masked_greater_equal(square, bounds[0])
             upper_mask = np.ma.masked_less_equal(square, bounds[1])
@@ -497,6 +506,11 @@ class Selectivity(dj.Computed):
 
             criteria[name] = 1 if pval <= alpha else 0
             criteria[pref] = 1 if np.average(freq_i) > np.average(freq_c) else 0
+
+        for attr in ['selectivity', 'preference']:
+            criteria['any_{}'.format(attr)] = any(
+                criteria['{}_{}'.format(k, attr)] for k in periods
+                if k != 'global')
 
         criteria_id = (SelectivityCriteria() & criteria).fetch1('KEY')
 
