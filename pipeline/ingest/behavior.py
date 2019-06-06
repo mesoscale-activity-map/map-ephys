@@ -171,7 +171,7 @@ class BehaviorIngest(dj.Imported):
 
         log.info('rigpath {p}'.format(p=path))
 
-        matches = sorted(glob.glob(path))
+        matches = sorted(root.glob('{h2o}_*_{d}*.mat'.format(h2o=h2o, d=datestr)))
         if matches:
             log.info('found files: {}, this is the rig'.format(matches))
             skey['rig'] = key['rig']
@@ -687,7 +687,7 @@ class BehaviorIngest(dj.Imported):
             allow_direct_insert=True)
 
         BehaviorIngest.BehaviorFile().insert(
-            (dict(key, behavior_file=f.split(root)[1]) for f in matches),
+            (dict(key, behavior_file=f.name) for f in matches),
             ignore_extra_fields=True, allow_direct_insert=True)
 
         # Photostim Insertion

@@ -29,7 +29,7 @@ schema = dj.schema(dj.config['custom'].get(
 class EphysDataPath(dj.Lookup):
     # ephys data storage location(s)
     definition = """
-    data_path:              varchar(255)           # rig data path
+    data_path:              varchar(255)           # rig data path  
     ---
     search_order:           int                     # rig search order
     """
@@ -121,32 +121,27 @@ class EphysIngest(dj.Imported):
             }
 
 
-            # Add electrode group and group member (hard-coded to be the first 384 electrode)
-            ephys.ProbeInsertion.ElectrodeGroup.insert1(dict(ekey, probe=probe_part_no, electrode_group=0), ignore_extra_fields = True)
-            ephys.ProbeInsertion.Electrode.insert((dict(ekey, probe=probe_part_no, electrode_group=0, electrode=chn)
-                                            for chn in range(1, 385)), ignore_extra_fields = True)
-
-            # extract ElectrodeConfig, check DB to reference if exists, else create
+            # ElectrodeConfig - add electrode group and group member (hard-coded to be the first 384 electrode)
             electrode_group = {'probe': probe_part_no, 'electrode_group': 0}
             electrode_group_member = [{**electrode_group, 'electrode': chn} for chn in range(1, 385)]
             electrode_config_name = 'npx_first384'  # user-friendly name - npx probe config with the first 384 channels
             electrode_config_id = dict_to_hash(
                 {**electrode_group, **{str(idx): k for idx, k in enumerate(electrode_group_member)}})
-            if ({'probe': probe_part_no, 'channel_config_id': electrode_config_id}
+            # extract ElectrodeConfig, check DB to reference if exists, else create
+            if ({'probe': probe_part_no, 'electrode_config_id': electrode_config_id}
                     not in lab.ElectrodeConfig):
                 log.info('create Neuropixels electrode configuration (lab.ElectrodeConfig)')
-                with lab.ElectrodeConfig.connection.transaction:
-                    lab.ElectrodeConfig.insert1({
-                        'probe': probe_part_no,
-                        'electrode_config_id': electrode_config_id,
-                        'electrode_config_name': electrode_config_name})
-                    lab.ElectrodeConfig.ElectrodeGroup.insert1({'electrode_config_id': electrode_config_id,
-                                                                **electrode_group})
-                    lab.ElectrodeConfig.Electrode.insert(
-                        {'channel_config_id': electrode_config_id, **member} for member in electrode_group_member)
+                lab.ElectrodeConfig.insert1({
+                    'probe': probe_part_no,
+                    'electrode_config_id': electrode_config_id,
+                    'electrode_config_name': electrode_config_name})
+                lab.ElectrodeConfig.ElectrodeGroup.insert1({'electrode_config_id': electrode_config_id,
+                                                            **electrode_group})
+                lab.ElectrodeConfig.Electrode.insert(
+                    {'electrode_config_id': electrode_config_id, **member} for member in electrode_group_member)
 
             log.info('inserting probe insertion')
-            ephys.ProbeInsertion.insert1(dict(ekey, electrode_config_id=electrode_config_id))
+            ephys.ProbeInsertion.insert1(dict(ekey, probe=probe_part_no, electrode_config_id=electrode_config_id))
 
             #
             # Extract spike data
@@ -242,8 +237,8 @@ class EphysIngest(dj.Imported):
             log.info('inserting units for session {s}'.format(s=behavior['session']))
             #pdb.set_trace()
             ephys.Unit().insert((dict(ekey, unit=x, unit_uid=x, unit_quality=strs[x],
-                                      electrode_config_id = electrode_config_id, electrode_group=0,
-                                      electrode=int(viSite_clu[x]),
+                                      electrode_config_id=electrode_config_id, probe=probe_part_no,
+                                      electrode_group=0, electrode=int(viSite_clu[x]),
                                       unit_posx=vrPosX_clu[x], unit_posy=vrPosY_clu[x],
                                       spike_times=units[x], waveform=trWav_raw_clu[x][0])
                                  for x in unit_ids), allow_direct_insert=True)  # batch insert the units
