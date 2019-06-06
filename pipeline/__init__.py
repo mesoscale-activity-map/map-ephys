@@ -2,7 +2,7 @@
 import logging
 
 import datajoint as dj
-
+import hashlib
 
 log = logging.getLogger(__name__)
 
@@ -51,3 +51,13 @@ class InsertBuffer(object):
             raise evalue
         else:
             return self.flush(1)
+
+
+def dict_to_hash(key):
+    """
+	Given a dictionary `key`, returns a hash string
+    """
+    hashed = hashlib.md5()
+    for k, v in sorted(key.items()):
+        hashed.update(str(v).encode())
+    return hashed.hexdigest()
