@@ -577,6 +577,30 @@ def mockdata():
             skip_duplicates = True
         )
 
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'left_medulla',
+            'brain_area': 'Medulla',
+            'hemisphere': 'left',
+            'skull_reference': 'Bregma'},
+            skip_duplicates = True
+        )
+
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'right_medulla',
+            'brain_area': 'Medulla',
+            'hemisphere': 'right',
+            'skull_reference': 'Bregma'},
+            skip_duplicates = True
+        )
+
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'both_medulla',
+            'brain_area': 'Medulla',
+            'hemisphere': 'both',
+            'skull_reference': 'Bregma'},
+            skip_duplicates = True
+        )
+
         # ---- Neuropixel Probe ----
         probe = '15131808323'  # <-- this is more of probe model number (not quite the serial number of that probe)
         with lab.Probe.connection.transaction:
@@ -599,9 +623,7 @@ def post_ephys(*args):
                 'subject_id': 435884,
                 'session': 1,
                 'insertion_number': 1,
-                'skull_reference': 'Bregma',
-                'hemisphere': 'right',
-                'brain_area': 'ALM',
+                'brain_location_name': 'right_alm',
                 # ml_location:
                 # ap_location:
                 # dv_location:
@@ -614,9 +636,7 @@ def post_ephys(*args):
                 'subject_id': 412330,
                 'session': 1,
                 'insertion_number': 1,
-                'skull_reference': 'Bregma',
-                'hemisphere': 'right',
-                'brain_area': 'Medulla',
+                'brain_location_name': 'right_medulla',
                 # ml_location:
                 # ap_location:
                 # dv_location:

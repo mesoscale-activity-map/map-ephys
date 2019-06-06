@@ -88,7 +88,7 @@ class HistologyIngest(dj.Imported):
             pos_xyz = np.vstack([hist.pos.x, hist.pos.y, hist.pos.z]).T * 20  # 20um spacing (y-wise) between channels
 
             # probe CCF regions
-            names = hist.ont.name  # NEED VERIFICATION - there are 1000 names here, if each represent 1 electrode sites, there should only be 960
+            names = hist.ont.name  # there are 1000 names here, 1-960 represents the names for each electrode sites (960 sites for npx probe), ignore the last 40
             valid = [isinstance(n, (str,)) for n in names]
             goodn = np.where(np.array(valid))[0]
 

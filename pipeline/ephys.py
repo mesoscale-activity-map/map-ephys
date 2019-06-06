@@ -99,10 +99,9 @@ class ElectrodeCCFPosition(dj.Manual):
         definition = """
         -> lab.ElectrodeConfig.Electrode
         -> ccf.CCFLabel
-        ---
-        x   :  float   # (um)
-        y   :  float   # (um)
-        z   :  float   # (um)
+        x   :  int   # (um)
+        y   :  int   # (um)
+        z   :  int   # (um)
         """
 
 
@@ -132,8 +131,8 @@ class Unit(dj.Imported):
     unit_uid : int # unique across sessions/animals
     -> UnitQualityType
     -> lab.ElectrodeConfig.Electrode # site on the electrode for which the unit has the largest amplitude
-    unit_posx : double # (um) x position of the unit on the probe
-    unit_posy : double # (um) y position of the unit on the probe
+    unit_posx : double # (um) estimated x position of the unit relative to probe's (0,0)
+    unit_posy : double # (um) estimated y position of the unit relative to probe's (0,0)
     spike_times : longblob  #  (s)
     unit_amp : double
     unit_snr : double

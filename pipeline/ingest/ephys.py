@@ -96,8 +96,7 @@ class EphysIngest(dj.Imported):
             # subpath = os.path.join('{}-{}'.format(date, probe), file)
             # file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
             epfile = '{h2o}_g0_*.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water)  # current file naming format
-            epsubpath = pathlib.Path(water, date, str(probe))
-            epfullpath = pathlib.Path(rigpath, epsubpath)
+            epfullpath = pathlib.Path(rigpath, water, date, str(probe))
             ephys_files = list(epfullpath.glob(epfile))
 
             if len(ephys_files) != 1:
@@ -105,6 +104,7 @@ class EphysIngest(dj.Imported):
                 continue
 
             epfullpath = ephys_files[0]
+            epsubpath = epfullpath.relative_to(rigpath)
             log.info('EphysIngest().make(): found probe {} ephys recording in {}'.format(probe, epfullpath))
 
             #
@@ -129,7 +129,7 @@ class EphysIngest(dj.Imported):
                 {**electrode_group, **{str(idx): k for idx, k in enumerate(electrode_group_member)}})
             # extract ElectrodeConfig, check DB to reference if exists, else create
             if ({'probe': probe_part_no, 'electrode_config_id': electrode_config_id}
-                    not in lab.ElectrodeConfig):
+                    not in lab.ElectrodeConfig()):
                 log.info('create Neuropixels electrode configuration (lab.ElectrodeConfig)')
                 lab.ElectrodeConfig.insert1({
                     'probe': probe_part_no,
