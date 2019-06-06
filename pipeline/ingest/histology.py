@@ -83,19 +83,20 @@ class HistologyIngest(dj.Imported):
             log.info('... found probe {} histology file {}'.format(
                 probe, fullpath))
 
-            hist = scio.loadmat(fullpath)['site']
             hist = scio.loadmat(fullpath, struct_as_record=False, squeeze_me=True)['site']
             # probe CCF 3D positions
             pos_xyz = np.vstack([hist.pos.x, hist.pos.y, hist.pos.z]).T * 20  # 20um spacing (y-wise) between channels
 
             # probe CCF regions
-            names = hist.ont.name
+            names = hist.ont.name  # NEED VERIFICATION - there are 1000 names here, if each represent 1 electrode sites, there should only be 960
             valid = [isinstance(n, (str,)) for n in names]
             goodn = np.where(np.array(valid))[0]
 
             # XXX: to verify - electrode off-by-one in ingest (e.g. mat->py)??
-            electrodes = np.array((ephys.ProbeInsertion * lab.Probe.Channel & egmap[probe]).fetch(
-                'KEY', order_by='channel asc'))
+            # note, hard-code for neuropixels probe -> only one ElectrodeGroup (electrode_group=0)
+            electrodes = np.array((ephys.ProbeInsertion * lab.ElectrodeConfig.Electrode
+                                   & egmap[probe] & 'electrode_group=0').fetch(
+                'KEY', order_by='electrode asc'))
 
             # interact('histoloading', local=dict(ChainMap(locals(), globals())))
 
@@ -111,16 +112,16 @@ class HistologyIngest(dj.Imported):
             # but hitting ccf coordinate issues..:
 
             log.info('inserting channel ccf position')
-            ephys.ChannelCCFPosition.insert1(egmap[probe])
+            ephys.ElectrodeCCFPosition.insert1(egmap[probe])
 
             for r in recs:
                 log.debug('... adding probe/position: {}'.format(r))
                 try:
-                    ephys.ChannelCCFPosition.ElectrodePosition.insert1(
+                    ephys.ElectrodeCCFPosition.ElectrodePosition.insert1(
                         r, ignore_extra_fields=True, allow_direct_insert=True)
                 except Exception as e:
                     log.warning('... ERROR!')
-                    ephys.ChannelCCFPosition.ElectrodePositionError.insert1(
+                    ephys.ElectrodeCCFPosition.ElectrodePositionError.insert1(
                         r, ignore_extra_fields=True, allow_direct_insert=True)
 
             log.info('... ok.')
