@@ -329,11 +329,11 @@ class UnitPsth(dj.Computed):
             spikes = q.fetch('spike_times')
             spikes = np.concatenate(spikes)
 
-            xmin, xmax, bins = UnitPsth.psth_params.values()
+            xmin, xmax, bins = self.psth_params.values()
             psth = list(np.histogram(spikes, bins=np.arange(xmin, xmax, bins)))
             psth[0] = psth[0] / len(unstim_trials) / bins
 
-            UnitPsth.Unit.insert1({**key, **unit, 'unit_psth': np.array(psth)},
+            self.Unit.insert1({**key, **unit, 'unit_psth': np.array(psth)},
                                   allow_direct_insert=True)
 
     @classmethod
