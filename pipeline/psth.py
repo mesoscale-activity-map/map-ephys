@@ -108,7 +108,11 @@ class Condition(dj.Manual):
         to a primary key for the associated child table (pk_map),
         and then restricted through the table defined in 'restrict_map'
         along with experiment.SessionTrial to retrieve the corresponding
-        trials for that particular part.
+        trials for that particular part. In other words, the pseudo-query:
+
+          SessionTrial & restrict_map & pk_map[Condition.Part & cond]
+
+        is performed for each of the trial-parts.
 
         The intersection of these trial-part results are then combined
         locally to build the result, which is a list of SessionTrial keys.
