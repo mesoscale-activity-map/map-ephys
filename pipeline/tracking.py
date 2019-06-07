@@ -38,7 +38,7 @@ class Tracking(dj.Imported):
     -> experiment.SessionTrial
     -> TrackingDevice
     ---
-    tracking_samples:           int             # number of events
+    tracking_samples:           int             # number of events (possibly frame number, relative to the start of the trial)
     """
 
     class NoseTracking(dj.Part):

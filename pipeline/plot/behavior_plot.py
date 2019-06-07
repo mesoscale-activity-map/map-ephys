@@ -5,7 +5,7 @@ import datajoint as dj
 import matplotlib.pyplot as plt
 from scipy import signal
 
-from pipeline import experiment
+from pipeline import experiment, tracking
 
 
 def plot_correct_proportion(session_key, window_size=None, axis=None):
@@ -41,16 +41,17 @@ def plot_photostim_effect(session_key, photostim_key, axis=None):
     + photostim left-lick (specified by "photostim_key")
     + photostim right-lick (specified by "photostim_key")
     Plot correct proportion for each group
+    Note: ignore "early lick" trials
     """
 
     ctrl_trials = experiment.BehaviorTrial - experiment.PhotostimTrial & session_key
     stim_trials = experiment.BehaviorTrial * experiment.PhotostimTrial & session_key
 
-    ctrl_left = ctrl_trials & 'trial_instruction="left"'
-    ctrl_right = ctrl_trials & 'trial_instruction="right"'
+    ctrl_left = ctrl_trials & 'trial_instruction="left"' & 'early_lick="no early"'
+    ctrl_right = ctrl_trials & 'trial_instruction="right"' & 'early_lick="no early"'
 
-    stim_left = stim_trials & 'trial_instruction="left"'
-    stim_right = stim_trials & 'trial_instruction="right"'
+    stim_left = stim_trials & 'trial_instruction="left"' & 'early_lick="no early"'
+    stim_right = stim_trials & 'trial_instruction="right"' & 'early_lick="no early"'
 
     # Restrict by stim location (from photostim_key)
     stim_left = stim_left * experiment.PhotostimEvent & photostim_key
@@ -85,5 +86,22 @@ def plot_photostim_effect(session_key, photostim_key, axis=None):
     axis.legend(loc='lower left')
     axis.spines['right'].set_visible(False)
     axis.spines['top'].set_visible(False)
+
+
+def plot_jaw_movement(session_key, axis=None):
+    jaw_tracking = tracking.Tracking.JawTracking * experiment.BehaviorTrial
+    l_trial_jaw = jaw_tracking & 'trial_instruction="left"' & 'early_lick="no early"'
+    r_trial_jaw = jaw_tracking & 'trial_instruction="right"' & 'early_lick="no early"'
+
+
+
+
+
+
+
+
+
+
+
 
 
