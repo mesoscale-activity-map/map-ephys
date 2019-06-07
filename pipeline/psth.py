@@ -121,7 +121,7 @@ class Condition(dj.Manual):
 
             tup_keys = [{k: t[k] for k in t if k in pk}
                         for t in tup]
-            trials = [(experiment.SessionTrial() & (tab() & t & r))
+            trials = [(experiment.SessionTrial() & (tab() & t & r).proj())
                       for t in tup_keys]
 
             res.append({tuple(i.values()) for i in
@@ -523,13 +523,18 @@ class Selectivity(dj.Computed):
 class UnitGroupCondition(dj.Manual):
     definition = """
     # manually curated unit groups of interest
-    -> Condition
-    unit_group_condition_id:                    int
+    unit_group_condition_id:            int     # group condition id
     ---
     unit_group_condition_desc:                  varchar(4096)
     -> lab.BrainArea
     -> SelectivityCriteria
     """
+
+    class UnitCondition(dj.Part):
+        definition = """
+        -> master
+        -> Condition
+        """
 
     @classmethod
     def populate(cls):
@@ -538,22 +543,23 @@ class UnitGroupCondition(dj.Manual):
         """
         self = cls()
 
-        #
-        # audio delay contra hit - global selectivity; ALM
-        #
+        # audio delay hit, 'any' selectivity; ALM
 
+        gcond_key = {'unit_group_condition_id': 0}
+        gcond_desc = 'audio delay hit, any selectivity; ALM'
         crit = {
             'sample_selectivity': None,
             'delay_selectivity': None,
             'go_selectivity': None,
-            'global_selectivity': 1,
+            'global_selectivity': None,
+            'any_selectivity': True,
             'sample_preference': None,
             'delay_preference': None,
             'go_preference': None,
-            'global_preference': 1,
+            'global_preference': None,
+            'any_preference': None,
         }
-
-        # XXX: TODO null key filtering fns..
+        # XXX: TODO 'null' key filtering fns..
         crit_min = {i[0]: i[1] for i in crit.items() if i[1] is not None}
         crit_match = (SelectivityCriteria & crit_min).fetch(as_dict=True)
         crit_ok = [i for i in crit_match
@@ -562,112 +568,20 @@ class UnitGroupCondition(dj.Manual):
         assert len(crit_ok) == 1
 
         self.insert1({
+            **gcond_key,
+            'unit_group_condition_desc': gcond_desc,
+            'brain_area': 'ALM',
+            'selectivity_criteria_id': crit_ok[0]['selectivity_criteria_id']
+        }, skip_duplicates=True)
+
+        self.UnitCondition.insert1({  # contra hit
+            **gcond_key,
             'condition_id': 0,
-            'unit_group_condition_id': 0,
-            'unit_group_condition_desc': dedent('''
-            audio delay contra hit - global selectivity; ALM
-            '''),
-            'brain_area': 'ALM',
-            'selectivity_criteria_id': crit_ok[0]['selectivity_criteria_id']
         }, skip_duplicates=True)
 
-        #
-        # audio delay ipsi hit - global selectivity; ALM
-        #
-
-        crit = {
-            'sample_selectivity': None,
-            'delay_selectivity': None,
-            'go_selectivity': None,
-            'global_selectivity': 1,
-            'sample_preference': None,
-            'delay_preference': None,
-            'go_preference': None,
-            'global_preference': 1,
-        }
-
-        # XXX: TODO null key filtering fns..
-        crit_min = {i[0]: i[1] for i in crit.items() if i[1] is not None}
-        crit_match = (SelectivityCriteria & crit_min).fetch(as_dict=True)
-        crit_ok = [i for i in crit_match
-                   if {k: i[k] for k
-                       in (i - {'selectivity_criteria_id': 0}.keys())} == crit]
-        assert len(crit_ok) == 1
-
-        self.insert1({
+        self.UnitCondition.insert1({  # ipsi hit
+            **gcond_key,
             'condition_id': 1,
-            'unit_group_condition_id': 1,
-            'unit_group_condition_desc': dedent('''
-            audio delay ipsi hit - global selectivity; ALM
-            '''),
-            'brain_area': 'ALM',
-            'selectivity_criteria_id': crit_ok[0]['selectivity_criteria_id']
-        }, skip_duplicates=True)
-
-        #
-        # audio delay contra miss - global selectivity; ALM
-        #
-
-        crit = {
-            'sample_selectivity': None,
-            'delay_selectivity': None,
-            'go_selectivity': None,
-            'global_selectivity': 1,
-            'sample_preference': None,
-            'delay_preference': None,
-            'go_preference': None,
-            'global_preference': 1,
-        }
-
-        # XXX: TODO null key filtering fns..
-        crit_min = {i[0]: i[1] for i in crit.items() if i[1] is not None}
-        crit_match = (SelectivityCriteria & crit_min).fetch(as_dict=True)
-        crit_ok = [i for i in crit_match
-                   if {k: i[k] for k
-                       in (i - {'selectivity_criteria_id': 0}.keys())} == crit]
-        assert len(crit_ok) == 1
-
-        self.insert1({
-            'condition_id': 2,
-            'unit_group_condition_id': 2,
-            'unit_group_condition_desc': dedent('''
-            audio delay contra miss - global selectivity; ALM
-            '''),
-            'brain_area': 'ALM',
-            'selectivity_criteria_id': crit_ok[0]['selectivity_criteria_id']
-        }, skip_duplicates=True)
-
-        #
-        # audio delay ipsi miss - global selectivity; ALM
-        #
-
-        crit = {
-            'sample_selectivity': None,
-            'delay_selectivity': None,
-            'go_selectivity': None,
-            'global_selectivity': 1,
-            'sample_preference': None,
-            'delay_preference': None,
-            'go_preference': None,
-            'global_preference': 1,
-        }
-
-        # XXX: TODO null key filtering fns..
-        crit_min = {i[0]: i[1] for i in crit.items() if i[1] is not None}
-        crit_match = (SelectivityCriteria & crit_min).fetch(as_dict=True)
-        crit_ok = [i for i in crit_match
-                   if {k: i[k] for k
-                       in (i - {'selectivity_criteria_id': 0}.keys())} == crit]
-        assert len(crit_ok) == 1
-
-        self.insert1({
-            'condition_id': 3,
-            'unit_group_condition_id': 3,
-            'unit_group_condition_desc': dedent('''
-            audio delay ipsi miss - global selectivity; ALM
-            '''),
-            'brain_area': 'ALM',
-            'selectivity_criteria_id': crit_ok[0]['selectivity_criteria_id']
         }, skip_duplicates=True)
 
 
@@ -681,44 +595,66 @@ class UnitGroupPsth(dj.Computed):
 
     class Unit(dj.Part):
         definition = """
-        # unit backreference for group psth
+        # UnitGroupPsth UnitPsth.Unit Backreference
         -> master
-        -> ephys.Unit
+        -> UnitPsth.Unit
         """
 
     def make(self, key):
         '''
-        take average PSTH for all trials matching the UnitGroupCondition
+        Group PSTH for all trials matching the UnitGroupCondition
         '''
-
         log.info('UnitGroupPsth.make(): key: {}'.format(key))
 
-        group_cond = (UnitGroupCondition & key).fetch1()
+        cond = (UnitGroupCondition & key).fetch1()
 
-        select_crit = (SelectivityCriteria
-                       & {'selectivity_criteria_id':
-                          group_cond['selectivity_criteria_id']}).fetch1()
+        my_crit = (SelectivityCriteria
+                   & {'selectivity_criteria_id':
+                      cond['selectivity_criteria_id']}).fetch1()
 
-        select_crit_min = {k: v for k, v in select_crit.items()
-                           if v is not None and k != 'selectivity_criteria_id'}
+        # genericize selectivity criteria for subsequent selectivity matching
+        crit_min = {k: v for k, v in my_crit.items()
+                    if v is not None and k != 'selectivity_criteria_id'}
 
-        unit_psth_q = (
-            (UnitPsth.Unit & {'condition_id': key['condition_id']})
-            & (Selectivity & (SelectivityCriteria & select_crit_min).proj()))
+        crit_all = (SelectivityCriteria & crit_min).fetch(as_dict=True)
 
-        unit_psth = unit_psth_q.fetch()
+        crit_i = [i for i in crit_all if i['any_preference'] == 1
+                  and None not in i.values()]
 
-        psths = unit_psth['unit_psth']
-        self.insert1(dict(key, unit_group_psth=np.average(psths)))
+        crit_c = [i for i in crit_all if i['any_preference'] == 0
+                  and None not in i.values()]
 
-        units = unit_psth[['subject_id', 'session', 'electrode_group', 'unit']]
+        conds = (Condition &
+                 (UnitGroupCondition.UnitCondition & key).proj()).fetch(
+                     as_dict=True)
 
-        self.Unit.insert((*i[0], *i[1]) for i in
-                         zip(repeat(tuple(key.values())), units))
+        conds_c = [{k: v for k, v in c.items() if k in Condition.primary_key}
+                   for c in conds if 'contra' in c['condition_desc']]
+
+        conds_i = [{k: v for k, v in c.items() if k in Condition.primary_key}
+                   for c in conds if 'ipsi' in c['condition_desc']]
+
+        # {var}_{a}_{b} -> var {group preference}, {psth condition}
+        #   for var in [psth, key, set]
+
+        psth_i_i = ((UnitPsth.Unit & conds_i)
+                    & (Selectivity & crit_i).proj()).fetch()
+
+        psth_i_c = ((UnitPsth.Unit & conds_c)
+                    & (Selectivity & crit_i).proj()).fetch()
+
+        psth_c_c = ((UnitPsth.Unit & conds_c)
+                    & (Selectivity & crit_c).proj()).fetch()
+
+        psth_c_i = ((UnitPsth.Unit & conds_i)
+                    & (Selectivity & crit_c).proj()).fetch()
+
+        # TODO: How/What to store?
+        # see also: pipeline/plot.py:{group_psth_ll,group_psth}
+        [psth_i_i['unit_psth'], psth_i_c['unit_psth'],
+         psth_c_c['unit_psth'], psth_c_i['unit_psth']]
 
     @classmethod
     def get(cls, group_condition_key):
 
-        return (UnitPsth.Unit
-                & (UnitGroupPsth.Unit
-                   & group_condition_key).proj()).fetch()
+        raise NotImplementedError('storage/retrieval tbd')
