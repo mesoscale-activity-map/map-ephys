@@ -8,10 +8,9 @@ from itertools import repeat
 from textwrap import dedent
 
 import numpy as np
-import scipy as sc
 import datajoint as dj
 
-import scipy.stats  # NOQA
+import scipy.stats as sc_stats
 
 from pipeline import lab
 from pipeline import experiment
@@ -20,6 +19,13 @@ from pipeline import ephys
 
 log = logging.getLogger(__name__)
 schema = dj.schema(dj.config.get('psth.database', 'map_psth'))
+
+# NOWLIST:
+# - rename Condition to TrialCondition
+# - GroupCondition -> now notion of UnitCondition;
+#   - table notneeded
+#   - provide canned queries
+#   - also null filtering funs
 
 
 @schema
@@ -68,6 +74,10 @@ class Condition(dj.Manual):
 
     @classmethod
     def expand(cls, condition_id):
+        """
+        Expand the given condition_id into a dictionary containing the
+        fetched sub-parts of the condition.
+        """
 
         self = cls()
         key = {'condition_id': condition_id}
@@ -89,11 +99,22 @@ class Condition(dj.Manual):
     @classmethod
     def trials(cls, cond, r={}):
         """
-        get trials for a condition.
-        accepts either a condition_id as an integer,
-        or the output of the 'expand' function, above.
+        Get trials for a Condition.
 
-        the parameter 'r' can be used add additional query restrictions.
+        Accepts either a condition_id as an integer, or the output of
+        the 'expand' function, above.
+
+        Each Condition 'part' defined in the Condition is filtered
+        to a primary key for the associated child table (pk_map),
+        and then restricted through the table defined in 'restrict_map'
+        along with experiment.SessionTrial to retrieve the corresponding
+        trials for that particular part.
+
+        The intersection of these trial-part results are then combined
+        locally to build the result, which is a list of SessionTrial keys.
+
+        The parameter 'r' can be used to add additional query restrictions,
+        currently applied to all of the sub-queries.
         """
 
         self = cls()
@@ -280,7 +301,7 @@ class UnitPsth(dj.Computed):
     """
     psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
 
-    class Unit(dj.Part):
+    class Unit(dj.Part):  # XXX: merge up to master; reason: recomputing:
         definition = """
         -> master
         -> ephys.Unit
@@ -349,6 +370,20 @@ class UnitPsth(dj.Computed):
             incl_conds=['TaskProtocol', 'TrialInstruction', 'EarlyLick',
                         'Outcome'],
             excl_conds=['PhotostimLocation']):
+        """
+        Retrieve / build data needed for a Unit PSTH Plot based on the given
+        unit condition and included / excluded condition (sub-)variables.
+
+        Returns a dictionary of the form:
+
+          {
+             'trials': ephys.TrialSpikes.trials,
+             'spikes': ephys.TrialSpikes.spikes,
+             'psth': UnitPsth.Unit.unit_psth,
+             'raster': Spike * Trial raster [np.array, np.array]
+          }
+
+        """
 
         condition = Condition.expand(condition_key['condition_id'])
         session_key = {k: unit_key[k] for k in experiment.Session.primary_key}
@@ -488,8 +523,6 @@ class Selectivity(dj.Computed):
             name = period + '_selectivity'
             pref = period + '_preference'
 
-            # pref = name.split('_')[0] + '_preference'
-
             lower_mask = np.ma.masked_greater_equal(square, bounds[0])
             upper_mask = np.ma.masked_less_equal(square, bounds[1])
             inrng_mask = np.logical_and(lower_mask.mask, upper_mask.mask)
@@ -507,7 +540,7 @@ class Selectivity(dj.Computed):
 
             freq_i = freq[behav_i]
             freq_c = freq[behav_c]
-            t_stat, pval = sc.stats.ttest_ind(freq_i, freq_c, equal_var=False)
+            t_stat, pval = sc_stats.ttest_ind(freq_i, freq_c, equal_var=False)
 
             criteria[name] = 1 if pval <= alpha else 0
             criteria[pref] = 1 if np.average(freq_i) > np.average(freq_c) else 0
