@@ -13,7 +13,7 @@ from pipeline.reference import ccf_ontology
 
 
 log = logging.getLogger(__name__)
-schema = dj.schema(dj.config.get('ccf.database', 'map_ccf'))
+schema = dj.schema(dj.config['custom'].get('ccf.database', 'map_ccf'))
 
 
 @schema
