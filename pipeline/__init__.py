@@ -7,6 +7,12 @@ import hashlib
 log = logging.getLogger(__name__)
 
 
+try:
+    database_prefix = dj.config['custom']['database.prefix']
+except:
+    database_prefix = "map_v1_"
+
+
 class InsertBuffer(object):
     '''
     InsertBuffer: a utility class to help managed chunked inserts

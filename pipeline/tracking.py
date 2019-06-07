@@ -6,9 +6,9 @@ MAP Motion Tracking Schema
 import datajoint as dj
 
 from . import experiment
+from . import database_prefix
 
-
-schema = dj.schema(dj.config['custom'].get('tracking.database', 'map_tracking'))
+schema = dj.schema(database_prefix + 'tracking')
 [experiment]  # NOQA flake8
 
 

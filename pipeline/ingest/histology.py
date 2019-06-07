@@ -11,15 +11,14 @@ from pipeline import ephys
 from pipeline import experiment
 from pipeline import ccf
 from pipeline.ingest import ephys as ephys_ingest
+from . import ingest_db_prefix
 
 from code import interact
 from collections import ChainMap
 
 log = logging.getLogger(__name__)
 
-schema = dj.schema(dj.config['custom'].get(
-    'ingest.histology.database',
-    '{}_ingestHistology'.format(dj.config['database.user'])))
+schema = dj.schema(ingest_db_prefix + 'histology')
 
 
 @schema

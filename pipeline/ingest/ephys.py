@@ -17,12 +17,11 @@ from pipeline import experiment
 from pipeline import ephys
 from pipeline import InsertBuffer, dict_to_hash
 from pipeline.ingest import behavior as behavior_ingest
+from . import ingest_db_prefix
 
 log = logging.getLogger(__name__)
 
-schema = dj.schema(dj.config['custom'].get(
-    'ingest.ephys.database',
-    '{}_ingestEphys'.format(dj.config['database.user'])))
+schema = dj.schema(ingest_db_prefix + 'ephys')
 
 
 @schema

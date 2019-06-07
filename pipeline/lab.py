@@ -1,6 +1,7 @@
 import datajoint as dj
+from . import database_prefix
 
-schema = dj.schema(dj.config['custom'].get('lab.database', 'map_lab'))
+schema = dj.schema(database_prefix + 'experiment')
 
 
 @schema

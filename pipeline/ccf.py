@@ -8,12 +8,12 @@ import datajoint as dj
 
 from tifffile import imread
 
-from pipeline import InsertBuffer
-from pipeline.reference import ccf_ontology
+from . import InsertBuffer, database_prefix
+from .reference import ccf_ontology
 
 
 log = logging.getLogger(__name__)
-schema = dj.schema(dj.config['custom'].get('ccf.database', 'map_ccf'))
+schema = dj.schema(database_prefix + 'ccf')
 
 
 @schema

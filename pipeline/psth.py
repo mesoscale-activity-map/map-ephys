@@ -11,13 +11,15 @@ import datajoint as dj
 
 import scipy.stats  # NOQA
 
-from pipeline import lab
-from pipeline import experiment
-from pipeline import ephys
+from . import lab
+from . import experiment
+from . import ephys
 [lab, experiment, ephys]  # NOQA
 
+from . import database_prefix
+
+schema = dj.schema(database_prefix + 'psth')
 log = logging.getLogger(__name__)
-schema = dj.schema(dj.config['custom'].get('psth.database', 'map_psth'))
 
 
 @schema

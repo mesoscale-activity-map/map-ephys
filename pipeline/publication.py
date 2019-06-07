@@ -6,12 +6,12 @@ import datajoint as dj
 
 from . import lab, experiment, ephys
 from pipeline.globus import GlobusStorageManager
-
+from . import database_prefix
 
 log = logging.getLogger(__name__)
 __all__ = [experiment, ephys]
 
-schema = dj.schema(dj.config['custom'].get('publication.database', 'map_publication'))
+schema = dj.schema(database_prefix + 'publication')
 
 
 @schema

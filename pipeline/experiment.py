@@ -2,11 +2,10 @@
 import datajoint as dj
 import numpy as np
 
-from . import lab
-from . import ccf
+from . import lab, ccf
+from . import database_prefix
 
-schema = dj.schema(dj.config['custom'].get('experiment.database', 'map_experiment'))
-
+schema = dj.schema(database_prefix + 'experiment')
 
 @schema
 class BrainLocation(dj.Manual):

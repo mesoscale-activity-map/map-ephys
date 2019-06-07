@@ -11,16 +11,14 @@ from pipeline import lab
 from pipeline import tracking
 from pipeline import experiment
 from pipeline.ingest import behavior as behavior_ingest
+from . import ingest_db_prefix
 [behavior_ingest]  # NOQA schema only use
 
 from collections import defaultdict
 
 log = logging.getLogger(__name__)
 
-
-schema = dj.schema(dj.config['custom'].get(
-    'ingest.tracking.database',
-    '{}_ingestTracking'.format(dj.config['database.user'])))
+schema = dj.schema(ingest_db_prefix + 'tracking')
 
 
 @schema

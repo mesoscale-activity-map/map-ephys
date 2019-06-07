@@ -1,11 +1,10 @@
 
 import datajoint as dj
 
-from . import lab
-from . import experiment
-from . import ccf
+from . import lab, experiment, ccf
+from . import database_prefix
 
-schema = dj.schema(dj.config['custom'].get('ephys.database', 'map_ephys'))
+schema = dj.schema(database_prefix + 'ephys')
 [lab, experiment, ccf]  # NOQA flake8
 
 

@@ -20,15 +20,13 @@ import datajoint as dj
 from pipeline import ccf
 from pipeline import lab
 from pipeline import experiment
-
+from . import ingest_db_prefix
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 log = logging.getLogger(__name__)
 
-schema = dj.schema(dj.config['custom'].get(
-    'ingest.behavior.database',
-    '{}_ingestBehavior'.format(dj.config['database.user'])))
+schema = dj.schema(ingest_db_prefix + 'behavior')
 
 
 @schema
