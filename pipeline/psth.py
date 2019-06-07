@@ -34,30 +34,35 @@ class Condition(dj.Manual):
     class TaskProtocol(dj.Part):
         definition = """
         -> master
+        ---
         -> experiment.TaskProtocol
         """
 
     class TrialInstruction(dj.Part):
         definition = """
         -> master
+        ---
         -> experiment.TrialInstruction
         """
 
     class EarlyLick(dj.Part):
         definition = """
         -> master
+        ---
         -> experiment.EarlyLick
         """
 
     class Outcome(dj.Part):
         definition = """
         -> master
+        ---w
         -> experiment.Outcome
         """
 
     class PhotostimLocation(dj.Part):
         definition = """
         -> master
+        ---
         -> experiment.PhotostimLocation
         """
 
