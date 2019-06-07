@@ -8,7 +8,7 @@ import datajoint as dj
 from . import experiment
 
 
-schema = dj.schema(dj.config.get('tracking.database', 'map_tracking'))
+schema = dj.schema(dj.config['custom'].get('tracking.database', 'map_tracking'))
 [experiment]  # NOQA flake8
 
 
