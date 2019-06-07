@@ -5,7 +5,7 @@ import datajoint as dj
 import matplotlib.pyplot as plt
 from scipy import signal
 
-from pipeline import experiment, tracking
+from pipeline import experiment, tracking, ephys
 
 
 def plot_correct_proportion(session_key, window_size=None, axis=None):
@@ -31,6 +31,8 @@ def plot_correct_proportion(session_key, window_size=None, axis=None):
     axis.plot(range(len(mv_outcomes)), mv_outcomes, 'k', linewidth=3)
     axis.set_xlabel('Trial')
     axis.set_ylabel('Proportion correct')
+
+    return axis
 
 
 def plot_photostim_effect(session_key, photostim_key, axis=None):
@@ -87,18 +89,55 @@ def plot_photostim_effect(session_key, photostim_key, axis=None):
     axis.spines['right'].set_visible(False)
     axis.spines['top'].set_visible(False)
 
+    return axis
 
-def plot_jaw_movement(session_key, tongue_thres=430, axis=None):
+
+def plot_jaw_movement(session_key, tongue_thres=430, trial_limit=10, axis=None):
     trk = (tracking.Tracking.JawTracking * tracking.Tracking.TongueTracking
-           * experiment.BehaviorTrial & session_key)
+           * experiment.BehaviorTrial & session_key & experiment.ActionEvent & ephys.TrialSpikes)
+    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & session_key).fetch1('sampling_rate'))
+
     l_trial_trk = trk & 'trial_instruction="left"' & 'early_lick="no early"'
     r_trial_trk = trk & 'trial_instruction="right"' & 'early_lick="no early"'
 
-    for tr in l_trial_trk.fetch('jaw_y', 'tongue_y', limit=10):
-        jaw =
-        tongue =
-        sample_counts = len(jaw_tracking['jaw_x'])
-        tvec = np.arange(sample_counts) / tracking_fs
+    def get_trial_track(trial_tracks):
+        for tr in trial_tracks.fetch(as_dict=True, limit=trial_limit):
+            jaw = tr['jaw_y']
+            tongue = tr['tongue_y']
+            sample_counts = len(jaw)
+            tvec = np.arange(sample_counts) / tracking_fs
+
+            first_lick_time = (experiment.ActionEvent & tr & 'action_event_type in ("left lick", "right lick")').fetch(
+                    'action_event_time', order_by = 'action_event_time', limit = 1)[0]
+
+            spike_times = np.hstack((ephys.TrialSpikes & tr).fetch('spike_times', limit=5))
+
+            tvec = tvec - float(first_lick_time)
+            tongue_out_bool = tongue >= tongue_thres
+
+            yield jaw, tongue_out_bool, spike_times, tvec
+
+    if not axis or len(axis) < 2:
+        fig, axis = plt.subplots(1, 2, figsize=(16, 8))
+
+    h_spacing = 0.5 * tongue_thres
+    for trial_tracks, ax, ax_name in zip((l_trial_trk, r_trial_trk), axis, ('left lick trials', 'right lick trials')):
+        for tr_id, (jaw, tongue_out_bool, spike_times, tvec) in enumerate(get_trial_track(trial_tracks)):
+            ax.plot(tvec, jaw + tr_id * h_spacing, 'k', linewidth=2)
+            ax.plot(tvec[tongue_out_bool], jaw[tongue_out_bool] + tr_id * h_spacing, '.', color = 'lime', markersize=2)
+            ax.plot(spike_times, np.full_like(spike_times, jaw.mean() + 1.5*jaw.std()) + tr_id * h_spacing,
+                    '.r', markersize=2)
+            ax.set_title(ax_name)
+            ax.axvline(x=0, linestyle='--', color='k')
+
+            # cosmetic
+            ax.set_xlim((-0.5, 1.5))
+            ax.set_yticks([])
+            ax.spines['left'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+
+
 
 
 
