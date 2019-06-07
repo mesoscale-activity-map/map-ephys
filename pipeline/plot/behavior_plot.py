@@ -88,11 +88,17 @@ def plot_photostim_effect(session_key, photostim_key, axis=None):
     axis.spines['top'].set_visible(False)
 
 
-def plot_jaw_movement(session_key, axis=None):
-    jaw_tracking = tracking.Tracking.JawTracking * experiment.BehaviorTrial
-    l_trial_jaw = jaw_tracking & 'trial_instruction="left"' & 'early_lick="no early"'
-    r_trial_jaw = jaw_tracking & 'trial_instruction="right"' & 'early_lick="no early"'
+def plot_jaw_movement(session_key, tongue_thres=430, axis=None):
+    trk = (tracking.Tracking.JawTracking * tracking.Tracking.TongueTracking
+           * experiment.BehaviorTrial & session_key)
+    l_trial_trk = trk & 'trial_instruction="left"' & 'early_lick="no early"'
+    r_trial_trk = trk & 'trial_instruction="right"' & 'early_lick="no early"'
 
+    for tr in l_trial_trk.fetch('jaw_y', 'tongue_y', limit=10):
+        jaw =
+        tongue =
+        sample_counts = len(jaw_tracking['jaw_x'])
+        tvec = np.arange(sample_counts) / tracking_fs
 
 
 

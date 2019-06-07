@@ -16,9 +16,9 @@ from . import experiment
 from . import ephys
 [lab, experiment, ephys]  # NOQA
 
-from . import database_prefix
+from . import get_schema_name
 
-schema = dj.schema(database_prefix + 'psth')
+schema = dj.schema(get_schema_name('psth'))
 log = logging.getLogger(__name__)
 
 

@@ -3,9 +3,9 @@ import datajoint as dj
 import numpy as np
 
 from . import lab, ccf
-from . import database_prefix
+from . import get_schema_name
 
-schema = dj.schema(database_prefix + 'experiment')
+schema = dj.schema(get_schema_name('experiment'))
 
 @schema
 class BrainLocation(dj.Manual):

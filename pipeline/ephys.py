@@ -2,9 +2,9 @@
 import datajoint as dj
 
 from . import lab, experiment, ccf
-from . import database_prefix
+from . import get_schema_name
 
-schema = dj.schema(database_prefix + 'ephys')
+schema = dj.schema(get_schema_name('ephys'))
 [lab, experiment, ccf]  # NOQA flake8
 
 

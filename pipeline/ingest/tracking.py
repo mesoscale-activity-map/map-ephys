@@ -11,14 +11,14 @@ from pipeline import lab
 from pipeline import tracking
 from pipeline import experiment
 from pipeline.ingest import behavior as behavior_ingest
-from . import ingest_db_prefix
-[behavior_ingest]  # NOQA schema only use
-
 from collections import defaultdict
+from . import get_schema_name
+
+schema = dj.schema(get_schema_name('tracking'))
 
 log = logging.getLogger(__name__)
 
-schema = dj.schema(ingest_db_prefix + 'tracking')
+[behavior_ingest]  # NOQA schema only use
 
 
 @schema

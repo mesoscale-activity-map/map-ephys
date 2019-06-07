@@ -6,12 +6,12 @@ import datajoint as dj
 
 from . import lab, experiment, ephys
 from pipeline.globus import GlobusStorageManager
-from . import database_prefix
+from . import get_schema_name
+
+schema = dj.schema(get_schema_name('publication'))
 
 log = logging.getLogger(__name__)
 __all__ = [experiment, ephys]
-
-schema = dj.schema(database_prefix + 'publication')
 
 
 @schema

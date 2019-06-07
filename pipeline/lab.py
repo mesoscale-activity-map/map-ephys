@@ -1,7 +1,7 @@
 import datajoint as dj
-from . import database_prefix
+from . import get_schema_name
 
-schema = dj.schema(database_prefix + 'experiment')
+schema = dj.schema(get_schema_name('lab'))
 
 
 @schema

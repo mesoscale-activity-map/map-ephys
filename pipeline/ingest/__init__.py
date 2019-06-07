@@ -1,6 +1,13 @@
 import datajoint as dj
 
 try:
-    ingest_db_prefix = dj.config['custom'].get('ingest.behavior.database')
+    _ingest_db_prefix = dj.config['custom'].get('ingest.behavior.database')
 except:
-    ingest_db_prefix = '{}_ingest_'.format(dj.config['database.user'])
+    _ingest_db_prefix = '{}_ingest_'.format(dj.config['database.user'])
+
+
+def get_schema_name(name):
+    try:
+         return dj.config['custom']['ingest.{}.database'.format(name)]
+    except KeyError:
+        return _ingest_db_prefix + name

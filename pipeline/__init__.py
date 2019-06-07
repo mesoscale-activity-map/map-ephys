@@ -8,9 +8,16 @@ log = logging.getLogger(__name__)
 
 
 try:
-    database_prefix = dj.config['custom']['database.prefix']
+    _db_prefix = dj.config['custom']['database.prefix']
 except:
-    database_prefix = "map_v1_"
+    _db_prefix = "map_v1_"
+
+
+def get_schema_name(name):
+    try:
+         return dj.config['custom']['{}.database'.format(name)]
+    except KeyError:
+        return _db_prefix + name
 
 
 class InsertBuffer(object):

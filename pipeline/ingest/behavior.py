@@ -20,13 +20,13 @@ import datajoint as dj
 from pipeline import ccf
 from pipeline import lab
 from pipeline import experiment
-from . import ingest_db_prefix
+from . import get_schema_name
+
+schema = dj.schema(get_schema_name('behavior'))
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 log = logging.getLogger(__name__)
-
-schema = dj.schema(ingest_db_prefix + 'behavior')
 
 
 @schema
