@@ -8,7 +8,7 @@ from scipy import signal
 from pipeline import experiment
 
 
-def plot_behavior_performance(session_key, window_size=None):
+def plot_correct_proportion(session_key, window_size=None, axis=None):
     """
     For a particular session (specified by session_key), extract all behavior trials
     Get outcome of each trials, map to (0, 1) - 1 if 'hit'
@@ -24,11 +24,66 @@ def plot_behavior_performance(session_key, window_size=None):
 
     mv_outcomes = signal.convolve(trial_outcomes, kernel, mode='same')
 
-    fig, ax = plt.subplots(1, 1)
-    ax.bar(range(len(mv_outcomes)), trial_outcomes * mv_outcomes.max(), alpha=0.3)
-    ax.plot(range(len(mv_outcomes)), mv_outcomes, 'k', linewidth=3)
-    ax.set_xlabel('Trial')
-    ax.set_ylabel('Proportion correct')
-    plt.show()
-    
+    if not axis:
+        fig, axis = plt.subplots(1, 1)
+
+    axis.bar(range(len(mv_outcomes)), trial_outcomes * mv_outcomes.max(), alpha=0.3)
+    axis.plot(range(len(mv_outcomes)), mv_outcomes, 'k', linewidth=3)
+    axis.set_xlabel('Trial')
+    axis.set_ylabel('Proportion correct')
+
+
+def plot_photostim_effect(session_key, photostim_key, axis=None):
+    """
+    For all trials in this "session_key", split to 4 groups:
+    + control left-lick
+    + control right-lick
+    + photostim left-lick (specified by "photostim_key")
+    + photostim right-lick (specified by "photostim_key")
+    Plot correct proportion for each group
+    """
+
+    ctrl_trials = experiment.BehaviorTrial - experiment.PhotostimTrial & session_key
+    stim_trials = experiment.BehaviorTrial * experiment.PhotostimTrial & session_key
+
+    ctrl_left = ctrl_trials & 'trial_instruction="left"'
+    ctrl_right = ctrl_trials & 'trial_instruction="right"'
+
+    stim_left = stim_trials & 'trial_instruction="left"'
+    stim_right = stim_trials & 'trial_instruction="right"'
+
+    # Restrict by stim location (from photostim_key)
+    stim_left = stim_left * experiment.PhotostimEvent & photostim_key
+    stim_right = stim_right * experiment.PhotostimEvent & photostim_key
+
+    def get_correct_proportion(trials):
+        correct = (trials.fetch('outcome') == 'hit').astype(int)
+        return correct.sum()/len(correct)
+
+    # Extract and compute correct proportion
+    cp_ctrl_left = get_correct_proportion(ctrl_left)
+    cp_ctrl_right = get_correct_proportion(ctrl_right)
+    cp_stim_left = get_correct_proportion(stim_left)
+    cp_stim_right = get_correct_proportion(stim_right)
+
+    if not axis:
+        fig, axis = plt.subplots(1, 1)
+
+    axis.plot([0, 1], [cp_ctrl_left, cp_stim_left], 'b', label='lick left trials')
+    axis.plot([0, 1], [cp_ctrl_right, cp_stim_right], 'r', label='lick right trials')
+
+    # plot cosmetic
+    ylim = (min([cp_ctrl_left, cp_stim_left, cp_ctrl_right, cp_stim_right]) - 0.1, 1)
+    ylim = (0, 1) if ylim[0] < 0 else ylim
+
+    axis.set_xlim((0, 1))
+    axis.set_ylim(ylim)
+    axis.set_xticks([0, 1])
+    axis.set_xticklabels(['Control', 'Photostim'])
+    axis.set_ylabel('Proportion correct')
+
+    axis.legend(loc='lower left')
+    axis.spines['right'].set_visible(False)
+    axis.spines['top'].set_visible(False)
+
 
