@@ -20,9 +20,9 @@ import datajoint as dj
 from pipeline import ccf
 from pipeline import lab
 from pipeline import experiment
-from . import get_schema_name
+from .. import get_schema_name
 
-schema = dj.schema(get_schema_name('behavior'))
+schema = dj.schema(get_schema_name('ingest_behavior'))
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 

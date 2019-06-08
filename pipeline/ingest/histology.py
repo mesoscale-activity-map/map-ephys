@@ -15,9 +15,9 @@ from pipeline.ingest import ephys as ephys_ingest
 from code import interact
 from collections import ChainMap
 
-from . import get_schema_name
+from .. import get_schema_name
 
-schema = dj.schema(get_schema_name('histology'))
+schema = dj.schema(get_schema_name('ingest_histology'))
 
 log = logging.getLogger(__name__)
 

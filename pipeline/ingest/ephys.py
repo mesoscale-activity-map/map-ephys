@@ -17,9 +17,9 @@ from pipeline import experiment
 from pipeline import ephys
 from pipeline import InsertBuffer, dict_to_hash
 from pipeline.ingest import behavior as behavior_ingest
-from . import get_schema_name
+from .. import get_schema_name
 
-schema = dj.schema(get_schema_name('ephys'))
+schema = dj.schema(get_schema_name('ingest_ephys'))
 
 log = logging.getLogger(__name__)
 
