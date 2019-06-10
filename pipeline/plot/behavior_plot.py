@@ -219,13 +219,13 @@ def plot_windowed_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), w_size=0.01, bi
     fig, axs = plt.subplots(int(np.ceil(len(windows) / col_counts)), col_counts,
                             figsize=(16, 16),
                             subplot_kw=dict(polar=True))
-    fig.subplots_adjust(wspace=0.6, hspace=0.2)
+    fig.subplots_adjust(wspace=0.6, hspace=0.3)
 
     # non-overlapping windowed histogram
     for w_start, ax in zip(windows, axs.flatten()):
         phase = insta_phase[:, np.logical_and(tvec >= w_start, tvec <= w_start + w_size)].flatten()
         plot_polar_histogram(phase, ax, bin_counts=bin_counts)
-
+        ax.set_xlabel(f'{w_start*1000:.0f} to {(w_start + w_size)*1000:.0f}ms', fontweight='bold')
 
 
 def plot_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), bin_counts=20):
@@ -262,9 +262,9 @@ def plot_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), bin_counts=20):
     fig.subplots_adjust(wspace=0.6)
 
     plot_polar_histogram(l_insta_phase.flatten(), axs[0], bin_counts=bin_counts)
-    axs[0].set_title('Contra', loc='left')
+    axs[0].set_title('Contra', loc='left', fontweight='bold')
     plot_polar_histogram(r_insta_phase.flatten(), axs[1], bin_counts=bin_counts)
-    axs[1].set_title('Ipsi', loc='left')
+    axs[1].set_title('Ipsi', loc='left', fontweight='bold')
 
 
 def plot_polar_histogram(data, ax, bin_counts=30):
