@@ -1,6 +1,7 @@
 import datajoint as dj
+from . import get_schema_name
 
-schema = dj.schema(dj.config.get('lab.database', 'map_lab'))
+schema = dj.schema(get_schema_name('lab'))
 
 
 @schema
@@ -137,7 +138,7 @@ class SkullReference(dj.Lookup):
 @schema
 class BrainArea(dj.Lookup):
     definition = """
-    brain_area = 'ALM'  : varchar(32)
+    brain_area: varchar(32)
     ---
     description = null : varchar (4000) # name of the brain area
     """
@@ -147,7 +148,7 @@ class BrainArea(dj.Lookup):
 @schema
 class Hemisphere(dj.Lookup):
     definition = """
-    hemisphere = 'left'   : varchar(32)
+    hemisphere: varchar(32)
     """
     contents = zip(['left', 'right', 'both'])
 
@@ -163,16 +164,16 @@ class Surgery(dj.Manual):
     end_time            : datetime # end time
     surgery_description : varchar(256)
     """
-
+    # TODO: confirm location pos/neg convention (contradict with 'BrainLocation' used photostim and ephys)
     class VirusInjection(dj.Part):
         definition = """
         # Virus injections
-        -> Surgery
+        -> master
         injection_id : int
         ---
         -> Virus
         -> SkullReference
-        ml_location     : Decimal(8,3) # um from ref left is positive
+        ml_location     : Decimal(8,3) # um from ref left is positive 
         ap_location     : Decimal(8,3) # um from ref anterior is positive
         dv_location     : Decimal(8,3) # um from dura dorsal is positive 
         volume          : Decimal(10,3) # in nl
@@ -183,7 +184,7 @@ class Surgery(dj.Manual):
     class Procedure(dj.Part):
         definition = """
         # Other things you did to the animal
-        -> Surgery
+        -> master
         procedure_id : int
         ---
         -> SkullReference
@@ -202,3 +203,69 @@ class SurgeryLocation(dj.Manual):
     -> Hemisphere
     -> BrainArea 
     """
+
+
+@schema
+class ProbeType(dj.Lookup):
+    definition = """
+    probe_type: varchar(32)    
+    """
+
+    contents = zip(['silicon_probe', 'tetrode_array', 'neuropixel'])
+
+
+@schema
+class Probe(dj.Lookup):
+    definition = """  # represent a physical probe
+    probe: varchar(32)  # unique identifier for this model of probe (e.g. part number)
+    ---
+    -> ProbeType
+    probe_comment='' :  varchar(1000)
+    """
+
+    class Electrode(dj.Part):
+        definition = """
+        -> master
+        electrode: int     # electrode
+        ---
+        x_coord=NULL: float   # (um) x coordinate of the electrode within the probe
+        y_coord=NULL: float   # (um) y coordinate of the electrode within the probe
+        z_coord=NULL: float   # (um) z coordinate of the electrode within the probe
+        """
+
+
+@schema
+class ElectrodeConfig(dj.Lookup):
+    definition = """
+    -> Probe
+    electrode_config_id: varchar(36)  # hash of the group and group_member (ensure uniqueness)
+    ---
+    electrode_config_name: varchar(16)  # user friendly name
+    """
+
+    class ElectrodeGroup(dj.Part):
+        definition = """
+        # grouping of electrodes to be clustered together (e.g. a neuropixel electrode config - 384/960)
+        -> master
+        electrode_group: int  # electrode group
+        """
+
+    class Electrode(dj.Part):
+        definition = """
+        -> master.ElectrodeGroup
+        -> Probe.Electrode
+        """
+
+
+@schema
+class PhotostimDevice(dj.Lookup):
+    definition = """
+    photostim_device  : varchar(20)
+    ---
+    excitation_wavelength :  decimal(5,1)  # (nm) 
+    photostim_device_description : varchar(255)
+    """
+    contents =[
+       ('LaserGem473', 473, 'Laser (Laser Quantum, Gem 473)'),
+       ('LED470', 470, 'LED (Thor Labs, M470F3 - 470 nm, 17.2 mW (Min) Fiber-Coupled LED)'),
+       ('OBIS470', 473, 'OBIS 473nm LX 50mW Laser System: Fiber Pigtail (Coherent Inc)')]

@@ -4,16 +4,14 @@ import logging
 
 import datajoint as dj
 
-from pipeline import lab
-from pipeline import experiment
-from pipeline import ephys
+from . import lab, experiment, ephys
 from pipeline.globus import GlobusStorageManager
+from . import get_schema_name
 
+schema = dj.schema(get_schema_name('publication'))
 
 log = logging.getLogger(__name__)
 __all__ = [experiment, ephys]
-
-schema = dj.schema(dj.config.get('publication.database', 'map_publication'))
 
 
 @schema
@@ -29,8 +27,8 @@ class GlobusStorageLocation(dj.Lookup):
 
     @property
     def contents(self):
-        if 'globus.storage_locations' in dj.config:  # for local testing
-            return dj.config['globus.storage_locations']
+        if 'globus.storage_locations' in dj.config['custom']:  # for local testing
+            return dj.config['custom']['globus.storage_locations']
 
         return (('raw-ephys',
                  '5b875fda-4185-11e8-bb52-0ac6873fc732',
@@ -39,9 +37,9 @@ class GlobusStorageLocation(dj.Lookup):
     @property
     def local_endpoint(self):
         if 'globus.local_endpoint' in dj.config:
-            return (dj.config['globus.local_endpoint'],
-                    dj.config['globus.local_endpoint_subdir'],
-                    dj.config['globus.local_endpoint_local_path'])
+            return (dj.config['custom']['globus.local_endpoint'],
+                    dj.config['custom']['globus.local_endpoint_subdir'],
+                    dj.config['custom']['globus.local_endpoint_local_path'])
         else:
             raise dj.DataJointError("globus_local_endpoint not configured")
 
@@ -105,7 +103,7 @@ class ArchivedRawEphysTrial(dj.Imported):
 
     definition = """
     -> experiment.SessionTrial
-    -> ephys.ElectrodeGroup
+    -> ephys.ProbeInsertion
     -> GlobusStorageLocation
     """
 

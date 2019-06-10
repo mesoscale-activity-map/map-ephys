@@ -3,7 +3,13 @@
 import os
 import re
 import sys
+import pathlib
 from importlib import reload
+
+# pipeline_path = pathlib.Path('..').resolve()
+# if pipeline_path.exists():
+#     print(pipeline_path.absolute())
+#     sys.path.insert(0, str(pipeline_path))
 
 import datajoint as dj
 
@@ -12,6 +18,7 @@ from pipeline import ccf
 from pipeline import experiment
 from pipeline import ephys
 from pipeline import publication
+from pipeline import get_schema_name
 
 
 def usage_exit():
@@ -23,13 +30,16 @@ def usage_exit():
 
 def dropdbs():
     print('dropping databases')
-    for d in ['ingest.histology', 'ingest.ephys', 'ingest.tracking',
-              'ingest.behavior', 'publication', 'psth', 'tracking', 'ephys',
+    for d in ['ingest_histology', 'ingest_ephys', 'ingest_tracking',
+              'ingest_behavior', 'publication', 'psth', 'tracking', 'ephys',
               'experiment', 'lab', 'ccf']:
-        dname = dj.config['{}.database'.format(d)]
+        dname = get_schema_name(d)
         print('..  {} ({})'.format(d, dname))
-        schema = dj.schema(dname)
-        schema.drop(force=True)
+        try:
+            schema = dj.schema(dname)
+            schema.drop(force=True)
+        except:
+            pass
 
 
 def mockdata():
@@ -397,7 +407,7 @@ def mockdata():
             'wr_start_weight': 25.5},
             skip_duplicates=True
         )
-	# Subject 407986 / dl28
+        # Subject 407986 / dl28
         lab.Subject().insert1({
             'subject_id': 407986,
             'username': 'daveliu',
@@ -542,6 +552,69 @@ def mockdata():
             'rig_description': 'Recording computer'},
             skip_duplicates=True
         )
+
+        # ---- Brain Location ----
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'left_alm',
+            'brain_area': 'ALM',
+            'hemisphere': 'left',
+            'skull_reference': 'Bregma'},
+            skip_duplicates=True
+        )
+
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'right_alm',
+            'brain_area': 'ALM',
+            'hemisphere': 'right',
+            'skull_reference': 'Bregma'},
+            skip_duplicates=True
+        )
+
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'both_alm',
+            'brain_area': 'ALM',
+            'hemisphere': 'both',
+            'skull_reference': 'Bregma'},
+            skip_duplicates=True
+        )
+
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'left_medulla',
+            'brain_area': 'Medulla',
+            'hemisphere': 'left',
+            'skull_reference': 'Bregma'},
+            skip_duplicates=True
+        )
+
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'right_medulla',
+            'brain_area': 'Medulla',
+            'hemisphere': 'right',
+            'skull_reference': 'Bregma'},
+            skip_duplicates=True
+        )
+
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'both_medulla',
+            'brain_area': 'Medulla',
+            'hemisphere': 'both',
+            'skull_reference': 'Bregma'},
+            skip_duplicates=True
+        )
+
+        # Probe (Neuropixel)
+        npx_probe_model = '15131808323'   # using Model No. - SN TBD?
+        lab.Probe.insert1({
+            'probe': npx_probe_model,
+            'probe_type': 'neuropixel'},
+            skip_duplicates=True,
+        )
+        lab.Probe.Electrode.insert(
+            ({'probe': npx_probe_model, 'electrode': x} for
+             x in range(1, 961)),
+            skip_duplicates=True,
+        )
+
     except Exception as e:
         print("error creating mock data: {e}".format(e=e), file=sys.stderr)
         raise
@@ -551,15 +624,13 @@ def post_ephys(*args):
     from pipeline.ingest import ephys as ephys_ingest
     for ef in ephys_ingest.EphysIngest.EphysFile().fetch(as_dict=True):
         fname = ef['ephys_file']
-        print('attempting ElectrodeGroupPosition for fname: ', end='')
+        print('attempting Probe InsertionLocation for fname: ', end='')
         if re.match('.*2018-12-07.*dl59.*.mat', fname):
             rec = {
                 'subject_id': 435884,
                 'session': 1,
-                'electrode_group': 1,
-                'skull_reference': 'Bregma',
-                'hemisphere': 'right',
-                'brain_area': 'ALM',
+                'insertion_number': 1,
+                'brain_location_name': 'right_alm',
                 # ml_location:
                 # ap_location:
                 # dv_location:
@@ -571,10 +642,8 @@ def post_ephys(*args):
             rec = {
                 'subject_id': 412330,
                 'session': 1,
-                'electrode_group': 1,
-                'skull_reference': 'Bregma',
-                'hemisphere': 'right',
-                'brain_area': 'Medulla',
+                'insertion_number': 1,
+                'brain_location_name': 'right_medulla',
                 # ml_location:
                 # ap_location:
                 # dv_location:
@@ -585,7 +654,7 @@ def post_ephys(*args):
         else:
             print('no match!')
 
-        ephys.ElectrodeGroup.ElectrodeGroupPosition().insert1(
+        ephys.ProbeInsertion.InsertionLocation().insert1(
             rec, skip_duplicates=True)
 
 

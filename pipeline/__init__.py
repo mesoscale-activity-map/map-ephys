@@ -2,9 +2,21 @@
 import logging
 
 import datajoint as dj
-
+import hashlib
 
 log = logging.getLogger(__name__)
+
+
+def get_schema_name(name):
+    try:
+        return dj.config['custom']['{}.database'.format(name)]
+    except KeyError:
+        if name.startswith('ingest'):
+            prefix = '{}_ingest_'.format(dj.config.get('database.user', 'map'))
+        else:
+            prefix = 'map_v1_'
+
+    return prefix + name
 
 
 class InsertBuffer(object):
@@ -51,3 +63,13 @@ class InsertBuffer(object):
             raise evalue
         else:
             return self.flush(1)
+
+
+def dict_to_hash(key):
+    """
+	Given a dictionary `key`, returns a hash string
+    """
+    hashed = hashlib.md5()
+    for k, v in sorted(key.items()):
+        hashed.update(str(v).encode())
+    return hashed.hexdigest()
