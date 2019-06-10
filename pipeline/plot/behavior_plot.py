@@ -147,15 +147,60 @@ def plot_jaw_movement(session_key, unit_key, tongue_thres=430, trial_limit=10, a
             ax.spines['top'].set_visible(False)
 
 
+def plot_jaw_movement(session_key, unit_key, tongue_thres=430, trial_limit=10, axis=None):
+    """
+    Plot jaw movement per trial, time-locked to cue-onset, with spike times overlay
+    :param session_key: session where the trials are from
+    :param unit_key: unit for spike times overlay
+    :param tongue_thres: y-pos of the toungue to be considered "protruding out of the mouth"
+    :param trial_limit: number of trial to plot
+    :param axis:
+    """
 
 
+def plot_trial_jaw_movement(trial_key):
+    """
+    Plot trial-specific Jaw Movement time-locked to "go" cue
+    """
+    trk = (tracking.Tracking.JawTracking * experiment.BehaviorTrial & trial_key & experiment.TrialEvent)
+    if len(trk) == 0:
+        return 'The selected trial has no Action Event (e.g. cue start)'
 
+    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & trial_key).fetch1('sampling_rate'))
+    jaw = trk.fetch1('jaw_y')
+    sample_counts = len(jaw)
 
+    first_lick_time = (experiment.TrialEvent & trk & 'trial_event_type="go"').fetch1('trial_event_time')
 
+    tvec = np.arange(len(jaw)) / tracking_fs - float(first_lick_time)
 
+    b, a = signal.butter(5, (5, 15), btype='band', fs=tracking_fs)
+    filt_jaw = signal.filtfilt(b, a, jaw)
 
+    analytic_signal = signal.hilbert(filt_jaw)
+    insta_amp = np.abs(analytic_signal)
+    insta_phase = np.angle(analytic_signal)
 
+    fig, axs = plt.subplots(2, 2, figsize=(16, 6))
+    fig.subplots_adjust(hspace=0.4)
 
+    axs[0, 0].plot(tvec, jaw, '.k')
+    axs[0, 0].set_title('Jaw Movement')
+    axs[1, 0].plot(tvec, filt_jaw, '.k')
+    axs[1, 0].set_title('Bandpass filtered 5-15Hz')
+    axs[1, 0].set_xlabel('Time(s)')
+    axs[0, 1].plot(tvec, insta_amp, '.k')
+    axs[0, 1].set_title('Amplitude')
+    axs[1, 1].plot(tvec, insta_phase, '.k')
+    axs[1, 1].set_title('Phase')
+    axs[1, 1].set_xlabel('Time(s)')
 
+    # cosmetic
+    for ax in axs.flatten():
+        ax.set_xlim((-3, 3))
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+
+    return axs
 
 
