@@ -18,6 +18,7 @@ from pipeline import ccf
 from pipeline import experiment
 from pipeline import ephys
 from pipeline import publication
+from pipeline import get_schema_name
 
 
 def usage_exit():
@@ -29,10 +30,10 @@ def usage_exit():
 
 def dropdbs():
     print('dropping databases')
-    for d in ['ingest.histology', 'ingest.ephys', 'ingest.tracking',
-              'ingest.behavior', 'publication', 'psth', 'tracking', 'ephys',
+    for d in ['ingest_histology', 'ingest_ephys', 'ingest_tracking',
+              'ingest_behavior', 'publication', 'psth', 'tracking', 'ephys',
               'experiment', 'lab', 'ccf']:
-        dname = dj.config['custom'].get('{}.database'.format(d))
+        dname = get_schema_name(d)
         print('..  {} ({})'.format(d, dname))
         try:
             schema = dj.schema(dname)
@@ -406,7 +407,7 @@ def mockdata():
             'wr_start_weight': 25.5},
             skip_duplicates=True
         )
-	# Subject 407986 / dl28
+        # Subject 407986 / dl28
         lab.Subject().insert1({
             'subject_id': 407986,
             'username': 'daveliu',
@@ -558,7 +559,7 @@ def mockdata():
             'brain_area': 'ALM',
             'hemisphere': 'left',
             'skull_reference': 'Bregma'},
-            skip_duplicates = True
+            skip_duplicates=True
         )
 
         experiment.BrainLocation.insert1({
@@ -566,7 +567,7 @@ def mockdata():
             'brain_area': 'ALM',
             'hemisphere': 'right',
             'skull_reference': 'Bregma'},
-            skip_duplicates = True
+            skip_duplicates=True
         )
 
         experiment.BrainLocation.insert1({
@@ -574,7 +575,7 @@ def mockdata():
             'brain_area': 'ALM',
             'hemisphere': 'both',
             'skull_reference': 'Bregma'},
-            skip_duplicates = True
+            skip_duplicates=True
         )
 
         experiment.BrainLocation.insert1({
@@ -582,7 +583,7 @@ def mockdata():
             'brain_area': 'Medulla',
             'hemisphere': 'left',
             'skull_reference': 'Bregma'},
-            skip_duplicates = True
+            skip_duplicates=True
         )
 
         experiment.BrainLocation.insert1({
@@ -590,7 +591,7 @@ def mockdata():
             'brain_area': 'Medulla',
             'hemisphere': 'right',
             'skull_reference': 'Bregma'},
-            skip_duplicates = True
+            skip_duplicates=True
         )
 
         experiment.BrainLocation.insert1({
@@ -598,15 +599,21 @@ def mockdata():
             'brain_area': 'Medulla',
             'hemisphere': 'both',
             'skull_reference': 'Bregma'},
-            skip_duplicates = True
+            skip_duplicates=True
         )
 
-        # ---- Neuropixel Probe ----
-        probe = '15131808323'  # <-- this is more of probe model number (not quite the serial number of that probe)
-        with lab.Probe.connection.transaction:
-            lab.Probe.insert1({'probe': probe, 'probe_type': 'neuropixel'})
-            lab.Probe.Electrode.insert({'probe': probe, 'electrode': x} for x in range(1, 961))
-
+        # Probe (Neuropixel)
+        npx_probe_model = '15131808323'   # using Model No. - SN TBD?
+        lab.Probe.insert1({
+            'probe': npx_probe_model,
+            'probe_type': 'neuropixel'},
+            skip_duplicates=True,
+        )
+        lab.Probe.Electrode.insert(
+            ({'probe': npx_probe_model, 'electrode': x} for
+             x in range(1, 961)),
+            skip_duplicates=True,
+        )
 
     except Exception as e:
         print("error creating mock data: {e}".format(e=e), file=sys.stderr)

@@ -7,17 +7,16 @@ import hashlib
 log = logging.getLogger(__name__)
 
 
-try:
-    _db_prefix = dj.config['custom']['database.prefix']
-except:
-    _db_prefix = "map_v1_"
-
-
 def get_schema_name(name):
     try:
-         return dj.config['custom']['{}.database'.format(name)]
+        return dj.config['custom']['{}.database'.format(name)]
     except KeyError:
-        return _db_prefix + name
+        if name.startswith('ingest'):
+            prefix = '{}_ingest_'.format(dj.config.get('database.user', 'map'))
+        else:
+            prefix = 'map_v1_'
+
+    return prefix + name
 
 
 class InsertBuffer(object):

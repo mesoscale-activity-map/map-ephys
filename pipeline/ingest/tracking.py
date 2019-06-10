@@ -12,9 +12,9 @@ from pipeline import tracking
 from pipeline import experiment
 from pipeline.ingest import behavior as behavior_ingest
 from collections import defaultdict
-from . import get_schema_name
+from .. import get_schema_name
 
-schema = dj.schema(get_schema_name('tracking'))
+schema = dj.schema(get_schema_name('ingest_tracking'))
 
 log = logging.getLogger(__name__)
 
