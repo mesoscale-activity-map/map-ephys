@@ -4,7 +4,6 @@ import math
 
 from functools import reduce
 from itertools import repeat
-from textwrap import dedent
 
 import numpy as np
 import datajoint as dj
@@ -22,8 +21,9 @@ schema = dj.schema(get_schema_name('psth'))
 log = logging.getLogger(__name__)
 
 # NOW:
-# - [X] rename Condition to TrialCondition
-# - [ ] GroupCondition -> now notion of UnitCondition;
+# - [X] rename UnitCondition to TrialCondition
+# - [X] store actual Selectivity value
+# - [ ] GroupCondition -> now notion of UnitCondition
 #   - table notneeded
 #   - provide canned queries
 #   - also null filtering funs
@@ -395,10 +395,10 @@ class UnitPsth(dj.Computed):
         psth = psth_q.fetch1()['unit_psth']
 
         i_trials = TrialCondition.trials({k: condition[k] for k in incl_conds},
-                                    session_key)
+                                         session_key)
 
         x_trials = TrialCondition.trials({k: condition[k] for k in excl_conds},
-                                    session_key)
+                                         session_key)
 
         st_q = ((ephys.TrialSpikes & i_trials & unit_key) -
                 (experiment.SessionTrial & x_trials & unit_key))
@@ -414,53 +414,6 @@ class UnitPsth(dj.Computed):
 
 
 @schema
-class SelectivityCriteria(dj.Lookup):
-    '''
-    Selectivity Criteria -
-    Indicate significance of unit firing rate for trial type left vs right.
-
-    *_selectivity variables indicate if the unit displays selectivity
-    *_preference variables indicate the unit ipsi/contra preference
-    '''
-
-    definition = """
-    selectivity_criteria_id:    int             # criteria id
-    ---
-    sample_selectivity=Null:    boolean         # sample period selectivity
-    delay_selectivity=Null:     boolean         # delay period selectivity
-    go_selectivity=Null:        boolean         # go period selectivity
-    global_selectivity=Null:    boolean         # global selectivity
-    any_selectivity=Null:       boolean         # (sample|delay|go) selectivity
-    sample_preference=Null:     boolean         # sample period pref. (i|c)
-    delay_preference=Null:      boolean         # delay period pref. (i|c)
-    go_preference=Null:         boolean         # go period pref. (i|c)
-    global_preference=Null:     boolean         # global period pref. (i|c)
-    any_preference=Null:        boolean         # any period pref. (i|c)
-    """
-    ranges = {   # time ranges in SelectivityCriteria order
-        'sample': (-2.4, -1.2),
-        'delay':  (-1.2, -0.0),
-        'go':     (+0.0, +1.2),
-        'global': (-2.4, +1.2),
-    }
-
-    @property
-    def contents(self):
-        deflines = dedent(self.definition).splitlines()[1:]
-        nfields = len(deflines[slice(deflines.index('---')+1, None)])
-
-        nconds = 2 ** nfields
-        fmt = '{0:0' + str(nfields) + 'b}'  # 'int' -> binary formatter
-
-        recset = [tuple(int(i) for i in fmt.format(i))
-                  for i in range(nconds)]
-
-        return [(j[0], *j[1]) for j in enumerate(
-            recset + [({1: 1, 0: None}[d] for d in i)
-                      for i in recset])][:-1]  # 0->None for all but all 1s
-
-
-@schema
 class Selectivity(dj.Computed):
     '''
     Unit Selectivity
@@ -470,18 +423,39 @@ class Selectivity(dj.Computed):
     Calculation:
     2 tail t significance of unit firing rate for trial type l vs r
     frequency = nspikes(period)/len(period)
-
-    lick instruction(-2.4,-1.2)  # sound is playing,
-    pre trial delay wait(-1.2,0)  # delay
-    go(0,1.2)  # perform lick
     '''
 
     definition = """
-    # Unit Response Selectivity
+    # Unit Response Selectivity (WIP)
     -> ephys.Unit
     ---
-    -> SelectivityCriteria
+    sample_selectivity=Null:    float         # sample period selectivity
+    delay_selectivity=Null:     float         # delay period selectivity
+    go_selectivity=Null:        float         # go period selectivity
+    global_selectivity=Null:    float         # global selectivity
+    min_selectivity=Null:       float         # (sample|delay|go) selectivity
+    sample_preference=Null:     boolean       # sample period pref. (i|c)
+    delay_preference=Null:      boolean       # delay period pref. (i|c)
+    go_preference=Null:         boolean       # go period pref. (i|c)
+    global_preference=Null:     boolean       # global period pref. (i|c)
+    any_preference=Null:        boolean       # any period pref. (i|c)
     """
+
+    alpha = 0.05  # default alpha value
+
+    @property
+    def selective(self):
+        return 'min_selectivity<{}'.format(self.alpha)
+
+    ipsi_preferring = 'any_preference=1'
+    contra_preferring = 'any_preference=0'
+
+    ranges = {   # time ranges in SelectivityCriteria order
+        'sample': (-2.4, -1.2),
+        'delay':  (-1.2, -0.0),
+        'go':     (+0.0, +1.2),
+        'global': (-2.4, +1.2),
+    }
 
     def make(self, key):
 
@@ -490,8 +464,7 @@ class Selectivity(dj.Computed):
         else:
             log.debug('Selectivity.make(): key: {}'.format(key))
 
-        alpha = 0.05
-        ranges = SelectivityCriteria.ranges
+        ranges = self.ranges
         spikes_q = ((ephys.TrialSpikes & key)
                     & (experiment.BehaviorTrial()
                        & {'early_lick': 'no early'}))
@@ -545,159 +518,14 @@ class Selectivity(dj.Computed):
             freq_c = freq[behav_c]
             t_stat, pval = sc_stats.ttest_ind(freq_i, freq_c, equal_var=False)
 
-            criteria[name] = 1 if pval <= alpha else 0
+            # criteria[name] = 1 if pval <= alpha else 0
+            criteria[name] = pval
             criteria[pref] = 1 if np.average(freq_i) > np.average(freq_c) else 0
 
-        for attr in ['selectivity', 'preference']:
-            criteria['any_{}'.format(attr)] = any(
-                criteria['{}_{}'.format(k, attr)] for k in periods
-                if k != 'global')
+        criteria['min_selectivity'] = min([v for k, v in criteria.items()
+                                           if 'selectivity' in k])
 
-        criteria_id = (SelectivityCriteria() & criteria).fetch1('KEY')
+        criteria['any_preference'] = any([v for k, v in criteria.items()
+                                          if 'preference' in k])
 
-        log.info('criteria {} ({})'.format(criteria, criteria_id))
-
-        self.insert1(dict(key, **criteria_id))
-
-
-@schema
-class UnitGroupCondition(dj.Manual):
-    definition = """
-    # manually curated unit groups of interest
-    unit_group_condition_id:            int     # group condition id
-    ---
-    unit_group_condition_desc:                  varchar(4096)
-    -> lab.BrainArea
-    -> SelectivityCriteria
-    """
-
-    class TrialCondition(dj.Part):
-        definition = """
-        -> master
-        -> TrialCondition
-        """
-
-    @classmethod
-    def populate(cls):
-        """
-        Table contents for UnitGroupCondition
-        """
-        self = cls()
-
-        # audio delay hit, 'any' selectivity; ALM
-
-        gcond_key = {'unit_group_condition_id': 0}
-        gcond_desc = 'audio delay hit, any selectivity; ALM'
-        crit = {
-            'sample_selectivity': None,
-            'delay_selectivity': None,
-            'go_selectivity': None,
-            'global_selectivity': None,
-            'any_selectivity': True,
-            'sample_preference': None,
-            'delay_preference': None,
-            'go_preference': None,
-            'global_preference': None,
-            'any_preference': None,
-        }
-        # XXX: TODO 'null' key filtering fns..
-        crit_min = {i[0]: i[1] for i in crit.items() if i[1] is not None}
-        crit_match = (SelectivityCriteria & crit_min).fetch(as_dict=True)
-        crit_ok = [i for i in crit_match
-                   if {k: i[k] for k
-                       in (i - {'selectivity_criteria_id': 0}.keys())} == crit]
-        assert len(crit_ok) == 1
-
-        self.insert1({
-            **gcond_key,
-            'unit_group_condition_desc': gcond_desc,
-            'brain_area': 'ALM',
-            'selectivity_criteria_id': crit_ok[0]['selectivity_criteria_id']
-        }, skip_duplicates=True)
-
-        self.TrialCondition.insert1({  # contra hit
-            **gcond_key,
-            'condition_id': 0,
-        }, skip_duplicates=True)
-
-        self.TrialCondition.insert1({  # ipsi hit
-            **gcond_key,
-            'condition_id': 1,
-        }, skip_duplicates=True)
-
-
-@schema
-class UnitGroupPsth(dj.Computed):
-    definition = """
-    -> UnitGroupCondition
-    ---
-    unit_group_psth:                            longblob
-    """
-
-    class Unit(dj.Part):
-        definition = """
-        # UnitGroupPsth UnitPsth.Unit Backreference
-        -> master
-        -> UnitPsth.Unit
-        """
-
-    def make(self, key):
-        '''
-        Group PSTH for all trials matching the UnitGroupCondition
-        '''
-        log.info('UnitGroupPsth.make(): key: {}'.format(key))
-
-        cond = (UnitGroupCondition & key).fetch1()
-
-        my_crit = (SelectivityCriteria
-                   & {'selectivity_criteria_id':
-                      cond['selectivity_criteria_id']}).fetch1()
-
-        # genericize selectivity criteria for subsequent selectivity matching
-        crit_min = {k: v for k, v in my_crit.items()
-                    if v is not None and k != 'selectivity_criteria_id'}
-
-        crit_all = (SelectivityCriteria & crit_min).fetch(as_dict=True)
-
-        crit_i = [i for i in crit_all if i['any_preference'] == 1
-                  and None not in i.values()]
-
-        crit_c = [i for i in crit_all if i['any_preference'] == 0
-                  and None not in i.values()]
-
-        conds = (TrialCondition &
-                 (UnitGroupCondition.TrialCondition & key).proj()).fetch(
-                     as_dict=True)
-
-        conds_c = [{k: v for k, v in c.items()
-                    if k in TrialCondition.primary_key}
-                   for c in conds if 'contra' in c['condition_desc']]
-
-        conds_i = [{k: v for k, v in c.items()
-                    if k in TrialCondition.primary_key}
-                   for c in conds if 'ipsi' in c['condition_desc']]
-
-        # {var}_{a}_{b} -> var {group preference}, {psth condition}
-        #   for var in [psth, key, set]
-
-        psth_i_i = ((UnitPsth.Unit & conds_i)
-                    & (Selectivity & crit_i).proj()).fetch()
-
-        psth_i_c = ((UnitPsth.Unit & conds_c)
-                    & (Selectivity & crit_i).proj()).fetch()
-
-        psth_c_c = ((UnitPsth.Unit & conds_c)
-                    & (Selectivity & crit_c).proj()).fetch()
-
-        psth_c_i = ((UnitPsth.Unit & conds_i)
-                    & (Selectivity & crit_c).proj()).fetch()
-
-        # TODO: How/What to store?
-        # see also: pipeline/plot.py:{group_psth_ll,group_psth}
-        [psth_i_i['unit_psth'], psth_i_c['unit_psth'],
-         psth_c_c['unit_psth'], psth_c_i['unit_psth']]
-
-    @classmethod
-    def get(cls, group_condition_key):
-
-        raise NotImplementedError('storage/retrieval tbd')
+        self.insert1(dict(key, **criteria))

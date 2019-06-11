@@ -77,12 +77,6 @@ def populate_psth(*args):
     log.info('psth.Selectivity.populate()')
     psth.Selectivity.populate()
 
-    log.info('psth.UnitGroupCondition.populate()')
-    psth.UnitGroupCondition.populate()
-
-    log.info('psth.UnitGroupPsth.populate()')
-    psth.UnitGroupPsth.populate()
-
 
 def nuke_all():
     if 'nuclear_option' not in dj.config:
