@@ -62,13 +62,14 @@ class TrialCondition(dj.Manual):
     class Outcome(dj.Part):
         definition = """
         -> master
-        ---w
+        ---
         -> experiment.Outcome
         """
 
     class PhotostimLocation(dj.Part):
         definition = """
         -> master
+        ---
         -> experiment.Photostim
         """
 
