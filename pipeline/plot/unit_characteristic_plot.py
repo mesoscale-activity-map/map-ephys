@@ -13,7 +13,8 @@ from pipeline import experiment, tracking, ephys
 
 
 def plot_clustering_quality(session_key):
-    amp, snr, spk_times = (ephys.Unit & session_key).fetch('unit_amp', 'unit_snr', 'spike_times')
+    amp, snr, spk_times = (ephys.Unit * ephys.ProbeInsertion.InsertionLocation & session_key).fetch(
+        'unit_amp', 'unit_snr', 'spike_times')
     isi_violation, spk_rate = zip(*((compute_isi_violation(spk), compute_spike_rate(spk)) for spk in spk_times))
 
     metrics = {'amp': amp,
@@ -39,10 +40,14 @@ def plot_clustering_quality(session_key):
 
 
 def plot_unit_characteristic(session_key):
-    amp, snr, spk_times, x, y = (ephys.Unit & session_key).fetch(
-        'unit_amp', 'unit_snr', 'spike_times', 'unit_posx', 'unit_posy')
+    amp, snr, spk_times, x, y, insertion_depth = (ephys.Unit * ephys.ProbeInsertion.InsertionLocation
+                                                  & session_key).fetch(
+        'unit_amp', 'unit_snr', 'spike_times', 'unit_posx', 'unit_posy', 'dv_location')
+
     spk_rate = np.array(list(compute_spike_rate(spk) for spk in spk_times))
-    metrics = pd.DataFrame(list(zip(*(amp/amp.max(), snr/snr.max(), spk_rate/spk_rate.max(), x, -y))))
+    insertion_depth = np.where(np.isnan(insertion_depth), 0, insertion_depth)
+
+    metrics = pd.DataFrame(list(zip(*(amp/amp.max(), snr/snr.max(), spk_rate/spk_rate.max(), x, -y + insertion_depth))))
     metrics.columns = ['amp', 'snr', 'rate', 'x', 'y']
 
     fig, axs = plt.subplots(1, 3, figsize=(10, 8))
