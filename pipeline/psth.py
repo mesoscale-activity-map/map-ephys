@@ -302,18 +302,57 @@ class TrialCondition(dj.Manual):
 class UnitPsth(dj.Computed):
     definition = """
     -> TrialCondition
+    -> ephys.Unit
+    ---
+    unit_psth=NULL:                             longblob
     """
     psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
 
-    class Unit(dj.Part):  # XXX: merge up to master; reason: recomputing:
-        definition = """
-        -> master
-        -> ephys.Unit
-        ---
-        unit_psth:                                  longblob
-        """
+    # class Unit(dj.Part):  # XXX: merge up to master; reason: recomputing:
+    #     definition = """
+    #     -> master
+    #     """
 
     def make(self, key):
+        log.info('UnitPsth.make(): key: {}'.format(key))
+
+        unit = {k: v for k, v in key.items() if k in ephys.Unit.primary_key}
+
+        # Expand Condition -
+        # could conditionalize e.g.
+        # if key['condition_id'] in [1,2,3]: self.make_thiskind(key), etc.
+        # for now, we assume one method of processing.
+
+        cond = TrialCondition.expand(key['condition_id'])
+
+        all_trials = TrialCondition.trials({
+            'TaskProtocol': cond['TaskProtocol'],
+            'TrialInstruction': cond['TrialInstruction'],
+            'EarlyLick': cond['EarlyLick'],
+            'Outcome': cond['Outcome']})
+
+        photo_trials = TrialCondition.trials({
+            'PhotostimLocation': cond['PhotostimLocation']})
+
+        unstim_trials = [t for t in all_trials if t not in photo_trials]
+
+        q = (ephys.TrialSpikes() & unit & unstim_trials)
+        spikes = q.fetch('spike_times')
+
+        if len(spikes) == 0:
+            log.warning('no spikes found for key {} - null psth'.format(key))
+            self.insert1(key)
+            return
+
+        spikes = np.concatenate(spikes)
+
+        xmin, xmax, bins = self.psth_params.values()
+        psth = list(np.histogram(spikes, bins=np.arange(xmin, xmax, bins)))
+        psth[0] = psth[0] / len(unstim_trials) / bins
+
+        self.insert1({**key, 'unit_psth': np.array(psth)})
+
+    def make_old(self, key):
         log.info('UnitPsth.make(): key: {}'.format(key))
 
         # can e.g. if key['condition_id'] in [1,2,3]: self.make_thiskind(key)
@@ -383,7 +422,7 @@ class UnitPsth(dj.Computed):
           {
              'trials': ephys.TrialSpikes.trials,
              'spikes': ephys.TrialSpikes.spikes,
-             'psth': UnitPsth.Unit.unit_psth,
+             'psth': UnitPsth.unit_psth,
              'raster': Spike * Trial raster [np.array, np.array]
           }
 
@@ -392,7 +431,7 @@ class UnitPsth(dj.Computed):
         condition = TrialCondition.expand(condition_key['condition_id'])
         session_key = {k: unit_key[k] for k in experiment.Session.primary_key}
 
-        psth_q = (UnitPsth.Unit & {**condition_key, **unit_key})
+        psth_q = (UnitPsth & {**condition_key, **unit_key})
         psth = psth_q.fetch1()['unit_psth']
 
         i_trials = TrialCondition.trials({k: condition[k] for k in incl_conds},
