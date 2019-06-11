@@ -21,16 +21,16 @@ from . import get_schema_name
 schema = dj.schema(get_schema_name('psth'))
 log = logging.getLogger(__name__)
 
-# NOWLIST:
-# - rename Condition to TrialCondition
-# - GroupCondition -> now notion of UnitCondition;
+# NOW:
+# - [X] rename Condition to TrialCondition
+# - [ ] GroupCondition -> now notion of UnitCondition;
 #   - table notneeded
 #   - provide canned queries
 #   - also null filtering funs
 
 
 @schema
-class Condition(dj.Manual):
+class TrialCondition(dj.Manual):
     definition = """
     # manually curated conditions of interest
     condition_id:                               int
@@ -85,15 +85,15 @@ class Condition(dj.Manual):
         return {
             'Condition': (self & key).fetch1(),
             'TaskProtocol':
-                (Condition.TaskProtocol & key).fetch(as_dict=True),
+                (TrialCondition.TaskProtocol & key).fetch(as_dict=True),
             'TrialInstruction':
-                (Condition.TrialInstruction & key).fetch(as_dict=True),
+                (TrialCondition.TrialInstruction & key).fetch(as_dict=True),
             'EarlyLick':
-                (Condition.EarlyLick & key).fetch(as_dict=True),
+                (TrialCondition.EarlyLick & key).fetch(as_dict=True),
             'Outcome':
-                (Condition.Outcome & key).fetch(as_dict=True),
+                (TrialCondition.Outcome & key).fetch(as_dict=True),
             'PhotostimLocation':
-                (Condition.PhotostimLocation & key).fetch(as_dict=True)
+                (TrialCondition.PhotostimLocation & key).fetch(as_dict=True)
         }
 
     @classmethod
@@ -182,23 +182,23 @@ class Condition(dj.Manual):
         }
         self.insert1(cond_key, skip_duplicates=True)
 
-        Condition.TaskProtocol.insert1(
+        TrialCondition.TaskProtocol.insert1(
             dict(cond_key, task='audio delay', task_protocol=1),
             skip_duplicates=True, ignore_extra_fields=True)
 
-        Condition.TrialInstruction.insert1(
+        TrialCondition.TrialInstruction.insert1(
             dict(cond_key, trial_instruction='right'),
             skip_duplicates=True, ignore_extra_fields=True)
 
-        Condition.EarlyLick.insert1(
+        TrialCondition.EarlyLick.insert1(
             dict(cond_key, early_lick='no early'),
             skip_duplicates=True, ignore_extra_fields=True)
 
-        Condition.Outcome.insert1(
+        TrialCondition.Outcome.insert1(
             dict(cond_key, outcome='hit'),
             skip_duplicates=True, ignore_extra_fields=True)
 
-        Condition.PhotostimLocation.insert(
+        TrialCondition.PhotostimLocation.insert(
             [dict(cond_key, **ploc) for ploc
              in experiment.Photostim & {'brainloc_id': 0}],
             skip_duplicates=True, ignore_extra_fields=True)
@@ -213,23 +213,23 @@ class Condition(dj.Manual):
         }
         self.insert1(cond_key, skip_duplicates=True)
 
-        Condition.TaskProtocol.insert1(
+        TrialCondition.TaskProtocol.insert1(
             dict(cond_key, task='audio delay', task_protocol=1),
             skip_duplicates=True, ignore_extra_fields=True)
 
-        Condition.TrialInstruction.insert1(
+        TrialCondition.TrialInstruction.insert1(
             dict(cond_key, trial_instruction='left'),
             skip_duplicates=True, ignore_extra_fields=True)
 
-        Condition.EarlyLick.insert1(
+        TrialCondition.EarlyLick.insert1(
             dict(cond_key, early_lick='no early'),
             skip_duplicates=True, ignore_extra_fields=True)
 
-        Condition.Outcome.insert1(
+        TrialCondition.Outcome.insert1(
             dict(cond_key, outcome='hit'),
             skip_duplicates=True, ignore_extra_fields=True)
 
-        Condition.PhotostimLocation.insert(
+        TrialCondition.PhotostimLocation.insert(
             [dict(cond_key, **ploc) for ploc
              in experiment.Photostim & {'brainloc_id': 0}],
             skip_duplicates=True, ignore_extra_fields=True)
@@ -244,23 +244,23 @@ class Condition(dj.Manual):
         }
         self.insert1(cond_key, skip_duplicates=True)
 
-        Condition.TaskProtocol.insert1(
+        TrialCondition.TaskProtocol.insert1(
             dict(cond_key, task='audio delay', task_protocol=1),
             skip_duplicates=True, ignore_extra_fields=True)
 
-        Condition.TrialInstruction.insert1(
+        TrialCondition.TrialInstruction.insert1(
             dict(cond_key, trial_instruction='right'),
             skip_duplicates=True, ignore_extra_fields=True)
 
-        Condition.EarlyLick.insert1(
+        TrialCondition.EarlyLick.insert1(
             dict(cond_key, early_lick='no early'),
             skip_duplicates=True, ignore_extra_fields=True)
 
-        Condition.Outcome.insert1(
+        TrialCondition.Outcome.insert1(
             dict(cond_key, outcome='miss'),
             skip_duplicates=True, ignore_extra_fields=True)
 
-        Condition.PhotostimLocation.insert(
+        TrialCondition.PhotostimLocation.insert(
             [dict(cond_key, **ploc) for ploc
              in experiment.Photostim & {'brainloc_id': 0}],
             skip_duplicates=True, ignore_extra_fields=True)
@@ -275,23 +275,23 @@ class Condition(dj.Manual):
         }
         self.insert1(cond_key, skip_duplicates=True)
 
-        Condition.TaskProtocol.insert1(
+        TrialCondition.TaskProtocol.insert1(
             dict(cond_key, task='audio delay', task_protocol=1),
             skip_duplicates=True, ignore_extra_fields=True)
 
-        Condition.TrialInstruction.insert1(
+        TrialCondition.TrialInstruction.insert1(
             dict(cond_key, trial_instruction='left'),
             skip_duplicates=True, ignore_extra_fields=True)
 
-        Condition.EarlyLick.insert1(
+        TrialCondition.EarlyLick.insert1(
             dict(cond_key, early_lick='no early'),
             skip_duplicates=True, ignore_extra_fields=True)
 
-        Condition.Outcome.insert1(
+        TrialCondition.Outcome.insert1(
             dict(cond_key, outcome='miss'),
             skip_duplicates=True, ignore_extra_fields=True)
 
-        Condition.PhotostimLocation.insert(
+        TrialCondition.PhotostimLocation.insert(
             [dict(cond_key, **ploc) for ploc
              in experiment.Photostim & {'brainloc_id': 0}],
             skip_duplicates=True, ignore_extra_fields=True)
@@ -300,7 +300,7 @@ class Condition(dj.Manual):
 @schema
 class UnitPsth(dj.Computed):
     definition = """
-    -> Condition
+    -> TrialCondition
     """
     psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
 
@@ -318,18 +318,18 @@ class UnitPsth(dj.Computed):
         # can e.g. if key['condition_id'] in [1,2,3]: self.make_thiskind(key)
         # for now, we assume one method of processing
 
-        cond = Condition.expand(key['condition_id'])
+        cond = TrialCondition.expand(key['condition_id'])
 
         # XXX: if / else for different conditions as needed
         # e.g if key['condition_id'] > 3: ..., elif key['condition_id'] == 5
 
-        all_trials = Condition.trials({
+        all_trials = TrialCondition.trials({
             'TaskProtocol': cond['TaskProtocol'],
             'TrialInstruction': cond['TrialInstruction'],
             'EarlyLick': cond['EarlyLick'],
             'Outcome': cond['Outcome']})
 
-        photo_trials = Condition.trials({
+        photo_trials = TrialCondition.trials({
             'PhotostimLocation': cond['PhotostimLocation']})
 
         unstim_trials = [t for t in all_trials if t not in photo_trials]
@@ -366,7 +366,7 @@ class UnitPsth(dj.Computed):
             psth[0] = psth[0] / len(unstim_trials) / bins
 
             self.Unit.insert1({**key, **unit, 'unit_psth': np.array(psth)},
-                                  allow_direct_insert=True)
+                              allow_direct_insert=True)
 
     @classmethod
     def get(cls, condition_key, unit_key,
@@ -388,16 +388,16 @@ class UnitPsth(dj.Computed):
 
         """
 
-        condition = Condition.expand(condition_key['condition_id'])
+        condition = TrialCondition.expand(condition_key['condition_id'])
         session_key = {k: unit_key[k] for k in experiment.Session.primary_key}
 
         psth_q = (UnitPsth.Unit & {**condition_key, **unit_key})
         psth = psth_q.fetch1()['unit_psth']
 
-        i_trials = Condition.trials({k: condition[k] for k in incl_conds},
+        i_trials = TrialCondition.trials({k: condition[k] for k in incl_conds},
                                     session_key)
 
-        x_trials = Condition.trials({k: condition[k] for k in excl_conds},
+        x_trials = TrialCondition.trials({k: condition[k] for k in excl_conds},
                                     session_key)
 
         st_q = ((ephys.TrialSpikes & i_trials & unit_key) -
@@ -490,7 +490,7 @@ class Selectivity(dj.Computed):
         else:
             log.debug('Selectivity.make(): key: {}'.format(key))
 
-        alpha = 0.05  # TODO: confirm
+        alpha = 0.05
         ranges = SelectivityCriteria.ranges
         spikes_q = ((ephys.TrialSpikes & key)
                     & (experiment.BehaviorTrial()
@@ -502,7 +502,8 @@ class Selectivity(dj.Computed):
         behav_lr = {k: np.where(behav['trial_instruction'] == k) for k in lr}
 
         try:
-            egpos = (ephys.ProbeInsertion.InsertionLocation * experiment.BrainLocation & key).fetch1()
+            egpos = (ephys.ProbeInsertion.InsertionLocation
+                     * experiment.BrainLocation & key).fetch1()
         except dj.DataJointError as e:
             if 'exactly one tuple' in repr(e):
                 log.error('... Insertion Location missing. skipping')
@@ -570,10 +571,10 @@ class UnitGroupCondition(dj.Manual):
     -> SelectivityCriteria
     """
 
-    class UnitCondition(dj.Part):
+    class TrialCondition(dj.Part):
         definition = """
         -> master
-        -> Condition
+        -> TrialCondition
         """
 
     @classmethod
@@ -614,12 +615,12 @@ class UnitGroupCondition(dj.Manual):
             'selectivity_criteria_id': crit_ok[0]['selectivity_criteria_id']
         }, skip_duplicates=True)
 
-        self.UnitCondition.insert1({  # contra hit
+        self.TrialCondition.insert1({  # contra hit
             **gcond_key,
             'condition_id': 0,
         }, skip_duplicates=True)
 
-        self.UnitCondition.insert1({  # ipsi hit
+        self.TrialCondition.insert1({  # ipsi hit
             **gcond_key,
             'condition_id': 1,
         }, skip_duplicates=True)
@@ -664,14 +665,16 @@ class UnitGroupPsth(dj.Computed):
         crit_c = [i for i in crit_all if i['any_preference'] == 0
                   and None not in i.values()]
 
-        conds = (Condition &
-                 (UnitGroupCondition.UnitCondition & key).proj()).fetch(
+        conds = (TrialCondition &
+                 (UnitGroupCondition.TrialCondition & key).proj()).fetch(
                      as_dict=True)
 
-        conds_c = [{k: v for k, v in c.items() if k in Condition.primary_key}
+        conds_c = [{k: v for k, v in c.items()
+                    if k in TrialCondition.primary_key}
                    for c in conds if 'contra' in c['condition_desc']]
 
-        conds_i = [{k: v for k, v in c.items() if k in Condition.primary_key}
+        conds_i = [{k: v for k, v in c.items()
+                    if k in TrialCondition.primary_key}
                    for c in conds if 'ipsi' in c['condition_desc']]
 
         # {var}_{a}_{b} -> var {group preference}, {psth condition}

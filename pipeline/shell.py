@@ -69,7 +69,7 @@ def ingest_histology(*args):
 
 def populate_psth(*args):
     log.info('psth.Condition.populate()')
-    psth.Condition.populate()
+    psth.TrialCondition.populate()
 
     log.info('psth.UnitPsth.populate()')
     psth.UnitPsth.populate()
