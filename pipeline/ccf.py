@@ -8,12 +8,13 @@ import datajoint as dj
 
 from tifffile import imread
 
-from pipeline import InsertBuffer
-from pipeline.reference import ccf_ontology
+from . import InsertBuffer
+from .reference import ccf_ontology
+from . import get_schema_name
 
+schema = dj.schema(get_schema_name('ccf'))
 
 log = logging.getLogger(__name__)
-schema = dj.schema(dj.config.get('ccf.database', 'map_ccf'))
 
 
 @schema
@@ -81,7 +82,7 @@ class CCFAnnotation(dj.Manual):
         log.info('CCFAnnotation.load_ccf_r3_20um(): start')
 
         self = cls()  # Instantiate self,
-        stack_path = dj.config['ccf.r3_20um_path']
+        stack_path = dj.config['custom']['ccf.r3_20um_path']
         stack = imread(stack_path)  # load reference stack,
 
         log.info('.. loaded stack of shape {} from {}'

@@ -6,9 +6,9 @@ MAP Motion Tracking Schema
 import datajoint as dj
 
 from . import experiment
+from . import get_schema_name
 
-
-schema = dj.schema(dj.config.get('tracking.database', 'map_tracking'))
+schema = dj.schema(get_schema_name('tracking'))
 [experiment]  # NOQA flake8
 
 
@@ -38,7 +38,7 @@ class Tracking(dj.Imported):
     -> experiment.SessionTrial
     -> TrackingDevice
     ---
-    tracking_samples:           int             # number of events
+    tracking_samples:           int             # number of events (possibly frame number, relative to the start of the trial)
     """
 
     class NoseTracking(dj.Part):

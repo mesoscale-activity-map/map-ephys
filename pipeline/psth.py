@@ -1,4 +1,3 @@
-
 import logging
 import operator
 import math
@@ -12,13 +11,15 @@ import datajoint as dj
 
 import scipy.stats as sc_stats
 
-from pipeline import lab
-from pipeline import experiment
-from pipeline import ephys
+from . import lab
+from . import experiment
+from . import ephys
 [lab, experiment, ephys]  # NOQA
 
+from . import get_schema_name
+
+schema = dj.schema(get_schema_name('psth'))
 log = logging.getLogger(__name__)
-schema = dj.schema(dj.config.get('psth.database', 'map_psth'))
 
 # NOWLIST:
 # - rename Condition to TrialCondition
@@ -68,8 +69,7 @@ class Condition(dj.Manual):
     class PhotostimLocation(dj.Part):
         definition = """
         -> master
-        ---
-        -> experiment.PhotostimLocation
+        -> experiment.Photostim
         """
 
     @classmethod
@@ -130,14 +130,14 @@ class Condition(dj.Manual):
             'TrialInstruction': experiment.TrialInstruction,
             'EarlyLick': experiment.EarlyLick,
             'Outcome': experiment.Outcome,
-            'PhotostimLocation': experiment.PhotostimLocation
+            'PhotostimLocation': experiment.Photostim
         }
         restrict_map = {
             'TaskProtocol': experiment.BehaviorTrial,
             'TrialInstruction': experiment.BehaviorTrial,
             'EarlyLick': experiment.BehaviorTrial,
             'Outcome': experiment.BehaviorTrial,
-            'PhotostimLocation': experiment.PhotostimTrialEvent
+            'PhotostimLocation': experiment.PhotostimEvent
         }
 
         res = []
@@ -200,7 +200,7 @@ class Condition(dj.Manual):
 
         Condition.PhotostimLocation.insert(
             [dict(cond_key, **ploc) for ploc
-             in experiment.PhotostimLocation & {'brainloc_id': 0}],
+             in experiment.Photostim & {'brainloc_id': 0}],
             skip_duplicates=True, ignore_extra_fields=True)
 
         #
@@ -231,7 +231,7 @@ class Condition(dj.Manual):
 
         Condition.PhotostimLocation.insert(
             [dict(cond_key, **ploc) for ploc
-             in experiment.PhotostimLocation & {'brainloc_id': 0}],
+             in experiment.Photostim & {'brainloc_id': 0}],
             skip_duplicates=True, ignore_extra_fields=True)
 
         #
@@ -262,7 +262,7 @@ class Condition(dj.Manual):
 
         Condition.PhotostimLocation.insert(
             [dict(cond_key, **ploc) for ploc
-             in experiment.PhotostimLocation & {'brainloc_id': 0}],
+             in experiment.Photostim & {'brainloc_id': 0}],
             skip_duplicates=True, ignore_extra_fields=True)
 
         #
@@ -293,13 +293,12 @@ class Condition(dj.Manual):
 
         Condition.PhotostimLocation.insert(
             [dict(cond_key, **ploc) for ploc
-             in experiment.PhotostimLocation & {'brainloc_id': 0}],
+             in experiment.Photostim & {'brainloc_id': 0}],
             skip_duplicates=True, ignore_extra_fields=True)
 
 
 @schema
 class UnitPsth(dj.Computed):
-
     definition = """
     -> Condition
     """
@@ -362,11 +361,11 @@ class UnitPsth(dj.Computed):
             spikes = q.fetch('spike_times')
             spikes = np.concatenate(spikes)
 
-            xmin, xmax, bins = UnitPsth.psth_params.values()
+            xmin, xmax, bins = self.psth_params.values()
             psth = list(np.histogram(spikes, bins=np.arange(xmin, xmax, bins)))
             psth[0] = psth[0] / len(unstim_trials) / bins
 
-            UnitPsth.Unit.insert1({**key, **unit, 'unit_psth': np.array(psth)},
+            self.Unit.insert1({**key, **unit, 'unit_psth': np.array(psth)},
                                   allow_direct_insert=True)
 
     @classmethod
@@ -503,11 +502,10 @@ class Selectivity(dj.Computed):
         behav_lr = {k: np.where(behav['trial_instruction'] == k) for k in lr}
 
         try:
-            egpos = (ephys.ElectrodeGroup.ElectrodeGroupPosition()
-                     & key).fetch1()
+            egpos = (ephys.ProbeInsertion.InsertionLocation * experiment.BrainLocation & key).fetch1()
         except dj.DataJointError as e:
             if 'exactly one tuple' in repr(e):
-                log.error('... ElectrodeGroupPosition missing. skipping')
+                log.error('... Insertion Location missing. skipping')
                 return
 
         # construct a square-shaped spike array, create 'valid value' index

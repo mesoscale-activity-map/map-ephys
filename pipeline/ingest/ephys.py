@@ -2,6 +2,7 @@
 
 import os
 import logging
+import pathlib
 from glob import glob
 
 import scipy.io as spio
@@ -14,29 +15,28 @@ import datajoint as dj
 from pipeline import lab
 from pipeline import experiment
 from pipeline import ephys
-from pipeline import InsertBuffer
+from pipeline import InsertBuffer, dict_to_hash
 from pipeline.ingest import behavior as behavior_ingest
+from .. import get_schema_name
+
+schema = dj.schema(get_schema_name('ingest_ephys'))
 
 log = logging.getLogger(__name__)
-
-schema = dj.schema(dj.config.get(
-    'ingest.ephys.database',
-    '{}_ingestEphys'.format(dj.config['database.user'])))
 
 
 @schema
 class EphysDataPath(dj.Lookup):
     # ephys data storage location(s)
     definition = """
-    data_path:              varchar(255)           # rig data path
+    data_path:              varchar(255)           # rig data path  
     ---
     search_order:           int                     # rig search order
     """
 
     @property
     def contents(self):
-        if 'ephys_data_paths' in dj.config:  # for local testing
-            return dj.config['ephys_data_paths']
+        if 'ephys_data_paths' in dj.config['custom']:  # for local testing
+            return dj.config['custom']['ephys_data_paths']
 
         return ((r'H:\\data\MAP', 0),)
 
@@ -53,7 +53,7 @@ class EphysIngest(dj.Imported):
         ''' files in rig-specific storage '''
         definition = """
         -> EphysIngest
-        electrode_group:        tinyint                 # electrode_group
+        probe_insertion_number:        tinyint                 # electrode_group
         ephys_file:             varchar(255)            # rig file subpath
         """
 
@@ -88,43 +88,67 @@ class EphysIngest(dj.Imported):
         subject_id = key['subject_id']
         water = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1('water_restriction_number')
 
-        for probe in range(1,3):
+        for probe in range(1, 3):
 
             # TODO: should code include actual logic to pick these up still?
             # file = '{h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water) # some older files
             # subpath = os.path.join('{}-{}'.format(date, probe), file)
             # file = '{h2o}ap_imec3_opt3_jrc.mat'.format(h2o=water) # current file naming format
             epfile = '{h2o}_g0_*.imec.ap_imec3_opt3_jrc.mat'.format(h2o=water)  # current file naming format
-            epsubpath = os.path.join(water, date, str(probe), epfile)
-            epfullpath = os.path.join(rigpath, epsubpath)
-            ephys_files = glob(epfullpath)
+            epfullpath = pathlib.Path(rigpath, water, date, str(probe))
+            ephys_files = list(epfullpath.glob(epfile))
 
             if len(ephys_files) != 1:
                 log.info('EphysIngest().make(): skipping probe {} - incorrect files found: {}/{}'.format(probe, epfullpath, ephys_files))
                 continue
 
             epfullpath = ephys_files[0]
+            epsubpath = epfullpath.relative_to(rigpath)
             log.info('EphysIngest().make(): found probe {} ephys recording in {}'.format(probe, epfullpath))
 
             #
-            # Prepare ElectrodeGroup configuration
+            # Prepare ProbeInsertion configuration
             #
-            # HACK / TODO: assuming single specific ElectrodeGroup for all tests;
+            # HACK / TODO: assuming single specific ProbeInsertion for all tests;
             # better would be to have this encoded in filename or similar.
+            probe_part_no = '15131808323'  # hard-coded here
 
             ekey = {
                 'subject_id': behavior['subject_id'],
                 'session': behavior['session'],
-                'electrode_group': probe,
+                'insertion_number': probe
             }
 
-            log.info('inserting electrode group')
-            ephys.ElectrodeGroup().insert1(dict(ekey, probe_part_no=15131808323))
-            ephys.ElectrodeGroup().make(ekey)  # note: no locks; is dj.Manual
+
+            # ElectrodeConfig - add electrode group and group member (hard-coded to be the first 384 electrode)
+            electrode_group = {'probe': probe_part_no, 'electrode_group': 0}
+            electrode_group_member = [{**electrode_group, 'electrode': chn} for chn in range(1, 385)]
+            electrode_config_name = 'npx_first384'  # user-friendly name - npx probe config with the first 384 channels
+            electrode_config_id = dict_to_hash(
+                {**electrode_group, **{str(idx): k for idx, k in enumerate(electrode_group_member)}})
+            # extract ElectrodeConfig, check DB to reference if exists, else create
+            if ({'probe': probe_part_no, 'electrode_config_id': electrode_config_id}
+                    not in lab.ElectrodeConfig()):
+                log.info('create Neuropixels electrode configuration (lab.ElectrodeConfig)')
+                lab.ElectrodeConfig.insert1({
+                    'probe': probe_part_no,
+                    'electrode_config_id': electrode_config_id,
+                    'electrode_config_name': electrode_config_name})
+                lab.ElectrodeConfig.ElectrodeGroup.insert1({'electrode_config_id': electrode_config_id,
+                                                            **electrode_group})
+                lab.ElectrodeConfig.Electrode.insert(
+                    {'electrode_config_id': electrode_config_id, **member} for member in electrode_group_member)
+
+            log.info('inserting probe insertion')
+            ephys.ProbeInsertion.insert1(dict(ekey, probe=probe_part_no, electrode_config_id=electrode_config_id))
+
+            #
+            # Extract spike data
+            #
 
             log.info('extracting spike data')
 
-            f = h5py.File(epfullpath,'r')
+            f = h5py.File(epfullpath, 'r')
             ind = np.argsort(f['S_clu']['viClu'][0]) # index sorted by cluster
             cluster_ids = f['S_clu']['viClu'][0][ind] # cluster (unit) number
             ind = ind[np.where(cluster_ids > 0)[0]] # get rid of the -ve noise clusters
@@ -136,13 +160,13 @@ class EphysIngest(dj.Imported):
             vrPosX_clu = f['S_clu']['vrPosX_clu'][0] # x position of the unit
             vrPosY_clu = f['S_clu']['vrPosY_clu'][0] # y position of the unit
             vrVpp_uv_clu = f['S_clu']['vrVpp_uv_clu'][0] # amplitude of the unit
-            vrSnr_clu = f['S_clu']['vrSnr_clu'][0] # y position of the unit
+            vrSnr_clu = f['S_clu']['vrSnr_clu'][0] # snr of the unit
             strs = ["all" for x in range(len(csNote_clu))] # all units are "all" by definition
             for iU in range(0, len(csNote_clu)): # read the manual curation of each unit
                 log.debug('extracting spike indicators {s}:{u}'.format(s=behavior['session'], u=iU))
                 unitQ = f[csNote_clu[iU]]
                 str1 = ''.join(chr(i) for i in unitQ[:])
-                if str1 == 'single': # definitions in unit quality
+                if str1 == 'single':  # definitions in unit quality
                     strs[iU] = 'good'
                 elif str1 =='ok':
                     strs[iU] = 'ok'
@@ -150,12 +174,12 @@ class EphysIngest(dj.Imported):
                     strs[iU] = 'multi'
             spike_times = f['viTime_spk'][0][ind] # spike times
             viSite_spk = f['viSite_spk'][0][ind] # electrode site for the spike
-            sRateHz = f['P']['sRateHz'][0] # sampling rate
+            sRateHz = f['P']['sRateHz'][0]  # sampling rate
 
             file = '{h2o}_bitcode.mat'.format(h2o=water) # fetch the bitcode and realign
             # subpath = os.path.join('{}-{}'.format(date, probe), file)
-            bcsubpath = os.path.join(water, date, str(probe), file)
-            bcfullpath = os.path.join(rigpath, bcsubpath)
+            bcsubpath = pathlib.Path(water, date, str(probe), file)
+            bcfullpath = rigpath / bcsubpath
 
             log.info('opening bitcode for session {s} probe {p} ({f})'
                      .format(s=behavior['session'], p=probe, f=bcfullpath))
@@ -202,22 +226,28 @@ class EphysIngest(dj.Imported):
             trialunits = np.split(spike_trials, clu_ids_diff) # sub arrays of spike_trials for each unit
             unit_ids = np.arange(len(clu_ids_diff) + 1) # unit number
 
-            trialunits1 = [] # array of unit number (for ephys.Unit.UnitTrial())
-            trialunits2 = [] # array of trial number
-            for i in range(0,len(trialunits)): # loop through each unit
+            trialunits1 = []  # array of unit number (for ephys.Unit.UnitTrial())
+            trialunits2 = []  # array of trial number
+            for i in range(0, len(trialunits)):  # loop through each unit
                 log.debug('aggregating trials with units {s}:{t}'.format(s=behavior['session'], t=i))
                 trialunits2 = np.append(trialunits2, np.unique(trialunits[i])) # add the trials that a unit is in
                 trialunits1 = np.append(trialunits1, np.zeros(len(np.unique(trialunits[i])))+i) # add the unit numbers 
 
             log.info('inserting units for session {s}'.format(s=behavior['session']))
             #pdb.set_trace()
-            ephys.Unit().insert(list(dict(ekey, unit = x, unit_uid = x, unit_quality = strs[x], unit_site = int(viSite_clu[x]), unit_posx = vrPosX_clu[x], unit_posy = vrPosY_clu[x], spike_times = units[x], unit_amp = vrVpp_uv_clu[x], unit_snr = vrSnr_clu[x], waveform = trWav_raw_clu[x][0]) for x in unit_ids), allow_direct_insert=True) # batch insert the units
+            ephys.Unit().insert((dict(ekey, unit=x, unit_uid=x, unit_quality=strs[x],
+                                      electrode_config_id=electrode_config_id, probe=probe_part_no,
+                                      electrode_group=0, electrode=int(viSite_clu[x]),
+                                      unit_posx=vrPosX_clu[x], unit_posy=vrPosY_clu[x],
+                                      unit_amp=vrVpp_uv_clu[x], unit_snr=vrSnr_clu[x],
+                                      spike_times=units[x], waveform=trWav_raw_clu[x][0])
+                                 for x in unit_ids), allow_direct_insert=True)  # batch insert the units
 
             if spike_trials_fix is None:
-                if len(bitCodeB) < len(bitCodeE): # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
-                    startB = np.where(bitCodeE==bitCodeB[0])[0]
-                elif len(bitCodeB) > len(bitCodeE): # behavior file is longer; e.g. only some trials are sorted, the bitcode.mat should reflect this; Sometimes SpikeGLX can skip a trial, I need to check the last trial
-                    startE = np.where(bitCodeB==bitCodeE[0])[0]
+                if len(bitCodeB) < len(bitCodeE):  # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
+                    startB = np.where(bitCodeE == bitCodeB[0])[0]
+                elif len(bitCodeB) > len(bitCodeE):  # behavior file is longer; e.g. only some trials are sorted, the bitcode.mat should reflect this; Sometimes SpikeGLX can skip a trial, I need to check the last trial
+                    startE = np.where(bitCodeB == bitCodeE[0])[0]
                     startB = -startE
                 else:
                     startB = 0
@@ -228,18 +258,18 @@ class EphysIngest(dj.Imported):
 
             log.info('extracting trial unit information {s} ({f})'.format(s=behavior['session'], f=epfullpath))
 
-            trialunits2 = trialunits2-startB # behavior has less trials if startB is +ve, behavior has more trials if startB is -ve
-            indT = np.where(trialunits2 > -1)[0] # get rid of the -ve trials
+            trialunits2 = trialunits2-startB  # behavior has less trials if startB is +ve, behavior has more trials if startB is -ve
+            indT = np.where(trialunits2 > -1)[0]  # get rid of the -ve trials
             trialunits1 = trialunits1[indT]
             trialunits2 = trialunits2[indT]
 
-            spike_trials = spike_trials - startB # behavior has less trials if startB is +ve, behavior has more trials if startB is -ve
-            indT = np.where(spike_trials > -1)[0] # get rid of the -ve trials
+            spike_trials = spike_trials - startB  # behavior has less trials if startB is +ve, behavior has more trials if startB is -ve
+            indT = np.where(spike_trials > -1)[0]  # get rid of the -ve trials
             cluster_ids = cluster_ids[indT]
             viSite_spk = viSite_spk[indT]
             spike_trials = spike_trials[indT]
 
-            trialunits = np.asarray(trialunits) # convert the list to an array
+            trialunits = np.asarray(trialunits)  # convert the list to an array
             trialunits = trialunits - startB
 
             # split units based on which trial they are in (for ephys.TrialSpikes())
@@ -300,7 +330,7 @@ class EphysIngest(dj.Imported):
                          allow_direct_insert=True)
 
             EphysIngest.EphysFile().insert1(
-                dict(key, electrode_group=probe, ephys_file=epsubpath),
+                dict(key, probe_insertion_number=probe, ephys_file=epsubpath.as_posix()),
                 ignore_extra_fields=True, allow_direct_insert=True)
 
             log.info('ephys ingest for {} complete'.format(key))
