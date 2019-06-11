@@ -256,8 +256,6 @@ def plot_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), bin_counts=20):
     r_insta_phase = np.angle(signal.hilbert(filt_r_jaw_trackings, axis=1))
     r_insta_phase = np.degrees(r_insta_phase) % 360  # convert to degree [0, 360]
 
-    tvec = np.linspace(xlim[0], xlim[1], l_jaw_trackings.shape[1])
-
     fig, axs = plt.subplots(1, 2, figsize=(12, 8), subplot_kw=dict(polar=True))
     fig.subplots_adjust(wspace=0.6)
 
