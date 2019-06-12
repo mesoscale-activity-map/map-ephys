@@ -117,8 +117,10 @@ def plot_jaw_movement(session_key, unit_key, tongue_thres=430, trial_limit=10, a
 
             first_lick_time = (experiment.ActionEvent & tr & 'action_event_type in ("left lick", "right lick")').fetch(
                     'action_event_time', order_by = 'action_event_time', limit = 1)[0]
+            go_time = (experiment.TrialEvent & tr & 'trial_event_type="go"').fetch1('trial_event_time')
 
             spike_times = (ephys.TrialSpikes & tr & unit_key).fetch1('spike_times')
+            spike_times = spike_times + float(go_time) - float(first_lick_time)  # realigned to first-lick
 
             tvec = tvec - float(first_lick_time)
             tongue_out_bool = tongue >= tongue_thres

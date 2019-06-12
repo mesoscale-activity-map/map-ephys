@@ -41,7 +41,7 @@ def plot_clustering_quality(session_key):
 
 def plot_unit_characteristic(session_key):
     amp, snr, spk_times, x, y, insertion_depth = (ephys.Unit * ephys.ProbeInsertion.InsertionLocation
-                                                  & session_key).fetch(
+                                                  & session_key & 'unit_quality = "good"').fetch(
         'unit_amp', 'unit_snr', 'spike_times', 'unit_posx', 'unit_posy', 'dv_location')
 
     spk_rate = np.array(list(compute_spike_rate(spk) for spk in spk_times))
@@ -62,7 +62,7 @@ def plot_unit_characteristic(session_key):
     sns.scatterplot(data=metrics, x='x', y='y', s=metrics.snr*m_scale, ax=axs[1], **cosmetic)
     sns.scatterplot(data=metrics, x='x', y='y', s=metrics.rate*m_scale, ax=axs[2], **cosmetic)
 
-    # cosmeticx
+    # cosmetic
     for title, ax in zip(('Amplitude', 'SNR', 'Firing rate'), axs.flatten()):
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
