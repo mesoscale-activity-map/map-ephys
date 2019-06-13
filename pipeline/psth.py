@@ -9,7 +9,7 @@ import numpy as np
 import scipy as sc
 import datajoint as dj
 
-import scipy.stats  # NOQA
+import scipy.stats as sc_stats
 
 from . import lab
 from . import experiment
@@ -378,15 +378,55 @@ class UnitSelectivity(dj.Computed):
     frequency = nspikes(period)/len(period)
     """
     definition = """
-    -> Unit
+    -> ephys.Unit
     -> experiment.Period
     ---
     selectivity: enum('contra-selective', 'ipsi-selective', 'non-selective')
-    firing_rate_diff: float  # absolute difference between trial-ave spike rate for this unit 
-    p-value: float  # p-value of the t-test of spike-rate of all trials
+    contra_firing_rate: float  # mean firing rate of all contra-trials
+    ipsi_firing_rate: float  # mean firing rate of all ipsi-trials
+    p_value: float  # p-value of the t-test of spike-rate of all trials
     """
 
+    key_source = ephys.Unit
+
     def make(self, key):
+        corrrect_right = TrialCondition.expand(0)
+        corrrect_left = TrialCondition.expand(1)
+
+        # get trial spike times
+        right_trialspikes = (ephys.TrialSpikes & key & corrrect_right).fetch('spike_times')
+        left_trialspikes = (ephys.TrialSpikes & key & corrrect_left).fetch('spike_times')
+
+        unit_hemi = (ephys.ProbeInsertion.InsertionLocation & key).fetch1('hemisphere')
+
+        if unit_hemi not in ('left', 'right'):
+            raise Exception('Hemisphere Error! Unit not belonging to either left or right hemisphere')
+
+        contra_trialspikes = right_trialspikes if unit_hemi == 'left' else left_trialspikes
+        ipsi_trialspikes = left_trialspikes if unit_hemi == 'left' else right_trialspikes
+
+        for period in experiment.Period.fetch():
+            contra_trial_spk_count = [(np.logical_and(t >= period['period_start'], t < period['period_end'])).astype(int).sum()
+                             for t in contra_trialspikes]
+            ipsi_trial_spk_count = [(np.logical_and(t >= period['period_start'], t < period['period_end'])).astype(int).sum()
+                           for t in ipsi_trialspikes]
+
+            period_dur = period['period_end'] - period['period_start']
+            contra_frate = sum(contra_trial_spk_count) / (period_dur * len(contra_trialspikes))
+            ipsi_frate = sum(ipsi_trial_spk_count) / (period_dur * len(ipsi_trialspikes))
+
+            # do t-test on the spike-count per trial for all contra trials vs. ipsi trials
+            t_stat, pval = sc_stats.ttest_ind(contra_trial_spk_count, ipsi_trial_spk_count, equal_var=False)
+
+            if pval > 0.05:
+                pref = 'non-selective'
+            else:
+                pref = 'ipsi-selective' if ipsi_frate > contra_frate else 'contra-selective'
+
+            self.insert1(dict(key, **period, selectivity=pref,
+                              contra_firing_rate=contra_frate,
+                              ipsi_firing_rate=ipsi_frate,
+                              p_value=pval), ignore_extra_fields=True)
 
 
 @schema
