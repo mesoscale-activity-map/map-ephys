@@ -370,6 +370,26 @@ class UnitPsth(dj.Computed):
 
 
 @schema
+class UnitSelectivity(dj.Computed):
+    """
+    Compute unit selectivity for a unit in a particular time period.
+    Calculation:
+    2 tail t significance of unit firing rate for trial type: CorrectLeft vs. CorrectRight (no stim, no early lick)
+    frequency = nspikes(period)/len(period)
+    """
+    definition = """
+    -> Unit
+    -> experiment.Period
+    ---
+    selectivity: enum('contra-selective', 'ipsi-selective', 'non-selective')
+    firing_rate_diff: float  # absolute difference between trial-ave spike rate for this unit 
+    p-value: float  # p-value of the t-test of spike-rate of all trials
+    """
+
+    def make(self, key):
+
+
+@schema
 class SelectivityCriteria(dj.Lookup):
     '''
     Selectivity Criteria -
