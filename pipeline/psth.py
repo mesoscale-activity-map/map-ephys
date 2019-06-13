@@ -441,7 +441,7 @@ class UnitSelectivity(dj.Computed):
         right_trialspikes = (ephys.TrialSpikes & key & corrrect_right).fetch('spike_times')
         left_trialspikes = (ephys.TrialSpikes & key & corrrect_left).fetch('spike_times')
 
-        unit_hemi = (ephys.ProbeInsertion.InsertionLocation & key).fetch1('hemisphere')
+        unit_hemi = (ephys.ProbeInsertion.InsertionLocation * experiment.BrainLocation & key).fetch1('hemisphere')
 
         if unit_hemi not in ('left', 'right'):
             raise Exception('Hemisphere Error! Unit not belonging to either left or right hemisphere')
@@ -449,7 +449,7 @@ class UnitSelectivity(dj.Computed):
         contra_trialspikes = right_trialspikes if unit_hemi == 'left' else left_trialspikes
         ipsi_trialspikes = left_trialspikes if unit_hemi == 'left' else right_trialspikes
 
-        for period in experiment.Period.fetch():
+        for period in experiment.Period.fetch(as_dict=True):
             contra_trial_spk_count = [(np.logical_and(t >= period['period_start'], t < period['period_end'])).astype(int).sum()
                              for t in contra_trialspikes]
             ipsi_trial_spk_count = [(np.logical_and(t >= period['period_start'], t < period['period_end'])).astype(int).sum()
