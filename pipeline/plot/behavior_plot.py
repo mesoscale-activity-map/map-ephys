@@ -262,9 +262,9 @@ def plot_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), bin_counts=20):
     fig.subplots_adjust(wspace=0.6)
 
     plot_polar_histogram(l_insta_phase.flatten(), axs[0], bin_counts=bin_counts)
-    axs[0].set_title('Contra', loc='left', fontweight='bold')
+    axs[0].set_title('left lick trials', loc='left', fontweight='bold')
     plot_polar_histogram(r_insta_phase.flatten(), axs[1], bin_counts=bin_counts)
-    axs[1].set_title('Ipsi', loc='left', fontweight='bold')
+    axs[1].set_title('right lick trials', loc='left', fontweight='bold')
 
 
 def plot_polar_histogram(data, ax, bin_counts=30):
