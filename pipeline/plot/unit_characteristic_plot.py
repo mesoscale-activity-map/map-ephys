@@ -23,7 +23,7 @@ def plot_clustering_quality(session_key):
                'isi': np.array(isi_violation),
                'rate': np.array(spk_rate)}
     label_mapper = {'amp': 'Amplitude',
-                    'snr': 'Signal to noise ration (SNR)',
+                    'snr': 'Signal to noise ratio (SNR)',
                     'isi': 'ISI violation (%)',
                     'rate': 'Firing rate (spike/s)'}
 
@@ -73,13 +73,13 @@ def plot_unit_characteristic(session_key):
 
 
 def plot_unit_selectivity(session_key):
-    attr_names = ['unit', 'period', 'selectivity', 'contra_firing_rate',
+    attr_names = ['unit', 'period', 'period_selectivity', 'contra_firing_rate',
                        'ipsi_firing_rate', 'unit_posx', 'unit_posy', 'dv_location']
-    selective_units = (psth.UnitSelectivity * ephys.Unit * ephys.ProbeInsertion.InsertionLocation * experiment.Period
-                       & session_key & 'selectivity != "non-selective"').fetch(*attr_names)
+    selective_units = (psth.UnitSelectivity.PeriodSelectivity * ephys.Unit * ephys.ProbeInsertion.InsertionLocation
+                       * experiment.Period & session_key & 'period_selectivity != "non-selective"').fetch(*attr_names)
     selective_units = pd.DataFrame(selective_units).T
     selective_units.columns = attr_names
-    selective_units.selectivity.astype('category')
+    selective_units.period_selectivity.astype('category')
 
     # --- account for insertion depth (manipulator depth)
     selective_units.unit_posy = (selective_units.unit_posy
@@ -110,10 +110,10 @@ def plot_unit_selectivity(session_key):
                                 for p in ('sample', 'delay', 'response')), axs):
         sns.scatterplot(data=df, x='unit_posx', y='unit_posy',
                         s=df.f_rate_diff.values.astype(float)*m_scale,
-                        hue='selectivity', marker=open_circle,
+                        hue='period_selectivity', marker=open_circle,
                         palette={'contra-selective': 'b', 'ipsi-selective': 'r'},
                         ax=ax, **cosmetic)
-        contra_p = (df.selectivity == 'contra-selective').sum() / len(df) * 100
+        contra_p = (df.period_selectivity == 'contra-selective').sum() / len(df) * 100
         # cosmetic
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)

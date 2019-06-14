@@ -182,11 +182,10 @@ class Period(dj.Lookup):
     """
     contents = [('sample', -2.4, -1.2),
                 ('delay', -1.2, 0.0),
-                ('response', 0.0, 1.2),
-                ('global', -2.4, 1.2)]
+                ('response', 0.0, 1.2)]
+
 
 # ---- behavioral trials ----
-
 
 @schema
 class TrialInstruction(dj.Lookup):

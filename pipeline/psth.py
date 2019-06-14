@@ -414,6 +414,15 @@ class UnitPsth(dj.Computed):
 
 
 @schema
+class Selectivity(dj.Lookup):
+    definition = """
+    selectivity: varchar(24)
+    """
+
+    contents = zip(['contra-selective', 'ipsi-selective', 'non-selective'])
+
+
+@schema
 class UnitSelectivity(dj.Computed):
     """
     Compute unit selectivity for a unit in a particular time period.
@@ -423,13 +432,20 @@ class UnitSelectivity(dj.Computed):
     """
     definition = """
     -> ephys.Unit
-    -> experiment.Period
     ---
-    selectivity: enum('contra-selective', 'ipsi-selective', 'non-selective')
-    contra_firing_rate: float  # mean firing rate of all contra-trials
-    ipsi_firing_rate: float  # mean firing rate of all ipsi-trials
-    p_value: float  # p-value of the t-test of spike-rate of all trials
+    -> Selectivity.proj(unit_selectivity='selectivity')
     """
+
+    class PeriodSelectivity(dj.Part):
+        definition = """
+        -> master
+        -> experiment.Period
+        ---
+        -> Selectivity.proj(period_selectivity='selectivity')
+        contra_firing_rate: float  # mean firing rate of all contra-trials
+        ipsi_firing_rate: float  # mean firing rate of all ipsi-trials
+        p_value: float  # p-value of the t-test of spike-rate of all trials
+        """
 
     key_source = ephys.Unit & 'unit_quality = "good"'
 
@@ -440,10 +456,10 @@ class UnitSelectivity(dj.Computed):
         correct_left = {**trial_restrictor, 'trial_instruction': 'left'}
 
         # get trial spike times
-        r_tr_id, right_trialspikes = (ephys.TrialSpikes * experiment.BehaviorTrial
-                             - experiment.PhotostimTrial & key & correct_right).fetch('trial', 'spike_times', order_by='trial')
-        l_tr_id, left_trialspikes = (ephys.TrialSpikes * experiment.BehaviorTrial
-                            - experiment.PhotostimTrial & key & correct_left).fetch('trial', 'spike_times', order_by='trial')
+        right_trialspikes = (ephys.TrialSpikes * experiment.BehaviorTrial
+                             - experiment.PhotostimTrial & key & correct_right).fetch('spike_times', order_by='trial')
+        left_trialspikes = (ephys.TrialSpikes * experiment.BehaviorTrial
+                            - experiment.PhotostimTrial & key & correct_left).fetch('spike_times', order_by='trial')
 
         unit_hemi = (ephys.ProbeInsertion.InsertionLocation * experiment.BrainLocation & key).fetch1('hemisphere')
 
@@ -453,6 +469,7 @@ class UnitSelectivity(dj.Computed):
         contra_trialspikes = right_trialspikes if unit_hemi == 'left' else left_trialspikes
         ipsi_trialspikes = left_trialspikes if unit_hemi == 'left' else right_trialspikes
 
+        period_selectivity = []
         for period in experiment.Period.fetch(as_dict=True):
             period_dur = period['period_end'] - period['period_start']
             contra_trial_spk_rate = [(np.logical_and(t >= period['period_start'],
@@ -473,10 +490,19 @@ class UnitSelectivity(dj.Computed):
             else:
                 pref = 'ipsi-selective' if ipsi_frate > contra_frate else 'contra-selective'
 
-            self.insert1(dict(key, **period, selectivity=pref,
-                              contra_firing_rate=contra_frate,
-                              ipsi_firing_rate=ipsi_frate,
-                              p_value=pval), ignore_extra_fields=True)
+            period_selectivity.append(dict(key, **period, period_selectivity=pref, p_value=pval,
+                                            contra_firing_rate=contra_frate, ipsi_firing_rate=ipsi_frate))
+
+        unit_selective = not (np.array([p['period_selectivity'] for p in period_selectivity]) == 'non-selective').all()
+        if not unit_selective:
+            unit_pref = 'non-selective'
+        else:
+            ave_ipsi_frate = np.array([p['ipsi_firing_rate'] for p in period_selectivity]).mean()
+            ave_contra_frate = np.array([p['contra_firing_rate'] for p in period_selectivity]).mean()
+            unit_pref = 'ipsi-selective' if ave_ipsi_frate > ave_contra_frate else 'contra-selective'
+
+        self.insert1(dict(**key, unit_selectivity=unit_pref))
+        self.PeriodSelectivity.insert(period_selectivity, ignore_extra_fields=True)
 
 
 @schema
