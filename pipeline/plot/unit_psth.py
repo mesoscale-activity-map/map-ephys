@@ -69,19 +69,23 @@ def unit_psth_ll(ipsi_hit, contra_hit, ipsi_err, contra_err):
 def unit_psth(unit_key):
 
     ipsi_hit_cond_key = (
-        psth.TrialCondition() & {'condition_desc': 'audio delay ipsi hit'}
+        psth.TrialCondition() & {'condition_desc':
+                                 'audio delay ipsi hit - nostim'}
     ).fetch1('KEY')
 
     contra_hit_cond_key = (
-        psth.TrialCondition() & {'condition_desc': 'audio delay contra hit'}
+        psth.TrialCondition() & {'condition_desc':
+                                 'audio delay contra hit - nostim'}
     ).fetch1('KEY')
 
     ipsi_err_cond_key = (
-        psth.TrialCondition() & {'condition_desc': 'audio delay ipsi error'}
+        psth.TrialCondition() & {'condition_desc':
+                                 'audio delay ipsi error - nostim'}
     ).fetch1('KEY')
 
     contra_err_cond_key = (
-        psth.TrialCondition() & {'condition_desc': 'audio delay contra error'}
+        psth.TrialCondition() & {'condition_desc':
+                                 'audio delay contra error - nostim'}
     ).fetch1('KEY')
 
     ipsi_hit_unit_psth = psth.UnitPsth.get(ipsi_hit_cond_key, unit_key)

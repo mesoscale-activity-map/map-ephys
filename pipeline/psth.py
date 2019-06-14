@@ -23,7 +23,9 @@ log = logging.getLogger(__name__)
 # NOW:
 # - [X] rename UnitCondition to TrialCondition
 # - [X] store actual Selectivity value
+# - [ ] expand Condition logic to be 1:M += include/exclude flags + fetcher
 # - [ ] GroupCondition -> now notion of UnitCondition
+#   ... probably should also make condition description strings constant vars
 #   - table notneeded
 #   - provide canned queries
 #   - also null filtering funs
@@ -37,6 +39,8 @@ class TrialCondition(dj.Manual):
     ---
     condition_desc:                             varchar(4096)
     """
+
+
 
     class TaskProtocol(dj.Part):
         definition = """
@@ -179,7 +183,7 @@ class TrialCondition(dj.Manual):
 
         cond_key = {
             'condition_id': 0,
-            'condition_desc': 'audio delay contra hit'
+            'condition_desc': 'audio delay contra hit - nostim'
         }
         self.insert1(cond_key, skip_duplicates=True)
 
@@ -210,7 +214,7 @@ class TrialCondition(dj.Manual):
 
         cond_key = {
             'condition_id': 1,
-            'condition_desc': 'audio delay ipsi hit'
+            'condition_desc': 'audio delay ipsi hit - nostim'
         }
         self.insert1(cond_key, skip_duplicates=True)
 
@@ -241,7 +245,7 @@ class TrialCondition(dj.Manual):
 
         cond_key = {
             'condition_id': 2,
-            'condition_desc': 'audio delay contra error'
+            'condition_desc': 'audio delay contra error - nostim'
         }
         self.insert1(cond_key, skip_duplicates=True)
 
@@ -272,7 +276,131 @@ class TrialCondition(dj.Manual):
 
         cond_key = {
             'condition_id': 3,
-            'condition_desc': 'audio delay ipsi error'
+            'condition_desc': 'audio delay ipsi error - nostim'
+        }
+        self.insert1(cond_key, skip_duplicates=True)
+
+        TrialCondition.TaskProtocol.insert1(
+            dict(cond_key, task='audio delay', task_protocol=1),
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        TrialCondition.TrialInstruction.insert1(
+            dict(cond_key, trial_instruction='left'),
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        TrialCondition.EarlyLick.insert1(
+            dict(cond_key, early_lick='no early'),
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        TrialCondition.Outcome.insert1(
+            dict(cond_key, outcome='miss'),
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        TrialCondition.PhotostimLocation.insert(
+            [dict(cond_key, **ploc) for ploc
+             in experiment.Photostim & {'brainloc_id': 0}],
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        #
+        # Condition 4: Audio Delay Task - Contra Hit
+        #
+
+        cond_key = {
+            'condition_id': 4,
+            'condition_desc': 'audio delay contra hit - onlystim'
+        }
+        self.insert1(cond_key, skip_duplicates=True)
+
+        TrialCondition.TaskProtocol.insert1(
+            dict(cond_key, task='audio delay', task_protocol=1),
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        TrialCondition.TrialInstruction.insert1(
+            dict(cond_key, trial_instruction='right'),
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        TrialCondition.EarlyLick.insert1(
+            dict(cond_key, early_lick='no early'),
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        TrialCondition.Outcome.insert1(
+            dict(cond_key, outcome='hit'),
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        TrialCondition.PhotostimLocation.insert(
+            [dict(cond_key, **ploc) for ploc
+             in experiment.Photostim & {'brainloc_id': 0}],
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        #
+        # Condition 5: Audio Delay Task - Ipsi Hit
+        #
+
+        cond_key = {
+            'condition_id': 5,
+            'condition_desc': 'audio delay ipsi hit - onlystim'
+        }
+        self.insert1(cond_key, skip_duplicates=True)
+
+        TrialCondition.TaskProtocol.insert1(
+            dict(cond_key, task='audio delay', task_protocol=1),
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        TrialCondition.TrialInstruction.insert1(
+            dict(cond_key, trial_instruction='left'),
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        TrialCondition.EarlyLick.insert1(
+            dict(cond_key, early_lick='no early'),
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        TrialCondition.Outcome.insert1(
+            dict(cond_key, outcome='hit'),
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        TrialCondition.PhotostimLocation.insert(
+            [dict(cond_key, **ploc) for ploc
+             in experiment.Photostim & {'brainloc_id': 0}],
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        #
+        # Condition 6: Audio Delay Task - Contra Error
+        #
+
+        cond_key = {
+            'condition_id': 6,
+            'condition_desc': 'audio delay contra error - onlystim'
+        }
+        self.insert1(cond_key, skip_duplicates=True)
+
+        TrialCondition.TaskProtocol.insert1(
+            dict(cond_key, task='audio delay', task_protocol=1),
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        TrialCondition.TrialInstruction.insert1(
+            dict(cond_key, trial_instruction='right'),
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        TrialCondition.EarlyLick.insert1(
+            dict(cond_key, early_lick='no early'),
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        TrialCondition.Outcome.insert1(
+            dict(cond_key, outcome='miss'),
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        TrialCondition.PhotostimLocation.insert(
+            [dict(cond_key, **ploc) for ploc
+             in experiment.Photostim & {'brainloc_id': 0}],
+            skip_duplicates=True, ignore_extra_fields=True)
+
+        #
+        # Condition 7: Audio Delay Task - Ipsi Error
+        #
+
+        cond_key = {
+            'condition_id': 7,
+            'condition_desc': 'audio delay ipsi error - onlystim'
         }
         self.insert1(cond_key, skip_duplicates=True)
 
@@ -329,9 +457,16 @@ class UnitPsth(dj.Computed):
         photo_trials = TrialCondition.trials({
             'PhotostimLocation': cond['PhotostimLocation']})
 
-        unstim_trials = [t for t in all_trials if t not in photo_trials]
+        # HACK special case stim condition logic -
+        #   ... should be fixed by expanding Condition support logic.
+        if 'onlystim' in cond['Condition']['condition_desc']:
+            tgt_trials = [t for t in all_trials if t in photo_trials]
+        elif 'nostim' in cond['Condition']['condition_desc']:
+            tgt_trials = [t for t in all_trials if t not in photo_trials]
+        else:
+            tgt_trials = all_trials
 
-        q = (ephys.TrialSpikes() & unit & unstim_trials)
+        q = (ephys.TrialSpikes() & unit & tgt_trials)
         spikes = q.fetch('spike_times')
 
         if len(spikes) == 0:
@@ -345,7 +480,7 @@ class UnitPsth(dj.Computed):
         # XXX: xmin, xmax+bins (149 here vs 150 in matlab)..
         #   See also [:1] slice in plots..
         psth = list(np.histogram(spikes, bins=np.arange(xmin, xmax, bins)))
-        psth[0] = psth[0] / len(unstim_trials) / bins
+        psth[0] = psth[0] / len(tgt_trials) / bins
 
         self.insert1({**key, 'unit_psth': np.array(psth)})
 
