@@ -357,14 +357,7 @@ class UnitPsth(dj.Computed):
                 log.debug('.. unit {}/{} ({:.2f}%)'
                           .format(i, n_units, (i/n_units)*100))
 
-            q = (ephys.TrialSpikes() & unit & unstim_trials)
-            spikes = q.fetch('spike_times')
-            spikes = np.concatenate(spikes)
-
-            xmin, xmax, bins = self.psth_params.values()
-            psth = list(np.histogram(spikes, bins=np.arange(xmin, xmax, bins)))
-            psth[0] = psth[0] / len(unstim_trials) / bins
-
+            psth = compute_unit_psth(unit, unstim_trials)
             self.Unit.insert1({**key, **unit, 'unit_psth': np.array(psth)},
                               allow_direct_insert=True)
 
@@ -505,156 +498,15 @@ class UnitSelectivity(dj.Computed):
         self.PeriodSelectivity.insert(period_selectivity, ignore_extra_fields=True)
 
 
-@schema
-class SelectivityCriteria(dj.Lookup):
-    '''
-    Selectivity Criteria -
-    Indicate significance of unit firing rate for trial type left vs right.
+# ---------- HELPER FUNCTIONS --------------
 
-    *_selectivity variables indicate if the unit displays selectivity
-    *_preference variables indicate the unit ipsi/contra preference
-    '''
+def compute_unit_psth(unit_key, trial_keys):
+    q = (ephys.TrialSpikes() & unit_key & trial_keys)
+    spikes = q.fetch('spike_times')
+    spikes = np.concatenate(spikes)
 
-    definition = """
-    sample_selectivity:                         boolean
-    delay_selectivity:                          boolean
-    go_selectivity:                             boolean
-    global_selectivity:                         boolean
-    sample_preference:                          boolean
-    delay_preference:                           boolean
-    go_preference:                              boolean
-    global_preference:                          boolean
-    """
+    xmin, xmax, bins = UnitPsth.psth_params.values()
+    psth = list(np.histogram(spikes, bins = np.arange(xmin, xmax, bins)))
+    psth[0] = psth[0] / len(trial_keys) / bins
 
-    @property
-    def contents(self):
-        fourset = [(0, 0, 0, 0,), (0, 0, 0, 1,), (0, 0, 1, 0,), (0, 0, 1, 1,),
-                   (0, 1, 0, 0,), (0, 1, 0, 1,), (0, 1, 1, 0,), (0, 1, 1, 1,),
-                   (1, 0, 0, 0,), (1, 0, 0, 1,), (1, 0, 1, 0,), (1, 0, 1, 1,),
-                   (1, 1, 0, 0,), (1, 1, 0, 1,), (1, 1, 1, 0,), (1, 1, 1, 1,)]
-        return (i + j for i in fourset for j in fourset)
-
-    ranges = {   # time ranges in SelectivityCriteria order
-        'sample_selectivity': (-2.4, -1.2),
-        'delay_selectivity': (-1.2, 0),
-        'go_selectivity': (0, 1.2),
-        'global_selectivity': (-2.4, 1.2),
-    }
-
-
-@schema
-class Selectivity(dj.Computed):
-    '''
-    Unit Selectivity
-
-    Compute unit selectivity based on fixed time regions.
-
-    Calculation:
-    2 tail t significance of unit firing rate for trial type l vs r
-    frequency = nspikes(period)/len(period)
-    '''
-
-    definition = """
-    # Unit Response Selectivity (WIP)
-    -> ephys.Unit
-    ---
-    sample_selectivity=Null:    float         # sample period selectivity
-    delay_selectivity=Null:     float         # delay period selectivity
-    go_selectivity=Null:        float         # go period selectivity
-    global_selectivity=Null:    float         # global selectivity
-    min_selectivity=Null:       float         # (sample|delay|go) selectivity
-    sample_preference=Null:     boolean       # sample period pref. (i|c)
-    delay_preference=Null:      boolean       # delay period pref. (i|c)
-    go_preference=Null:         boolean       # go period pref. (i|c)
-    global_preference=Null:     boolean       # global period pref. (i|c)
-    any_preference=Null:        boolean       # any period pref. (i|c)
-    """
-
-    alpha = 0.05  # default alpha value
-
-    @property
-    def selective(self):
-        return 'min_selectivity<{}'.format(self.alpha)
-
-    ipsi_preferring = 'any_preference=1'
-    contra_preferring = 'any_preference=0'
-
-    ranges = {   # time ranges in SelectivityCriteria order
-        'sample': (-2.4, -1.2),
-        'delay':  (-1.2, -0.0),
-        'go':     (+0.0, +1.2),
-        'global': (-2.4, +1.2),
-    }
-
-    def make(self, key):
-
-        if key['unit'] % 50 == 0:
-            log.info('Selectivity.make(): key % 50: {}'.format(key))
-        else:
-            log.debug('Selectivity.make(): key: {}'.format(key))
-
-        ranges = self.ranges
-        spikes_q = ((ephys.TrialSpikes & key)
-                    & (experiment.BehaviorTrial()
-                       & {'early_lick': 'no early'}))
-
-        lr = ['left', 'right']
-        behav = (experiment.BehaviorTrial & spikes_q.proj()).fetch(
-            order_by='trial asc')
-        behav_lr = {k: np.where(behav['trial_instruction'] == k) for k in lr}
-
-        try:
-            egpos = (ephys.ProbeInsertion.InsertionLocation
-                     * experiment.BrainLocation & key).fetch1()
-        except dj.DataJointError as e:
-            if 'exactly one tuple' in repr(e):
-                log.error('... Insertion Location missing. skipping')
-                return
-
-        # construct a square-shaped spike array, create 'valid value' index
-        spikes = spikes_q.fetch(order_by='trial asc')
-        ydim = max(len(i['spike_times']) for i in spikes)
-        square = np.array(
-            np.array([np.concatenate([st, pad])[:ydim]
-                      for st, pad in zip(spikes['spike_times'],
-                                         repeat([math.nan]*ydim))]))
-
-        criteria = {}
-
-        periods = list(ranges.keys())
-
-        for period in periods:
-            bounds = ranges[period]
-            name = period + '_selectivity'
-            pref = period + '_preference'
-
-            lower_mask = np.ma.masked_greater_equal(square, bounds[0])
-            upper_mask = np.ma.masked_less_equal(square, bounds[1])
-            inrng_mask = np.logical_and(lower_mask.mask, upper_mask.mask)
-
-            rsum = np.sum(inrng_mask, axis=1)
-            dur = bounds[1] - bounds[0]
-            freq = rsum / dur
-
-            if egpos['hemisphere'] == 'left':
-                behav_i = behav_lr['left']
-                behav_c = behav_lr['right']
-            else:
-                behav_i = behav_lr['right']
-                behav_c = behav_lr['left']
-
-            freq_i = freq[behav_i]
-            freq_c = freq[behav_c]
-            t_stat, pval = sc_stats.ttest_ind(freq_i, freq_c, equal_var=False)
-
-            # criteria[name] = 1 if pval <= alpha else 0
-            criteria[name] = pval
-            criteria[pref] = 1 if np.average(freq_i) > np.average(freq_c) else 0
-
-        criteria['min_selectivity'] = min([v for k, v in criteria.items()
-                                           if 'selectivity' in k])
-
-        criteria['any_preference'] = any([v for k, v in criteria.items()
-                                          if 'preference' in k])
-
-        self.insert1(dict(key, **criteria))
+    return np.array(psth)

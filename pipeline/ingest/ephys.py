@@ -205,6 +205,7 @@ class EphysIngest(dj.Imported):
             bitCodeB_ext = bitCodeB[bitCodeB_0:][:len(bitCodeE)]
             spike_trials_fix = None
             if not np.all(np.equal(bitCodeE, bitCodeB_ext)):
+                log.info('ephys/bitcode trial mismatch - attempting fix')
                 if 'trialNum' in mat:
                     spike_trials_fix = mat['trialNum']
                 else:

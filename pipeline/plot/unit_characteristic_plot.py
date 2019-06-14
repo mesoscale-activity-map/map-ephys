@@ -40,7 +40,7 @@ def plot_clustering_quality(probe_insert_key):
         ax.spines['top'].set_visible(False)
 
 
-def plot_unit_characteristic(probe_insert_key):
+def plot_unit_characteristic(probe_insert_key, axs=None):
     amp, snr, spk_times, x, y, insertion_depth = (ephys.Unit * ephys.ProbeInsertion.InsertionLocation
                                                   & probe_insert_key & 'unit_quality = "good"').fetch(
         'unit_amp', 'unit_snr', 'spike_times', 'unit_posx', 'unit_posy', 'dv_location')
@@ -51,8 +51,11 @@ def plot_unit_characteristic(probe_insert_key):
     metrics = pd.DataFrame(list(zip(*(amp/amp.max(), snr/snr.max(), spk_rate/spk_rate.max(), x, y + insertion_depth))))
     metrics.columns = ['amp', 'snr', 'rate', 'x', 'y']
 
-    fig, axs = plt.subplots(1, 3, figsize=(10, 8))
-    fig.subplots_adjust(wspace=0.6)
+    if axs is None:
+        fig, axs = plt.subplots(1, 3, figsize=(10, 8))
+        fig.subplots_adjust(wspace=0.6)
+
+    assert axs.size == 3
 
     cosmetic = {'legend': None,
                 'linewidth': 1.75,
@@ -72,7 +75,7 @@ def plot_unit_characteristic(probe_insert_key):
         ax.set_xlim((-10, 60))
 
 
-def plot_unit_selectivity(probe_insert_key):
+def plot_unit_selectivity(probe_insert_key, axs=None):
     attr_names = ['unit', 'period', 'period_selectivity', 'contra_firing_rate',
                        'ipsi_firing_rate', 'unit_posx', 'unit_posy', 'dv_location']
     selective_units = (psth.UnitSelectivity.PeriodSelectivity * ephys.Unit * ephys.ProbeInsertion.InsertionLocation
@@ -104,8 +107,12 @@ def plot_unit_selectivity(probe_insert_key):
     open_circle = mpl.path.Path(vert)
 
     # --- plot
-    fig, axs = plt.subplots(1, 3, figsize=(10, 8))
-    fig.subplots_adjust(wspace=0.6)
+    if axs is None:
+        fig, axs = plt.subplots(1, 3, figsize=(10, 8))
+        fig.subplots_adjust(wspace=0.6)
+
+    assert axs.size == 3
+
     for (title, df), ax in zip(((p, selective_units[selective_units.period == p])
                                 for p in ('sample', 'delay', 'response')), axs):
         sns.scatterplot(data=df, x='unit_posx', y='unit_posy',
@@ -120,6 +127,20 @@ def plot_unit_selectivity(probe_insert_key):
         ax.set_title(f'{title}\n% contra: {contra_p:.2f}\n% ipsi: {100-contra_p:.2f}')
         ax.set_xlim((-10, 60))
         ax.set_ylim((0, ymax))
+
+
+def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
+    trial_restrictor = {'task': 'audio delay', 'task_protocol': 1,
+                        'outcome': 'hit', 'early_lick': 'no early'}
+    both_alm_stim_res = experiment.Photostim * experiment.BrainLocation & 'brain_location = "both_alm"'
+
+    no_stim_trials = experiment.BehaviorTrial - experiment.PhotostimTrial & trial_restrictor
+    bi_stim_trials = experiment.BehaviorTrial * experiment.PhotostimTrial & trial_restrictor & both_alm_stim_res
+
+
+
+    np_stim_trials = (ephys.TrialSpikes * experiment.BehaviorTrial
+                         - experiment.PhotostimTrial & probe_insert_key & correct_right).fetch('spike_times', order_by = 'trial')
 
 
 def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
@@ -169,8 +190,8 @@ def _plot_stacked_psth_diff(psth_a, psth_b, vlines=[], ax=None):
     b_data = np.array([r[0] for r in psth_b['unit_psth']])
 
     # scale per-unit psth's - TODO: moving average scaling
-    a_data = np.array([movmean(i/i.max()) for i in a_data])
-    b_data = np.array([movmean(i/i.max()) for i in b_data])
+    a_data = np.array([_movmean(i/i.max()) for i in a_data])
+    b_data = np.array([_movmean(i/i.max()) for i in b_data])
 
     result = a_data - b_data
 
@@ -195,7 +216,7 @@ def _compute_spike_rate(spike_times):
     return len(spike_times) / (spike_times[-1] - spike_times[0])
 
 
-def movmean(data, nsamp=5):
+def _movmean(data, nsamp=5):
     ret = np.cumsum(data, dtype=float)
     ret[nsamp:] = ret[nsamp:] - ret[:-nsamp]
     return ret[nsamp - 1:] / nsamp
