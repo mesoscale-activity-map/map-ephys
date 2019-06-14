@@ -9,7 +9,7 @@ import pandas as pd
 
 from scipy import signal
 
-from pipeline import experiment, tracking, ephys
+from pipeline import experiment, tracking, ephys, psth
 
 
 def plot_clustering_quality(session_key):
@@ -47,17 +47,18 @@ def plot_unit_characteristic(session_key):
     spk_rate = np.array(list(compute_spike_rate(spk) for spk in spk_times))
     insertion_depth = np.where(np.isnan(insertion_depth), 0, insertion_depth)
 
-    metrics = pd.DataFrame(list(zip(*(amp/amp.max(), snr/snr.max(), spk_rate/spk_rate.max(), x, -y + insertion_depth))))
+    metrics = pd.DataFrame(list(zip(*(amp/amp.max(), snr/snr.max(), spk_rate/spk_rate.max(), x, y + insertion_depth))))
     metrics.columns = ['amp', 'snr', 'rate', 'x', 'y']
 
     fig, axs = plt.subplots(1, 3, figsize=(10, 8))
     fig.subplots_adjust(wspace=0.6)
 
     cosmetic = {'legend': None,
-                'linewidth': 1.25,
-                'alpha': 0.75,
+                'linewidth': 1.75,
+                'alpha': 0.9,
                 'facecolor': 'none', 'edgecolor': 'k'}
-    m_scale = 250
+    m_scale = 1200
+
     sns.scatterplot(data=metrics, x='x', y='y', s=metrics.amp*m_scale, ax=axs[0], **cosmetic)
     sns.scatterplot(data=metrics, x='x', y='y', s=metrics.snr*m_scale, ax=axs[1], **cosmetic)
     sns.scatterplot(data=metrics, x='x', y='y', s=metrics.rate*m_scale, ax=axs[2], **cosmetic)
@@ -67,6 +68,12 @@ def plot_unit_characteristic(session_key):
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
         ax.set_title(title)
+        ax.set_xlim((-10, 60))
+
+
+def plot_unit_selectivity(session_key):
+    contra_selective_units = (psth.UnitSelectivity * ephys.Unit & session_key
+                              & 'unit_quality = "good"' - 'selectivity = "contra-selective"')
 
 
 def compute_isi_violation(spike_times, isi_thresh=2):
@@ -75,4 +82,4 @@ def compute_isi_violation(spike_times, isi_thresh=2):
 
 
 def compute_spike_rate(spike_times):
-    return len(spike_times) / (spike_times[-1] - spike_times[0])
+    return len(spike_times) #/ (spike_times[-1] - spike_times[0])

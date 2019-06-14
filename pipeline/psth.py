@@ -431,15 +431,19 @@ class UnitSelectivity(dj.Computed):
     p_value: float  # p-value of the t-test of spike-rate of all trials
     """
 
-    key_source = ephys.Unit
+    key_source = ephys.Unit & 'unit_quality = "good"'
 
     def make(self, key):
-        corrrect_right = TrialCondition.expand(0)
-        corrrect_left = TrialCondition.expand(1)
+        trial_restrictor = {'task': 'audio delay', 'task_protocol': 1,
+                            'outcome': 'hit', 'early_lick': 'no early'}
+        correct_right = {**trial_restrictor, 'trial_instruction': 'right'}
+        correct_left = {**trial_restrictor, 'trial_instruction': 'left'}
 
         # get trial spike times
-        right_trialspikes = (ephys.TrialSpikes & key & corrrect_right).fetch('spike_times')
-        left_trialspikes = (ephys.TrialSpikes & key & corrrect_left).fetch('spike_times')
+        right_trialspikes = (ephys.TrialSpikes * experiment.BehaviorTrial
+                             - experiment.PhotostimTrial & key & correct_right).fetch('spike_times', order_by='trial')
+        left_trialspikes = (ephys.TrialSpikes * experiment.BehaviorTrial
+                            - experiment.PhotostimTrial & key & correct_left).fetch('spike_times', order_by='trial')
 
         unit_hemi = (ephys.ProbeInsertion.InsertionLocation * experiment.BrainLocation & key).fetch1('hemisphere')
 
@@ -450,17 +454,19 @@ class UnitSelectivity(dj.Computed):
         ipsi_trialspikes = left_trialspikes if unit_hemi == 'left' else right_trialspikes
 
         for period in experiment.Period.fetch(as_dict=True):
-            contra_trial_spk_count = [(np.logical_and(t >= period['period_start'], t < period['period_end'])).astype(int).sum()
+            period_dur = period['period_end'] - period['period_start']
+            contra_trial_spk_rate = [(np.logical_and(t >= period['period_start'],
+                                                      t < period['period_end'])).astype(int).sum() / period_dur
                              for t in contra_trialspikes]
-            ipsi_trial_spk_count = [(np.logical_and(t >= period['period_start'], t < period['period_end'])).astype(int).sum()
+            ipsi_trial_spk_rate = [(np.logical_and(t >= period['period_start'],
+                                                    t < period['period_end'])).astype(int).sum() / period_dur
                            for t in ipsi_trialspikes]
 
-            period_dur = period['period_end'] - period['period_start']
-            contra_frate = sum(contra_trial_spk_count) / (period_dur * len(contra_trialspikes))
-            ipsi_frate = sum(ipsi_trial_spk_count) / (period_dur * len(ipsi_trialspikes))
+            contra_frate = np.mean(contra_trial_spk_rate)
+            ipsi_frate = np.mean(ipsi_trial_spk_rate)
 
             # do t-test on the spike-count per trial for all contra trials vs. ipsi trials
-            t_stat, pval = sc_stats.ttest_ind(contra_trial_spk_count, ipsi_trial_spk_count, equal_var=False)
+            t_stat, pval = sc_stats.ttest_ind(contra_trial_spk_rate, ipsi_trial_spk_rate, equal_var=False)
 
             if pval > 0.05:
                 pref = 'non-selective'
