@@ -593,7 +593,9 @@ class Selectivity(dj.Computed):
         # retrieving the spikes of interest,
         spikes_q = ((ephys.TrialSpikes & key)
                     & (experiment.BehaviorTrial()
-                       & {'early_lick': 'no early'}))
+                       & {'task': 'audio delay'}
+                       & {'early_lick': 'no early'}
+                       & {'outcome': 'hit'}) - experiment.PhotostimEvent)
 
         # and their corresponding behavior,
         lr = ['left', 'right']
