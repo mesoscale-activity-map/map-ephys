@@ -347,66 +347,12 @@ class UnitPsth(dj.Computed):
         spikes = np.concatenate(spikes)
 
         xmin, xmax, bins = self.psth_params.values()
+        # XXX: xmin, xmax+bins (149 here vs 150 in matlab)..
+        #   See also [:1] slice in plots..
         psth = list(np.histogram(spikes, bins=np.arange(xmin, xmax, bins)))
         psth[0] = psth[0] / len(unstim_trials) / bins
 
         self.insert1({**key, 'unit_psth': np.array(psth)})
-
-    def make_old(self, key):
-        log.info('UnitPsth.make(): key: {}'.format(key))
-
-        # can e.g. if key['condition_id'] in [1,2,3]: self.make_thiskind(key)
-        # for now, we assume one method of processing
-
-        cond = TrialCondition.expand(key['condition_id'])
-
-        # XXX: if / else for different conditions as needed
-        # e.g if key['condition_id'] > 3: ..., elif key['condition_id'] == 5
-
-        all_trials = TrialCondition.trials({
-            'TaskProtocol': cond['TaskProtocol'],
-            'TrialInstruction': cond['TrialInstruction'],
-            'EarlyLick': cond['EarlyLick'],
-            'Outcome': cond['Outcome']})
-
-        photo_trials = TrialCondition.trials({
-            'PhotostimLocation': cond['PhotostimLocation']})
-
-        unstim_trials = [t for t in all_trials if t not in photo_trials]
-
-        # build unique session list from trial list
-        sessions = {(t['subject_id'], t['session']) for t in all_trials}
-        sessions = [{'subject_id': s[0], 'session': s[1]}
-                    for s in sessions]
-
-        # find good units
-        units = ephys.Unit & [dict(s, unit_quality='good') for s in sessions]
-
-        # fetch spikes and create per-unit PSTH record
-        self.insert1(key)
-
-        i = 0
-        n_units = len(units)
-
-        for unit in ({k: u[k] for k in ephys.Unit.primary_key} for u in units):
-            i += 1
-            if i % 50 == 0:
-                log.info('.. unit {}/{} ({:.2f}%)'
-                         .format(i, n_units, (i/n_units)*100))
-            else:
-                log.debug('.. unit {}/{} ({:.2f}%)'
-                          .format(i, n_units, (i/n_units)*100))
-
-            q = (ephys.TrialSpikes() & unit & unstim_trials)
-            spikes = q.fetch('spike_times')
-            spikes = np.concatenate(spikes)
-
-            xmin, xmax, bins = self.psth_params.values()
-            psth = list(np.histogram(spikes, bins=np.arange(xmin, xmax, bins)))
-            psth[0] = psth[0] / len(unstim_trials) / bins
-
-            self.Unit.insert1({**key, **unit, 'unit_psth': np.array(psth)},
-                              allow_direct_insert=True)
 
     @classmethod
     def get(cls, condition_key, unit_key,
@@ -522,7 +468,7 @@ class Selectivity(dj.Computed):
                 log.error('... Insertion Location missing. skipping')
                 return
 
-        # construct a square-shaped spike array, create 'valid value' index
+        # construct a square, nan-padded trial x spike array
         spikes = spikes_q.fetch(order_by='trial asc')
         ydim = max(len(i['spike_times']) for i in spikes)
         square = np.array(
