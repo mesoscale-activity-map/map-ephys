@@ -418,7 +418,7 @@ class Selectivity(dj.Computed):
     sample_preference=Null:     boolean       # sample period pref. (i|c)
     delay_preference=Null:      boolean       # delay period pref. (i|c)
     go_preference=Null:         boolean       # go period pref. (i|c)
-    global_preference=Null:     boolean       # global period pref. (i|c)
+    global_preference=Null:     boolean       # global non-period pref. (i|c)
     any_preference=Null:        boolean       # any period pref. (i|c)
     """
 
@@ -428,8 +428,8 @@ class Selectivity(dj.Computed):
     def selective(self):
         return 'min_selectivity<{}'.format(self.alpha)
 
-    ipsi_preferring = 'any_preference=1'
-    contra_preferring = 'any_preference=0'
+    ipsi_preferring = 'global_preference=1'
+    contra_preferring = 'global_preference=0'
 
     ranges = {   # time ranges in SelectivityCriteria order
         'sample': (-2.4, -1.2),
@@ -445,16 +445,8 @@ class Selectivity(dj.Computed):
         else:
             log.debug('Selectivity.make(): key: {}'.format(key))
 
-        ranges = self.ranges
-        spikes_q = ((ephys.TrialSpikes & key)
-                    & (experiment.BehaviorTrial()
-                       & {'early_lick': 'no early'}))
-
-        lr = ['left', 'right']
-        behav = (experiment.BehaviorTrial & spikes_q.proj()).fetch(
-            order_by='trial asc')
-        behav_lr = {k: np.where(behav['trial_instruction'] == k) for k in lr}
-
+        # Verify insertion location is present,
+        egpos = None
         try:
             egpos = (ephys.ProbeInsertion.InsertionLocation
                      * experiment.BrainLocation & key).fetch1()
@@ -463,7 +455,25 @@ class Selectivity(dj.Computed):
                 log.error('... Insertion Location missing. skipping')
                 return
 
-        # construct a square, nan-padded trial x spike array
+        # retrieving the spikes of interest,
+        spikes_q = ((ephys.TrialSpikes & key)
+                    & (experiment.BehaviorTrial()
+                       & {'early_lick': 'no early'}))
+
+        # and their corresponding behavior,
+        lr = ['left', 'right']
+        behav = (experiment.BehaviorTrial & spikes_q.proj()).fetch(
+            order_by='trial asc')
+        behav_lr = {k: np.where(behav['trial_instruction'] == k) for k in lr}
+
+        if egpos['hemisphere'] == 'left':
+            behav_i = behav_lr['left']
+            behav_c = behav_lr['right']
+        else:
+            behav_i = behav_lr['right']
+            behav_c = behav_lr['left']
+
+        # constructing a square, nan-padded trial x spike array
         spikes = spikes_q.fetch(order_by='trial asc')
         ydim = max(len(i['spike_times']) for i in spikes)
         square = np.array(
@@ -471,8 +481,9 @@ class Selectivity(dj.Computed):
                       for st, pad in zip(spikes['spike_times'],
                                          repeat([math.nan]*ydim))]))
 
-        criteria = {}
+        criteria = {}  # with which to calculate the selctivity criteria.
 
+        ranges = self.ranges
         periods = list(ranges.keys())
 
         for period in periods:
@@ -488,25 +499,31 @@ class Selectivity(dj.Computed):
             dur = bounds[1] - bounds[0]
             freq = rsum / dur
 
-            if egpos['hemisphere'] == 'left':
-                behav_i = behav_lr['left']
-                behav_c = behav_lr['right']
-            else:
-                behav_i = behav_lr['right']
-                behav_c = behav_lr['left']
-
             freq_i = freq[behav_i]
             freq_c = freq[behav_c]
             t_stat, pval = sc_stats.ttest_ind(freq_i, freq_c, equal_var=False)
 
             # criteria[name] = 1 if pval <= alpha else 0
+
             criteria[name] = pval
-            criteria[pref] = 1 if np.average(freq_i) > np.average(freq_c) else 0
 
-        criteria['min_selectivity'] = min([v for k, v in criteria.items()
-                                           if 'selectivity' in k])
+            if period != 'global':
+                criteria[pref] = (1 if np.average(freq_i)
+                                  > np.average(freq_c) else 0)
+            else:
+                min_sel = min([v for k, v in criteria.items()
+                               if 'selectivity' in k])
 
-        criteria['any_preference'] = any([v for k, v in criteria.items()
-                                          if 'preference' in k])
+                any_pref = any([v for k, v in criteria.items()
+                                if 'preference' in k])
+
+                criteria['min_selectivity'] = min_sel
+                criteria['any_preference'] = any_pref
+
+                # XXX: hacky.. best would be to have another value
+                gbl_pref = (1 if ((np.average(freq_i) > np.average(freq_c))
+                                  and (min_sel <= self.alpha)) else 0)
+
+                criteria[pref] = gbl_pref
 
         self.insert1(dict(key, **criteria))
