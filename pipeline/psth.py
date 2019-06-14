@@ -503,8 +503,6 @@ class Selectivity(dj.Computed):
             freq_c = freq[behav_c]
             t_stat, pval = sc_stats.ttest_ind(freq_i, freq_c, equal_var=False)
 
-            # criteria[name] = 1 if pval <= alpha else 0
-
             criteria[name] = pval
 
             if period != 'global':
