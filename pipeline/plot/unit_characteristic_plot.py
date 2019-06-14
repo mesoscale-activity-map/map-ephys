@@ -72,8 +72,47 @@ def plot_unit_characteristic(session_key):
 
 
 def plot_unit_selectivity(session_key):
-    contra_selective_units = (psth.UnitSelectivity * ephys.Unit & session_key
-                              & 'unit_quality = "good"' - 'selectivity = "contra-selective"')
+    attr_names = ['unit', 'period', 'selectivity', 'contra_firing_rate',
+                       'ipsi_firing_rate', 'unit_posx', 'unit_posy', 'dv_location']
+    selective_units = (psth.UnitSelectivity * ephys.Unit * ephys.ProbeInsertion.InsertionLocation * experiment.Period
+                       & session_key & 'selectivity != "non-selective"').fetch(*attr_names)
+    selective_units = pd.DataFrame(selective_units).T
+    selective_units.columns = attr_names
+    selective_units.selectivity.astype('category')
+
+    # account for insertion depth (manipulator depth)
+    selective_units.unit_posy = (selective_units.unit_posy
+                                 + np.where(np.isnan(selective_units.dv_location.values.astype(float)),
+                                            0, selective_units.dv_location.values.astype(float)))
+
+    # get ipsi vs. contra firing rate difference
+    f_rate_diff = np.abs(selective_units.ipsi_firing_rate - selective_units.contra_firing_rate)
+    selective_units['f_rate_diff'] = f_rate_diff / f_rate_diff.max()
+
+    fig, axs = plt.subplots(1, 3, figsize=(10, 8))
+    fig.subplots_adjust(wspace=0.6)
+
+    cosmetic = {'legend': None,
+                'linewidth': 1.75,
+                'alpha': 0.9,
+                'facecolor': 'none', 'edgecolor': 'k'}
+    m_scale = 1200
+
+    ymax = selective_units.unit_posy.max() + 100
+
+    for (title, df), ax in zip(((p, selective_units[selective_units.period == p])
+                                for p in ('sample', 'delay', 'response')), axs):
+        sns.scatterplot(data=df, x='unit_posx', y='unit_posy',
+                        size='f_rate_diff', hue='selectivity',
+                        ax=ax, **cosmetic)
+        contra_p = (df.selectivity == 'contra-selective').sum() / len(df) * 100
+        # cosmetic
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.set_title(f'{title}\n% contra: {contra_p:.2f}\n% ipsi: {100-contra_p:.2f}')
+        ax.set_xlim((-10, 60))
+        ax.set_ylim((0, ymax))
+
 
 
 def compute_isi_violation(spike_times, isi_thresh=2):

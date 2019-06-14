@@ -440,10 +440,10 @@ class UnitSelectivity(dj.Computed):
         correct_left = {**trial_restrictor, 'trial_instruction': 'left'}
 
         # get trial spike times
-        right_trialspikes = (ephys.TrialSpikes * experiment.BehaviorTrial
-                             - experiment.PhotostimTrial & key & correct_right).fetch('spike_times', order_by='trial')
-        left_trialspikes = (ephys.TrialSpikes * experiment.BehaviorTrial
-                            - experiment.PhotostimTrial & key & correct_left).fetch('spike_times', order_by='trial')
+        r_tr_id, right_trialspikes = (ephys.TrialSpikes * experiment.BehaviorTrial
+                             - experiment.PhotostimTrial & key & correct_right).fetch('trial', 'spike_times', order_by='trial')
+        l_tr_id, left_trialspikes = (ephys.TrialSpikes * experiment.BehaviorTrial
+                            - experiment.PhotostimTrial & key & correct_left).fetch('trial', 'spike_times', order_by='trial')
 
         unit_hemi = (ephys.ProbeInsertion.InsertionLocation * experiment.BrainLocation & key).fetch1('hemisphere')
 
