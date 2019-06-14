@@ -200,6 +200,7 @@ class EphysIngest(dj.Imported):
             bitCodeE = mat['bitCodeS'].flatten() # bitCodeS is the char variable
             goCue = mat['goCue'].flatten() # bitCodeS is the char variable
             viT_offset_file = mat['sTrig'].flatten() # start of each trial, subtract this number for each trial
+            viT_offset_file = viT_offset_file - 7500  # mimic MATLAB implementation
             trialNote = experiment.TrialNote()
             bitCodeB = (trialNote & {'subject_id': ekey['subject_id']} & {'session': ekey['session']} & {'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial') # fetch the bitcode from the behavior trialNote
 

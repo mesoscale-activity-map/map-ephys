@@ -2,6 +2,7 @@ import numpy as np
 import scipy as sp
 import datajoint as dj
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 import itertools
@@ -80,30 +81,37 @@ def plot_unit_selectivity(session_key):
     selective_units.columns = attr_names
     selective_units.selectivity.astype('category')
 
-    # account for insertion depth (manipulator depth)
+    # --- account for insertion depth (manipulator depth)
     selective_units.unit_posy = (selective_units.unit_posy
                                  + np.where(np.isnan(selective_units.dv_location.values.astype(float)),
                                             0, selective_units.dv_location.values.astype(float)))
 
-    # get ipsi vs. contra firing rate difference
+    # --- get ipsi vs. contra firing rate difference
     f_rate_diff = np.abs(selective_units.ipsi_firing_rate - selective_units.contra_firing_rate)
     selective_units['f_rate_diff'] = f_rate_diff / f_rate_diff.max()
 
-    fig, axs = plt.subplots(1, 3, figsize=(10, 8))
-    fig.subplots_adjust(wspace=0.6)
-
-    cosmetic = {'legend': None,
-                'linewidth': 1.75,
-                'alpha': 0.9,
-                'facecolor': 'none', 'edgecolor': 'k'}
+    # --- prepare for plotting
     m_scale = 1200
-
+    cosmetic = {'legend': None,
+                'linewidth': 0.0001}
     ymax = selective_units.unit_posy.max() + 100
 
+    # a bit of hack to get 'open circle'
+    pts = np.linspace(0, np.pi * 2, 24)
+    circ = np.c_[np.sin(pts) / 2, -np.cos(pts) / 2]
+    vert = np.r_[circ, circ[::-1] * .7]
+
+    open_circle = mpl.path.Path(vert)
+
+    # --- plot
+    fig, axs = plt.subplots(1, 3, figsize=(10, 8))
+    fig.subplots_adjust(wspace=0.6)
     for (title, df), ax in zip(((p, selective_units[selective_units.period == p])
                                 for p in ('sample', 'delay', 'response')), axs):
         sns.scatterplot(data=df, x='unit_posx', y='unit_posy',
-                        size='f_rate_diff', hue='selectivity',
+                        s=df.f_rate_diff.values.astype(float)*m_scale,
+                        hue='selectivity', marker=open_circle,
+                        palette={'contra-selective': 'b', 'ipsi-selective': 'r'},
                         ax=ax, **cosmetic)
         contra_p = (df.selectivity == 'contra-selective').sum() / len(df) * 100
         # cosmetic
