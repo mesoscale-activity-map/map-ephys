@@ -62,7 +62,7 @@ class TrialCondition(dj.Manual):
     class Outcome(dj.Part):
         definition = """
         -> master
-        ---w
+        ---
         -> experiment.Outcome
         """
 
