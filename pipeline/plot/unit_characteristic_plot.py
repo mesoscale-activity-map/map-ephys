@@ -129,4 +129,4 @@ def compute_isi_violation(spike_times, isi_thresh=2):
 
 
 def compute_spike_rate(spike_times):
-    return len(spike_times) #/ (spike_times[-1] - spike_times[0])
+    return len(spike_times) / (spike_times[-1] - spike_times[0])
