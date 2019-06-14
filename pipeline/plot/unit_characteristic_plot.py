@@ -16,7 +16,7 @@ from pipeline import experiment, tracking, ephys, psth
 def plot_clustering_quality(probe_insert_key):
     amp, snr, spk_times = (ephys.Unit * ephys.ProbeInsertion.InsertionLocation & probe_insert_key).fetch(
         'unit_amp', 'unit_snr', 'spike_times')
-    isi_violation, spk_rate = zip(*((compute_isi_violation(spk), compute_spike_rate(spk)) for spk in spk_times))
+    isi_violation, spk_rate = zip(*((_compute_isi_violation(spk), _compute_spike_rate(spk)) for spk in spk_times))
 
     metrics = {'amp': amp,
                'snr': snr,
@@ -45,7 +45,7 @@ def plot_unit_characteristic(probe_insert_key):
                                                   & probe_insert_key & 'unit_quality = "good"').fetch(
         'unit_amp', 'unit_snr', 'spike_times', 'unit_posx', 'unit_posy', 'dv_location')
 
-    spk_rate = np.array(list(compute_spike_rate(spk) for spk in spk_times))
+    spk_rate = np.array(list(_compute_spike_rate(spk) for spk in spk_times))
     insertion_depth = np.where(np.isnan(insertion_depth), 0, insertion_depth)
 
     metrics = pd.DataFrame(list(zip(*(amp/amp.max(), snr/snr.max(), spk_rate/spk_rate.max(), x, y + insertion_depth))))
@@ -129,28 +129,31 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
     contra_trials = psth.TrialCondition & {'condition_id': 0 if unit_hemi == 'left' else 1}
     ipsi_trials = psth.TrialCondition & {'condition_id': 1 if unit_hemi == 'left' else 0}
 
-
     ipsi_sel_units = ephys.Unit * psth.UnitSelectivity & 'unit_selectivity = "ipsi-selective"'
     contra_sel_units = ephys.Unit * psth.UnitSelectivity & 'unit_selectivity = "contra-selective"'
 
     if axs is None:
-        fig, axs = plt.subplots(1, 2, figsize=(8, 12))
+        fig, axs = plt.subplots(1, 2, figsize=(20, 20))
 
     assert axs.size == 2
 
+    period_starts = (experiment.Period & 'period in ("sample", "delay", "response")').fetch('period_start')
+
     # contra-selective units
-    plot_stacked_psth_diff(
-        (contra_sel_units & contra_trials).fetch(order_by='unit_posy asc'),
-        (contra_sel_units & ipsi_trials).fetch(order_by='unit_posy asc'),
-        ax=axs[0])
-    plot_stacked_psth_diff(
-        (ipsi_sel_units & ipsi_trials).fetch(order_by='unit_posy asc'),
-        (ipsi_sel_units & contra_trials).fetch(order_by='unit_posy asc'),
-        ax=axs[0])
+    _plot_stacked_psth_diff(
+        (psth.UnitPsth.Unit * contra_sel_units & contra_trials).fetch(order_by='unit_posy desc'),
+        (psth.UnitPsth.Unit * contra_sel_units & ipsi_trials).fetch(order_by='unit_posy desc'),
+        ax=axs[0], vlines=period_starts)
+    axs[0].set_title('Contra-selective Units')
+    # ipsi-selective units
+    _plot_stacked_psth_diff(
+        (psth.UnitPsth.Unit * ipsi_sel_units & ipsi_trials).fetch(order_by='unit_posy desc'),
+        (psth.UnitPsth.Unit * ipsi_sel_units & contra_trials).fetch(order_by='unit_posy desc'),
+        ax=axs[1], vlines=period_starts)
+    axs[1].set_title('Ipsi-selective Units')
 
 
-
-def plot_stacked_psth_diff(psth_a, psth_b, ax=None):
+def _plot_stacked_psth_diff(psth_a, psth_b, vlines=[], ax=None):
     """
     Heatmap of (psth_a - psth_b)
     psth_a, psth_b are the unit_psth(s) resulted from psth.UnitPSTH.fetch()
@@ -166,8 +169,8 @@ def plot_stacked_psth_diff(psth_a, psth_b, ax=None):
     b_data = np.array([r[0] for r in psth_b['unit_psth']])
 
     # scale per-unit psth's - TODO: moving average scaling
-    a_data = np.array([movmean(i * (1 / np.max(i))) for i in a_data])
-    b_data = np.array([movmean(i * (1 / np.max(i))) for i in b_data])
+    a_data = np.array([movmean(i/i.max()) for i in a_data])
+    b_data = np.array([movmean(i/i.max()) for i in b_data])
 
     result = a_data - b_data
 
@@ -176,19 +179,19 @@ def plot_stacked_psth_diff(psth_a, psth_b, ax=None):
 
     # ax.set_axis_off()
     ax.set_xlim([plt_xmin, plt_xmax])
-    ax.axvline(0, 0, 1, ls = '--', color = 'k')
-    ax.axvline(-1.2, 0, 1, ls = '--', color = 'k')
-    ax.axvline(-2.4, 0, 1, ls = '--', color = 'k')
+    for x in vlines:
+        ax.axvline(x=x, linestyle = '--', color = 'k')
 
-    ax.imshow(result, cmap=plt.cm.bwr, aspect=aspect, extent=extent)
+    im = ax.imshow(result, cmap=plt.cm.bwr, aspect=aspect, extent=extent)
+    im.set_clim((-1, 1))
 
 
-def compute_isi_violation(spike_times, isi_thresh=2):
+def _compute_isi_violation(spike_times, isi_thresh=2):
     isi = np.diff(spike_times)
     return sum((isi < isi_thresh).astype(int)) / len(isi)
 
 
-def compute_spike_rate(spike_times):
+def _compute_spike_rate(spike_times):
     return len(spike_times) / (spike_times[-1] - spike_times[0])
 
 
