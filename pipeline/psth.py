@@ -476,7 +476,7 @@ class UnitSelectivity(dj.Computed):
             ipsi_frate = np.mean(ipsi_trial_spk_rate)
 
             # do t-test on the spike-count per trial for all contra trials vs. ipsi trials
-            t_stat, pval = sc_stats.ttest_ind(contra_trial_spk_rate, ipsi_trial_spk_rate, equal_var=False)
+            t_stat, pval = sc_stats.ttest_ind(contra_trial_spk_rate, ipsi_trial_spk_rate)
 
             if pval > 0.05:
                 pref = 'non-selective'

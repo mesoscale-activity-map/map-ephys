@@ -12,6 +12,7 @@ from scipy import signal
 
 from pipeline import experiment, tracking, ephys, psth
 
+m_scale = 1200
 
 def plot_clustering_quality(probe_insert_key):
     amp, snr, spk_times = (ephys.Unit * ephys.ProbeInsertion.InsertionLocation & probe_insert_key).fetch(
@@ -61,7 +62,6 @@ def plot_unit_characteristic(probe_insert_key, axs=None):
                 'linewidth': 1.75,
                 'alpha': 0.9,
                 'facecolor': 'none', 'edgecolor': 'k'}
-    m_scale = 1200
 
     sns.scatterplot(data=metrics, x='x', y='y', s=metrics.amp*m_scale, ax=axs[0], **cosmetic)
     sns.scatterplot(data=metrics, x='x', y='y', s=metrics.snr*m_scale, ax=axs[1], **cosmetic)
@@ -94,7 +94,6 @@ def plot_unit_selectivity(probe_insert_key, axs=None):
     selective_units['f_rate_diff'] = f_rate_diff / f_rate_diff.max()
 
     # --- prepare for plotting
-    m_scale = 1200
     cosmetic = {'legend': None,
                 'linewidth': 0.0001}
     ymax = selective_units.unit_posy.max() + 100
@@ -130,17 +129,37 @@ def plot_unit_selectivity(probe_insert_key, axs=None):
 
 
 def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
-    trial_restrictor = {'task': 'audio delay', 'task_protocol': 1,
-                        'outcome': 'hit', 'early_lick': 'no early'}
-    both_alm_stim_res = experiment.Photostim * experiment.BrainLocation & 'brain_location = "both_alm"'
+    trial_restrictor = {'task': 'audio delay', 'task_protocol': 1, 'early_lick': 'no early'}
+    both_alm_stim_res = experiment.Photostim * experiment.BrainLocation & 'brain_location_name = "both_alm"'
 
     no_stim_trials = experiment.BehaviorTrial - experiment.PhotostimTrial & trial_restrictor
     bi_stim_trials = experiment.BehaviorTrial * experiment.PhotostimTrial & trial_restrictor & both_alm_stim_res
 
+    units = ephys.Unit & 'unit_quality = "good"'
 
+    metrics = pd.DataFrame(columns=['unit', 'x', 'y', 'frate_change'])
+    for u_idx, unit in enumerate(units.fetch('KEY')):
+        x, y = (ephys.Unit & unit).fetch1('unit_posx', 'unit_posy')
+        nostim_psth, nostim_edge = psth.compute_unit_psth(unit, no_stim_trials)
+        stim_psth, stim_edge = psth.compute_unit_psth(unit, bi_stim_trials)
+        frate_change = np.abs(stim_psth.mean() - nostim_psth.mean()) / nostim_psth.mean()
+        metrics.loc[u_idx] = (int(unit['unit']), x, y, frate_change)
 
-    np_stim_trials = (ephys.TrialSpikes * experiment.BehaviorTrial
-                         - experiment.PhotostimTrial & probe_insert_key & correct_right).fetch('spike_times', order_by = 'trial')
+    metrics.frate_change = metrics.frate_change / metrics.frate_change.max()
+
+    if axs is None:
+        fig, axs = plt.subplots(1, 1, figsize=(4, 8))
+
+    cosmetic = {'legend': None,
+                'linewidth': 1.75,
+                'alpha': 0.9,
+                'facecolor': 'none', 'edgecolor': 'k'}
+
+    sns.scatterplot(data=metrics, x='x', y='y', s=metrics.frate_change*m_scale, ax=axs, **cosmetic)
+    axs.spines['right'].set_visible(False)
+    axs.spines['top'].set_visible(False)
+    axs.set_title('% change')
+    axs.set_xlim((-10, 60))
 
 
 def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
