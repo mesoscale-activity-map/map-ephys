@@ -122,7 +122,7 @@ class TrialCondition(dj.Manual):
         """
 
         self = cls()
-        if type(cond) == int:
+        if isinstance(cond, (int, np.integer)):
             cond = self.expand(cond)
 
         pk_map = {
