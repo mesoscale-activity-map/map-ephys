@@ -3,3 +3,6 @@ scipy
 h5py
 globus-sdk
 tifffile
+pandas
+seaborn
+matplotlib
