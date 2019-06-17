@@ -3,7 +3,8 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
-from pipeline import psth
+from pipeline.psth import Condition
+from pipeline.psth import UnitPsth
 
 
 def unit_psth_ll(ipsi_hit, contra_hit, ipsi_err, contra_err):
@@ -68,31 +69,17 @@ def unit_psth_ll(ipsi_hit, contra_hit, ipsi_err, contra_err):
 
 def unit_psth(unit_key):
 
-    ipsi_hit_cond_key = (
-        psth.TrialCondition() & {'condition_desc':
-                                 'audio delay ipsi hit - nostim'}
-    ).fetch1('KEY')
+    ipsi_hit_unit_psth = UnitPsth.get_plotting_data(
+        unit_key, Condition.audio_delay_ipsi_hit_nostim())
 
-    contra_hit_cond_key = (
-        psth.TrialCondition() & {'condition_desc':
-                                 'audio delay contra hit - nostim'}
-    ).fetch1('KEY')
+    contra_hit_unit_psth = UnitPsth.get_plotting_data(
+        unit_key, Condition.audio_delay_contra_hit_nostim())
 
-    ipsi_err_cond_key = (
-        psth.TrialCondition() & {'condition_desc':
-                                 'audio delay ipsi error - nostim'}
-    ).fetch1('KEY')
+    ipsi_miss_unit_psth = UnitPsth.get_plotting_data(
+        unit_key, Condition.audio_delay_ipsi_miss_nostim())
 
-    contra_err_cond_key = (
-        psth.TrialCondition() & {'condition_desc':
-                                 'audio delay contra error - nostim'}
-    ).fetch1('KEY')
-
-    ipsi_hit_unit_psth = psth.UnitPsth.get(ipsi_hit_cond_key, unit_key)
-    contra_hit_unit_psth = psth.UnitPsth.get(contra_hit_cond_key, unit_key)
-
-    ipsi_err_unit_psth = psth.UnitPsth.get(ipsi_err_cond_key, unit_key)
-    contra_err_unit_psth = psth.UnitPsth.get(contra_err_cond_key, unit_key)
+    contra_miss_unit_psth = UnitPsth.get_plotting_data(
+        unit_key, Condition.audio_delay_contra_miss_nostim())
 
     unit_psth_ll(ipsi_hit_unit_psth, contra_hit_unit_psth,
-                 ipsi_err_unit_psth, contra_err_unit_psth)
+                 ipsi_miss_unit_psth, contra_miss_unit_psth)
