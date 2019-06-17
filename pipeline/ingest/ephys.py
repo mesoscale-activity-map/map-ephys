@@ -174,14 +174,10 @@ class EphysIngest(dj.Imported):
 
             # get rid of the -ve noise clusters
             non_neg_cluster_idx = cluster_ids > 0
-            # pick 'good' clusters only
-            good_clusters = np.where(np.array(strs) == 'good')[0] + 1
-            good_cluster_idx = (cluster_ids[:, None] == good_clusters).sum(axis=1)
-            good_non_neg = np.logical_and(good_cluster_idx, non_neg_cluster_idx)
 
-            cluster_ids = cluster_ids[good_non_neg]
-            spike_times = spike_times[good_non_neg]
-            viSite_spk = viSite_spk[good_non_neg]
+            cluster_ids = cluster_ids[non_neg_cluster_idx]
+            spike_times = spike_times[non_neg_cluster_idx]
+            viSite_spk = viSite_spk[non_neg_cluster_idx]
 
             file = '{h2o}_bitcode.mat'.format(h2o=water) # fetch the bitcode and realign
             # subpath = os.path.join('{}-{}'.format(date, probe), file)

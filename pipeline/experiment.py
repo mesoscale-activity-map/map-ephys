@@ -171,8 +171,21 @@ class SessionComment(dj.Manual):
     session_comment : varchar(767)
     """
 
-# ---- behavioral trials ----
 
+@schema
+class Period(dj.Lookup):
+    definition = """
+    period  : varchar(12)  
+    ---
+    period_start: float  # (s) start of this period relative to GO CUE
+    period_end: float    # (s) end of this period relative to GO CUE
+    """
+    contents = [('sample', -2.4, -1.2),
+                ('delay', -1.2, 0.0),
+                ('response', 0.0, 1.2)]
+
+
+# ---- behavioral trials ----
 
 @schema
 class TrialInstruction(dj.Lookup):

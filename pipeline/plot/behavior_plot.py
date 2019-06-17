@@ -117,8 +117,10 @@ def plot_jaw_movement(session_key, unit_key, tongue_thres=430, trial_limit=10, a
 
             first_lick_time = (experiment.ActionEvent & tr & 'action_event_type in ("left lick", "right lick")').fetch(
                     'action_event_time', order_by = 'action_event_time', limit = 1)[0]
+            go_time = (experiment.TrialEvent & tr & 'trial_event_type="go"').fetch1('trial_event_time')
 
             spike_times = (ephys.TrialSpikes & tr & unit_key).fetch1('spike_times')
+            spike_times = spike_times + float(go_time) - float(first_lick_time)  # realigned to first-lick
 
             tvec = tvec - float(first_lick_time)
             tongue_out_bool = tongue >= tongue_thres
@@ -147,15 +149,140 @@ def plot_jaw_movement(session_key, unit_key, tongue_thres=430, trial_limit=10, a
             ax.spines['top'].set_visible(False)
 
 
+def plot_trial_jaw_movement(trial_key):
+    """
+    Plot trial-specific Jaw Movement time-locked to "go" cue
+    """
+    trk = (tracking.Tracking.JawTracking * experiment.BehaviorTrial & trial_key & experiment.TrialEvent)
+    if len(trk) == 0:
+        return 'The selected trial has no Action Event (e.g. cue start)'
+
+    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & trial_key).fetch1('sampling_rate'))
+    jaw = trk.fetch1('jaw_y')
+    go_time = (experiment.TrialEvent & trk & 'trial_event_type="go"').fetch1('trial_event_time')
+    tvec = np.arange(len(jaw)) / tracking_fs - float(go_time)
+
+    b, a = signal.butter(5, (5, 15), btype='band', fs=tracking_fs)
+    filt_jaw = signal.filtfilt(b, a, jaw)
+
+    analytic_signal = signal.hilbert(filt_jaw)
+    insta_amp = np.abs(analytic_signal)
+    insta_phase = np.angle(analytic_signal)
+
+    fig, axs = plt.subplots(2, 2, figsize=(16, 6))
+    fig.subplots_adjust(hspace=0.4)
+
+    axs[0, 0].plot(tvec, jaw, '.k')
+    axs[0, 0].set_title('Jaw Movement')
+    axs[1, 0].plot(tvec, filt_jaw, '.k')
+    axs[1, 0].set_title('Bandpass filtered 5-15Hz')
+    axs[1, 0].set_xlabel('Time(s)')
+    axs[0, 1].plot(tvec, insta_amp, '.k')
+    axs[0, 1].set_title('Amplitude')
+    axs[1, 1].plot(tvec, insta_phase, '.k')
+    axs[1, 1].set_title('Phase')
+    axs[1, 1].set_xlabel('Time(s)')
+
+    # cosmetic
+    for ax in axs.flatten():
+        ax.set_xlim((-3, 3))
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+
+    return axs
 
 
+def plot_windowed_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), w_size=0.01, bin_counts=20):
+    trks = (tracking.Tracking.JawTracking * experiment.BehaviorTrial & session_key & experiment.TrialEvent)
+    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & session_key).fetch1('sampling_rate'))
+
+    def get_trial_track():
+        for jaw, go_time in zip(*(trks * experiment.TrialEvent & 'trial_event_type="go"').fetch(
+                'jaw_y', 'trial_event_time')):
+            tvec = np.arange(len(jaw)) / tracking_fs - float(go_time)
+            segmented_jaw = jaw[np.logical_and(tvec >= xlim[0], tvec <= xlim[1])]
+            if len(segmented_jaw) == (xlim[1] - xlim[0]) * tracking_fs:
+                yield segmented_jaw
+
+    jaw_trackings = np.vstack(get_trial_track())  # trials x times
+
+    b, a = signal.butter(5, (5, 15), btype='band', fs=tracking_fs)
+
+    filt_jaw_trackings = signal.filtfilt(b, a, jaw_trackings, axis=1)
+
+    insta_phase = np.angle(signal.hilbert(filt_jaw_trackings, axis=1))
+    insta_phase = np.degrees(insta_phase) % 360  # convert to degree [0, 360]
+
+    tvec = np.linspace(xlim[0], xlim[1], jaw_trackings.shape[1])
+    windows = np.arange(xlim[0], xlim[1], w_size)
+
+    # plot
+    col_counts = 8
+    fig, axs = plt.subplots(int(np.ceil(len(windows) / col_counts)), col_counts,
+                            figsize=(16, 16),
+                            subplot_kw=dict(polar=True))
+    fig.subplots_adjust(wspace=0.6, hspace=0.3)
+
+    # non-overlapping windowed histogram
+    for w_start, ax in zip(windows, axs.flatten()):
+        phase = insta_phase[:, np.logical_and(tvec >= w_start, tvec <= w_start + w_size)].flatten()
+        plot_polar_histogram(phase, ax, bin_counts=bin_counts)
+        ax.set_xlabel(f'{w_start*1000:.0f} to {(w_start + w_size)*1000:.0f}ms', fontweight='bold')
 
 
+def plot_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), bin_counts=20):
+    trks = (tracking.Tracking.JawTracking * experiment.BehaviorTrial & session_key & experiment.TrialEvent)
+    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & session_key).fetch1('sampling_rate'))
+
+    l_trial_trk = trks & 'trial_instruction="left"' & 'early_lick="no early"'
+    r_trial_trk = trks & 'trial_instruction="right"' & 'early_lick="no early"'
+
+    def get_trial_track(trial_tracks):
+        for jaw, go_time in zip(*(trial_tracks * experiment.TrialEvent & 'trial_event_type="go"').fetch(
+                'jaw_y', 'trial_event_time')):
+            tvec = np.arange(len(jaw)) / tracking_fs - float(go_time)
+            segmented_jaw = jaw[np.logical_and(tvec >= xlim[0], tvec <= xlim[1])]
+            if len(segmented_jaw) == (xlim[1] - xlim[0]) * tracking_fs:
+                yield segmented_jaw
+
+    l_jaw_trackings = np.vstack(get_trial_track(l_trial_trk))  # trials x times
+    r_jaw_trackings = np.vstack(get_trial_track(r_trial_trk))  # trials x times
+
+    b, a = signal.butter(5, (5, 15), btype='band', fs=tracking_fs)
+
+    filt_l_jaw_trackings = signal.filtfilt(b, a, l_jaw_trackings, axis=1)
+    l_insta_phase = np.angle(signal.hilbert(filt_l_jaw_trackings, axis=1))
+    l_insta_phase = np.degrees(l_insta_phase) % 360  # convert to degree [0, 360]
+
+    filt_r_jaw_trackings = signal.filtfilt(b, a, r_jaw_trackings, axis=1)
+    r_insta_phase = np.angle(signal.hilbert(filt_r_jaw_trackings, axis=1))
+    r_insta_phase = np.degrees(r_insta_phase) % 360  # convert to degree [0, 360]
+
+    fig, axs = plt.subplots(1, 2, figsize=(12, 8), subplot_kw=dict(polar=True))
+    fig.subplots_adjust(wspace=0.6)
+
+    plot_polar_histogram(l_insta_phase.flatten(), axs[0], bin_counts=bin_counts)
+    axs[0].set_title('left lick trials', loc='left', fontweight='bold')
+    plot_polar_histogram(r_insta_phase.flatten(), axs[1], bin_counts=bin_counts)
+    axs[1].set_title('right lick trials', loc='left', fontweight='bold')
 
 
+def plot_polar_histogram(data, ax, bin_counts=30):
+    bottom = 2
 
+    theta = np.linspace(0.0, 2 * np.pi, bin_counts, endpoint=False)
 
+    radii, tick = np.histogram(data, bins=bin_counts)
 
+    # width of each bin on the plot
+    width = (2 * np.pi) / bin_counts
 
+    # make a polar plot
+    bars = ax.bar(theta, radii, width=width, bottom=bottom)
+
+    # set the lable go clockwise and start from the top
+    ax.set_theta_zero_location("E")
+    # clockwise
+    ax.set_theta_direction(1)
 
 

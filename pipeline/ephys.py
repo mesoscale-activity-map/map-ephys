@@ -122,6 +122,11 @@ class LabeledTrack(dj.Manual):
 
 @schema
 class Unit(dj.Imported):
+    """
+    A certain portion of the recording is used for clustering (could very well be the entire recording)
+    Thus, spike-times are relative to the 1st time point in this portion
+    E.g. if clustering is performed from trial 8 to trial 200, then spike-times are relative to the start of trial 8
+    """
     definition = """
     # Sorted unit
     -> ProbeInsertion
@@ -132,7 +137,7 @@ class Unit(dj.Imported):
     -> lab.ElectrodeConfig.Electrode # site on the electrode for which the unit has the largest amplitude
     unit_posx : double # (um) estimated x position of the unit relative to probe's (0,0)
     unit_posy : double # (um) estimated y position of the unit relative to probe's (0,0)
-    spike_times : longblob  #  (s)
+    spike_times : longblob  # (s) from the start of the first data point used in clustering
     unit_amp : double
     unit_snr : double
     waveform : blob # average spike waveform

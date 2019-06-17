@@ -127,7 +127,7 @@ class TrialCondition(dj.Manual):
         """
 
         self = cls()
-        if type(cond) == int:
+        if isinstance(cond, (int, np.integer)):
             cond = self.expand(cond)
 
         pk_map = {
@@ -430,13 +430,74 @@ class TrialCondition(dj.Manual):
 class UnitPsth(dj.Computed):
     definition = """
     -> TrialCondition
+    """
+
+    definition_next = """
+    -> TrialCondition
     -> ephys.Unit
     ---
     unit_psth=NULL:                             longblob
     """
     psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
 
+    class Unit(dj.Part):  # XXX: merge up to master; reason: recomputing:
+        definition = """
+        -> master
+        -> ephys.Unit
+        ---
+        unit_psth:                                  longblob
+        """
+
     def make(self, key):
+        log.info('UnitPsth.make(): key: {}'.format(key))
+
+        # can e.g. if key['condition_id'] in [1,2,3]: self.make_thiskind(key)
+        # for now, we assume one method of processing
+
+        cond = TrialCondition.expand(key['condition_id'])
+
+        # XXX: if / else for different conditions as needed
+        # e.g if key['condition_id'] > 3: ..., elif key['condition_id'] == 5
+
+        all_trials = TrialCondition.trials({
+            'TaskProtocol': cond['TaskProtocol'],
+            'TrialInstruction': cond['TrialInstruction'],
+            'EarlyLick': cond['EarlyLick'],
+            'Outcome': cond['Outcome']})
+
+        photo_trials = TrialCondition.trials({
+            'PhotostimLocation': cond['PhotostimLocation']})
+
+        unstim_trials = [t for t in all_trials if t not in photo_trials]
+
+        # build unique session list from trial list
+        sessions = {(t['subject_id'], t['session']) for t in all_trials}
+        sessions = [{'subject_id': s[0], 'session': s[1]}
+                    for s in sessions]
+
+        # find good units
+        units = ephys.Unit & [dict(s, unit_quality='good') for s in sessions]
+
+        # fetch spikes and create per-unit PSTH record
+        self.insert1(key)
+
+        i = 0
+        n_units = len(units)
+
+        for unit in ({k: u[k] for k in ephys.Unit.primary_key} for u in units):
+            i += 1
+            if i % 50 == 0:
+                log.info('.. unit {}/{} ({:.2f}%)'
+                         .format(i, n_units, (i/n_units)*100))
+            else:
+                log.debug('.. unit {}/{} ({:.2f}%)'
+                          .format(i, n_units, (i/n_units)*100))
+
+            psth = compute_unit_psth(unit, unstim_trials)
+            self.Unit.insert1({**key, **unit, 'unit_psth': np.array(psth)},
+                              allow_direct_insert=True)
+
+    def make_chris(self, key):
         log.info('UnitPsth.make(): key: {}'.format(key))
 
         unit = {k: v for k, v in key.items() if k in ephys.Unit.primary_key}
@@ -475,7 +536,6 @@ class UnitPsth(dj.Computed):
             return
 
         spikes = np.concatenate(spikes)
-
         xmin, xmax, bins = self.psth_params.values()
         # XXX: xmin, xmax+bins (149 here vs 150 in matlab)..
         #   See also [:1] slice in plots..
@@ -529,20 +589,16 @@ class UnitPsth(dj.Computed):
         return dict(trials=trials, spikes=spikes, psth=psth, raster=raster)
 
 
+
 @schema
-class Selectivity(dj.Computed):
-    '''
-    Unit Selectivity
-
-    Compute unit selectivity based on fixed time regions.
-
+class UnitSelectivityChris(dj.Computed):
+    """
+    Compute unit selectivity for a unit in a particular time period.
     Calculation:
-    2 tail t significance of unit firing rate for trial type l vs r
+    2 tail t significance of unit firing rate for trial type: CorrectLeft vs. CorrectRight (no stim, no early lick)
     frequency = nspikes(period)/len(period)
-    '''
-
+    """
     definition = """
-    # Unit Response Selectivity (WIP)
     -> ephys.Unit
     ---
     sample_selectivity=Null:    float         # sample period selectivity
@@ -566,19 +622,8 @@ class Selectivity(dj.Computed):
     ipsi_preferring = 'global_preference=1'
     contra_preferring = 'global_preference=0'
 
-    ranges = {   # time ranges in SelectivityCriteria order
-        'sample': (-2.4, -1.2),
-        'delay':  (-1.2, -0.0),
-        'go':     (+0.0, +1.2),
-        'global': (-2.4, +1.2),
-    }
-
     def make(self, key):
-
-        if key['unit'] % 50 == 0:
-            log.info('Selectivity.make(): key % 50: {}'.format(key))
-        else:
-            log.debug('Selectivity.make(): key: {}'.format(key))
+        log.debug('Selectivity.make(): key: {}'.format(key))
 
         # Verify insertion location is present,
         egpos = None
@@ -661,4 +706,110 @@ class Selectivity(dj.Computed):
 
                 criteria[pref] = gbl_pref
 
-        self.insert1(dict(key, **criteria))
+        self.insert1({**key, **criteria})
+
+
+@schema
+class Selectivity(dj.Lookup):
+    definition = """
+    selectivity: varchar(24)
+    """
+
+    contents = zip(['contra-selective', 'ipsi-selective', 'non-selective'])
+
+
+@schema
+class UnitSelectivity(dj.Computed):
+    """
+    Compute unit selectivity for a unit in a particular time period.
+    Calculation:
+    2 tail t significance of unit firing rate for trial type: CorrectLeft vs. CorrectRight (no stim, no early lick)
+    frequency = nspikes(period)/len(period)
+    """
+    definition = """
+    -> ephys.Unit
+    ---
+    -> Selectivity.proj(unit_selectivity='selectivity')
+    """
+
+    class PeriodSelectivity(dj.Part):
+        definition = """
+        -> master
+        -> experiment.Period
+        ---
+        -> Selectivity.proj(period_selectivity='selectivity')
+        contra_firing_rate: float  # mean firing rate of all contra-trials
+        ipsi_firing_rate: float  # mean firing rate of all ipsi-trials
+        p_value: float  # p-value of the t-test of spike-rate of all trials
+        """
+
+    key_source = ephys.Unit & 'unit_quality = "good"'
+
+    def make(self, key):
+        trial_restrictor = {'task': 'audio delay', 'task_protocol': 1,
+                            'outcome': 'hit', 'early_lick': 'no early'}
+        correct_right = {**trial_restrictor, 'trial_instruction': 'right'}
+        correct_left = {**trial_restrictor, 'trial_instruction': 'left'}
+
+        # get trial spike times
+        right_trialspikes = (ephys.TrialSpikes * experiment.BehaviorTrial
+                             - experiment.PhotostimTrial & key & correct_right).fetch('spike_times', order_by='trial')
+        left_trialspikes = (ephys.TrialSpikes * experiment.BehaviorTrial
+                            - experiment.PhotostimTrial & key & correct_left).fetch('spike_times', order_by='trial')
+
+        unit_hemi = (ephys.ProbeInsertion.InsertionLocation * experiment.BrainLocation & key).fetch1('hemisphere')
+
+        if unit_hemi not in ('left', 'right'):
+            raise Exception('Hemisphere Error! Unit not belonging to either left or right hemisphere')
+
+        contra_trialspikes = right_trialspikes if unit_hemi == 'left' else left_trialspikes
+        ipsi_trialspikes = left_trialspikes if unit_hemi == 'left' else right_trialspikes
+
+        period_selectivity = []
+        for period in experiment.Period.fetch(as_dict=True):
+            period_dur = period['period_end'] - period['period_start']
+            contra_trial_spk_rate = [(np.logical_and(t >= period['period_start'],
+                                                      t < period['period_end'])).astype(int).sum() / period_dur
+                             for t in contra_trialspikes]
+            ipsi_trial_spk_rate = [(np.logical_and(t >= period['period_start'],
+                                                    t < period['period_end'])).astype(int).sum() / period_dur
+                           for t in ipsi_trialspikes]
+
+            contra_frate = np.mean(contra_trial_spk_rate)
+            ipsi_frate = np.mean(ipsi_trial_spk_rate)
+
+            # do t-test on the spike-count per trial for all contra trials vs. ipsi trials
+            t_stat, pval = sc_stats.ttest_ind(contra_trial_spk_rate, ipsi_trial_spk_rate)
+
+            if pval > 0.05:
+                pref = 'non-selective'
+            else:
+                pref = 'ipsi-selective' if ipsi_frate > contra_frate else 'contra-selective'
+
+            period_selectivity.append(dict(key, **period, period_selectivity=pref, p_value=pval,
+                                            contra_firing_rate=contra_frate, ipsi_firing_rate=ipsi_frate))
+
+        unit_selective = not (np.array([p['period_selectivity'] for p in period_selectivity]) == 'non-selective').all()
+        if not unit_selective:
+            unit_pref = 'non-selective'
+        else:
+            ave_ipsi_frate = np.array([p['ipsi_firing_rate'] for p in period_selectivity]).mean()
+            ave_contra_frate = np.array([p['contra_firing_rate'] for p in period_selectivity]).mean()
+            unit_pref = 'ipsi-selective' if ave_ipsi_frate > ave_contra_frate else 'contra-selective'
+
+        self.insert1(dict(**key, unit_selectivity=unit_pref))
+        self.PeriodSelectivity.insert(period_selectivity, ignore_extra_fields=True)
+
+
+# ---------- HELPER FUNCTIONS --------------
+
+def compute_unit_psth(unit_key, trial_keys):
+    q = (ephys.TrialSpikes() & unit_key & trial_keys)
+    spikes = q.fetch('spike_times')
+    spikes = np.concatenate(spikes)
+
+    xmin, xmax, bins = UnitPsth.psth_params.values()
+    psth = list(np.histogram(spikes, bins = np.arange(xmin, xmax, bins)))
+    psth[0] = psth[0] / len(trial_keys) / bins
+
+    return np.array(psth)
