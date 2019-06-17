@@ -180,14 +180,14 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
 
     # contra-selective units
     _plot_stacked_psth_diff(
-        (psth.UnitPsth.Unit * contra_sel_units & contra_trials).fetch(order_by='unit_posy desc'),
-        (psth.UnitPsth.Unit * contra_sel_units & ipsi_trials).fetch(order_by='unit_posy desc'),
+        (psth.UnitPsth * contra_sel_units & contra_trials).fetch(order_by='unit_posy desc'),
+        (psth.UnitPsth * contra_sel_units & ipsi_trials).fetch(order_by='unit_posy desc'),
         ax=axs[0], vlines=period_starts)
     axs[0].set_title('Contra-selective Units')
     # ipsi-selective units
     _plot_stacked_psth_diff(
-        (psth.UnitPsth.Unit * ipsi_sel_units & ipsi_trials).fetch(order_by='unit_posy desc'),
-        (psth.UnitPsth.Unit * ipsi_sel_units & contra_trials).fetch(order_by='unit_posy desc'),
+        (psth.UnitPsth * ipsi_sel_units & ipsi_trials).fetch(order_by='unit_posy desc'),
+        (psth.UnitPsth * ipsi_sel_units & contra_trials).fetch(order_by='unit_posy desc'),
         ax=axs[1], vlines=period_starts)
     axs[1].set_title('Ipsi-selective Units')
 
