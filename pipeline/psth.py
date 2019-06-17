@@ -23,12 +23,9 @@ log = logging.getLogger(__name__)
 # NOW:
 # - [X] rename UnitCondition to TrialCondition
 # - [X] store actual Selectivity value
-# - [ ] expand Condition logic to be 1:M += include/exclude flags + fetcher
-# - [ ] GroupCondition -> now notion of UnitCondition
-#   ... probably should also make condition description strings constant vars
-#   - table notneeded
+# - remove Condition & refactor
 #   - provide canned queries
-#   - also null filtering funs
+#   - (old? also null filtering funs?)
 
 
 @schema
@@ -39,8 +36,6 @@ class TrialCondition(dj.Manual):
     ---
     condition_desc:                             varchar(4096)
     """
-
-
 
     class TaskProtocol(dj.Part):
         definition = """
@@ -430,74 +425,13 @@ class TrialCondition(dj.Manual):
 class UnitPsth(dj.Computed):
     definition = """
     -> TrialCondition
-    """
-
-    definition_next = """
-    -> TrialCondition
     -> ephys.Unit
     ---
     unit_psth=NULL:                             longblob
     """
     psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
 
-    class Unit(dj.Part):  # XXX: merge up to master; reason: recomputing:
-        definition = """
-        -> master
-        -> ephys.Unit
-        ---
-        unit_psth:                                  longblob
-        """
-
     def make(self, key):
-        log.info('UnitPsth.make(): key: {}'.format(key))
-
-        # can e.g. if key['condition_id'] in [1,2,3]: self.make_thiskind(key)
-        # for now, we assume one method of processing
-
-        cond = TrialCondition.expand(key['condition_id'])
-
-        # XXX: if / else for different conditions as needed
-        # e.g if key['condition_id'] > 3: ..., elif key['condition_id'] == 5
-
-        all_trials = TrialCondition.trials({
-            'TaskProtocol': cond['TaskProtocol'],
-            'TrialInstruction': cond['TrialInstruction'],
-            'EarlyLick': cond['EarlyLick'],
-            'Outcome': cond['Outcome']})
-
-        photo_trials = TrialCondition.trials({
-            'PhotostimLocation': cond['PhotostimLocation']})
-
-        unstim_trials = [t for t in all_trials if t not in photo_trials]
-
-        # build unique session list from trial list
-        sessions = {(t['subject_id'], t['session']) for t in all_trials}
-        sessions = [{'subject_id': s[0], 'session': s[1]}
-                    for s in sessions]
-
-        # find good units
-        units = ephys.Unit & [dict(s, unit_quality='good') for s in sessions]
-
-        # fetch spikes and create per-unit PSTH record
-        self.insert1(key)
-
-        i = 0
-        n_units = len(units)
-
-        for unit in ({k: u[k] for k in ephys.Unit.primary_key} for u in units):
-            i += 1
-            if i % 50 == 0:
-                log.info('.. unit {}/{} ({:.2f}%)'
-                         .format(i, n_units, (i/n_units)*100))
-            else:
-                log.debug('.. unit {}/{} ({:.2f}%)'
-                          .format(i, n_units, (i/n_units)*100))
-
-            psth = compute_unit_psth(unit, unstim_trials)
-            self.Unit.insert1({**key, **unit, 'unit_psth': np.array(psth)},
-                              allow_direct_insert=True)
-
-    def make_chris(self, key):
         log.info('UnitPsth.make(): key: {}'.format(key))
 
         unit = {k: v for k, v in key.items() if k in ephys.Unit.primary_key}
@@ -621,6 +555,8 @@ class UnitSelectivityChris(dj.Computed):
 
     ipsi_preferring = 'global_preference=1'
     contra_preferring = 'global_preference=0'
+
+    key_source = ephys.Unit & 'unit_quality = "good"'
 
     def make(self, key):
         log.debug('Selectivity.make(): key: {}'.format(key))
@@ -746,6 +682,8 @@ class UnitSelectivity(dj.Computed):
     key_source = ephys.Unit & 'unit_quality = "good"'
 
     def make(self, key):
+        log.debug('Selectivity.make(): key: {}'.format(key))
+
         trial_restrictor = {'task': 'audio delay', 'task_protocol': 1,
                             'outcome': 'hit', 'early_lick': 'no early'}
         correct_right = {**trial_restrictor, 'trial_instruction': 'right'}
