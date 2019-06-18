@@ -329,7 +329,7 @@ def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
 
     _plot_ave_psth(psth_n_i, psth_n_c, period_starts, axs[0],
                    'Control')
-    _plot_ave_psth(psth_s_i, psth_s_c, period_starts, axs[0],
+    _plot_ave_psth(psth_s_i, psth_s_c, period_starts, axs[1],
                    'Bilateral ALM photostim')
 
     # cosmetic
