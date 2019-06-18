@@ -56,7 +56,7 @@ class TrialCondition(dj.Lookup):
 
     @property
     def contents(self):
-        contents_data = (
+        contents_data = (  # FIXME: functions should handle missing args
             {
                 'trial_condition_desc': 'good_noearlylick_hit',
                 'trial_condition_func': '_get_trials_no_stim',
@@ -159,6 +159,13 @@ class UnitPsth(dj.Computed):
     """
     psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
 
+    key_source = (ephys.Unit * TrialCondition
+                  & [{'trial_condition_desc': desc}
+                     for desc in ['good_noearlylick_left_hit',
+                                  'good_noearlylick_right_hit',
+                                  'good_noearlylick_left_miss',
+                                  'good_noearlylick_right_miss']])
+
     def make(self, key):
         log.info('UnitPsth.make(): key: {}'.format(key))
 
@@ -168,6 +175,11 @@ class UnitPsth(dj.Computed):
         # expand TrialCondition to trials,
         trials = TrialCondition.get_trials(
             (TrialCondition & key).fetch1('trial_condition_desc'))
+
+        # from sys import exit as sys_exit  # NOQA
+        # from code import interact
+        # from collections import ChainMap
+        # interact('unitpsth make', local=dict(ChainMap(locals(), globals())))
 
         # fetch related spike times
         q = (ephys.TrialSpikes & unit & trials)
@@ -187,11 +199,6 @@ class UnitPsth(dj.Computed):
         psth[0] = psth[0] / len(trials) / bins
 
         self.insert1({**key, 'unit_psth': np.array(psth)})
-
-        # from sys import exit as sys_exit  # NOQA
-        # from code import interact
-        # from collections import ChainMap
-        # interact('unitpsth make', local=dict(ChainMap(locals(), globals())))
 
     @classmethod
     def get(cls, condition_key, unit_key,
