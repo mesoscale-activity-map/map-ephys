@@ -112,7 +112,7 @@ class TrialCondition(dj.Lookup):
                 for d in contents_data)
 
     @classmethod
-    def get_trials(cls,  trial_condition_desc):
+    def get_trials(cls, trial_condition_desc):
         return cls.get_func({'trial_condition_desc': trial_condition_desc})()
 
     @classmethod
@@ -162,34 +162,15 @@ class UnitPsth(dj.Computed):
     def make(self, key):
         log.info('UnitPsth.make(): key: {}'.format(key))
 
+        # build unit key,
         unit = {k: v for k, v in key.items() if k in ephys.Unit.primary_key}
 
-        # Expand Condition -
-        # could conditionalize e.g.
-        # if key['condition_id'] in [1,2,3]: self.make_thiskind(key), etc.
-        # for now, we assume one method of processing.
+        # expand TrialCondition to trials,
+        trials = TrialCondition.get_trials(
+            (TrialCondition & key).fetch1('trial_condition_desc'))
 
-        cond = TrialCondition.expand(key['condition_id'])
-
-        all_trials = TrialCondition.trials({
-            'TaskProtocol': cond['TaskProtocol'],
-            'TrialInstruction': cond['TrialInstruction'],
-            'EarlyLick': cond['EarlyLick'],
-            'Outcome': cond['Outcome']})
-
-        photo_trials = TrialCondition.trials({
-            'PhotostimLocation': cond['PhotostimLocation']})
-
-        # HACK special case stim condition logic -
-        #   ... should be fixed by expanding Condition support logic.
-        if 'onlystim' in cond['Condition']['condition_desc']:
-            tgt_trials = [t for t in all_trials if t in photo_trials]
-        elif 'nostim' in cond['Condition']['condition_desc']:
-            tgt_trials = [t for t in all_trials if t not in photo_trials]
-        else:
-            tgt_trials = all_trials
-
-        q = (ephys.TrialSpikes() & unit & tgt_trials)
+        # fetch related spike times
+        q = (ephys.TrialSpikes & unit & trials)
         spikes = q.fetch('spike_times')
 
         if len(spikes) == 0:
@@ -203,9 +184,14 @@ class UnitPsth(dj.Computed):
         # XXX: xmin, xmax+bins (149 here vs 150 in matlab)..
         #   See also [:1] slice in plots..
         psth = list(np.histogram(spikes, bins=np.arange(xmin, xmax, bins)))
-        psth[0] = psth[0] / len(tgt_trials) / bins
+        psth[0] = psth[0] / len(trials) / bins
 
         self.insert1({**key, 'unit_psth': np.array(psth)})
+
+        # from sys import exit as sys_exit  # NOQA
+        # from code import interact
+        # from collections import ChainMap
+        # interact('unitpsth make', local=dict(ChainMap(locals(), globals())))
 
     @classmethod
     def get(cls, condition_key, unit_key,
