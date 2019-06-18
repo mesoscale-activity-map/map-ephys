@@ -185,6 +185,10 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
         fig, axs = plt.subplots(1, 2, figsize=(20, 20))
     assert axs.size == 2
 
+    period_starts = (experiment.Period
+                     & 'period in ("sample", "delay", "response")').fetch(
+                         'period_start')
+
     good_unit = ephys.Unit & {'unit_quality': 'good'}
     conds_i = (psth.TrialCondition
                & {'trial_condition_desc':
@@ -220,10 +224,6 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
                   & good_unit.proj() & sel_c.proj()).fetch(
                       order_by='unit_posy desc')
 
-    period_starts = (experiment.Period
-                     & 'period in ("sample", "delay", "response")').fetch(
-                         'period_start')
-
     _plot_stacked_psth_diff(psth_cs_ct, psth_cs_it, ax=axs[0],
                             vlines=period_starts)
 
@@ -231,28 +231,55 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
                             vlines=period_starts)
 
 
-def plot_ave_contra_ipsi_psth_thinh(probe_insert_key, axs=None):
-    unit_hemi = (ephys.ProbeInsertion.InsertionLocation * experiment.BrainLocation
-                 & probe_insert_key).fetch1('hemisphere')
-
-    period_starts = (experiment.Period & 'period in ("sample", "delay", "response")').fetch('period_start')
-
-    # query trials
-    trial_restrictor = {'task': 'audio delay', 'task_protocol': 1, 'early_lick': 'no early', 'outcome': 'hit'}
-    contra_trials = (experiment.BehaviorTrial - experiment.PhotostimTrial & trial_restrictor
-                     & {'trial_instruction': 'right' if unit_hemi == 'left' else 'left'})
-    ipsi_trials = (experiment.BehaviorTrial - experiment.PhotostimTrial & trial_restrictor
-                   & {'trial_instruction': 'left' if unit_hemi == 'left' else 'right'})
-
-    ipsi_sel_units = ephys.Unit * psth.UnitSelectivity & 'unit_selectivity = "ipsi-selective"'
-    contra_sel_units = ephys.Unit * psth.UnitSelectivity & 'unit_selectivity = "contra-selective"'
+def plot_ave_contra_ipsi_psth(probe_insert_key, axs=None):
 
     if axs is None:
         fig, axs = plt.subplots(1, 2, figsize=(16, 6))
     assert axs.size == 2
 
-    for units, ax, title in zip((contra_sel_units, ipsi_sel_units), axs, ('Contra-selective', 'Ipsi-selective')):
-        _plot_ave_psth(units, contra_trials, ipsi_trials, vlines=period_starts, ax=ax, title=title)
+    period_starts = (experiment.Period
+                     & 'period in ("sample", "delay", "response")').fetch(
+                         'period_start')
+
+    good_unit = ephys.Unit & {'unit_quality': 'good'}
+    conds_i = (psth.TrialCondition
+               & {'trial_condition_desc':
+                  'good_noearlylick_left_hit'}).fetch('KEY')
+
+    conds_c = (psth.TrialCondition
+               & {'trial_condition_desc':
+                  'good_noearlylick_right_hit'}).fetch('KEY')
+
+    sel_i = (ephys.Unit * psth.UnitSelectivity
+             & 'unit_selectivity = "ipsi-selective"' & probe_insert_key)
+
+    sel_c = (ephys.Unit * psth.UnitSelectivity
+             & 'unit_selectivity = "contra-selective"' & probe_insert_key)
+
+    psth_is_it = (((psth.UnitPsth & conds_i)
+                   * ephys.Unit.proj('unit_posx', 'unit_posy'))
+                  & good_unit.proj() & sel_i.proj()).fetch(
+                      'unit_psth', order_by='unit_posy desc')
+
+    psth_is_ct = (((psth.UnitPsth & conds_c)
+                   * ephys.Unit.proj('unit_posx', 'unit_posy'))
+                  & good_unit.proj() & sel_i.proj()).fetch(
+                      'unit_psth', order_by='unit_posy desc')
+
+    psth_cs_ct = (((psth.UnitPsth & conds_c)
+                   * ephys.Unit.proj('unit_posx', 'unit_posy'))
+                  & good_unit.proj() & sel_c.proj()).fetch(
+                      'unit_psth', order_by='unit_posy desc')
+
+    psth_cs_it = (((psth.UnitPsth & conds_i)
+                   * ephys.Unit.proj('unit_posx', 'unit_posy'))
+                  & good_unit.proj() & sel_c.proj()).fetch(
+                      'unit_psth', order_by='unit_posy desc')
+
+    _plot_ave_psth(psth_cs_ct, psth_cs_it, period_starts, axs[0],
+                   'Contra-selective')
+    _plot_ave_psth(psth_is_it, psth_is_ct, period_starts, axs[1],
+                   'Ipsi-selective')
 
     ymax = max([ax.get_ylim()[1] for ax in axs])
     for ax in axs:
@@ -292,20 +319,21 @@ def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
     axs[1].axvspan(delay, delay + stim_dur, alpha=0.3, color='royalblue')
 
 
-def _plot_ave_psth(units, contra_trials, ipsi_trials, vlines=[], ax=None, title=''):
-    contra_psth, contra_edges = zip(*[psth.compute_unit_psth(unit, contra_trials) for unit in units.fetch('KEY')])
-    ave_contra_psth = np.vstack(contra_psth).mean(axis = 0)
-    contra_edges = contra_edges[0][:-1]
+def _plot_ave_psth(ipsi_psth, contra_psth, vlines={}, ax=None, title=''):
 
-    ipsi_psth, ipsi_edges = zip(*[psth.compute_unit_psth(unit, ipsi_trials) for unit in units.fetch('KEY')])
-    ave_ipsi_psth = np.vstack(ipsi_psth).mean(axis = 0)
-    ipsi_edges = ipsi_edges[0][:-1]
+    ave_contra_psth = np.vstack(
+        np.array([i[0] for i in contra_psth])).mean(axis=0)
+    contra_edges = contra_psth[0][1][:-1]
+
+    ave_ipsi_psth = np.vstack(
+        np.array([i[0] for i in ipsi_psth])).mean(axis=0)
+    ipsi_edges = ipsi_psth[0][1][:-1]
 
     ax.plot(contra_edges, ave_contra_psth, 'b')
     ax.plot(ipsi_edges, ave_ipsi_psth, 'r')
 
     for x in vlines:
-        ax.axvline(x = x, linestyle = '--', color = 'k')
+        ax.axvline(x=x, linestyle='--', color='k')
 
     # cosmetic
     ax.set_title(title)
