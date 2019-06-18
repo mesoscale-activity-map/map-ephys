@@ -27,7 +27,9 @@ log = logging.getLogger(__name__)
 
 def key_hash(key):
     """
-        Given a dictionary `key`, returns a hash string
+    Given a dictionary `key`, returns an md5 hash string of its values.
+
+    For use in building dictionary-keyed tables.
     """
     hashed = hashlib.md5()
     for k, v in sorted(key.items()):
@@ -37,12 +39,19 @@ def key_hash(key):
 
 @schema
 class TrialCondition(dj.Lookup):
+    '''
+    TrialCondition: Manually curated condition queries.
+
+    Used to define sets of trials which can then be keyed on for downstream
+    computations.
+    '''
+
     definition = """
-    trial_condition_id: varchar(32)  # hash of trial_condition_arg
+    trial_condition_id:         varchar(32)     # hash of trial_condition_arg
     ---
-    trial_condition_desc: varchar(1000)
-    trial_condition_func: varchar(36)
-    trial_condition_arg: longblob
+    trial_condition_desc:       varchar(1000)   # trial condition description
+    trial_condition_func:       varchar(36)     # trial retrieval function
+    trial_condition_arg:        longblob        # trial retrieval arguments
     """
 
     @property
@@ -119,64 +128,25 @@ class TrialCondition(dj.Lookup):
     def _get_trials_no_stim(cls, task=None, task_protocol=None, outcome=None,
                             early_lick=None, trial_instruction=None):
 
-        print('get_trials_no_stim', locals())
-        self = cls()
+        log.debug('_get_trials_no_stim', locals())
+
+        return ((experiment.BehaviorTrial
+                 & {'task': task}
+                 & {'trial_instruction': trial_instruction}
+                 & {'early_lick': early_lick}
+                 & {'outcome': outcome}) - experiment.PhotostimEvent)
 
     @classmethod
     def _get_trials_stim(cls, task=None, task_protocol=None, outcome=None,
                          early_lick=None, trial_instruction=None):
 
-        log.debug('get_trials_stim', locals())
-        self = cls()
+        log.debug('_get_trials_stim', locals())
 
-
-class Condition:
-    '''
-    Manually curated condition queries
-    '''
-
-    @staticmethod
-    def q(q, spikes=None):
-        if spikes is None:
-            return q
-        else:
-            return ephys.TrialSpikes & q
-
-    @staticmethod
-    def audio_delay_ipsi_hit_nostim(spikes=None):
-        return Condition.q(
-            ((experiment.BehaviorTrial()
-              & {'task': 'audio delay'}
-              & {'trial_instruction': 'left'}
-              & {'early_lick': 'no early'}
-              & {'outcome': 'hit'}) - experiment.PhotostimEvent), spikes)
-
-    @staticmethod
-    def audio_delay_contra_hit_nostim(spikes=None):
-        return Condition.q(
-            ((experiment.BehaviorTrial()
-              & {'task': 'audio delay'}
-              & {'trial_instruction': 'right'}
-              & {'early_lick': 'no early'}
-              & {'outcome': 'hit'}) - experiment.PhotostimEvent), spikes)
-
-    @staticmethod
-    def audio_delay_ipsi_miss_nostim(spikes=None):
-        return Condition.q(
-            ((experiment.BehaviorTrial()
-              & {'task': 'audio delay'}
-              & {'trial_instruction': 'left'}
-              & {'early_lick': 'no early'}
-              & {'outcome': 'miss'}) - experiment.PhotostimEvent), spikes)
-
-    @staticmethod
-    def audio_delay_contra_miss_nostim(spikes=None):
-        return Condition.q(
-            ((experiment.BehaviorTrial()
-              & {'task': 'audio delay'}
-              & {'trial_instruction': 'right'}
-              & {'early_lick': 'no early'}
-              & {'outcome': 'miss'}) - experiment.PhotostimEvent), spikes)
+        return ((experiment.BehaviorTrial
+                 & {'task': task}
+                 & {'trial_instruction': trial_instruction}
+                 & {'early_lick': early_lick}
+                 & {'outcome': outcome}) & experiment.PhotostimEvent)
 
 
 class UnitPsth:
