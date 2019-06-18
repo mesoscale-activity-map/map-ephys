@@ -56,7 +56,7 @@ class TrialCondition(dj.Lookup):
 
     @property
     def contents(self):
-        contents_data = (  # FIXME: functions should handle missing args
+        contents_data = (
             {
                 'trial_condition_desc': 'good_noearlylick_hit',
                 'trial_condition_func': '_get_trials_no_stim',
@@ -150,13 +150,6 @@ class UnitPsth(dj.Computed):
     unit_psth=NULL:                             longblob
     """
     psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
-
-    key_source = (ephys.Unit * TrialCondition
-                  & [{'trial_condition_desc': desc}
-                     for desc in ['good_noearlylick_left_hit',
-                                  'good_noearlylick_right_hit',
-                                  'good_noearlylick_left_miss',
-                                  'good_noearlylick_right_miss']])
 
     def make(self, key):
         log.info('UnitPsth.make(): key: {}'.format(key))
