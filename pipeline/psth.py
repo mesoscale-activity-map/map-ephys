@@ -133,10 +133,10 @@ class TrialCondition(dj.Lookup):
                     if k in (set(experiment.Photostim.heading.names)
                              - set(experiment.Session.heading.names))}
 
-        rest_key = {k: v for k, v in kwargs.items()
-                    if k not in stim_key}
+        behav_key = {k: v for k, v in kwargs.items()
+                     if k not in stim_key}
 
-        return ((experiment.BehaviorTrial & rest_key) -
+        return ((experiment.BehaviorTrial & behav_key) -
                 (experiment.BehaviorTrial
                  * experiment.PhotostimTrial
                  * experiment.Photostim & stim_key).proj())
@@ -150,10 +150,10 @@ class TrialCondition(dj.Lookup):
                     if k in (set(experiment.Photostim.heading.names)
                              - set(experiment.Session.heading.names))}
 
-        rest_key = {k: v for k, v in kwargs.items()
-                    if k not in stim_key}
+        behav_key = {k: v for k, v in kwargs.items()
+                     if k not in stim_key}
 
-        return ((experiment.BehaviorTrial & rest_key) &
+        return ((experiment.BehaviorTrial & behav_key) &
                 (experiment.BehaviorTrial
                  * experiment.PhotostimTrial
                  * experiment.Photostim & stim_key).proj())
