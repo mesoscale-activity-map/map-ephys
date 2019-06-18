@@ -500,71 +500,128 @@ class UnitSelectivity(dj.Computed):
 
 # ---------- HELPER FUNCTIONS --------------
 
-class TrialCondition(dj.Lookup):
-    definition = """
-    trial_condition_id: varchar(32)  # hash of trial_condition 
-    ---
-    trial_condition_desc: varchar(1000)
-    trial_condition: longblob    
+def get_trials_no_stim(session_key, task=None, task_protocol=None, outcome=None,
+                        early_lick=None, trial_instruction=None):
+    # log.debug('_get_trials_no_stim', locals())
+
+    return ((experiment.BehaviorTrial & session_key
+             & {'task': task}
+             & {'trial_instruction': trial_instruction}
+             & {'early_lick': early_lick}
+             & {'outcome': outcome}) - experiment.PhotostimEvent)
+
+
+def get_trials_stim(session_key, task=None, task_protocol=None, outcome=None,
+                     early_lick=None, trial_instruction=None):
+    # log.debug('_get_trials_stim', locals())
+
+    return ((experiment.BehaviorTrial & session_key
+             & {'task': task}
+             & {'trial_instruction': trial_instruction}
+             & {'early_lick': early_lick}
+             & {'outcome': outcome}) & experiment.PhotostimEvent)
+
+
+def compute_unit_psth(unit_key, trial_keys, per_trial=False):
     """
-
-
-class UnitPsth(dj.Compute):
-    definition = """
-    -> Unit
-    -> TrialCondition
-    ---
-    unit_psth: longblob    
+    Compute unit-level psth for the specified unit and trial-set - return (time,)
+    If per_trial == True, compute trial-level psth - return (trial#, time)
     """
+    q = (ephys.TrialSpikes & unit_key & trial_keys)
+    if not q:
+        return None
 
+    xmin, xmax, bin_size = UnitPsth.psth_params.values()
+    binning = np.arange(xmin, xmax, bin_size)
 
-def compute_unit_psth(unit_key, trial_keys):
-    q = (ephys.TrialSpikes() & unit_key & trial_keys)
     spikes = q.fetch('spike_times')
-    spikes = np.concatenate(spikes)
 
-    xmin, xmax, bins = UnitPsth.psth_params.values()
-    psth = list(np.histogram(spikes, bins = np.arange(xmin, xmax, bins)))
-    psth[0] = psth[0] / len(trial_keys) / bins
+    if per_trial:
+        trial_psth = np.vstack(np.histogram(spike, bins=binning)[0] / bin_size for spike in spikes)
+        return trial_psth , binning[1:]
+    else:
+        spikes = np.concatenate(spikes)
+        psth, edges = np.histogram(spikes, bins=binning)
+        psth = psth / len(q) / bin_size
+        return psth, edges[1:]
 
-    return np.array(psth)
 
-
-def compute_coding_direction(unit_keys, time_period=(-0.4, 0)):
+def compute_coding_direction(contra_psths, ipsi_psths, time_period=None):
     """
     Coding direction here is a vector of length: len(unit_keys)
     This coding direction vector (vcd) is the normalized difference between contra-trials firing rate
-    and ipsi-trials firing rate per unit, within the specified time period prior relative to the cue-onset
-    Trials are restricted as: correct trials, no-early, no-stim
+    and ipsi-trials firing rate per unit, within the specified time period
+    :param contra_psths: unit# x (trial-ave psth, psth_edge)
+    :param ipsi_psths: unit# x (trial-ave psth, psth_edge)
     """
-    time_duration = time_period[-1] - time_period[0]
+    if not time_period:
+        contra_tmin, contra_tmax = zip(*((k[1].min(), k[1].max()) for k in contra_psths))
+        ipsi_tmin, ipsi_tmax = zip(*((k[1].min(), k[1].max()) for k in ipsi_psths))
+        time_period = max(min(contra_tmin), min(ipsi_tmin)), min(max(contra_tmax), max(ipsi_tmax))
 
-    unit_hemi = (ephys.ProbeInsertion.InsertionLocation * experiment.BrainLocation & unit_keys).fetch('hemisphere')
-    if len(set(unit_hemi)) > 1:
-        raise Exception('Specified units are from both hemisphere')
+    p_start, p_end = time_period
+
+    contra_ave_spk_rate = np.array([spk_rate[np.logical_and(spk_edge >= p_start, spk_edge < p_end)].mean()
+                                    for spk_rate, spk_edge in contra_psths])
+    ipsi_ave_spk_rate = np.array([spk_rate[np.logical_and(spk_edge >= p_start, spk_edge < p_end)].mean()
+                                    for spk_rate, spk_edge in ipsi_psths])
+
+    cd_vec = contra_ave_spk_rate - ipsi_ave_spk_rate
+    return cd_vec / np.linalg.norm(cd_vec)
+
+
+def compute_CD_projected_psth(units, time_period=None):
+    """
+    Routine for Coding Direction computation on all the units in the specified unit_keys
+    Coding Direction is calculated in the specified time_period
+    :param: unit_keys - list of unit_keys
+    :return: coding direction unit-vector,
+             contra-trials CD projected trial-psth,
+             ipsi-trials CD projected trial-psth
+             psth time-stamps
+    """
+    unit_hemi = (ephys.ProbeInsertion.InsertionLocation * experiment.BrainLocation
+                 & units).fetch('hemisphere')
+    if len(unit_hemi) != 1:
+        raise Exception('Units from both hemispheres found')
     else:
         unit_hemi = unit_hemi[0]
+
+    session_key = experiment.Session & units
+    if len(session_key) != 1:
+        raise Exception('Units from multiple sessions found')
 
     trial_restrictor = {'task': 'audio delay', 'task_protocol': 1,
                         'outcome': 'hit', 'early_lick': 'no early'}
     contra_trials = {**trial_restrictor, 'trial_instruction': 'right' if unit_hemi == 'left' else 'left'}
     ipsi_trials = {**trial_restrictor, 'trial_instruction': 'left' if unit_hemi == 'left' else 'right'}
 
-    for key in unit_keys:
-        # get trial spike times
-        contra_trialspikes = (ephys.TrialSpikes * experiment.BehaviorTrial
-                             - experiment.PhotostimTrial & key & contra_trials).fetch('spike_times', order_by='trial')
-        ipsi_trialspikes = (ephys.TrialSpikes * experiment.BehaviorTrial
-                            - experiment.PhotostimTrial & key & ipsi_trials).fetch('spike_times', order_by='trial')
+    # -- the computation part
+    # get units and trials - ensuring they have trial-spikes
+    contra_trials = (get_trials_no_stim(session_key, **contra_trials) & ephys.TrialSpikes).fetch('KEY')
+    ipsi_trials = (get_trials_no_stim(session_key, **ipsi_trials) & ephys.TrialSpikes).fetch('KEY')
 
-        contra_trial_spk_rate = [(np.logical_and(t >= time_period['period_start'],
-                                                 t < time_period['period_end'])).astype(int).sum() / time_duration
-                                 for t in contra_trialspikes]
-        ipsi_trial_spk_rate = [(np.logical_and(t >= time_period['period_start'],
-                                               t < time_period['period_end'])).astype(int).sum() / time_duration
-                               for t in ipsi_trialspikes]
+    # get per-trial unit psth for all units - unit# x (trial# x time)
+    contra_trial_psths, contra_edges = zip(*(compute_unit_psth(unit, contra_trials, per_trial=True)
+                                             for unit in units))
+    ipsi_trial_psths, ipsi_edges = zip(*(compute_unit_psth(unit, ipsi_trials, per_trial=True)
+                                         for unit in units))
 
-        spk_rate_diff = np.mean(contra_trial_spk_rate) - np.mean(ipsi_trial_spk_rate)
+    # compute trial-ave unit psth
+    contra_psths = zip((p.mean(axis=0) for p in contra_trial_psths), contra_edges)
+    ipsi_psths = zip((p.mean(axis=0) for p in ipsi_trial_psths), ipsi_edges)
 
+    # compute coding direction
+    cd_vec = compute_coding_direction(contra_psths, ipsi_psths, time_period=time_period)
 
+    # get time vector, relying on all units PSTH shares the same time vector
+    time_stamps = contra_edges[0]
 
+    # get coding projection per trial - trial# x unit# x time
+    contra_psth_per_trial = np.dstack(contra_trial_psths)
+    ipsi_psth_per_trial = np.dstack(ipsi_trial_psths)
+
+    proj_contra_trial = np.vstack(np.dot(tr_u, cd_vec) for tr_u in contra_psth_per_trial)  # trial# x time
+    proj_ipsi_trial = np.vstack(np.dot(tr_u, cd_vec) for tr_u in ipsi_psth_per_trial)    # trial# x time
+
+    return cd_vec, proj_contra_trial, proj_ipsi_trial, time_stamps
