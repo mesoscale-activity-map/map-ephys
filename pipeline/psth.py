@@ -1,6 +1,9 @@
 import logging
 import math
+import hashlib
 
+from functools import partial
+from inspect import getmembers
 from itertools import repeat
 
 import numpy as np
@@ -43,6 +46,68 @@ log = logging.getLogger(__name__)
 #                                      'outcome': 'hit',
 #                                      'early_lick': 'no early',
 #                                      'trial_instruction': 'right'}
+
+
+def key_hash(key):
+    """
+        Given a dictionary `key`, returns a hash string
+    """
+    hashed = hashlib.md5()
+    for k, v in sorted(key.items()):
+        hashed.update(str(v).encode())
+    return hashed.hexdigest()
+
+
+@schema
+class TrialCondition(dj.Lookup):
+    definition = """
+    trial_condition_id: varchar(32)  # hash of trial_condition_arg
+    ---
+    trial_condition_desc: varchar(1000)
+    trial_condition_func: varchar(36)
+    trial_condition_arg: longblob
+    """
+
+    @property
+    def contents(self):
+        contents_data = (
+            {
+                'trial_condition_desc': 'good_noearlylick_correct_left',
+                'trial_condition_func': 'get_trial_no_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'outcome': 'hit',
+                    'early_lick': 'no early',
+                    'trial_instruction': 'right'}
+            },
+        )
+
+        return ({**d, 'trial_condition_id': key_hash(d['trial_condition_arg'])}
+                for d in contents_data)
+
+    @classmethod
+    def get_func(cls, key):
+        self = cls()
+
+        func, args = (self & key).fetch1(
+            'trial_condition_func', 'trial_condition_arg')
+
+        return partial(dict(getmembers(cls))[func], **args)
+
+    @classmethod
+    def get_trial_no_stim(cls, task=None, task_protocol=None, outcome=None,
+                          early_lick=None, trial_instruction=None):
+
+        print('get_trial_no_stim', locals())
+        self = cls()
+
+    @classmethod
+    def get_trial_stim(cls, task=None, task_protocol=None, outcome=None,
+                       early_lick=None, trial_instruction=None):
+
+        log.debug('get_trial_stim', locals())
+        self = cls()
 
 
 class Condition:
