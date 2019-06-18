@@ -106,9 +106,30 @@ class TrialCondition(dj.Lookup):
                     'early_lick': 'no early',
                     'trial_instruction': 'right'}
             },
+            {
+                'trial_condition_desc': 'all_noearlylick_both_alm_stim',
+                'trial_condition_func': '_get_trials_include_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'early_lick': 'no early',
+                    'brain_location_name': 'both_alm'}
+            },
+            {
+                'trial_condition_desc': 'all_noearlylick_both_alm_nostim',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'early_lick': 'no early',
+                    'brain_location_name': 'both_alm'}
+            },
         )
-
-        return ({**d, 'trial_condition_id': key_hash(d['trial_condition_arg'])}
+        # generate key XXX: complicated why not just key from description?
+        return ({**d, 'trial_condition_id':
+                 key_hash({'trial_condition_desc': d['trial_condition_desc'],
+                           'trial_condition_func': d['trial_condition_func'],
+                           **d['trial_condition_arg']})}
                 for d in contents_data)
 
     @classmethod
