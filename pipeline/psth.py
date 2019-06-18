@@ -500,6 +500,24 @@ class UnitSelectivity(dj.Computed):
 
 # ---------- HELPER FUNCTIONS --------------
 
+class TrialCondition(dj.Lookup):
+    definition = """
+    trial_condition_id: varchar(32)  # hash of trial_condition 
+    ---
+    trial_condition_desc: varchar(1000)
+    trial_condition: longblob    
+    """
+
+
+class UnitPsth(dj.Compute):
+    definition = """
+    -> Unit
+    -> TrialCondition
+    ---
+    unit_psth: longblob    
+    """
+
+
 def compute_unit_psth(unit_key, trial_keys):
     q = (ephys.TrialSpikes() & unit_key & trial_keys)
     spikes = q.fetch('spike_times')
@@ -510,3 +528,43 @@ def compute_unit_psth(unit_key, trial_keys):
     psth[0] = psth[0] / len(trial_keys) / bins
 
     return np.array(psth)
+
+
+def compute_coding_direction(unit_keys, time_period=(-0.4, 0)):
+    """
+    Coding direction here is a vector of length: len(unit_keys)
+    This coding direction vector (vcd) is the normalized difference between contra-trials firing rate
+    and ipsi-trials firing rate per unit, within the specified time period prior relative to the cue-onset
+    Trials are restricted as: correct trials, no-early, no-stim
+    """
+    time_duration = time_period[-1] - time_period[0]
+
+    unit_hemi = (ephys.ProbeInsertion.InsertionLocation * experiment.BrainLocation & unit_keys).fetch('hemisphere')
+    if len(set(unit_hemi)) > 1:
+        raise Exception('Specified units are from both hemisphere')
+    else:
+        unit_hemi = unit_hemi[0]
+
+    trial_restrictor = {'task': 'audio delay', 'task_protocol': 1,
+                        'outcome': 'hit', 'early_lick': 'no early'}
+    contra_trials = {**trial_restrictor, 'trial_instruction': 'right' if unit_hemi == 'left' else 'left'}
+    ipsi_trials = {**trial_restrictor, 'trial_instruction': 'left' if unit_hemi == 'left' else 'right'}
+
+    for key in unit_keys:
+        # get trial spike times
+        contra_trialspikes = (ephys.TrialSpikes * experiment.BehaviorTrial
+                             - experiment.PhotostimTrial & key & contra_trials).fetch('spike_times', order_by='trial')
+        ipsi_trialspikes = (ephys.TrialSpikes * experiment.BehaviorTrial
+                            - experiment.PhotostimTrial & key & ipsi_trials).fetch('spike_times', order_by='trial')
+
+        contra_trial_spk_rate = [(np.logical_and(t >= time_period['period_start'],
+                                                 t < time_period['period_end'])).astype(int).sum() / time_duration
+                                 for t in contra_trialspikes]
+        ipsi_trial_spk_rate = [(np.logical_and(t >= time_period['period_start'],
+                                               t < time_period['period_end'])).astype(int).sum() / time_duration
+                               for t in ipsi_trialspikes]
+
+        spk_rate_diff = np.mean(contra_trial_spk_rate) - np.mean(ipsi_trial_spk_rate)
+
+
+

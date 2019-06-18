@@ -129,7 +129,7 @@ def plot_unit_selectivity(probe_insert_key, axs=None):
 
 
 def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
-    trial_restrictor = {'task': 'audio delay', 'task_protocol': 1, 'early_lick': 'no early'}  # TODO: confirm this restrictor
+    trial_restrictor = [{'task': 'audio delay', 'task_protocol': 1, 'early_lick': 'no early'}, 'outcome != "ignore"']
     both_alm_stim_res = experiment.Photostim * experiment.BrainLocation & 'brain_location_name = "both_alm"'
 
     no_stim_trials = experiment.BehaviorTrial - experiment.PhotostimTrial & trial_restrictor
