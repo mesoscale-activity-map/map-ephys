@@ -59,7 +59,7 @@ class TrialCondition(dj.Lookup):
         contents_data = (
             {
                 'trial_condition_desc': 'good_noearlylick_hit',
-                'trial_condition_func': '_get_trials_no_stim',
+                'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
                     'task_protocol': 1,
@@ -68,7 +68,7 @@ class TrialCondition(dj.Lookup):
             },
             {
                 'trial_condition_desc': 'good_noearlylick_left_hit',
-                'trial_condition_func': '_get_trials_no_stim',
+                'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
                     'task_protocol': 1,
@@ -78,7 +78,7 @@ class TrialCondition(dj.Lookup):
             },
             {
                 'trial_condition_desc': 'good_noearlylick_right_hit',
-                'trial_condition_func': '_get_trials_no_stim',
+                'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
                     'task_protocol': 1,
@@ -88,7 +88,7 @@ class TrialCondition(dj.Lookup):
             },
             {
                 'trial_condition_desc': 'good_noearlylick_left_miss',
-                'trial_condition_func': '_get_trials_no_stim',
+                'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
                     'task_protocol': 1,
@@ -98,7 +98,7 @@ class TrialCondition(dj.Lookup):
             },
             {
                 'trial_condition_desc': 'good_noearlylick_right_miss',
-                'trial_condition_func': '_get_trials_no_stim',
+                'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
                     'task_protocol': 1,
@@ -125,21 +125,39 @@ class TrialCondition(dj.Lookup):
         return partial(dict(getmembers(cls))[func], **args)
 
     @classmethod
-    def _get_trials_no_stim(cls, **kwargs):
+    def _get_trials_exclude_stim(cls, **kwargs):
 
-        log.debug('_get_trials_no_stim: {}'.format(kwargs))
+        log.debug('_get_trials_exclude_stim: {}'.format(kwargs))
 
-        return ((experiment.BehaviorTrial & kwargs)
-                - experiment.PhotostimTrial)
+        stim_key = {k: v for k, v in kwargs.items()
+                    if k in (set(experiment.Photostim.heading.names)
+                             - set(experiment.Session.heading.names))}
+
+        rest_key = {k: v for k, v in kwargs.items()
+                    if k not in stim_key}
+
+        return ((experiment.BehaviorTrial & rest_key) -
+                (experiment.BehaviorTrial
+                 * experiment.PhotostimTrial
+                 * experiment.Photostim & stim_key).proj())
 
     @classmethod
-    def _get_trials_stim(cls, **kwargs):
+    def _get_trials_include_stim(cls, **kwargs):
 
-        log.debug('_get_trials_stim: {}'.format(kwargs))
+        log.debug('_get_trials_include_stim: {}'.format(kwargs))
 
-        return ((experiment.BehaviorTrial
+        stim_key = {k: v for k, v in kwargs.items()
+                    if k in (set(experiment.Photostim.heading.names)
+                             - set(experiment.Session.heading.names))}
+
+        rest_key = {k: v for k, v in kwargs.items()
+                    if k not in stim_key}
+
+        return ((experiment.BehaviorTrial & rest_key) &
+                (experiment.BehaviorTrial
                  * experiment.PhotostimTrial
-                 * experiment.Photostim) & kwargs)
+                 * experiment.Photostim & stim_key).proj())
+
 
 @schema
 class UnitPsth(dj.Computed):
@@ -159,7 +177,7 @@ class UnitPsth(dj.Computed):
             (TrialCondition & key).fetch1('trial_condition_desc'))
 
         # fetch related spike times
-        q = (ephys.TrialSpikes & key & trials)
+        q = (ephys.TrialSpikes & key & trials.proj())
         spikes = q.fetch('spike_times')
 
         if len(spikes) == 0:
