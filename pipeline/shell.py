@@ -68,9 +68,12 @@ def ingest_histology(*args):
 
 
 def populate_psth(*args):
+
+    log.info('psth.PeriodSelectivity.populate()')
+    psth.PeriodSelectivity.populate()
+
     log.info('psth.UnitSelectivity.populate()')
     psth.UnitSelectivity.populate()
-
 
 def nuke_all():
     if 'nuclear_option' not in dj.config:
