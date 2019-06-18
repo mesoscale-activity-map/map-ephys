@@ -22,30 +22,7 @@ schema = dj.schema(get_schema_name('psth'))
 log = logging.getLogger(__name__)
 
 # NOW:
-# 
-# - rework Condition to TrialCondition funtion+arguments based schema:
-#   definition = """
-#   trial_condition_id: varchar(32)  # hash of trial_condition
-#   ---
-#   trial_condition_desc: varchar(1000)
-#   trial_condition_func: varchar(36)
-#   trial_condition_arg: longblob
-#   """
-#   - should have get_func to resolve function
-#   - Functions:
-#     - get_trial_no_stim()
-#     - get_trial_stim()
-#   - Conditions:
-#     good_noearlylick_correct_left
-#     good_noearlylick_correct_right
-#     good_noearlylick_incorrect_left
-#     good_noearlylick_incorrect_right
-#     good_correct_noearlylick
-#     good_noearlylick_correct_left = {'task': 'audio delay',
-#                                      'task_protocol': 1,
-#                                      'outcome': 'hit',
-#                                      'early_lick': 'no early',
-#                                      'trial_instruction': 'right'}
+# - rework Condition to TrialCondition funtion+arguments based schema
 
 
 def key_hash(key):
@@ -72,8 +49,27 @@ class TrialCondition(dj.Lookup):
     def contents(self):
         contents_data = (
             {
-                'trial_condition_desc': 'good_noearlylick_correct_left',
-                'trial_condition_func': 'get_trial_no_stim',
+                'trial_condition_desc': 'good_noearlylick_hit',
+                'trial_condition_func': '_get_trials_no_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'outcome': 'hit',
+                    'early_lick': 'no early'}
+            },
+            {
+                'trial_condition_desc': 'good_noearlylick_left_hit',
+                'trial_condition_func': '_get_trials_no_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'outcome': 'hit',
+                    'early_lick': 'no early',
+                    'trial_instruction': 'left'}
+            },
+            {
+                'trial_condition_desc': 'good_noearlylick_right_hit',
+                'trial_condition_func': '_get_trials_no_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
                     'task_protocol': 1,
@@ -81,10 +77,34 @@ class TrialCondition(dj.Lookup):
                     'early_lick': 'no early',
                     'trial_instruction': 'right'}
             },
+            {
+                'trial_condition_desc': 'good_noearlylick_left_miss',
+                'trial_condition_func': '_get_trials_no_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'outcome': 'miss',
+                    'early_lick': 'no early',
+                    'trial_instruction': 'left'}
+            },
+            {
+                'trial_condition_desc': 'good_noearlylick_right_miss',
+                'trial_condition_func': '_get_trials_no_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'outcome': 'miss',
+                    'early_lick': 'no early',
+                    'trial_instruction': 'right'}
+            },
         )
 
         return ({**d, 'trial_condition_id': key_hash(d['trial_condition_arg'])}
                 for d in contents_data)
+
+    @classmethod
+    def get_trials(cls,  trial_condition_desc):
+        return cls.get_func({'trial_condition_desc': trial_condition_desc})()
 
     @classmethod
     def get_func(cls, key):
@@ -96,17 +116,17 @@ class TrialCondition(dj.Lookup):
         return partial(dict(getmembers(cls))[func], **args)
 
     @classmethod
-    def get_trial_no_stim(cls, task=None, task_protocol=None, outcome=None,
-                          early_lick=None, trial_instruction=None):
+    def _get_trials_no_stim(cls, task=None, task_protocol=None, outcome=None,
+                            early_lick=None, trial_instruction=None):
 
-        print('get_trial_no_stim', locals())
+        print('get_trials_no_stim', locals())
         self = cls()
 
     @classmethod
-    def get_trial_stim(cls, task=None, task_protocol=None, outcome=None,
-                       early_lick=None, trial_instruction=None):
+    def _get_trials_stim(cls, task=None, task_protocol=None, outcome=None,
+                         early_lick=None, trial_instruction=None):
 
-        log.debug('get_trial_stim', locals())
+        log.debug('get_trials_stim', locals())
         self = cls()
 
 
