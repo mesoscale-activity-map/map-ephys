@@ -169,15 +169,12 @@ class UnitPsth(dj.Computed):
     def make(self, key):
         log.info('UnitPsth.make(): key: {}'.format(key))
 
-        # build unit key,
-        unit = {k: v for k, v in key.items() if k in ephys.Unit.primary_key}
-
         # expand TrialCondition to trials,
         trials = TrialCondition.get_trials(
             (TrialCondition & key).fetch1('trial_condition_desc'))
 
         # fetch related spike times
-        q = (ephys.TrialSpikes & unit & trials)
+        q = (ephys.TrialSpikes & key & trials)
         spikes = q.fetch('spike_times')
 
         if len(spikes) == 0:
@@ -185,15 +182,30 @@ class UnitPsth(dj.Computed):
             self.insert1(key)
             return
 
-        spikes = np.concatenate(spikes)
-
-        xmin, xmax, bins = self.psth_params.values()
+        # compute psth & store.
         # XXX: xmin, xmax+bins (149 here vs 150 in matlab)..
         #   See also [:1] slice in plots..
-        psth = list(np.histogram(spikes, bins=np.arange(xmin, xmax, bins)))
-        psth[0] = psth[0] / len(trials) / bins
+        unit_psth = self.compute_psth(spikes)
 
-        self.insert1({**key, 'unit_psth': np.array(psth)})
+        self.insert1({**key, 'unit_psth': unit_psth})
+
+    @staticmethod
+    def compute_unit_trial_psth(unit_key, trial_keys):
+        raise NotImplementedError('old - possibly to be kept/adapted')
+
+        q = (ephys.TrialSpikes() & unit_key & trial_keys)
+        spikes = q.fetch('spike_times')
+        return UnitPsth.compute_psth(spikes)
+
+    @staticmethod
+    def compute_psth(session_unit_spikes):
+        spikes = np.concatenate(session_unit_spikes)
+
+        xmin, xmax, bins = UnitPsth.psth_params.values()
+        psth = list(np.histogram(spikes, bins=np.arange(xmin, xmax, bins)))
+        psth[0] = psth[0] / len(session_unit_spikes) / bins
+
+        return np.array(psth)
 
     @classmethod
     def get_plotting_data(cls, unit_key, condition_key):
@@ -225,25 +237,6 @@ class UnitPsth(dj.Computed):
                                   for s, t in zip(spikes, trials)])]
 
         return dict(trials=trials, spikes=spikes, psth=psth, raster=raster)
-
-    @staticmethod
-    def compute_unit_trial_psth(unit_key, trial_keys):
-        raise NotImplementedError('old - possibly to be kept/adapted')
-
-        q = (ephys.TrialSpikes() & unit_key & trial_keys)
-        spikes = q.fetch('spike_times')
-        return UnitPsth.compute_psth(spikes)
-
-    @staticmethod
-    def compute_psth(session_unit_spikes):
-        raise NotImplementedError('old - possibly to be kept/adapted')
-        spikes = np.concatenate(session_unit_spikes)
-
-        xmin, xmax, bins = UnitPsth.psth_params.values()
-        psth = list(np.histogram(spikes, bins=np.arange(xmin, xmax, bins)))
-        psth[0] = psth[0] / len(session_unit_spikes) / bins
-
-        return np.array(psth)
 
 
 @schema
