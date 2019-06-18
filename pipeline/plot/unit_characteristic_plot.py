@@ -325,7 +325,7 @@ def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
         psth_s_i = psth_s_r
         psth_n_i = psth_n_r
         psth_s_c = psth_s_l
-        psth_n_c = psth_n_r
+        psth_n_c = psth_n_l
 
     _plot_ave_psth(psth_n_i, psth_n_c, period_starts, axs[0],
                    'Control')
