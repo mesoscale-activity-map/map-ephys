@@ -125,29 +125,21 @@ class TrialCondition(dj.Lookup):
         return partial(dict(getmembers(cls))[func], **args)
 
     @classmethod
-    def _get_trials_no_stim(cls, task=None, task_protocol=None, outcome=None,
-                            early_lick=None, trial_instruction=None):
+    def _get_trials_no_stim(cls, **kwargs):
 
-        log.debug('_get_trials_no_stim', locals())
+        log.debug('_get_trials_no_stim: {}'.format(kwargs))
 
-        return ((experiment.BehaviorTrial
-                 & {'task': task}
-                 & {'trial_instruction': trial_instruction}
-                 & {'early_lick': early_lick}
-                 & {'outcome': outcome}) - experiment.PhotostimEvent)
+        return ((experiment.BehaviorTrial & kwargs)
+                - experiment.PhotostimTrial)
 
     @classmethod
-    def _get_trials_stim(cls, task=None, task_protocol=None, outcome=None,
-                         early_lick=None, trial_instruction=None):
+    def _get_trials_stim(cls, **kwargs):
 
-        log.debug('_get_trials_stim', locals())
+        log.debug('_get_trials_stim: {}'.format(kwargs))
 
         return ((experiment.BehaviorTrial
-                 & {'task': task}
-                 & {'trial_instruction': trial_instruction}
-                 & {'early_lick': early_lick}
-                 & {'outcome': outcome}) & experiment.PhotostimEvent)
-
+                 * experiment.PhotostimTrial
+                 * experiment.Photostim) & kwargs)
 
 @schema
 class UnitPsth(dj.Computed):
