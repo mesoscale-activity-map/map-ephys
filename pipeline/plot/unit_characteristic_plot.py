@@ -78,7 +78,7 @@ def plot_unit_characteristic(probe_insert_key, axs=None):
 def plot_unit_selectivity(probe_insert_key, axs=None):
     attr_names = ['unit', 'period', 'period_selectivity', 'contra_firing_rate',
                        'ipsi_firing_rate', 'unit_posx', 'unit_posy', 'dv_location']
-    selective_units = (psth.UnitSelectivity.PeriodSelectivity * ephys.Unit * ephys.ProbeInsertion.InsertionLocation
+    selective_units = (psth.PeriodSelectivity * ephys.Unit * ephys.ProbeInsertion.InsertionLocation
                        * experiment.Period & probe_insert_key & 'period_selectivity != "non-selective"').fetch(*attr_names)
     selective_units = pd.DataFrame(selective_units).T
     selective_units.columns = attr_names
@@ -140,8 +140,8 @@ def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
     metrics = pd.DataFrame(columns=['unit', 'x', 'y', 'frate_change'])
     for u_idx, unit in enumerate(units.fetch('KEY')):
         x, y = (ephys.Unit & unit).fetch1('unit_posx', 'unit_posy')
-        nostim_psth, nostim_edge = psth.compute_unit_psth(unit, no_stim_trials)
-        stim_psth, stim_edge = psth.compute_unit_psth(unit, bi_stim_trials)
+        nostim_psth, nostim_edge = psth.UnitPsth.compute_unit_trial_psth(unit, no_stim_trials)
+        stim_psth, stim_edge = psth.UnitPsth.compute_unit_trial_psth(unit, bi_stim_trials)
         frate_change = np.abs(stim_psth.mean() - nostim_psth.mean()) / nostim_psth.mean()
         metrics.loc[u_idx] = (int(unit['unit']), x, y, frate_change)
 
@@ -166,11 +166,23 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
     unit_hemi = (ephys.ProbeInsertion.InsertionLocation * experiment.BrainLocation
                  & probe_insert_key).fetch1('hemisphere')
 
-    contra_trials = psth.TrialCondition & {'condition_id': 0 if unit_hemi == 'left' else 1}
-    ipsi_trials = psth.TrialCondition & {'condition_id': 1 if unit_hemi == 'left' else 0}
+    # contra_trials = psth.TrialCondition & {'condition_id': 0 if unit_hemi == 'left' else 1}
+    # ipsi_trials = psth.TrialCondition & {'condition_id': 1 if unit_hemi == 'left' else 0}
+    # contra_trials = psth.TrialCondition & {'condition_id': 0 if unit_hemi == 'left' else 1}
+    # ipsi_trials = psth.TrialCondition & {'condition_id': 1 if unit_hemi == 'left' else 0}
 
-    ipsi_sel_units = ephys.Unit * psth.UnitSelectivity & 'unit_selectivity = "ipsi-selective"'
-    contra_sel_units = ephys.Unit * psth.UnitSelectivity & 'unit_selectivity = "contra-selective"'
+    if unit_hemi == 'left':
+        ipsi_trials = psth.Condition.audio_delay_ipsi_hit_nostim()
+        contra_trials = psth.Condition.audio_delay_contra_hit_nostim()
+    else:
+        ipsi_trials = psth.Condition.audio_delay_contra_hit_nostim()
+        contra_trials = psth.Condition.audio_delay_ipsi_hit_nostim()
+
+    ipsi_sel_units = (ephys.Unit * psth.UnitSelectivity
+                      & 'unit_selectivity = "ipsi-selective"').fetch('KEY')
+
+    contra_sel_units = (ephys.Unit * psth.UnitSelectivity
+                        & 'unit_selectivity = "contra-selective"').fetch('KEY')
 
     if axs is None:
         fig, axs = plt.subplots(1, 2, figsize=(20, 20))
@@ -179,16 +191,34 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
     period_starts = (experiment.Period & 'period in ("sample", "delay", "response")').fetch('period_start')
 
     # contra-selective units
-    _plot_stacked_psth_diff(
-        (psth.UnitPsth * contra_sel_units & contra_trials).fetch(order_by='unit_posy desc'),
-        (psth.UnitPsth * contra_sel_units & ipsi_trials).fetch(order_by='unit_posy desc'),
-        ax=axs[0], vlines=period_starts)
+    # _plot_stacked_psth_diff(
+    #     (psth.UnitPsth * contra_sel_units & contra_trials).fetch(order_by='unit_posy desc'),
+    #     (psth.UnitPsth * contra_sel_units & ipsi_trials).fetch(order_by='unit_posy desc'),
+    #     ax=axs[0], vlines=period_starts)
+
+    # contra-selective units
+
+    # compute psths WIP / stalled - see `rework Condition` in psth.py
+    psth_c_c = [psth.UnitPsth.compute_unit_trial_psth(u, contra_trials)
+                for u in contra_sel_units]
+    psth_c_i = [psth.UnitPsth.compute_unit_trial_psth(u, ipsi_trials)
+                for u in contra_sel_units]
+
+    _plot_stacked_psth_diff(psth_c_c, psth_c_i, ax=axs[0], vlines=period_starts)
     axs[0].set_title('Contra-selective Units')
+
     # ipsi-selective units
-    _plot_stacked_psth_diff(
-        (psth.UnitPsth * ipsi_sel_units & ipsi_trials).fetch(order_by='unit_posy desc'),
-        (psth.UnitPsth * ipsi_sel_units & contra_trials).fetch(order_by='unit_posy desc'),
-        ax=axs[1], vlines=period_starts)
+    # _plot_stacked_psth_diff(
+    #     (psth.UnitPsth * ipsi_sel_units & ipsi_trials).fetch(order_by='unit_posy desc'),
+    #     (psth.UnitPsth * ipsi_sel_units & contra_trials).fetch(order_by='unit_posy desc'),
+    #     ax=axs[1], vlines=period_starts)
+
+    psth_i_c = [psth.UnitPsth.compute_unit_trial_psth(u, contra_trials)
+                for u in ipsi_sel_units]
+    psth_i_i = [psth.UnitPsth.compute_unit_trial_psth(u, ipsi_trials)
+                for u in ipsi_sel_units]
+
+    _plot_stacked_psth_diff(psth_i_i, psth_i_c, ax=axs[0], vlines=period_starts)
     axs[1].set_title('Ipsi-selective Units')
 
 
@@ -288,10 +318,13 @@ def _plot_stacked_psth_diff(psth_a, psth_b, vlines=[], ax=None):
     aspect = 2 / nunits
     extent = [plt_xmin, plt_xmax, 0, nunits]
 
-    a_data = np.array([r[0] for r in psth_a['unit_psth']])
-    b_data = np.array([r[0] for r in psth_b['unit_psth']])
+    # a_data = np.array([r[0] for r in psth_a['unit_psth']])
+    # b_data = np.array([r[0] for r in psth_b['unit_psth']])
 
-    # scale per-unit psth's - TODO: moving average scaling
+    a_data = np.array([r[0] for r in psth_a])
+    b_data = np.array([r[0] for r in psth_b])
+
+    # scale per-unit psth's
     a_data = np.array([_movmean(i/i.max()) for i in a_data])
     b_data = np.array([_movmean(i/i.max()) for i in b_data])
 
