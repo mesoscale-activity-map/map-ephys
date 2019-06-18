@@ -287,27 +287,50 @@ def plot_ave_contra_ipsi_psth(probe_insert_key, axs=None):
 
 
 def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
-    stim_dur = 0.5  # TODO: hard-coded here, this info is not ingested anywhere
-    unit_hemi = (ephys.ProbeInsertion.InsertionLocation * experiment.BrainLocation
-                 & probe_insert_key).fetch1('hemisphere')
-    period_starts = (experiment.Period & 'period in ("sample", "delay", "response")').fetch('period_start')
-
-    trial_restrictor = {'task': 'audio delay', 'task_protocol': 1, 'early_lick': 'no early'}  # TODO: confirm this restrictor
-    both_alm_stim_res = experiment.Photostim * experiment.BrainLocation & 'brain_location_name = "both_alm"'
-
-    no_stim_trials = experiment.BehaviorTrial - experiment.PhotostimTrial & trial_restrictor
-    bi_stim_trials = experiment.BehaviorTrial * experiment.PhotostimTrial & trial_restrictor & both_alm_stim_res
-
-    units = ephys.Unit & 'unit_quality = "good"'
-
     if axs is None:
         fig, axs = plt.subplots(1, 2, figsize=(16, 6))
     assert axs.size == 2
 
-    for trials, ax, title in zip((no_stim_trials, bi_stim_trials), axs, ('Control', 'Bilateral ALM photostim')):
-        contra_trials = (trials & {'trial_instruction': 'right' if unit_hemi == 'left' else 'left'})
-        ipsi_trials = (trials & {'trial_instruction': 'left' if unit_hemi == 'left' else 'right'})
-        _plot_ave_psth(units, contra_trials, ipsi_trials, vlines=period_starts, ax=ax, title=title)
+    stim_dur = 0.5  # TODO: hard-coded here, this info is not ingested anywhere
+
+    insert = (ephys.ProbeInsertion.InsertionLocation
+              * experiment.BrainLocation & probe_insert_key).fetch1()
+
+    period_starts = (experiment.Period
+                     & 'period in ("sample", "delay", "response")').fetch(
+                         'period_start')
+
+    psth_s_l = (psth.UnitPsth * psth.TrialCondition
+                & {'trial_condition_desc':
+                   'all_noearlylick_both_alm_stim_left'}).fetch('unit_psth')
+
+    psth_n_l = (psth.UnitPsth * psth.TrialCondition
+                & {'trial_condition_desc':
+                   'all_noearlylick_both_alm_nostim_left'}).fetch('unit_psth')
+
+    psth_s_r = (psth.UnitPsth * psth.TrialCondition
+                & {'trial_condition_desc':
+                   'all_noearlylick_both_alm_stim_right'}).fetch('unit_psth')
+
+    psth_n_r = (psth.UnitPsth * psth.TrialCondition
+                & {'trial_condition_desc':
+                   'all_noearlylick_both_alm_nostim_right'}).fetch('unit_psth')
+
+    if insert['hemisphere'] == 'left':
+        psth_s_i = psth_s_l
+        psth_n_i = psth_n_l
+        psth_s_c = psth_s_r
+        psth_n_c = psth_n_r
+    else:
+        psth_s_i = psth_s_r
+        psth_n_i = psth_n_r
+        psth_s_c = psth_s_l
+        psth_n_c = psth_n_r
+
+    _plot_ave_psth(psth_n_i, psth_n_c, period_starts, axs[0],
+                   'Control')
+    _plot_ave_psth(psth_s_i, psth_s_c, period_starts, axs[0],
+                   'Bilateral ALM photostim')
 
     # cosmetic
     ymax = max([ax.get_ylim()[1] for ax in axs])
@@ -315,7 +338,8 @@ def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
         ax.set_ylim((0, ymax))
 
     # add shaded bar for photostim
-    delay = (experiment.Period & 'period = "delay"').fetch1('period_start')
+    delay = (experiment.Period  # TODO: use from period_starts
+             & 'period = "delay"').fetch1('period_start')
     axs[1].axvspan(delay, delay + stim_dur, alpha=0.3, color='royalblue')
 
 

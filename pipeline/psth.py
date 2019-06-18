@@ -124,6 +124,46 @@ class TrialCondition(dj.Lookup):
                     'early_lick': 'no early',
                     'brain_location_name': 'both_alm'}
             },
+            {
+                'trial_condition_desc': 'all_noearlylick_both_alm_stim_left',
+                'trial_condition_func': '_get_trials_include_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'early_lick': 'no early',
+                    'trial_instruction': 'left',
+                    'brain_location_name': 'both_alm'}
+            },
+            {
+                'trial_condition_desc': 'all_noearlylick_both_alm_nostim_left',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'early_lick': 'no early',
+                    'trial_instruction': 'left',
+                    'brain_location_name': 'both_alm'}
+            },
+            {
+                'trial_condition_desc': 'all_noearlylick_both_alm_stim_right',
+                'trial_condition_func': '_get_trials_include_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'early_lick': 'no early',
+                    'trial_instruction': 'right',
+                    'brain_location_name': 'both_alm'}
+            },
+            {
+                'trial_condition_desc': 'all_noearlylick_both_alm_nostim_right',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'early_lick': 'no early',
+                    'trial_instruction': 'right',
+                    'brain_location_name': 'both_alm'}
+            },
         )
         # generate key XXX: complicated why not just key from description?
         return ({**d, 'trial_condition_id':
