@@ -149,7 +149,107 @@ class TrialCondition(dj.Lookup):
                  & {'outcome': outcome}) & experiment.PhotostimEvent)
 
 
-class UnitPsth:
+@schema
+class UnitPsth(dj.Computed):
+    definition = """
+    -> TrialCondition
+    -> ephys.Unit
+    ---
+    unit_psth=NULL:                             longblob
+    """
+    psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
+
+    def make(self, key):
+        log.info('UnitPsth.make(): key: {}'.format(key))
+
+        unit = {k: v for k, v in key.items() if k in ephys.Unit.primary_key}
+
+        # Expand Condition -
+        # could conditionalize e.g.
+        # if key['condition_id'] in [1,2,3]: self.make_thiskind(key), etc.
+        # for now, we assume one method of processing.
+
+        cond = TrialCondition.expand(key['condition_id'])
+
+        all_trials = TrialCondition.trials({
+            'TaskProtocol': cond['TaskProtocol'],
+            'TrialInstruction': cond['TrialInstruction'],
+            'EarlyLick': cond['EarlyLick'],
+            'Outcome': cond['Outcome']})
+
+        photo_trials = TrialCondition.trials({
+            'PhotostimLocation': cond['PhotostimLocation']})
+
+        # HACK special case stim condition logic -
+        #   ... should be fixed by expanding Condition support logic.
+        if 'onlystim' in cond['Condition']['condition_desc']:
+            tgt_trials = [t for t in all_trials if t in photo_trials]
+        elif 'nostim' in cond['Condition']['condition_desc']:
+            tgt_trials = [t for t in all_trials if t not in photo_trials]
+        else:
+            tgt_trials = all_trials
+
+        q = (ephys.TrialSpikes() & unit & tgt_trials)
+        spikes = q.fetch('spike_times')
+
+        if len(spikes) == 0:
+            log.warning('no spikes found for key {} - null psth'.format(key))
+            self.insert1(key)
+            return
+
+        spikes = np.concatenate(spikes)
+
+        xmin, xmax, bins = self.psth_params.values()
+        # XXX: xmin, xmax+bins (149 here vs 150 in matlab)..
+        #   See also [:1] slice in plots..
+        psth = list(np.histogram(spikes, bins=np.arange(xmin, xmax, bins)))
+        psth[0] = psth[0] / len(tgt_trials) / bins
+
+        self.insert1({**key, 'unit_psth': np.array(psth)})
+
+    @classmethod
+    def get(cls, condition_key, unit_key,
+            incl_conds=['TaskProtocol', 'TrialInstruction', 'EarlyLick',
+                        'Outcome'],
+            excl_conds=['PhotostimLocation']):
+        """
+        Retrieve / build data needed for a Unit PSTH Plot based on the given
+        unit condition and included / excluded condition (sub-)variables.
+        Returns a dictionary of the form:
+          {
+             'trials': ephys.TrialSpikes.trials,
+             'spikes': ephys.TrialSpikes.spikes,
+             'psth': UnitPsth.unit_psth,
+             'raster': Spike * Trial raster [np.array, np.array]
+          }
+        """
+
+        condition = TrialCondition.expand(condition_key['condition_id'])
+        session_key = {k: unit_key[k] for k in experiment.Session.primary_key}
+
+        psth_q = (UnitPsth & {**condition_key, **unit_key})
+        psth = psth_q.fetch1()['unit_psth']
+
+        i_trials = TrialCondition.trials({k: condition[k] for k in incl_conds},
+                                         session_key)
+
+        x_trials = TrialCondition.trials({k: condition[k] for k in excl_conds},
+                                         session_key)
+
+        st_q = ((ephys.TrialSpikes & i_trials & unit_key) -
+                (experiment.SessionTrial & x_trials & unit_key))
+
+        spikes, trials = st_q.fetch('spike_times', 'trial',
+                                    order_by='trial asc')
+
+        raster = [np.concatenate(spikes),
+                  np.concatenate([[t] * len(s)
+                                  for s, t in zip(spikes, trials)])]
+
+        return dict(trials=trials, spikes=spikes, psth=psth, raster=raster)
+
+
+class UnitPsthOld:
 
     psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
 
