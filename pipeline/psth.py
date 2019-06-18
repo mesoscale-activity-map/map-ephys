@@ -176,11 +176,6 @@ class UnitPsth(dj.Computed):
         trials = TrialCondition.get_trials(
             (TrialCondition & key).fetch1('trial_condition_desc'))
 
-        # from sys import exit as sys_exit  # NOQA
-        # from code import interact
-        # from collections import ChainMap
-        # interact('unitpsth make', local=dict(ChainMap(locals(), globals())))
-
         # fetch related spike times
         q = (ephys.TrialSpikes & unit & trials)
         spikes = q.fetch('spike_times')
@@ -201,10 +196,7 @@ class UnitPsth(dj.Computed):
         self.insert1({**key, 'unit_psth': np.array(psth)})
 
     @classmethod
-    def get(cls, condition_key, unit_key,
-            incl_conds=['TaskProtocol', 'TrialInstruction', 'EarlyLick',
-                        'Outcome'],
-            excl_conds=['PhotostimLocation']):
+    def get_plotting_data(cls, condition_key, unit_key):
         """
         Retrieve / build data needed for a Unit PSTH Plot based on the given
         unit condition and included / excluded condition (sub-)variables.
@@ -216,24 +208,17 @@ class UnitPsth(dj.Computed):
              'raster': Spike * Trial raster [np.array, np.array]
           }
         """
+        # from sys import exit as sys_exit  # NOQA
+        # from code import interact
+        # from collections import ChainMap
+        # interact('unitpsth make', local=dict(ChainMap(locals(), globals())))
 
-        condition = TrialCondition.expand(condition_key['condition_id'])
-        session_key = {k: unit_key[k] for k in experiment.Session.primary_key}
+        trials = TrialCondition.get_func(condition_key)()
 
-        psth_q = (UnitPsth & {**condition_key, **unit_key})
-        psth = psth_q.fetch1()['unit_psth']
+        psth = (UnitPsth & {**condition_key, **unit_key}).fetch1()['unit_psth']
 
-        i_trials = TrialCondition.trials({k: condition[k] for k in incl_conds},
-                                         session_key)
-
-        x_trials = TrialCondition.trials({k: condition[k] for k in excl_conds},
-                                         session_key)
-
-        st_q = ((ephys.TrialSpikes & i_trials & unit_key) -
-                (experiment.SessionTrial & x_trials & unit_key))
-
-        spikes, trials = st_q.fetch('spike_times', 'trial',
-                                    order_by='trial asc')
+        spikes, trials = (ephys.TrialSpikes & trials & unit_key).fetch(
+            'spike_times', 'trial', order_by='trial asc')
 
         raster = [np.concatenate(spikes),
                   np.concatenate([[t] * len(s)
@@ -241,13 +226,9 @@ class UnitPsth(dj.Computed):
 
         return dict(trials=trials, spikes=spikes, psth=psth, raster=raster)
 
-
-class UnitPsthOld:
-
-    psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
-
     @staticmethod
     def compute_unit_trial_psth(unit_key, trial_keys):
+        raise NotImplementedError('old - possibly to be kept/adapted')
 
         q = (ephys.TrialSpikes() & unit_key & trial_keys)
         spikes = q.fetch('spike_times')
@@ -255,6 +236,7 @@ class UnitPsthOld:
 
     @staticmethod
     def compute_psth(session_unit_spikes):
+        raise NotImplementedError('old - possibly to be kept/adapted')
         spikes = np.concatenate(session_unit_spikes)
 
         xmin, xmax, bins = UnitPsth.psth_params.values()
@@ -262,33 +244,6 @@ class UnitPsthOld:
         psth[0] = psth[0] / len(session_unit_spikes) / bins
 
         return np.array(psth)
-
-    @staticmethod
-    def get_plotting_data(unit_key, trial_query):
-        """
-        Retrieve / build data needed for a Unit PSTH Plot based on the given
-        unit / condition and included / excluded condition (sub-)variables.
-
-        Returns a dictionary of the form:
-
-          {
-             'trials': ephys.TrialSpikes.trials,
-             'spikes': ephys.TrialSpikes.spikes,
-             'psth': UnitPsth.unit_psth,
-             'raster': Spike * Trial raster [np.array, np.array]
-          }
-
-        """
-        trials, spikes = (ephys.TrialSpikes & trial_query & unit_key).fetch(
-            'trial', 'spike_times', order_by='trial asc')
-
-        psth = UnitPsth.compute_psth(spikes)
-
-        raster = [np.concatenate(spikes),
-                  np.concatenate([[t] * len(s)
-                                  for s, t in zip(spikes, trials)])]
-
-        return dict(trials=trials, spikes=spikes, psth=psth, raster=raster)
 
 
 @schema
