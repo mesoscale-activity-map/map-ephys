@@ -196,7 +196,7 @@ class UnitPsth(dj.Computed):
         self.insert1({**key, 'unit_psth': np.array(psth)})
 
     @classmethod
-    def get_plotting_data(cls, condition_key, unit_key):
+    def get_plotting_data(cls, unit_key, condition_key):
         """
         Retrieve / build data needed for a Unit PSTH Plot based on the given
         unit condition and included / excluded condition (sub-)variables.
