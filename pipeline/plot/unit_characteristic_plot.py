@@ -8,9 +8,7 @@ import seaborn as sns
 import itertools
 import pandas as pd
 
-from scipy import signal
-
-from pipeline import experiment, tracking, ephys, psth
+from pipeline import experiment, ephys, psth
 
 m_scale = 1200
 

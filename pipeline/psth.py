@@ -216,7 +216,7 @@ class TrialCondition(dj.Lookup):
 
         return ((experiment.BehaviorTrial & behav_key) &
                 (experiment.BehaviorTrial
-                 * experiment.PhotostimTrial
+                 * experiment.PhotostimEvent
                  * experiment.Photostim & stim_key).proj())
 
 
