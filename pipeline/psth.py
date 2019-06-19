@@ -107,7 +107,7 @@ class TrialCondition(dj.Lookup):
                     'trial_instruction': 'right'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_stim',
+                'trial_condition_desc': 'all_noearlylick_both_alm_stim',  # TODO: this condition needs to exclude 'ignore' outcome - quick tricky under this current implementation
                 'trial_condition_func': '_get_trials_include_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
@@ -116,7 +116,7 @@ class TrialCondition(dj.Lookup):
                     'brain_location_name': 'both_alm'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_nostim',
+                'trial_condition_desc': 'all_noearlylick_both_alm_nostim', # TODO: this condition needs to exclude 'ignore' outcome - quick tricky under this current implementation
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
@@ -197,10 +197,9 @@ class TrialCondition(dj.Lookup):
         behav_key = {k: v for k, v in kwargs.items()
                      if k not in stim_key}
 
-        return ((experiment.BehaviorTrial & behav_key) -
-                (experiment.BehaviorTrial
-                 * experiment.PhotostimTrial
-                 * experiment.Photostim & stim_key).proj())
+        return ((experiment.BehaviorTrial & behav_key)
+                - experiment.PhotostimTrial)
+
 
     @classmethod
     def _get_trials_include_stim(cls, **kwargs):

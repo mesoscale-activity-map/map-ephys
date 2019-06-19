@@ -127,7 +127,6 @@ def plot_unit_selectivity(probe_insert_key, axs=None):
 
 
 def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
-    stim_dur = 0.5  # TODO: hard-coded here, this info is not ingested anywhere
     cue_onset = (experiment.Period & 'period = "delay"').fetch1('period_start')
 
     no_stim_cond = (psth.TrialCondition
@@ -137,6 +136,14 @@ def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
     bi_stim_cond = (psth.TrialCondition
                     & {'trial_condition_desc':
                        'all_noearlylick_both_alm_stim'}).fetch1('KEY')
+
+    # get photostim duration
+    stim_dur = (experiment.Photostim & experiment.PhotostimEvent
+                * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')).fetch('duration')
+    if len(stim_dur) != 1:
+        raise Exception('Multiple stim duration found')
+    else:
+        stim_dur = stim_dur[0]
 
     units = ephys.Unit & probe_insert_key & 'unit_quality = "good"'
 
@@ -304,8 +311,6 @@ def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
         fig, axs = plt.subplots(1, 2, figsize=(16, 6))
     assert axs.size == 2
 
-    stim_dur = 0.5  # TODO: hard-coded here, this info is not ingested anywhere
-
     insert = (ephys.ProbeInsertion.InsertionLocation
               * experiment.BrainLocation & probe_insert_key).fetch1()
 
@@ -328,6 +333,14 @@ def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
     psth_n_r = (psth.UnitPsth * psth.TrialCondition
                 & {'trial_condition_desc':
                    'all_noearlylick_both_alm_nostim_right'}).fetch('unit_psth')
+
+    # get photostim duration
+    stim_dur = (experiment.Photostim & experiment.PhotostimEvent
+                * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')).fetch('duration')
+    if len(stim_dur) != 1:
+        raise Exception('Multiple stim duration found')
+    else:
+        stim_dur = stim_dur[0]
 
     if insert['hemisphere'] == 'left':
         psth_s_i = psth_s_l
