@@ -492,28 +492,6 @@ class UnitSelectivity(dj.Computed):
         self.insert1({**key, 'unit_selectivity': pref})
 
 
-# def get_trials_no_stim(session_key, task=None, task_protocol=None, outcome=None,
-#                         early_lick=None, trial_instruction=None):
-#     # log.debug('_get_trials_no_stim', locals())
-#
-#     return ((experiment.BehaviorTrial & session_key
-#              & {'task': task}
-#              & {'trial_instruction': trial_instruction}
-#              & {'early_lick': early_lick}
-#              & {'outcome': outcome}) - experiment.PhotostimEvent)
-#
-#
-# def get_trials_stim(session_key, task=None, task_protocol=None, outcome=None,
-#                      early_lick=None, trial_instruction=None):
-#     # log.debug('_get_trials_stim', locals())
-#
-#     return ((experiment.BehaviorTrial & session_key
-#              & {'task': task}
-#              & {'trial_instruction': trial_instruction}
-#              & {'early_lick': early_lick}
-#              & {'outcome': outcome}) & experiment.PhotostimEvent)
-
-
 def compute_unit_psth(unit_key, trial_keys, per_trial=False):
     """
     Compute unit-level psth for the specified unit and trial-set - return (time,)
@@ -582,11 +560,6 @@ def compute_CD_projected_psth(units, time_period=None):
     session_key = experiment.Session & units
     if len(session_key) != 1:
         raise Exception('Units from multiple sessions found')
-
-    trial_restrictor = {'task': 'audio delay', 'task_protocol': 1,
-                        'outcome': 'hit', 'early_lick': 'no early'}
-    contra_trials = {**trial_restrictor, 'trial_instruction': 'right' if unit_hemi == 'left' else 'left'}
-    ipsi_trials = {**trial_restrictor, 'trial_instruction': 'left' if unit_hemi == 'left' else 'right'}
 
     # -- the computation part
     # get units and trials - ensuring they have trial-spikes
