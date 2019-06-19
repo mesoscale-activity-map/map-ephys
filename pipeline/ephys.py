@@ -1,27 +1,52 @@
 
 import datajoint as dj
 
-from . import lab
-from . import experiment
-from . import ccf
+from . import lab, experiment, ccf
+from . import get_schema_name
 
-schema = dj.schema(dj.config.get('ephys.database', 'map_ephys'))
+schema = dj.schema(get_schema_name('ephys'))
 [lab, experiment, ccf]  # NOQA flake8
 
 
 @schema
-class Probe(dj.Lookup):
+class ProbeInsertion(dj.Manual):
     definition = """
-    # Ephys probe
-    probe_part_no  :  varchar(20)
+    -> experiment.Session
+    insertion_number: int
     ---
-    probe_type : varchar(32)
-    probe_comment :  varchar(4000)
+    -> lab.ElectrodeConfig
     """
-    contents = [
-        ('15131808323', 'neuropixels probe O3', ''),
-        ('H-194', 'janelia2x32', '')
-    ]
+
+    class InsertionLocation(dj.Part):
+        definition = """
+        -> master
+        ---
+        -> experiment.BrainLocation
+        ml_location=null: float # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
+        ap_location=null: float # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
+        dv_location=null: float # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
+        ml_angle=null: float # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
+        ap_angle=null: float # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive. 
+        """
+
+
+@schema
+class LFP(dj.Imported):
+    definition = """
+    -> ProbeInsertion
+    ---
+    lfp_sample_rate: float          # (Hz)
+    lfp_time_stamps: longblob       # timestamps with respect to the start of the recording (recording_timestamp)
+    lfp_mean: longblob              # mean of LFP across electrodes
+    """
+
+    class Channel(dj.Part):
+        definition = """  
+        -> master
+        -> lab.ElectrodeConfig.Electrode
+        ---
+        lfp: longblob           # recorded lfp at this electrode
+        """
 
 
 @schema
@@ -58,63 +83,31 @@ class CellType(dj.Lookup):
 
 
 @schema
-class ElectrodeGroup(dj.Manual):
+class ElectrodeCCFPosition(dj.Manual):
     definition = """
-    # Electrode
-    -> experiment.Session
-    electrode_group : tinyint # Electrode_group is like the probe
-    ---
-    -> Probe
+    -> ProbeInsertion
     """
-
-    class Electrode(dj.Part):
-        definition = """
-        -> ElectrodeGroup
-        electrode : smallint # sites on the electrode
-        """
-
-    class ElectrodeGroupPosition(dj.Part):
-        definition = """
-        -> ElectrodeGroup
-        ---
-        -> lab.SkullReference
-        -> lab.Hemisphere
-        -> lab.BrainArea
-        ml_location = null : decimal(8,3) # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
-        ap_location = null : decimal(8,3) # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
-        dv_location = null : decimal(8,3) # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
-        ml_angle = null    : decimal(8,3) # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
-        ap_angle = null    : decimal(8,3) # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive.
-        """
 
     class ElectrodePosition(dj.Part):
         definition = """
-        -> ElectrodeGroup.Electrode
+        -> lab.ElectrodeConfig.Electrode
         -> ccf.CCF
         """
 
     class ElectrodePositionError(dj.Part):
         definition = """
-        -> ElectrodeGroup.Electrode
+        -> lab.ElectrodeConfig.Electrode
         -> ccf.CCFLabel
         x   :  int   # (um)
         y   :  int   # (um)
         z   :  int   # (um)
         """
 
-    def make(self, key):
-        part_no = (ElectrodeGroup() & key).fetch('probe_part_no')
-        probe = (Probe() & {'probe_part_no': part_no[0]}).fetch1()
-        if probe['probe_type'] == 'neuropixels probe O3':
-            # Fetch the Probe corresponding to this session. If Neuropixel probe in the probe_description, then 374 electrodes for 1 electrode group
-            ElectrodeGroup.Electrode().insert(list(dict(key, electrode = x) for x in range (1,375)))
-
-
 
 @schema
 class LabeledTrack(dj.Manual):
     definition = """
-    -> ElectrodeGroup
+    -> ProbeInsertion
     ---
     labeling_date : date # in case we labeled the track not during a recorded session we can specify the exact date here
     dye_color  : varchar(32)
@@ -129,17 +122,22 @@ class LabeledTrack(dj.Manual):
 
 @schema
 class Unit(dj.Imported):
+    """
+    A certain portion of the recording is used for clustering (could very well be the entire recording)
+    Thus, spike-times are relative to the 1st time point in this portion
+    E.g. if clustering is performed from trial 8 to trial 200, then spike-times are relative to the start of trial 8
+    """
     definition = """
     # Sorted unit
-    -> ElectrodeGroup
+    -> ProbeInsertion
     unit  : smallint
     ---
     unit_uid : int # unique across sessions/animals
     -> UnitQualityType
-    unit_site : smallint # site on the electrode for which the unit has the largest amplitude
-    unit_posx : double # x position of the unit on the probe
-    unit_posy : double # y position of the unit on the probe
-    spike_times : longblob  #  (s)
+    -> lab.ElectrodeConfig.Electrode # site on the electrode for which the unit has the largest amplitude
+    unit_posx : double # (um) estimated x position of the unit relative to probe's (0,0)
+    unit_posy : double # (um) estimated y position of the unit relative to probe's (0,0)
+    spike_times : longblob  # (s) from the start of the first data point used in clustering
     unit_amp : double
     unit_snr : double
     waveform : blob # average spike waveform
@@ -148,43 +146,18 @@ class Unit(dj.Imported):
     class UnitTrial(dj.Part):
         definition = """
         # Entries for trials a unit is in
-        -> Unit
+        -> master
         -> experiment.SessionTrial
         """
 
     class UnitPosition(dj.Part):
         definition = """
         # Estimated unit position in the brain
-        -> Unit
+        -> master
         -> ccf.CCF
         ---
-        -> lab.Hemisphere
-        -> lab.BrainArea
-        -> lab.SkullReference
-        unit_ml_location = null : decimal(8,3) # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
-        unit_ap_location = null : decimal(8,3) # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
-        unit_dv_location = null : decimal(8,3) # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
+        -> experiment.BrainLocation
         """
-
-
-@schema
-class TrialSpikes(dj.Imported):
-    definition = """
-    #
-    -> Unit
-    -> experiment.SessionTrial
-    ---
-    spike_times : longblob # (s) spike times for each trial, relative to go cue
-    """
-
-
-@schema
-class ElectrodePosition(dj.Manual):
-    definition = """
-    -> ElectrodeGroup.Electrode
-    ---
-    -> ccf.CCF
-    """
 
 
 @schema
@@ -201,4 +174,15 @@ class UnitCellType(dj.Computed):
     -> Unit
     ---
     -> CellType
+    """
+
+
+@schema
+class TrialSpikes(dj.Computed):
+    definition = """
+    #
+    -> Unit
+    -> experiment.SessionTrial
+    ---
+    spike_times : longblob # (s) spike times for each trial, relative to go cue
     """
