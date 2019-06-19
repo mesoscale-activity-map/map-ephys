@@ -1,6 +1,9 @@
 import logging
 import math
+import hashlib
 
+from functools import partial
+from inspect import getmembers
 from itertools import repeat
 
 import numpy as np
@@ -19,91 +22,236 @@ schema = dj.schema(get_schema_name('psth'))
 log = logging.getLogger(__name__)
 
 # NOW:
-# 
-# - rework Condition to TrialCondition funtion+arguments based schema:
-#   definition = """
-#   trial_condition_id: varchar(32)  # hash of trial_condition
-#   ---
-#   trial_condition_desc: varchar(1000)
-#   trial_condition_func: varchar(36)
-#   trial_condition_arg: longblob
-#   """
-#   - should have get_func to resolve function
-#   - Functions:
-#     - get_trial_no_stim()
-#     - get_trial_stim()
-#   - Conditions:
-#     good_noearlylick_correct_left
-#     good_noearlylick_correct_right
-#     good_noearlylick_incorrect_left
-#     good_noearlylick_incorrect_right
-#     good_correct_noearlylick
-#     good_noearlylick_correct_left = {'task': 'audio delay',
-#                                      'task_protocol': 1,
-#                                      'outcome': 'hit',
-#                                      'early_lick': 'no early',
-#                                      'trial_instruction': 'right'}
+# - rework Condition to TrialCondition funtion+arguments based schema
 
 
-class Condition:
+def key_hash(key):
+    """
+    Given a dictionary `key`, returns an md5 hash string of its values.
+
+    For use in building dictionary-keyed tables.
+    """
+    hashed = hashlib.md5()
+    for k, v in sorted(key.items()):
+        hashed.update(str(v).encode())
+    return hashed.hexdigest()
+
+
+@schema
+class TrialCondition(dj.Lookup):
     '''
-    Manually curated condition queries
+    TrialCondition: Manually curated condition queries.
+
+    Used to define sets of trials which can then be keyed on for downstream
+    computations.
     '''
 
-    @staticmethod
-    def q(q, spikes=None):
-        if spikes is None:
-            return q
-        else:
-            return ephys.TrialSpikes & q
+    definition = """
+    trial_condition_id:         varchar(32)     # hash of trial_condition_arg
+    ---
+    trial_condition_desc:       varchar(1000)   # trial condition description
+    trial_condition_func:       varchar(36)     # trial retrieval function
+    trial_condition_arg:        longblob        # trial retrieval arguments
+    """
 
-    @staticmethod
-    def audio_delay_ipsi_hit_nostim(spikes=None):
-        return Condition.q(
-            ((experiment.BehaviorTrial()
-              & {'task': 'audio delay'}
-              & {'trial_instruction': 'left'}
-              & {'early_lick': 'no early'}
-              & {'outcome': 'hit'}) - experiment.PhotostimEvent), spikes)
+    @property
+    def contents(self):
+        contents_data = (
+            {
+                'trial_condition_desc': 'good_noearlylick_hit',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'outcome': 'hit',
+                    'early_lick': 'no early'}
+            },
+            {
+                'trial_condition_desc': 'good_noearlylick_left_hit',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'outcome': 'hit',
+                    'early_lick': 'no early',
+                    'trial_instruction': 'left'}
+            },
+            {
+                'trial_condition_desc': 'good_noearlylick_right_hit',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'outcome': 'hit',
+                    'early_lick': 'no early',
+                    'trial_instruction': 'right'}
+            },
+            {
+                'trial_condition_desc': 'good_noearlylick_left_miss',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'outcome': 'miss',
+                    'early_lick': 'no early',
+                    'trial_instruction': 'left'}
+            },
+            {
+                'trial_condition_desc': 'good_noearlylick_right_miss',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'outcome': 'miss',
+                    'early_lick': 'no early',
+                    'trial_instruction': 'right'}
+            },
+            {
+                'trial_condition_desc': 'all_noearlylick_both_alm_stim',
+                'trial_condition_func': '_get_trials_include_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'early_lick': 'no early',
+                    'brain_location_name': 'both_alm'}
+            },
+            {
+                'trial_condition_desc': 'all_noearlylick_both_alm_nostim',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'early_lick': 'no early',
+                    'brain_location_name': 'both_alm'}
+            },
+            {
+                'trial_condition_desc': 'all_noearlylick_both_alm_stim_left',
+                'trial_condition_func': '_get_trials_include_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'early_lick': 'no early',
+                    'trial_instruction': 'left',
+                    'brain_location_name': 'both_alm'}
+            },
+            {
+                'trial_condition_desc': 'all_noearlylick_both_alm_nostim_left',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'early_lick': 'no early',
+                    'trial_instruction': 'left',
+                    'brain_location_name': 'both_alm'}
+            },
+            {
+                'trial_condition_desc': 'all_noearlylick_both_alm_stim_right',
+                'trial_condition_func': '_get_trials_include_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'early_lick': 'no early',
+                    'trial_instruction': 'right',
+                    'brain_location_name': 'both_alm'}
+            },
+            {
+                'trial_condition_desc': 'all_noearlylick_both_alm_nostim_right',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'audio delay',
+                    'task_protocol': 1,
+                    'early_lick': 'no early',
+                    'trial_instruction': 'right',
+                    'brain_location_name': 'both_alm'}
+            },
+        )
+        # generate key XXX: complicated why not just key from description?
+        return ({**d, 'trial_condition_id':
+                 key_hash({'trial_condition_desc': d['trial_condition_desc'],
+                           'trial_condition_func': d['trial_condition_func'],
+                           **d['trial_condition_arg']})}
+                for d in contents_data)
 
-    @staticmethod
-    def audio_delay_contra_hit_nostim(spikes=None):
-        return Condition.q(
-            ((experiment.BehaviorTrial()
-              & {'task': 'audio delay'}
-              & {'trial_instruction': 'right'}
-              & {'early_lick': 'no early'}
-              & {'outcome': 'hit'}) - experiment.PhotostimEvent), spikes)
+    @classmethod
+    def get_trials(cls, trial_condition_desc):
+        return cls.get_func({'trial_condition_desc': trial_condition_desc})()
 
-    @staticmethod
-    def audio_delay_ipsi_miss_nostim(spikes=None):
-        return Condition.q(
-            ((experiment.BehaviorTrial()
-              & {'task': 'audio delay'}
-              & {'trial_instruction': 'left'}
-              & {'early_lick': 'no early'}
-              & {'outcome': 'miss'}) - experiment.PhotostimEvent), spikes)
+    @classmethod
+    def get_func(cls, key):
+        self = cls()
 
-    @staticmethod
-    def audio_delay_contra_miss_nostim(spikes=None):
-        return Condition.q(
-            ((experiment.BehaviorTrial()
-              & {'task': 'audio delay'}
-              & {'trial_instruction': 'right'}
-              & {'early_lick': 'no early'}
-              & {'outcome': 'miss'}) - experiment.PhotostimEvent), spikes)
+        func, args = (self & key).fetch1(
+            'trial_condition_func', 'trial_condition_arg')
+
+        return partial(dict(getmembers(cls))[func], **args)
+
+    @classmethod
+    def _get_trials_exclude_stim(cls, **kwargs):
+
+        log.debug('_get_trials_exclude_stim: {}'.format(kwargs))
+
+        stim_key = {k: v for k, v in kwargs.items()
+                    if k in (set(experiment.Photostim.heading.names)
+                             - set(experiment.Session.heading.names))}
+
+        behav_key = {k: v for k, v in kwargs.items()
+                     if k not in stim_key}
+
+        return ((experiment.BehaviorTrial & behav_key) -
+                (experiment.BehaviorTrial
+                 * experiment.PhotostimTrial
+                 * experiment.Photostim & stim_key).proj())
+
+    @classmethod
+    def _get_trials_include_stim(cls, **kwargs):
+
+        log.debug('_get_trials_include_stim: {}'.format(kwargs))
+
+        stim_key = {k: v for k, v in kwargs.items()
+                    if k in (set(experiment.Photostim.heading.names)
+                             - set(experiment.Session.heading.names))}
+
+        behav_key = {k: v for k, v in kwargs.items()
+                     if k not in stim_key}
+
+        return ((experiment.BehaviorTrial & behav_key) &
+                (experiment.BehaviorTrial
+                 * experiment.PhotostimTrial
+                 * experiment.Photostim & stim_key).proj())
 
 
-class UnitPsth:
-
+@schema
+class UnitPsth(dj.Computed):
+    definition = """
+    -> TrialCondition
+    -> ephys.Unit
+    ---
+    unit_psth=NULL:                             longblob
+    """
     psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
 
-    @staticmethod
-    def compute_unit_trial_psth(unit_key, trial_keys):
+    def make(self, key):
+        log.info('UnitPsth.make(): key: {}'.format(key))
 
-        q = (ephys.TrialSpikes() & unit_key & trial_keys)
+        # expand TrialCondition to trials,
+        trials = TrialCondition.get_trials(
+            (TrialCondition & key).fetch1('trial_condition_desc'))
+
+        # fetch related spike times
+        q = (ephys.TrialSpikes & key & trials.proj())
         spikes = q.fetch('spike_times')
-        return UnitPsth.compute_psth(spikes)
+
+        if len(spikes) == 0:
+            log.warning('no spikes found for key {} - null psth'.format(key))
+            self.insert1(key)
+            return
+
+        # compute psth & store.
+        # XXX: xmin, xmax+bins (149 here vs 150 in matlab)..
+        #   See also [:1] slice in plots..
+        unit_psth = self.compute_psth(spikes)
+
+        self.insert1({**key, 'unit_psth': unit_psth})
 
     @staticmethod
     def compute_psth(session_unit_spikes):
@@ -115,26 +263,30 @@ class UnitPsth:
 
         return np.array(psth)
 
-    @staticmethod
-    def get_plotting_data(unit_key, trial_query):
+    @classmethod
+    def get_plotting_data(cls, unit_key, condition_key):
         """
         Retrieve / build data needed for a Unit PSTH Plot based on the given
-        unit / condition and included / excluded condition (sub-)variables.
-
+        unit condition and included / excluded condition (sub-)variables.
         Returns a dictionary of the form:
-
           {
              'trials': ephys.TrialSpikes.trials,
              'spikes': ephys.TrialSpikes.spikes,
              'psth': UnitPsth.unit_psth,
              'raster': Spike * Trial raster [np.array, np.array]
           }
-
         """
-        trials, spikes = (ephys.TrialSpikes & trial_query & unit_key).fetch(
-            'trial', 'spike_times', order_by='trial asc')
+        # from sys import exit as sys_exit  # NOQA
+        # from code import interact
+        # from collections import ChainMap
+        # interact('unitpsth make', local=dict(ChainMap(locals(), globals())))
 
-        psth = UnitPsth.compute_psth(spikes)
+        trials = TrialCondition.get_func(condition_key)()
+
+        psth = (UnitPsth & {**condition_key, **unit_key}).fetch1()['unit_psth']
+
+        spikes, trials = (ephys.TrialSpikes & trials & unit_key).fetch(
+            'spike_times', 'trial', order_by='trial asc')
 
         raster = [np.concatenate(spikes),
                   np.concatenate([[t] * len(s)
@@ -299,34 +451,39 @@ class UnitSelectivity(dj.Computed):
             return
 
         # left/right spikes,
-        spikes_l = ((ephys.TrialSpikes & key)
-                    & (experiment.BehaviorTrial()
-                       & {'task': 'audio delay'}
-                       & {'early_lick': 'no early'}
-                       & {'outcome': 'hit'}
-                       & {'trial_instruction': 'left'})
-                    - experiment.PhotostimEvent).fetch('spike_times')
+        trials_l, spikes_l = ((ephys.TrialSpikes & key)
+                              & (experiment.BehaviorTrial()
+                                 & {'task': 'audio delay'}
+                                 & {'early_lick': 'no early'}
+                                 & {'outcome': 'hit'}
+                                 & {'trial_instruction': 'left'})
+                              - experiment.PhotostimEvent).fetch(
+                                  'trial', 'spike_times')
 
-        spikes_r = ((ephys.TrialSpikes & key)
-                    & (experiment.BehaviorTrial()
-                       & {'task': 'audio delay'}
-                       & {'early_lick': 'no early'}
-                       & {'outcome': 'hit'}
-                       & {'trial_instruction': 'right'})
-                    - experiment.PhotostimEvent).fetch('spike_times')
+        trials_r, spikes_r = ((ephys.TrialSpikes & key)
+                              & (experiment.BehaviorTrial()
+                                 & {'task': 'audio delay'}
+                                 & {'early_lick': 'no early'}
+                                 & {'outcome': 'hit'}
+                                 & {'trial_instruction': 'right'})
+                              - experiment.PhotostimEvent).fetch(
+                                  'trial', 'spike_times')
 
         # compute their average firing rate,
         dur = experiment.Period.trial_duration
-        freq_l = np.sum(np.concatenate(spikes_l)) / (len(spikes_l) * dur)
-        freq_r = np.sum(np.concatenate(spikes_r)) / (len(spikes_r) * dur)
+
+        freq_l = (len(np.concatenate(spikes_l))
+                  / (len(np.unique(trials_l)) * dur))
+        freq_r = (len(np.concatenate(spikes_r))
+                  / (len(np.unique(trials_r)) * dur))
 
         # and determine their ipsi/contra preference via frequency.
         if egpos['hemisphere'] == 'left':
             freq_i = freq_l
             freq_c = freq_r
         else:
-            freq_i = freq_l
-            freq_c = freq_r
+            freq_i = freq_r
+            freq_c = freq_l
 
         pref = ('ipsi-selective' if freq_i > freq_c else 'contra-selective')
 
