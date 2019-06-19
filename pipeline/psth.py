@@ -254,14 +254,6 @@ class UnitPsth(dj.Computed):
         self.insert1({**key, 'unit_psth': unit_psth})
 
     @staticmethod
-    def compute_unit_trial_psth(unit_key, trial_keys):
-        raise NotImplementedError('old - possibly to be kept/adapted')
-
-        q = (ephys.TrialSpikes() & unit_key & trial_keys)
-        spikes = q.fetch('spike_times')
-        return UnitPsth.compute_psth(spikes)
-
-    @staticmethod
     def compute_psth(session_unit_spikes):
         spikes = np.concatenate(session_unit_spikes)
 
