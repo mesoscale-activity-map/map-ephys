@@ -224,11 +224,17 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
 
     _plot_stacked_psth_diff(psth_cs_ct, psth_cs_it, ax=axs[0],
                             vlines=period_starts)
+
     axs[0].set_title('Contra-selective Units')
+    axs[0].set_ylabel('Unit (by depth)')
+    axs[0].set_xlabel('Time to go (s)')
 
     _plot_stacked_psth_diff(psth_is_it, psth_is_ct, ax=axs[1],
                             vlines=period_starts, flip=True)
+
     axs[1].set_title('Ipsi-selective Units')
+    axs[1].set_ylabel('Unit (by depth)')
+    axs[1].set_xlabel('Time to go (s)')
 
 
 def plot_ave_contra_ipsi_psth(probe_insert_key, axs=None):
