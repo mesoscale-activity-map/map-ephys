@@ -119,7 +119,6 @@ class EphysIngest(dj.Imported):
                 'insertion_number': probe
             }
 
-
             # ElectrodeConfig - add electrode group and group member (hard-coded to be the first 384 electrode)
             electrode_group = {'probe': probe_part_no, 'electrode_group': 0}
             electrode_group_member = [{**electrode_group, 'electrode': chn} for chn in range(1, 385)]
@@ -149,10 +148,7 @@ class EphysIngest(dj.Imported):
             log.info('extracting spike data')
 
             f = h5py.File(epfullpath, 'r')
-            ind = np.argsort(f['S_clu']['viClu'][0]) # index sorted by cluster
-            cluster_ids = f['S_clu']['viClu'][0][ind] # cluster (unit) number
-            ind = ind[np.where(cluster_ids > 0)[0]] # get rid of the -ve noise clusters
-            cluster_ids = cluster_ids[np.where(cluster_ids > 0)[0]] # get rid of the -ve noise clusters
+            cluster_ids = f['S_clu']['viClu'][0]# cluster (unit) number
             trWav_raw_clu = f['S_clu']['trWav_raw_clu'] # spike waveform
     #        trWav_raw_clu1 = np.concatenate((trWav_raw_clu[0:1][:][:],trWav_raw_clu),axis=0) # add a spike waveform to cluster 0, not necessary anymore after the previous step
             csNote_clu = f['S_clu']['csNote_clu'][0] # manual sorting note
@@ -172,9 +168,16 @@ class EphysIngest(dj.Imported):
                     strs[iU] = 'ok'
                 elif str1 =='multi':
                     strs[iU] = 'multi'
-            spike_times = f['viTime_spk'][0][ind] # spike times
-            viSite_spk = f['viSite_spk'][0][ind] # electrode site for the spike
+            spike_times = f['viTime_spk'][0]  # spike times
+            viSite_spk = f['viSite_spk'][0]  # electrode site for the spike
             sRateHz = f['P']['sRateHz'][0]  # sampling rate
+
+            # get rid of the -ve noise clusters
+            non_neg_cluster_idx = cluster_ids > 0
+
+            cluster_ids = cluster_ids[non_neg_cluster_idx]
+            spike_times = spike_times[non_neg_cluster_idx]
+            viSite_spk = viSite_spk[non_neg_cluster_idx]
 
             file = '{h2o}_bitcode.mat'.format(h2o=water) # fetch the bitcode and realign
             # subpath = os.path.join('{}-{}'.format(date, probe), file)
@@ -191,7 +194,7 @@ class EphysIngest(dj.Imported):
 
             bitCodeE = mat['bitCodeS'].flatten() # bitCodeS is the char variable
             goCue = mat['goCue'].flatten() # bitCodeS is the char variable
-            viT_offset_file = mat['sTrig'].flatten() # start of each trial, subtract this number for each trial
+            viT_offset_file = mat['sTrig'].flatten() - 7500 # start of each trial, subtract this number for each trial
             trialNote = experiment.TrialNote()
             bitCodeB = (trialNote & {'subject_id': ekey['subject_id']} & {'session': ekey['session']} & {'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial') # fetch the bitcode from the behavior trialNote
 
@@ -200,48 +203,28 @@ class EphysIngest(dj.Imported):
             bitCodeB_ext = bitCodeB[bitCodeB_0:][:len(bitCodeE)]
             spike_trials_fix = None
             if not np.all(np.equal(bitCodeE, bitCodeB_ext)):
+                log.info('ephys/bitcode trial mismatch - attempting fix')
                 if 'trialNum' in mat:
                     spike_trials_fix = mat['trialNum']
                 else:
                     raise Exception('Bitcode Mismatch')
 
-            spike_trials = np.ones(len(spike_times)) * (len(viT_offset_file) - 1) # every spike is in the last trial
+            spike_trials = np.full_like(spike_times, (len(viT_offset_file) - 1)) # every spike is in the last trial
             spike_times2 = np.copy(spike_times)
             for i in range(len(viT_offset_file) - 1, 0, -1): #find the trials each unit has a spike in
                 log.debug('locating trials with spikes {s}:{t}'.format(s=behavior['session'], t=i))
                 if spike_trials_fix is None:
-                    spike_trials[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = i-1 # Get the trial number of each spike
+                    spike_trials[(spike_times >= viT_offset_file[i-1])
+                                 & (spike_times < viT_offset_file[i])] = i-1 # Get the trial number of each spike
                 else:
                     spike_trials[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = spike_trials_fix[i-1] - 1  # Get the trial number of each spike
+
                 spike_times2[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = spike_times[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] - goCue[i-1] # subtract the goCue from each trial
+
             spike_trials[np.where(spike_times2 >= viT_offset_file[-1])] = len(viT_offset_file) - 1 # subtract the goCue from the last trial
             spike_times2[np.where(spike_times2 >= viT_offset_file[-1])] = spike_times[np.where(spike_times2 >= viT_offset_file[-1])] - goCue[-1] # subtract the goCue from the last trial
-            spike_times2 = spike_times2 / sRateHz # divide the sampling rate, sRateHz
-            clu_ids_diff = np.diff(cluster_ids) # where the units seperate
-            clu_ids_diff = np.where(clu_ids_diff != 0)[0] + 1 # separate the spike_times
 
-            spike_times = spike_times2  # now replace spike times with updated version
-
-            units = np.split(spike_times, clu_ids_diff)  # sub arrays of spike_times for each unit (for ephys.Unit())
-            trialunits = np.split(spike_trials, clu_ids_diff) # sub arrays of spike_trials for each unit
-            unit_ids = np.arange(len(clu_ids_diff) + 1) # unit number
-
-            trialunits1 = []  # array of unit number (for ephys.Unit.UnitTrial())
-            trialunits2 = []  # array of trial number
-            for i in range(0, len(trialunits)):  # loop through each unit
-                log.debug('aggregating trials with units {s}:{t}'.format(s=behavior['session'], t=i))
-                trialunits2 = np.append(trialunits2, np.unique(trialunits[i])) # add the trials that a unit is in
-                trialunits1 = np.append(trialunits1, np.zeros(len(np.unique(trialunits[i])))+i) # add the unit numbers 
-
-            log.info('inserting units for session {s}'.format(s=behavior['session']))
-            #pdb.set_trace()
-            ephys.Unit().insert((dict(ekey, unit=x, unit_uid=x, unit_quality=strs[x],
-                                      electrode_config_id=electrode_config_id, probe=probe_part_no,
-                                      electrode_group=0, electrode=int(viSite_clu[x]),
-                                      unit_posx=vrPosX_clu[x], unit_posy=vrPosY_clu[x],
-                                      unit_amp=vrVpp_uv_clu[x], unit_snr=vrSnr_clu[x],
-                                      spike_times=units[x], waveform=trWav_raw_clu[x][0])
-                                 for x in unit_ids), allow_direct_insert=True)  # batch insert the units
+            spike_times2 = spike_times2 / sRateHz  # divide the sampling rate, sRateHz
 
             if spike_trials_fix is None:
                 if len(bitCodeB) < len(bitCodeE):  # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
@@ -256,36 +239,25 @@ class EphysIngest(dj.Imported):
                 startB = 0
                 startE = 0
 
-            log.info('extracting trial unit information {s} ({f})'.format(s=behavior['session'], f=epfullpath))
-
-            trialunits2 = trialunits2-startB  # behavior has less trials if startB is +ve, behavior has more trials if startB is -ve
-            indT = np.where(trialunits2 > -1)[0]  # get rid of the -ve trials
-            trialunits1 = trialunits1[indT]
-            trialunits2 = trialunits2[indT]
-
             spike_trials = spike_trials - startB  # behavior has less trials if startB is +ve, behavior has more trials if startB is -ve
-            indT = np.where(spike_trials > -1)[0]  # get rid of the -ve trials
-            cluster_ids = cluster_ids[indT]
-            viSite_spk = viSite_spk[indT]
-            spike_trials = spike_trials[indT]
 
-            trialunits = np.asarray(trialunits)  # convert the list to an array
-            trialunits = trialunits - startB
+            # at this point, spike-times are aligned to go-cue for that respective trial
+            unit_trial_spks = {u: (spike_trials[cluster_ids == u], spike_times2[cluster_ids == u])
+                               for u in set(cluster_ids)}
+            trial_start_time = viT_offset_file / sRateHz
 
-            # split units based on which trial they are in (for ephys.TrialSpikes())
-            trialPerUnit = np.copy(units) # list of trial index for each unit
-            for i in unit_ids: # loop through each unit, maybe this can be avoid?
-                log.debug('.. unit information {u}'.format(u=i))
-                indT = np.where(trialunits[i] > -1)[0] # get rid of the -ve trials
-                trialunits[i] = trialunits[i][indT]
-                units[i] = units[i][indT]
-                trialidx = np.argsort(trialunits[i]) # index of the sorted trials
-                trialunits[i] = np.sort(trialunits[i]) # sort the trials for a given unit
-                trial_ids_diff = np.diff(trialunits[i]) # where the trial index seperate
-                trial_ids_diff = np.where(trial_ids_diff != 0)[0] + 1
-                units[i] = units[i][trialidx] # sort the spike times based on the trial mapping
-                units[i] = np.split(units[i], trial_ids_diff) # separate the spike_times based on trials
-                trialPerUnit[i] = np.arange(0, len(trial_ids_diff), dtype = int) # list of trial index
+            log.info('inserting units for session {s}'.format(s=behavior['session']))
+            #pdb.set_trace()
+            ephys.Unit().insert((dict(ekey, unit=x, unit_uid=x, unit_quality=strs[x-1],
+                                      electrode_config_id=electrode_config_id, probe=probe_part_no,
+                                      electrode_group=0, electrode=int(viSite_clu[x-1]),
+                                      unit_posx=vrPosX_clu[x-1], unit_posy=vrPosY_clu[x-1],
+                                      unit_amp=vrVpp_uv_clu[x-1], unit_snr=vrSnr_clu[x-1],
+                                      spike_times=sorted(u_spk_times + (goCue / sRateHz)[u_spk_trials + startB]
+                                                         + trial_start_time[u_spk_trials + startB]),  # re-align back to trial-start, relative to 1st trial
+                                      waveform=trWav_raw_clu[x-1][0])
+                                 for x, (u_spk_trials, u_spk_times) in unit_trial_spks.items()),
+                                allow_direct_insert=True)  # batch insert the units
 
             # UnitTrial
             log.info('inserting UnitTrial information')
@@ -294,35 +266,21 @@ class EphysIngest(dj.Imported):
                               skip_duplicates=True,
                               allow_direct_insert=True) as ib:
 
-                len_trial_units2 = len(trialunits2)
-                for x in range(len_trial_units2):
-                    ib.insert1(dict(ekey, unit=trialunits1[x],
-                                    trial=trialunits2[x]))
+                for x, (u_spk_trials, u_spk_times) in unit_trial_spks.items():
+                    ib.insert(dict(ekey, unit=x,
+                                    trial=tr) for tr in set(spike_trials))
                     if ib.flush():
-                        log.debug('... UnitTrial spike {}'.format(x))
-
-            log.info('... UnitTrial last spike {}'.format(x))
+                        log.debug('... UnitTrial spike')
 
             # TrialSpike
-            log.info('inserting TrialSpike information')
-            with InsertBuffer(ephys.TrialSpikes, 10000, skip_duplicates=True,
-                              allow_direct_insert=True) as ib:
-
-                n_tspike = -1
-                for x in zip(unit_ids, trialPerUnit):  # loop through the units
-                    for i in x[1]:  # loop through the trials for each unit
-                        n_tspike += 1
-
-                        # i_off: cumulative offset into trialunits2
-                        i_off = sum([len(i) for i in trialPerUnit[:x[0]]]) + i
-                        ib.insert1(dict(ekey, unit=x[0],
-                                        trial=int(trialunits2[i_off]),
-                                        spike_times=(units[x[0]][x[1][i]])))
-
-                        if ib.flush():
-                            log.debug('... TrialSpike spike {}'.format(n_tspike))
-
-            log.info('... TrialSpike last spike {}'.format(n_tspike))
+            with InsertBuffer(ephys.TrialSpikes, 10000, skip_duplicates = True,
+                              allow_direct_insert = True) as ib:
+                for x, (u_spk_trials, u_spk_times) in unit_trial_spks.items():
+                    ib.insert(dict(ekey, unit=x,
+                                    spike_times=u_spk_times[u_spk_trials == tr],
+                                    trial=tr) for tr in set(spike_trials))
+                    if ib.flush():
+                        log.debug('... TrialSpike spike')
 
             log.info('inserting file load information')
 

@@ -59,7 +59,7 @@ class TrackingIngest(dj.Imported):
 
         h2o = (lab.WaterRestriction() & key).fetch1('water_restriction_number')
         session = (experiment.Session() & key).fetch1()
-        trials = (experiment.SessionTrial() & session).fetch(as_dict=True)
+        trials = (experiment.SessionTrial() & session).fetch('trial')
 
         log.info('got session: {} ({} trials)'.format(session, len(trials)))
 
@@ -101,6 +101,10 @@ class TrackingIngest(dj.Imported):
 
             i = 0
             for t in tmap:  # load tracking for trial
+
+                if tmap[t] not in trials:
+                    log.warning('nonexistant trial {}.. skipping'.format(t))
+                    continue
 
                 i += 1
                 if i % 50 == 0:

@@ -68,14 +68,14 @@ def ingest_histology(*args):
 
 
 def populate_psth(*args):
-    log.info('psth.Condition.populate()')
-    psth.TrialCondition.populate()
-
     log.info('psth.UnitPsth.populate()')
     psth.UnitPsth.populate()
 
-    log.info('psth.Selectivity.populate()')
-    psth.Selectivity.populate()
+    log.info('psth.PeriodSelectivity.populate()')
+    psth.PeriodSelectivity.populate()
+
+    log.info('psth.UnitSelectivity.populate()')
+    psth.UnitSelectivity.populate()
 
 
 def nuke_all():
