@@ -176,8 +176,6 @@ def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
     axs.set_title('% change')
     axs.set_xlim((-10, 60))
 
-    return locals()
-
 
 def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
 
@@ -394,7 +392,7 @@ def _plot_stacked_psth_diff(psth_a, psth_b, vlines=[], ax=None):
     # ax.set_axis_off()
     ax.set_xlim([plt_xmin, plt_xmax])
     for x in vlines:
-        ax.axvline(x=x, linestyle = '--', color = 'k')
+        ax.axvline(x=x, linestyle='--', color='k')
 
     im = ax.imshow(result, cmap=plt.cm.bwr, aspect=aspect, extent=extent)
     im.set_clim((-1, 1))
