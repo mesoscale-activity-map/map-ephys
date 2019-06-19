@@ -3,7 +3,8 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
-from pipeline import psth
+from pipeline.psth import TrialCondition
+from pipeline.psth import UnitPsth
 
 
 def unit_psth_ll(ipsi_hit, contra_hit, ipsi_err, contra_err):
@@ -67,28 +68,37 @@ def unit_psth_ll(ipsi_hit, contra_hit, ipsi_err, contra_err):
 
 
 def unit_psth(unit_key):
+    """
+    Plot a per-unit PSTH diagram
+    """
 
-    ipsi_hit_cond_key = (
-        psth.Condition() & {'condition_desc': 'audio delay ipsi hit'}
-    ).fetch1('KEY')
+    ipsi_hit_cond_key = (TrialCondition
+                         & {'trial_condition_desc':
+                            'good_noearlylick_left_hit'}).fetch1('KEY')
 
-    contra_hit_cond_key = (
-        psth.Condition() & {'condition_desc': 'audio delay contra hit'}
-    ).fetch1('KEY')
+    contra_hit_cond_key = (TrialCondition
+                           & {'trial_condition_desc':
+                              'good_noearlylick_right_hit'}).fetch1('KEY')
 
-    ipsi_err_cond_key = (
-        psth.Condition() & {'condition_desc': 'audio delay ipsi error'}
-    ).fetch1('KEY')
+    ipsi_miss_cond_key = (TrialCondition
+                          & {'trial_condition_desc':
+                             'good_noearlylick_left_miss'}).fetch1('KEY')
 
-    contra_err_cond_key = (
-        psth.Condition() & {'condition_desc': 'audio delay contra error'}
-    ).fetch1('KEY')
+    contra_miss_cond_key = (TrialCondition
+                            & {'trial_condition_desc':
+                               'good_noearlylick_right_miss'}).fetch1('KEY')
 
-    ipsi_hit_unit_psth = psth.UnitPsth.get(ipsi_hit_cond_key, unit_key)
-    contra_hit_unit_psth = psth.UnitPsth.get(contra_hit_cond_key, unit_key)
+    ipsi_hit_unit_psth = UnitPsth.get_plotting_data(
+        unit_key, ipsi_hit_cond_key)
 
-    ipsi_err_unit_psth = psth.UnitPsth.get(ipsi_err_cond_key, unit_key)
-    contra_err_unit_psth = psth.UnitPsth.get(contra_err_cond_key, unit_key)
+    contra_hit_unit_psth = UnitPsth.get_plotting_data(
+        unit_key, contra_hit_cond_key)
+
+    ipsi_miss_unit_psth = UnitPsth.get_plotting_data(
+        unit_key, ipsi_miss_cond_key)
+
+    contra_miss_unit_psth = UnitPsth.get_plotting_data(
+        unit_key, contra_miss_cond_key)
 
     unit_psth_ll(ipsi_hit_unit_psth, contra_hit_unit_psth,
-                 ipsi_err_unit_psth, contra_err_unit_psth)
+                 ipsi_miss_unit_psth, contra_miss_unit_psth)

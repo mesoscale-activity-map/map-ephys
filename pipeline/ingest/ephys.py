@@ -119,7 +119,6 @@ class EphysIngest(dj.Imported):
                 'insertion_number': probe
             }
 
-
             # ElectrodeConfig - add electrode group and group member (hard-coded to be the first 384 electrode)
             electrode_group = {'probe': probe_part_no, 'electrode_group': 0}
             electrode_group_member = [{**electrode_group, 'electrode': chn} for chn in range(1, 385)]
@@ -195,8 +194,7 @@ class EphysIngest(dj.Imported):
 
             bitCodeE = mat['bitCodeS'].flatten() # bitCodeS is the char variable
             goCue = mat['goCue'].flatten() # bitCodeS is the char variable
-            viT_offset_file = mat['sTrig'].flatten() # start of each trial, subtract this number for each trial
-            viT_offset_file = viT_offset_file - 7500  # mimic MATLAB implementation
+            viT_offset_file = mat['sTrig'].flatten() - 7500 # start of each trial, subtract this number for each trial
             trialNote = experiment.TrialNote()
             bitCodeB = (trialNote & {'subject_id': ekey['subject_id']} & {'session': ekey['session']} & {'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial') # fetch the bitcode from the behavior trialNote
 

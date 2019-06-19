@@ -175,11 +175,14 @@ class SessionComment(dj.Manual):
 @schema
 class Period(dj.Lookup):
     definition = """
-    period  : varchar(12)  
+    period: varchar(12)
     ---
     period_start: float  # (s) start of this period relative to GO CUE
     period_end: float    # (s) end of this period relative to GO CUE
     """
+
+    trial_duration = 1.2 + 2.4  # HACK: hmm..
+
     contents = [('sample', -2.4, -1.2),
                 ('delay', -1.2, 0.0),
                 ('response', 0.0, 1.2)]
