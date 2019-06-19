@@ -188,6 +188,7 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
                          'period_start')
 
     good_unit = ephys.Unit & {'unit_quality': 'good'}
+
     conds_i = (psth.TrialCondition
                & {'trial_condition_desc':
                   'good_noearlylick_left_hit'}).fetch('KEY')
@@ -202,22 +203,23 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
     sel_c = (ephys.Unit * psth.UnitSelectivity
              & 'unit_selectivity = "contra-selective"' & probe_insert_key)
 
-    psth_is_it = (((psth.UnitPsth & conds_i)
+    # psth_?s_?t: psth over selectivty type by specific trials
+    psth_is_it = (((psth.UnitPsth & conds_i)  # ipsi selective ipsi trials
                    * ephys.Unit.proj('unit_posx', 'unit_posy'))
                   & good_unit.proj() & sel_i.proj()).fetch(
                       order_by='unit_posy desc')
 
-    psth_is_ct = (((psth.UnitPsth & conds_c)
+    psth_is_ct = (((psth.UnitPsth & conds_c)  # ipsi selective contra trials
                    * ephys.Unit.proj('unit_posx', 'unit_posy'))
                   & good_unit.proj() & sel_i.proj()).fetch(
                       order_by='unit_posy desc')
 
-    psth_cs_ct = (((psth.UnitPsth & conds_c)
+    psth_cs_ct = (((psth.UnitPsth & conds_c)  # contra selective contra trials
                    * ephys.Unit.proj('unit_posx', 'unit_posy'))
                   & good_unit.proj() & sel_c.proj()).fetch(
                       order_by='unit_posy desc')
 
-    psth_cs_it = (((psth.UnitPsth & conds_i)
+    psth_cs_it = (((psth.UnitPsth & conds_i)  # contra selective ipsi trials
                    * ephys.Unit.proj('unit_posx', 'unit_posy'))
                   & good_unit.proj() & sel_c.proj()).fetch(
                       order_by='unit_posy desc')
