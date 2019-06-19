@@ -125,7 +125,7 @@ class TrialCondition(dj.Lookup):
                     'brain_location_name': 'both_alm'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_stim_left',
+                'trial_condition_desc': 'all_noearlylick_both_alm_stim_left',  # TODO: no ignore
                 'trial_condition_func': '_get_trials_include_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
@@ -135,7 +135,7 @@ class TrialCondition(dj.Lookup):
                     'brain_location_name': 'both_alm'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_nostim_left',
+                'trial_condition_desc': 'all_noearlylick_both_alm_nostim_left',   # TODO: no ignore
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
@@ -145,7 +145,7 @@ class TrialCondition(dj.Lookup):
                     'brain_location_name': 'both_alm'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_stim_right',
+                'trial_condition_desc': 'all_noearlylick_both_alm_stim_right',   # TODO: no ignore
                 'trial_condition_func': '_get_trials_include_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
@@ -155,7 +155,7 @@ class TrialCondition(dj.Lookup):
                     'brain_location_name': 'both_alm'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_nostim_right',
+                'trial_condition_desc': 'all_noearlylick_both_alm_nostim_right',   # TODO: no ignore
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',

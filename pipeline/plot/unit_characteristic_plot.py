@@ -138,12 +138,13 @@ def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
                        'all_noearlylick_both_alm_stim'}).fetch1('KEY')
 
     # get photostim duration
+    default_stim_dur = 0.5
     stim_dur = (experiment.Photostim & experiment.PhotostimEvent
                 * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')).fetch('duration')
     if len(stim_dur) != 1:
         raise Exception('Multiple stim duration found')
     else:
-        stim_dur = stim_dur[0]
+        stim_dur = stim_dur[0] if stim_dur[0] else default_stim_dur
 
     units = ephys.Unit & probe_insert_key & 'unit_quality = "good"'
 
@@ -296,7 +297,7 @@ def plot_avg_contra_ipsi_psth(probe_insert_key, axs=None):
                   & good_unit.proj() & sel_c.proj()).fetch(
                       'unit_psth', order_by='unit_posy desc')
 
-    _plot_avg_psth(psth_cs_ct, psth_cs_it, period_starts, axs[0],
+    _plot_avg_psth(psth_cs_it, psth_cs_ct, period_starts, axs[0],
                    'Contra-selective')
     _plot_avg_psth(psth_is_it, psth_is_ct, period_starts, axs[1],
                    'Ipsi-selective')
@@ -335,12 +336,13 @@ def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
                    'all_noearlylick_both_alm_nostim_right'}).fetch('unit_psth')
 
     # get photostim duration
+    default_stim_dur = 0.5
     stim_dur = (experiment.Photostim & experiment.PhotostimEvent
                 * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')).fetch('duration')
     if len(stim_dur) != 1:
         raise Exception('Multiple stim duration found')
     else:
-        stim_dur = stim_dur[0]
+        stim_dur = stim_dur[0] if stim_dur[0] else default_stim_dur
 
     if insert['hemisphere'] == 'left':
         psth_s_i = psth_s_l
