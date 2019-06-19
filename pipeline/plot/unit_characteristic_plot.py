@@ -227,7 +227,7 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
     axs[0].set_title('Contra-selective Units')
 
     _plot_stacked_psth_diff(psth_is_it, psth_is_ct, ax=axs[1],
-                            vlines=period_starts)
+                            vlines=period_starts, flip=True)
     axs[1].set_title('Ipsi-selective Units')
 
 
@@ -376,7 +376,7 @@ def _plot_stacked_psth_diff(psth_a, psth_b, vlines=[], ax=None, flip=False):
 
     assert len(psth_a) == len(psth_b)
     nunits = len(psth_a)
-    aspect = 2 / nunits
+    aspect = 4.5 / nunits  # 4:3 aspect ratio
     extent = [plt_xmin, plt_xmax, 0, nunits]
 
     a_data = np.array([r[0] for r in psth_a['unit_psth']])
@@ -386,7 +386,10 @@ def _plot_stacked_psth_diff(psth_a, psth_b, vlines=[], ax=None, flip=False):
     a_data = np.array([_movmean(i/np.abs(i).max()) for i in a_data])
     b_data = np.array([_movmean(i/np.abs(i).max()) for i in b_data])
 
-    result = a_data - b_data
+    if flip:
+        result = (a_data - b_data) * -1
+    else:
+        result = a_data - b_data
 
     if ax is None:
         fig, ax = plt.subplots(1, 1)
