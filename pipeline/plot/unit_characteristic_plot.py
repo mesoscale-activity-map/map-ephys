@@ -129,6 +129,8 @@ def plot_unit_selectivity(probe_insert_key, axs=None):
 
 
 def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
+    stim_dur = 0.5  # TODO: hard-coded here, this info is not ingested anywhere
+    cue_onset = (experiment.Period & 'period = "delay"').fetch1('period_start')
 
     no_stim_cond = (psth.TrialCondition
                     & {'trial_condition_desc':
@@ -153,8 +155,13 @@ def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
         bistim_psth, bistim_edge = (
             psth.UnitPsth & {**unit, **bi_stim_cond}).fetch1('unit_psth')
 
-        frate_change = (np.abs(bistim_psth.mean() - nostim_psth.mean())
-                        / nostim_psth.mean())
+        # compute the firing rate difference between contra vs. ipsi within the 0.5s stimulation duration
+        frate_change = (np.abs(bistim_psth[np.logical_and(bistim_edge[1:] > cue_onset,
+                                                          bistim_edge[1:] <= cue_onset + stim_dur)].mean()
+                               - nostim_psth[np.logical_and(bistim_edge[1:] > cue_onset,
+                                                            bistim_edge[1:] <= cue_onset + stim_dur)].mean())
+                        / nostim_psth[np.logical_and(bistim_edge[1:] > cue_onset,
+                                                            bistim_edge[1:] <= cue_onset + stim_dur)].mean())
 
         metrics.loc[u_idx] = (int(unit['unit']), x, y, frate_change)
 
