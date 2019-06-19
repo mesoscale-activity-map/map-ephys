@@ -459,34 +459,39 @@ class UnitSelectivity(dj.Computed):
             return
 
         # left/right spikes,
-        spikes_l = ((ephys.TrialSpikes & key)
-                    & (experiment.BehaviorTrial()
-                       & {'task': 'audio delay'}
-                       & {'early_lick': 'no early'}
-                       & {'outcome': 'hit'}
-                       & {'trial_instruction': 'left'})
-                    - experiment.PhotostimEvent).fetch('spike_times')
+        trials_l, spikes_l = ((ephys.TrialSpikes & key)
+                              & (experiment.BehaviorTrial()
+                                 & {'task': 'audio delay'}
+                                 & {'early_lick': 'no early'}
+                                 & {'outcome': 'hit'}
+                                 & {'trial_instruction': 'left'})
+                              - experiment.PhotostimEvent).fetch(
+                                  'trial', 'spike_times')
 
-        spikes_r = ((ephys.TrialSpikes & key)
-                    & (experiment.BehaviorTrial()
-                       & {'task': 'audio delay'}
-                       & {'early_lick': 'no early'}
-                       & {'outcome': 'hit'}
-                       & {'trial_instruction': 'right'})
-                    - experiment.PhotostimEvent).fetch('spike_times')
+        trials_r, spikes_r = ((ephys.TrialSpikes & key)
+                              & (experiment.BehaviorTrial()
+                                 & {'task': 'audio delay'}
+                                 & {'early_lick': 'no early'}
+                                 & {'outcome': 'hit'}
+                                 & {'trial_instruction': 'right'})
+                              - experiment.PhotostimEvent).fetch(
+                                  'trial', 'spike_times')
 
         # compute their average firing rate,
         dur = experiment.Period.trial_duration
-        freq_l = np.sum(np.concatenate(spikes_l)) / (len(spikes_l) * dur)
-        freq_r = np.sum(np.concatenate(spikes_r)) / (len(spikes_r) * dur)
+
+        freq_l = (len(np.concatenate(spikes_l))
+                  / (len(np.unique(trials_l)) * dur))
+        freq_r = (len(np.concatenate(spikes_r))
+                  / (len(np.unique(trials_r)) * dur))
 
         # and determine their ipsi/contra preference via frequency.
         if egpos['hemisphere'] == 'left':
             freq_i = freq_l
             freq_c = freq_r
         else:
-            freq_i = freq_l
-            freq_c = freq_r
+            freq_i = freq_r
+            freq_c = freq_l
 
         pref = ('ipsi-selective' if freq_i > freq_c else 'contra-selective')
 
