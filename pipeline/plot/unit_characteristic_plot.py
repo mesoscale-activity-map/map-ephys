@@ -275,11 +275,15 @@ def plot_coding_direction(units, time_period=None, axs=None):
     axs.set_xlabel('Time (s)')
 
 
-def plot_paired_coding_direction(units_1, units_2, labels=None, time_period=None):
-    _, proj_contra_trial_1, proj_ipsi_trial_1, time_stamps = psth.compute_CD_projected_psth(
-        units_1.fetch('KEY'), time_period=time_period)
-    _, proj_contra_trial_2, proj_ipsi_trial_2, time_stamps = psth.compute_CD_projected_psth(
-        units_2.fetch('KEY'), time_period=time_period)
+def plot_paired_coding_direction(unit_g1, unit_g2, labels=None, time_period=None):
+    """
+    Plot trial-to-trial CD-endpoint correlation between CD-projected trial-psth from two unit-groups (e.g. two brain regions)
+    Note: coding direction is calculated on selective units, contra vs. ipsi, within the specified time_period
+    """
+    _, proj_contra_trial_g1, proj_ipsi_trial_g1, time_stamps = psth.compute_CD_projected_psth(
+        unit_g1.fetch('KEY'), time_period=time_period)
+    _, proj_contra_trial_g2, proj_ipsi_trial_g2, time_stamps = psth.compute_CD_projected_psth(
+        unit_g2.fetch('KEY'), time_period=time_period)
 
     period_starts = (experiment.Period & 'period in ("sample", "delay", "response")').fetch('period_start')
 
@@ -291,10 +295,10 @@ def plot_paired_coding_direction(units_1, units_2, labels=None, time_period=None
     # plot projected trial-psth
     fig, axs = plt.subplots(1, 2, figsize=(16, 6))
 
-    _plot_with_sem(proj_contra_trial_1, time_stamps, ax=axs[0], c='b')
-    _plot_with_sem(proj_ipsi_trial_1, time_stamps, ax=axs[0], c='r')
-    _plot_with_sem(proj_contra_trial_2, time_stamps, ax=axs[1], c='b')
-    _plot_with_sem(proj_ipsi_trial_2, time_stamps, ax=axs[1], c='r')
+    _plot_with_sem(proj_contra_trial_g1, time_stamps, ax=axs[0], c='b')
+    _plot_with_sem(proj_ipsi_trial_g1, time_stamps, ax=axs[0], c='r')
+    _plot_with_sem(proj_contra_trial_g2, time_stamps, ax=axs[1], c='b')
+    _plot_with_sem(proj_ipsi_trial_g2, time_stamps, ax=axs[1], c='r')
 
     # cosmetic
     for ax, label in zip(axs, labels):
@@ -308,10 +312,10 @@ def plot_paired_coding_direction(units_1, units_2, labels=None, time_period=None
 
     # plot trial CD-endpoint correlation
     p_start, p_end = time_period
-    contra_cdend_1 = proj_contra_trial_1[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
-    contra_cdend_2 = proj_contra_trial_2[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
-    ipsi_cdend_1 = proj_ipsi_trial_1[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
-    ipsi_cdend_2 = proj_ipsi_trial_2[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+    contra_cdend_1 = proj_contra_trial_g1[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+    contra_cdend_2 = proj_contra_trial_g2[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+    ipsi_cdend_1 = proj_ipsi_trial_g1[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+    ipsi_cdend_2 = proj_ipsi_trial_g2[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
 
     c_df = pd.DataFrame([contra_cdend_1, contra_cdend_2]).T
     c_df.columns = labels
