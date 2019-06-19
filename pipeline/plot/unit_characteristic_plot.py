@@ -138,7 +138,7 @@ def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
                     & {'trial_condition_desc':
                        'all_noearlylick_both_alm_stim'}).fetch1('KEY')
 
-    units = ephys.Unit & 'unit_quality = "good"'
+    units = ephys.Unit & probe_insert_key & 'unit_quality = "good"'
 
     metrics = pd.DataFrame(columns=['unit', 'x', 'y', 'frate_change'])
 
