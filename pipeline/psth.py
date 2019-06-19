@@ -492,26 +492,26 @@ class UnitSelectivity(dj.Computed):
         self.insert1({**key, 'unit_selectivity': pref})
 
 
-def get_trials_no_stim(session_key, task=None, task_protocol=None, outcome=None,
-                        early_lick=None, trial_instruction=None):
-    # log.debug('_get_trials_no_stim', locals())
-
-    return ((experiment.BehaviorTrial & session_key
-             & {'task': task}
-             & {'trial_instruction': trial_instruction}
-             & {'early_lick': early_lick}
-             & {'outcome': outcome}) - experiment.PhotostimEvent)
-
-
-def get_trials_stim(session_key, task=None, task_protocol=None, outcome=None,
-                     early_lick=None, trial_instruction=None):
-    # log.debug('_get_trials_stim', locals())
-
-    return ((experiment.BehaviorTrial & session_key
-             & {'task': task}
-             & {'trial_instruction': trial_instruction}
-             & {'early_lick': early_lick}
-             & {'outcome': outcome}) & experiment.PhotostimEvent)
+# def get_trials_no_stim(session_key, task=None, task_protocol=None, outcome=None,
+#                         early_lick=None, trial_instruction=None):
+#     # log.debug('_get_trials_no_stim', locals())
+#
+#     return ((experiment.BehaviorTrial & session_key
+#              & {'task': task}
+#              & {'trial_instruction': trial_instruction}
+#              & {'early_lick': early_lick}
+#              & {'outcome': outcome}) - experiment.PhotostimEvent)
+#
+#
+# def get_trials_stim(session_key, task=None, task_protocol=None, outcome=None,
+#                      early_lick=None, trial_instruction=None):
+#     # log.debug('_get_trials_stim', locals())
+#
+#     return ((experiment.BehaviorTrial & session_key
+#              & {'task': task}
+#              & {'trial_instruction': trial_instruction}
+#              & {'early_lick': early_lick}
+#              & {'outcome': outcome}) & experiment.PhotostimEvent)
 
 
 def compute_unit_psth(unit_key, trial_keys, per_trial=False):
@@ -530,7 +530,7 @@ def compute_unit_psth(unit_key, trial_keys, per_trial=False):
 
     if per_trial:
         trial_psth = np.vstack(np.histogram(spike, bins=binning)[0] / bin_size for spike in spikes)
-        return trial_psth , binning[1:]
+        return trial_psth, binning[1:]
     else:
         spikes = np.concatenate(spikes)
         psth, edges = np.histogram(spikes, bins=binning)
@@ -590,8 +590,12 @@ def compute_CD_projected_psth(units, time_period=None):
 
     # -- the computation part
     # get units and trials - ensuring they have trial-spikes
-    contra_trials = (get_trials_no_stim(session_key, **contra_trials) & ephys.TrialSpikes).fetch('KEY')
-    ipsi_trials = (get_trials_no_stim(session_key, **ipsi_trials) & ephys.TrialSpikes).fetch('KEY')
+    contra_trials = (TrialCondition().get_trials(
+        'good_noearlylick_right_hit' if unit_hemi == 'left' else 'good_noearlylick_left_hit')
+                     & session_key & ephys.TrialSpikes).fetch('KEY')
+    ipsi_trials = (TrialCondition().get_trials(
+        'good_noearlylick_left_hit' if unit_hemi == 'left' else 'good_noearlylick_right_hit')
+                     & session_key & ephys.TrialSpikes).fetch('KEY')
 
     # get per-trial unit psth for all units - unit# x (trial# x time)
     contra_trial_psths, contra_edges = zip(*(compute_unit_psth(unit, contra_trials, per_trial=True)
