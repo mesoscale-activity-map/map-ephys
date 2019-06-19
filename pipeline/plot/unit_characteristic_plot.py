@@ -239,7 +239,7 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
     axs[1].set_xlabel('Time to go (s)')
 
 
-def plot_ave_contra_ipsi_psth(probe_insert_key, axs=None):
+def plot_avg_contra_ipsi_psth(probe_insert_key, axs=None):
 
     if axs is None:
         fig, axs = plt.subplots(1, 2, figsize=(16, 6))
@@ -284,9 +284,9 @@ def plot_ave_contra_ipsi_psth(probe_insert_key, axs=None):
                   & good_unit.proj() & sel_c.proj()).fetch(
                       'unit_psth', order_by='unit_posy desc')
 
-    _plot_ave_psth(psth_cs_ct, psth_cs_it, period_starts, axs[0],
+    _plot_avg_psth(psth_cs_ct, psth_cs_it, period_starts, axs[0],
                    'Contra-selective')
-    _plot_ave_psth(psth_is_it, psth_is_ct, period_starts, axs[1],
+    _plot_avg_psth(psth_is_it, psth_is_ct, period_starts, axs[1],
                    'Ipsi-selective')
 
     ymax = max([ax.get_ylim()[1] for ax in axs])
@@ -335,9 +335,9 @@ def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
         psth_s_c = psth_s_l
         psth_n_c = psth_n_l
 
-    _plot_ave_psth(psth_n_i, psth_n_c, period_starts, axs[0],
+    _plot_avg_psth(psth_n_i, psth_n_c, period_starts, axs[0],
                    'Control')
-    _plot_ave_psth(psth_s_i, psth_s_c, period_starts, axs[1],
+    _plot_avg_psth(psth_s_i, psth_s_c, period_starts, axs[1],
                    'Bilateral ALM photostim')
 
     # cosmetic
@@ -351,18 +351,18 @@ def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
     axs[1].axvspan(delay, delay + stim_dur, alpha=0.3, color='royalblue')
 
 
-def _plot_ave_psth(ipsi_psth, contra_psth, vlines={}, ax=None, title=''):
+def _plot_avg_psth(ipsi_psth, contra_psth, vlines={}, ax=None, title=''):
 
-    ave_contra_psth = np.vstack(
+    avg_contra_psth = np.vstack(
         np.array([i[0] for i in contra_psth])).mean(axis=0)
     contra_edges = contra_psth[0][1][:-1]
 
-    ave_ipsi_psth = np.vstack(
+    avg_ipsi_psth = np.vstack(
         np.array([i[0] for i in ipsi_psth])).mean(axis=0)
     ipsi_edges = ipsi_psth[0][1][:-1]
 
-    ax.plot(contra_edges, ave_contra_psth, 'b')
-    ax.plot(ipsi_edges, ave_ipsi_psth, 'r')
+    ax.plot(contra_edges, avg_contra_psth, 'b')
+    ax.plot(ipsi_edges, avg_ipsi_psth, 'r')
 
     for x in vlines:
         ax.axvline(x=x, linestyle='--', color='k')
