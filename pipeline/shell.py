@@ -68,20 +68,14 @@ def ingest_histology(*args):
 
 
 def populate_psth(*args):
-    log.info('psth.Condition.populate()')
-    psth.Condition.populate()
-
     log.info('psth.UnitPsth.populate()')
     psth.UnitPsth.populate()
 
-    log.info('psth.Selectivity.populate()')
-    psth.Selectivity.populate()
+    log.info('psth.PeriodSelectivity.populate()')
+    psth.PeriodSelectivity.populate()
 
-    log.info('psth.UnitGroupCondition.populate()')
-    psth.UnitGroupCondition.populate()
-
-    log.info('psth.UnitGroupPsth.populate()')
-    psth.UnitGroupPsth.populate()
+    log.info('psth.UnitSelectivity.populate()')
+    psth.UnitSelectivity.populate()
 
 
 def nuke_all():
@@ -123,7 +117,7 @@ def ccfload(*args):
 def erd(*args):
     for mod in (ephys, lab, experiment, tracking, psth, ccf, publication):
         modname = str().join(mod.__name__.split('.')[1:])
-        fname = os.path.join('pipeline', '{}.png'.format(modname))
+        fname = os.path.join('pipeline', './images/{}.png'.format(modname))
         print('saving', fname)
         dj.ERD(mod, context={modname: mod}).save(fname)
 
