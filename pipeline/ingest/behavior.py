@@ -199,13 +199,13 @@ class BehaviorIngest(dj.Imported):
         #
         # Prepare PhotoStim
         #
-
+        photosti_duration = 0.5  # (s) Hard-coded here
         photostims = {4: {'photo_stim': 4, 'photostim_device': 'OBIS470',
-                          'brain_location_name': 'left_alm'},
+                          'brain_location_name': 'left_alm', 'duration': photosti_duration},
                       5: {'photo_stim': 5, 'photostim_device': 'OBIS470',
-                          'brain_location_name': 'right_alm'},
+                          'brain_location_name': 'right_alm', 'duration': photosti_duration},
                       6: {'photo_stim': 6, 'photostim_device': 'OBIS470',
-                          'brain_location_name': 'both_alm'}}
+                          'brain_location_name': 'both_alm', 'duration': photosti_duration}}
 
         #
         # Extract trial data from file(s) & prepare trial loop
