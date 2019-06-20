@@ -192,8 +192,8 @@ class EphysIngest(dj.Imported):
             log.info('extracting spike information {s} probe {p} ({f})'
                      .format(s=behavior['session'], p=probe, f=bcfullpath))
 
-            bitCodeE = mat['bitCodeS'].flatten() # bitCodeS is the char variable
-            goCue = mat['goCue'].flatten() # bitCodeS is the char variable
+            bitCodeE = mat['bitCodeS'].flatten()  # bitCodeS is the char variable
+            goCue = mat['goCue'].flatten()  # bitCodeS is the char variable
             viT_offset_file = mat['sTrig'].flatten() - 7500 # start of each trial, subtract this number for each trial
             trialNote = experiment.TrialNote()
             bitCodeB = (trialNote & {'subject_id': ekey['subject_id']} & {'session': ekey['session']} & {'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial') # fetch the bitcode from the behavior trialNote
@@ -209,42 +209,29 @@ class EphysIngest(dj.Imported):
                 else:
                     raise Exception('Bitcode Mismatch')
 
-            spike_trials = np.full_like(spike_times, (len(viT_offset_file) - 1)) # every spike is in the last trial
+            spike_trials = np.full_like(spike_times, (len(viT_offset_file) - 1))  # every spike is in the last trial
             spike_times2 = np.copy(spike_times)
             for i in range(len(viT_offset_file) - 1, 0, -1): #find the trials each unit has a spike in
                 log.debug('locating trials with spikes {s}:{t}'.format(s=behavior['session'], t=i))
-                if spike_trials_fix is None:
-                    spike_trials[(spike_times >= viT_offset_file[i-1])
-                                 & (spike_times < viT_offset_file[i])] = i-1 # Get the trial number of each spike
-                else:
-                    spike_trials[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = spike_trials_fix[i-1] - 1  # Get the trial number of each spike
-
+                spike_trials[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = i-1  # Get the trial number of each spike
                 spike_times2[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] = spike_times[(spike_times >= viT_offset_file[i-1]) & (spike_times < viT_offset_file[i])] - goCue[i-1] # subtract the goCue from each trial
 
-            spike_trials[np.where(spike_times2 >= viT_offset_file[-1])] = len(viT_offset_file) - 1 # subtract the goCue from the last trial
+            spike_trials[np.where(spike_times2 >= viT_offset_file[-1])] = len(viT_offset_file) - 1
             spike_times2[np.where(spike_times2 >= viT_offset_file[-1])] = spike_times[np.where(spike_times2 >= viT_offset_file[-1])] - goCue[-1] # subtract the goCue from the last trial
 
             spike_times2 = spike_times2 / sRateHz  # divide the sampling rate, sRateHz
-
-            if spike_trials_fix is None:
-                if len(bitCodeB) < len(bitCodeE):  # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
-                    startB = np.where(bitCodeE == bitCodeB[0])[0]
-                elif len(bitCodeB) > len(bitCodeE):  # behavior file is longer; e.g. only some trials are sorted, the bitcode.mat should reflect this; Sometimes SpikeGLX can skip a trial, I need to check the last trial
-                    startE = np.where(bitCodeB == bitCodeE[0])[0]
-                    startB = -startE
-                else:
-                    startB = 0
-                    startE = 0
-            else:  # XXX: under test
-                startB = 0
-                startE = 0
-
-            spike_trials = spike_trials - startB  # behavior has less trials if startB is +ve, behavior has more trials if startB is -ve
 
             # at this point, spike-times are aligned to go-cue for that respective trial
             unit_trial_spks = {u: (spike_trials[cluster_ids == u], spike_times2[cluster_ids == u])
                                for u in set(cluster_ids)}
             trial_start_time = viT_offset_file / sRateHz
+
+            # save guard routines:
+            print(f'Trial range: {min(spike_trials)} - {max(spike_trials)}')
+            print(f'goCue length: {len(goCue)}')
+            print(f'Unit counts: {len(unit_trial_spks)}')
+            assert len(goCue) == len(trial_start_time)
+            assert max(spike_trials) < len(trial_start_time)
 
             log.info('inserting units for session {s}'.format(s=behavior['session']))
             #pdb.set_trace()
@@ -253,8 +240,8 @@ class EphysIngest(dj.Imported):
                                       electrode_group=0, electrode=int(viSite_clu[x-1]),
                                       unit_posx=vrPosX_clu[x-1], unit_posy=vrPosY_clu[x-1],
                                       unit_amp=vrVpp_uv_clu[x-1], unit_snr=vrSnr_clu[x-1],
-                                      spike_times=sorted(u_spk_times + (goCue / sRateHz)[u_spk_trials + startB]
-                                                         + trial_start_time[u_spk_trials + startB]),  # re-align back to trial-start, relative to 1st trial
+                                      spike_times=sorted(u_spk_times + (goCue / sRateHz)[u_spk_trials]
+                                                         + trial_start_time[u_spk_trials]),  # re-align back to trial-start, relative to 1st trial
                                       waveform=trWav_raw_clu[x-1][0])
                                  for x, (u_spk_trials, u_spk_times) in unit_trial_spks.items()),
                                 allow_direct_insert=True)  # batch insert the units
@@ -262,13 +249,28 @@ class EphysIngest(dj.Imported):
             # UnitTrial
             log.info('inserting UnitTrial information')
 
+            if spike_trials_fix is None:
+                if len(bitCodeB) < len(bitCodeE):  # behavior file is shorter; e.g. seperate protocols were used; Bpod trials missing due to crash; session restarted
+                    startB = np.where(bitCodeE == bitCodeB[0])[0].squeeze()
+                elif len(bitCodeB) > len(bitCodeE):  # behavior file is longer; e.g. only some trials are sorted, the bitcode.mat should reflect this; Sometimes SpikeGLX can skip a trial, I need to check the last trial
+                    startE = np.where(bitCodeB == bitCodeE[0])[0].squeeze()
+                    startB = -startE
+                else:
+                    startB = 0
+                    startE = 0
+                spike_trials_fix = np.arange(spike_trials.max() + 1)
+            else:  # XXX: under test
+                startB = 0
+                startE = 0
+                spike_trials_fix -= 1
+
             with InsertBuffer(ephys.Unit.UnitTrial, 10000,
                               skip_duplicates=True,
                               allow_direct_insert=True) as ib:
 
                 for x, (u_spk_trials, u_spk_times) in unit_trial_spks.items():
                     ib.insert(dict(ekey, unit=x,
-                                    trial=tr) for tr in set(spike_trials))
+                                    trial=spike_trials_fix[tr] - startB) for tr in set(spike_trials))
                     if ib.flush():
                         log.debug('... UnitTrial spike')
 
@@ -278,7 +280,7 @@ class EphysIngest(dj.Imported):
                 for x, (u_spk_trials, u_spk_times) in unit_trial_spks.items():
                     ib.insert(dict(ekey, unit=x,
                                     spike_times=u_spk_times[u_spk_trials == tr],
-                                    trial=tr) for tr in set(spike_trials))
+                                    trial=spike_trials_fix[tr] - startB) for tr in set(spike_trials))
                     if ib.flush():
                         log.debug('... TrialSpike spike')
 

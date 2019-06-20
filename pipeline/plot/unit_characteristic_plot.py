@@ -8,9 +8,7 @@ import seaborn as sns
 import itertools
 import pandas as pd
 
-from scipy import signal
-
-from pipeline import experiment, tracking, ephys, psth
+from pipeline import experiment, ephys, psth
 
 m_scale = 1200
 
@@ -129,6 +127,7 @@ def plot_unit_selectivity(probe_insert_key, axs=None):
 
 
 def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
+    cue_onset = (experiment.Period & 'period = "delay"').fetch1('period_start')
 
     no_stim_cond = (psth.TrialCondition
                     & {'trial_condition_desc':
@@ -137,6 +136,15 @@ def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
     bi_stim_cond = (psth.TrialCondition
                     & {'trial_condition_desc':
                        'all_noearlylick_both_alm_stim'}).fetch1('KEY')
+
+    # get photostim duration
+    default_stim_dur = 0.5
+    stim_dur = (experiment.Photostim & experiment.PhotostimEvent
+                * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')).fetch('duration')
+    if len(stim_dur) != 1:
+        raise Exception('Multiple stim duration found')
+    else:
+        stim_dur = stim_dur[0] if stim_dur[0] else default_stim_dur
 
     units = ephys.Unit & probe_insert_key & 'unit_quality = "good"'
 
@@ -153,8 +161,13 @@ def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
         bistim_psth, bistim_edge = (
             psth.UnitPsth & {**unit, **bi_stim_cond}).fetch1('unit_psth')
 
-        frate_change = (np.abs(bistim_psth.mean() - nostim_psth.mean())
-                        / nostim_psth.mean())
+        # compute the firing rate difference between contra vs. ipsi within the 0.5s stimulation duration
+        frate_change = (np.abs(bistim_psth[np.logical_and(bistim_edge[1:] > cue_onset,
+                                                          bistim_edge[1:] <= cue_onset + stim_dur)].mean()
+                               - nostim_psth[np.logical_and(bistim_edge[1:] > cue_onset,
+                                                            bistim_edge[1:] <= cue_onset + stim_dur)].mean())
+                        / nostim_psth[np.logical_and(bistim_edge[1:] > cue_onset,
+                                                            bistim_edge[1:] <= cue_onset + stim_dur)].mean())
 
         metrics.loc[u_idx] = (int(unit['unit']), x, y, frate_change)
 
@@ -189,13 +202,16 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
 
     good_unit = ephys.Unit & {'unit_quality': 'good'}
 
+    hemi = (ephys.ProbeInsertion.InsertionLocation
+            * experiment.BrainLocation & probe_insert_key).fetch1('hemisphere')
+
     conds_i = (psth.TrialCondition
                & {'trial_condition_desc':
-                  'good_noearlylick_left_hit'}).fetch('KEY')
+                  'good_noearlylick_left_hit' if hemi == 'left' else 'good_noearlylick_right_hit'}).fetch('KEY')
 
     conds_c = (psth.TrialCondition
                & {'trial_condition_desc':
-                  'good_noearlylick_right_hit'}).fetch('KEY')
+                  'good_noearlylick_right_hit' if hemi == 'left' else 'good_noearlylick_left_hit'}).fetch('KEY')
 
     sel_i = (ephys.Unit * psth.UnitSelectivity
              & 'unit_selectivity = "ipsi-selective"' & probe_insert_key)
@@ -250,13 +266,17 @@ def plot_avg_contra_ipsi_psth(probe_insert_key, axs=None):
                          'period_start')
 
     good_unit = ephys.Unit & {'unit_quality': 'good'}
+
+    hemi = (ephys.ProbeInsertion.InsertionLocation
+            * experiment.BrainLocation & probe_insert_key).fetch1('hemisphere')
+
     conds_i = (psth.TrialCondition
                & {'trial_condition_desc':
-                  'good_noearlylick_left_hit'}).fetch('KEY')
+                  'good_noearlylick_left_hit' if hemi == 'left' else 'good_noearlylick_right_hit'}).fetch('KEY')
 
     conds_c = (psth.TrialCondition
                & {'trial_condition_desc':
-                  'good_noearlylick_right_hit'}).fetch('KEY')
+                  'good_noearlylick_right_hit' if hemi == 'left' else 'good_noearlylick_left_hit'}).fetch('KEY')
 
     sel_i = (ephys.Unit * psth.UnitSelectivity
              & 'unit_selectivity = "ipsi-selective"' & probe_insert_key)
@@ -284,7 +304,7 @@ def plot_avg_contra_ipsi_psth(probe_insert_key, axs=None):
                   & good_unit.proj() & sel_c.proj()).fetch(
                       'unit_psth', order_by='unit_posy desc')
 
-    _plot_avg_psth(psth_cs_ct, psth_cs_it, period_starts, axs[0],
+    _plot_avg_psth(psth_cs_it, psth_cs_ct, period_starts, axs[0],
                    'Contra-selective')
     _plot_avg_psth(psth_is_it, psth_is_ct, period_starts, axs[1],
                    'Ipsi-selective')
@@ -298,8 +318,6 @@ def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
     if axs is None:
         fig, axs = plt.subplots(1, 2, figsize=(16, 6))
     assert axs.size == 2
-
-    stim_dur = 0.5  # TODO: hard-coded here, this info is not ingested anywhere
 
     insert = (ephys.ProbeInsertion.InsertionLocation
               * experiment.BrainLocation & probe_insert_key).fetch1()
@@ -323,6 +341,15 @@ def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
     psth_n_r = (psth.UnitPsth * psth.TrialCondition
                 & {'trial_condition_desc':
                    'all_noearlylick_both_alm_nostim_right'}).fetch('unit_psth')
+
+    # get photostim duration
+    default_stim_dur = 0.5
+    stim_dur = (experiment.Photostim & experiment.PhotostimEvent
+                * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')).fetch('duration')
+    if len(stim_dur) != 1:
+        raise Exception('Multiple stim duration found')
+    else:
+        stim_dur = stim_dur[0] if stim_dur[0] else default_stim_dur
 
     if insert['hemisphere'] == 'left':
         psth_s_i = psth_s_l
@@ -351,6 +378,86 @@ def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
     axs[1].axvspan(delay, delay + stim_dur, alpha=0.3, color='royalblue')
 
 
+def plot_coding_direction(units, time_period=None, axs=None):
+    _, proj_contra_trial, proj_ipsi_trial, time_stamps = psth.compute_CD_projected_psth(
+        units.fetch('KEY'), time_period=time_period)
+
+    period_starts = (experiment.Period & 'period in ("sample", "delay", "response")').fetch('period_start')
+
+    if axs is None:
+        fig, axs = plt.subplots(1, 1, figsize=(8, 6))
+
+    # plot
+    _plot_with_sem(proj_contra_trial, time_stamps, ax=axs, c='b')
+    _plot_with_sem(proj_ipsi_trial, time_stamps, ax=axs, c='r')
+
+    for x in period_starts:
+        axs.axvline(x=x, linestyle = '--', color = 'k')
+    # cosmetic
+    axs.spines['right'].set_visible(False)
+    axs.spines['top'].set_visible(False)
+    axs.set_ylabel('CD projection (a.u.)')
+    axs.set_xlabel('Time (s)')
+
+
+def plot_paired_coding_direction(unit_g1, unit_g2, labels=None, time_period=None):
+    """
+    Plot trial-to-trial CD-endpoint correlation between CD-projected trial-psth from two unit-groups (e.g. two brain regions)
+    Note: coding direction is calculated on selective units, contra vs. ipsi, within the specified time_period
+    """
+    _, proj_contra_trial_g1, proj_ipsi_trial_g1, time_stamps = psth.compute_CD_projected_psth(
+        unit_g1.fetch('KEY'), time_period=time_period)
+    _, proj_contra_trial_g2, proj_ipsi_trial_g2, time_stamps = psth.compute_CD_projected_psth(
+        unit_g2.fetch('KEY'), time_period=time_period)
+
+    period_starts = (experiment.Period & 'period in ("sample", "delay", "response")').fetch('period_start')
+
+    if labels:
+        assert len(labels) == 2
+    else:
+        labels = ('unit group 1', 'unit group 2')
+
+    # plot projected trial-psth
+    fig, axs = plt.subplots(1, 2, figsize=(16, 6))
+
+    _plot_with_sem(proj_contra_trial_g1, time_stamps, ax=axs[0], c='b')
+    _plot_with_sem(proj_ipsi_trial_g1, time_stamps, ax=axs[0], c='r')
+    _plot_with_sem(proj_contra_trial_g2, time_stamps, ax=axs[1], c='b')
+    _plot_with_sem(proj_ipsi_trial_g2, time_stamps, ax=axs[1], c='r')
+
+    # cosmetic
+    for ax, label in zip(axs, labels):
+        for x in period_starts:
+            ax.axvline(x=x, linestyle = '--', color = 'k')
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.set_ylabel('CD projection (a.u.)')
+        ax.set_xlabel('Time (s)')
+        ax.set_title(label)
+
+    # plot trial CD-endpoint correlation
+    p_start, p_end = time_period
+    contra_cdend_1 = proj_contra_trial_g1[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+    contra_cdend_2 = proj_contra_trial_g2[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+    ipsi_cdend_1 = proj_ipsi_trial_g1[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+    ipsi_cdend_2 = proj_ipsi_trial_g2[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+
+    c_df = pd.DataFrame([contra_cdend_1, contra_cdend_2]).T
+    c_df.columns = labels
+    c_df['trial-type'] = 'contra'
+    i_df = pd.DataFrame([ipsi_cdend_1, ipsi_cdend_2]).T
+    i_df.columns = labels
+    i_df['trial-type'] = 'ipsi'
+    df = c_df.append(i_df)
+
+    jplot = jointplot_w_hue(data=df, x=labels[0], y=labels[1], hue='trial-type', colormap=['b', 'r'],
+                            figsize=(8, 6), fig=None, scatter_kws=None)
+    jplot['fig'].show()
+
+
+# ---------- PLOTTING HELPER FUNCTIONS --------------
+
+
 def _plot_avg_psth(ipsi_psth, contra_psth, vlines={}, ax=None, title=''):
 
     avg_contra_psth = np.vstack(
@@ -361,13 +468,14 @@ def _plot_avg_psth(ipsi_psth, contra_psth, vlines={}, ax=None, title=''):
         np.array([i[0] for i in ipsi_psth])).mean(axis=0)
     ipsi_edges = ipsi_psth[0][1][:-1]
 
-    ax.plot(contra_edges, avg_contra_psth, 'b')
-    ax.plot(ipsi_edges, avg_ipsi_psth, 'r')
+    ax.plot(contra_edges, avg_contra_psth, 'b', label='contra')
+    ax.plot(ipsi_edges, avg_ipsi_psth, 'r', label='ipsi')
 
     for x in vlines:
         ax.axvline(x=x, linestyle='--', color='k')
 
     # cosmetic
+    ax.legend()
     ax.set_title(title)
     ax.set_ylabel('Firing Rate (spike/s)')
     ax.set_xlabel('Time (s)')
@@ -411,6 +519,15 @@ def _plot_stacked_psth_diff(psth_a, psth_b, vlines=[], ax=None, flip=False):
     im.set_clim((-1, 1))
 
 
+def _plot_with_sem(data, t_vec, ax, c='k'):
+    v_mean = np.nanmean(data, axis=0)
+    v_sem = np.nanstd(data, axis=0) #/ np.sqrt(data.shape[0])
+    ax.plot(t_vec, v_mean, c)
+    ax.fill_between(t_vec, v_mean - v_sem, v_mean + v_sem, alpha=0.25, facecolor=c)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+
+
 def _compute_isi_violation(spike_times, isi_thresh=2):
     isi = np.diff(spike_times)
     return sum((isi < isi_thresh).astype(int)) / len(isi)
@@ -424,3 +541,104 @@ def _movmean(data, nsamp=5):
     ret = np.cumsum(data, dtype=float)
     ret[nsamp:] = ret[nsamp:] - ret[:-nsamp]
     return ret[nsamp - 1:] / nsamp
+
+
+def jointplot_w_hue(data, x, y, hue=None, colormap=None,
+                    figsize=None, fig=None, scatter_kws=None):
+    """
+    __author__ = "lewis.r.liu@gmail.com"
+    __copyright__ = "Copyright 2018, github.com/ruxi"
+    __license__ = "MIT"
+    __version__ = 0.0
+    .1
+
+    # update: Mar 5 , 2018
+    # created: Feb 19, 2018
+    # desc: seaborn jointplot with 'hue'
+    # prepared for issue: https://github.com/mwaskom/seaborn/issues/365
+
+    jointplots with hue groupings.
+    minimum working example
+    -----------------------
+    iris = sns.load_dataset("iris")
+    jointplot_w_hue(data=iris, x = 'sepal_length', y = 'sepal_width', hue = 'species')['fig']
+    changelog
+    ---------
+    2018 Mar 5: added legends and colormap
+    2018 Feb 19: gist made
+    """
+
+    import matplotlib.gridspec as gridspec
+    import matplotlib.patches as mpatches
+    # defaults
+    if colormap is None:
+        colormap = sns.color_palette()  # ['blue','orange']
+    if figsize is None:
+        figsize = (5, 5)
+    if fig is None:
+        fig = plt.figure(figsize = figsize)
+    if scatter_kws is None:
+        scatter_kws = dict(alpha = 0.4, lw = 1)
+
+    # derived variables
+    if hue is None:
+        return "use normal sns.jointplot"
+    hue_groups = data[hue].unique()
+
+    subdata = dict()
+    colors = dict()
+
+    active_colormap = colormap[0: len(hue_groups)]
+    legend_mapping = []
+    for hue_grp, color in zip(hue_groups, active_colormap):
+        legend_entry = mpatches.Patch(color = color, label = hue_grp)
+        legend_mapping.append(legend_entry)
+
+        subdata[hue_grp] = data[data[hue] == hue_grp]
+        colors[hue_grp] = color
+
+    # canvas setup
+    grid = gridspec.GridSpec(2, 2,
+                             width_ratios = [4, 1],
+                             height_ratios = [1, 4],
+                             hspace = 0, wspace = 0
+                             )
+    ax_main = plt.subplot(grid[1, 0])
+    ax_xhist = plt.subplot(grid[0, 0], sharex = ax_main)
+    ax_yhist = plt.subplot(grid[1, 1])  # , sharey=ax_main)
+
+    ## plotting
+
+    # histplot x-axis
+    for hue_grp in hue_groups:
+        sns.distplot(subdata[hue_grp][x], color = colors[hue_grp]
+                     , ax = ax_xhist)
+
+    # histplot y-axis
+    for hue_grp in hue_groups:
+        sns.distplot(subdata[hue_grp][y], color = colors[hue_grp]
+                     , ax = ax_yhist, vertical = True)
+
+        # main scatterplot
+    # note: must be after the histplots else ax_yhist messes up
+    for hue_grp in hue_groups:
+        sns.regplot(data = subdata[hue_grp], fit_reg = True,
+                    x = x, y = y, ax = ax_main, color = colors[hue_grp]
+                    , line_kws={'alpha': 0.5}, scatter_kws = scatter_kws
+                    )
+
+        # despine
+    for myax in [ax_yhist, ax_xhist]:
+        sns.despine(ax = myax, bottom = False, top = True, left = False, right = True
+                    , trim = False)
+        plt.setp(myax.get_xticklabels(), visible = False)
+        plt.setp(myax.get_yticklabels(), visible = False)
+
+    # topright
+    ax_legend = plt.subplot(grid[0, 1])  # , sharey=ax_main)
+    plt.setp(ax_legend.get_xticklabels(), visible = False)
+    plt.setp(ax_legend.get_yticklabels(), visible = False)
+
+    ax_legend.legend(handles = legend_mapping)
+    return dict(fig = fig, gridspec = grid)
+
