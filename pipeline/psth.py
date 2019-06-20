@@ -343,7 +343,7 @@ class PeriodSelectivity(dj.Computed):
 
     alpha = 0.05  # default alpha value
 
-    key_source = experiment.Period * (ephys.Unit & 'unit_quality = "good"')
+    key_source = experiment.Period * (ephys.Unit & 'unit_quality != "all"')
 
     def make(self, key):
         '''
@@ -372,7 +372,7 @@ class PeriodSelectivity(dj.Computed):
         lr = ['left', 'right']
         behav = (experiment.BehaviorTrial & spikes_q.proj()).fetch(
             order_by='trial asc')
-        behav_lr = {k: np.where(behav['trial_instruction'] == k) for k in lr}
+        behav_lr = {k: np.where(behav['trial_instruction'] == k)[0] for k in lr}
 
         if egpos['hemisphere'] == 'left':
             behav_i = behav_lr['left']
@@ -389,7 +389,7 @@ class PeriodSelectivity(dj.Computed):
                       for st, pad in zip(spikes['spike_times'],
                                          repeat([math.nan]*ydim))]))
 
-        # with which to calculate the selctivity over the given period
+        # with which to calculate the selectivity over the given period
         period = (experiment.Period & key).fetch1()
 
         # by determining the period boundaries,
@@ -408,7 +408,7 @@ class PeriodSelectivity(dj.Computed):
         # and testing for selectivity.
         freq_i = freq[behav_i]
         freq_c = freq[behav_c]
-        t_stat, pval = sc_stats.ttest_ind(freq_i, freq_c, equal_var=False)
+        t_stat, pval = sc_stats.ttest_ind(freq_i, freq_c, equal_var=True)
 
         freq_i_m = np.average(freq_i)
         freq_c_m = np.average(freq_c)
@@ -441,7 +441,12 @@ class UnitSelectivity(dj.Computed):
     -> Selectivity.proj(unit_selectivity='selectivity')
     """
 
-    key_source = ephys.Unit & PeriodSelectivity
+    # Unit Selectivity is computed only for units
+    # that has PeriodSelectivity computed for "sample" and "delay" and "response"
+    key_source = (ephys.Unit
+                  & (PeriodSelectivity & 'period = "sample"')
+                  & (PeriodSelectivity & 'period = "delay"')
+                  & (PeriodSelectivity & 'period = "response"'))
 
     def make(self, key):
         '''
@@ -460,40 +465,40 @@ class UnitSelectivity(dj.Computed):
                 return
 
         # fetch region selectivity,
-        sel = (PeriodSelectivity & key
-               & "p_value <= '{}'".format(PeriodSelectivity.alpha)).fetch(
-                   as_dict=True)
+        sels = (PeriodSelectivity & key).fetch('period_selectivity')
 
-        if not sel:
+        assert len(sels) == 3  # one more sanity check, making sure we have all 3 periods
+
+        if (sels == 'non-selective').all():
             log.debug('... no UnitSelectivity for unit')
+            self.insert1({**key, 'unit_selectivity': 'non-selective'})
             return
 
         # left/right spikes,
-        trials_l, spikes_l = ((ephys.TrialSpikes & key)
-                              & (experiment.BehaviorTrial()
+        left_trial_spikes = ((ephys.TrialSpikes & key)
+                             & (experiment.BehaviorTrial()
                                  & {'task': 'audio delay'}
                                  & {'early_lick': 'no early'}
                                  & {'outcome': 'hit'}
                                  & {'trial_instruction': 'left'})
-                              - experiment.PhotostimEvent).fetch(
-                                  'trial', 'spike_times')
+                             - experiment.PhotostimEvent).fetch('spike_times')
 
-        trials_r, spikes_r = ((ephys.TrialSpikes & key)
+        right_trial_spikes = ((ephys.TrialSpikes & key)
                               & (experiment.BehaviorTrial()
                                  & {'task': 'audio delay'}
                                  & {'early_lick': 'no early'}
                                  & {'outcome': 'hit'}
                                  & {'trial_instruction': 'right'})
-                              - experiment.PhotostimEvent).fetch(
-                                  'trial', 'spike_times')
+                              - experiment.PhotostimEvent).fetch('spike_times')
 
         # compute their average firing rate,
-        dur = experiment.Period.trial_duration
+        period_starts, period_ends = (experiment.Period & key).fetch('period_start', 'period_end')
+        dur = sum(period_ends - period_starts)
 
-        freq_l = (len(np.concatenate(spikes_l))
-                  / (len(np.unique(trials_l)) * dur))
-        freq_r = (len(np.concatenate(spikes_r))
-                  / (len(np.unique(trials_r)) * dur))
+        freq_l = (len(np.concatenate(left_trial_spikes))
+                  / (len(left_trial_spikes) * dur))
+        freq_r = (len(np.concatenate(right_trial_spikes))
+                  / (len(right_trial_spikes) * dur))
 
         # and determine their ipsi/contra preference via frequency.
         if egpos['hemisphere'] == 'left':

@@ -226,13 +226,6 @@ class EphysIngest(dj.Imported):
                                for u in set(cluster_ids)}
             trial_start_time = viT_offset_file / sRateHz
 
-            # save guard routines:
-            print(f'Trial range: {min(spike_trials)} - {max(spike_trials)}')
-            print(f'goCue length: {len(goCue)}')
-            print(f'Unit counts: {len(unit_trial_spks)}')
-            assert len(goCue) == len(trial_start_time)
-            assert max(spike_trials) < len(trial_start_time)
-
             log.info('inserting units for session {s}'.format(s=behavior['session']))
             #pdb.set_trace()
             ephys.Unit().insert((dict(ekey, unit=x, unit_uid=x, unit_quality=strs[x-1],

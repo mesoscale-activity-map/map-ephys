@@ -41,7 +41,7 @@ def plot_clustering_quality(probe_insert_key):
 
 def plot_unit_characteristic(probe_insert_key, axs=None):
     amp, snr, spk_times, x, y, insertion_depth = (ephys.Unit * ephys.ProbeInsertion.InsertionLocation
-                                                  & probe_insert_key & 'unit_quality = "good"').fetch(
+                                                  & probe_insert_key & 'unit_quality != "all"').fetch(
         'unit_amp', 'unit_snr', 'spike_times', 'unit_posx', 'unit_posy', 'dv_location')
 
     spk_rate = np.array(list(_compute_spike_rate(spk) for spk in spk_times))
@@ -150,7 +150,7 @@ def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
     else:
         stim_dur = stim_durs[0] if len(stim_durs) == 1 and stim_durs[0] else default_stim_dur
 
-    units = ephys.Unit & probe_insert_key & 'unit_quality = "good"'
+    units = ephys.Unit & probe_insert_key & 'unit_quality != "all"'
 
     metrics = pd.DataFrame(columns=['unit', 'x', 'y', 'frate_change'])
 
@@ -204,8 +204,6 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
                      & 'period in ("sample", "delay", "response")').fetch(
                          'period_start')
 
-    good_unit = ephys.Unit & {'unit_quality': 'good'}
-
     hemi = (ephys.ProbeInsertion.InsertionLocation
             * experiment.BrainLocation & probe_insert_key).fetch1('hemisphere')
 
@@ -223,28 +221,21 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
     sel_c = (ephys.Unit * psth.UnitSelectivity
              & 'unit_selectivity = "contra-selective"' & probe_insert_key)
 
-    # psth_?s_?t: psth over selectivty type by specific trials
-    psth_is_it = (((psth.UnitPsth & conds_i)  # ipsi selective ipsi trials
-                   * ephys.Unit.proj('unit_posx', 'unit_posy'))
-                  & good_unit.proj() & sel_i.proj()).fetch(
-                      order_by='unit_posy desc')
+    # ipsi selective ipsi trials
+    psth_is_it = (psth.UnitPsth * sel_i.proj('unit_posy') & conds_i).fetch(order_by='unit_posy desc')
 
-    psth_is_ct = (((psth.UnitPsth & conds_c)  # ipsi selective contra trials
-                   * ephys.Unit.proj('unit_posx', 'unit_posy'))
-                  & good_unit.proj() & sel_i.proj()).fetch(
-                      order_by='unit_posy desc')
+    # ipsi selective contra trials
+    psth_is_ct = (psth.UnitPsth * sel_i.proj('unit_posy') & conds_c).fetch(order_by='unit_posy desc')
 
-    psth_cs_ct = (((psth.UnitPsth & conds_c)  # contra selective contra trials
-                   * ephys.Unit.proj('unit_posx', 'unit_posy'))
-                  & good_unit.proj() & sel_c.proj()).fetch(
-                      order_by='unit_posy desc')
+    # contra selective contra trials
+    psth_cs_ct = (psth.UnitPsth * sel_c.proj('unit_posy') & conds_c).fetch(order_by='unit_posy desc')
 
-    psth_cs_it = (((psth.UnitPsth & conds_i)  # contra selective ipsi trials
-                   * ephys.Unit.proj('unit_posx', 'unit_posy'))
-                  & good_unit.proj() & sel_c.proj()).fetch(
-                      order_by='unit_posy desc')
+    # contra selective ipsi trials
+    psth_cs_it = (psth.UnitPsth * sel_c.proj('unit_posy') & conds_i).fetch(order_by='unit_posy desc')
 
-    _plot_stacked_psth_diff(psth_cs_ct, psth_cs_it, ax=axs[0],
+    # always look at the difference in ipsi-trial subtracting contra-trial
+
+    _plot_stacked_psth_diff(psth_cs_it, psth_cs_ct, ax=axs[0],
                             vlines=period_starts)
 
     axs[0].set_title('Contra-selective Units')
@@ -252,7 +243,7 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
     axs[0].set_xlabel('Time to go (s)')
 
     _plot_stacked_psth_diff(psth_is_it, psth_is_ct, ax=axs[1],
-                            vlines=period_starts, flip=True)
+                            vlines=period_starts)
 
     axs[1].set_title('Ipsi-selective Units')
     axs[1].set_ylabel('Unit (by depth)')
@@ -269,7 +260,7 @@ def plot_avg_contra_ipsi_psth(probe_insert_key, axs=None):
                      & 'period in ("sample", "delay", "response")').fetch(
                          'period_start')
 
-    good_unit = ephys.Unit & {'unit_quality': 'good'}
+    good_unit = ephys.Unit & 'unit_quality != "all"'
 
     hemi = (ephys.ProbeInsertion.InsertionLocation
             * experiment.BrainLocation & probe_insert_key).fetch1('hemisphere')
@@ -506,14 +497,14 @@ def _plot_stacked_psth_diff(psth_a, psth_b, vlines=[], ax=None, flip=False):
     a_data = np.array([r[0] for r in psth_a['unit_psth']])
     b_data = np.array([r[0] for r in psth_b['unit_psth']])
 
-    # scale per-unit psth's
-    a_data = np.array([_movmean(i/np.abs(i).max()) for i in a_data])
-    b_data = np.array([_movmean(i/np.abs(i).max()) for i in b_data])
+    result = a_data - b_data
+    result = result / np.repeat(result.max(axis=1)[:, None], 149, axis=1)
 
-    if flip:
-        result = (a_data - b_data) * -1
-    else:
-        result = a_data - b_data
+    # moving average
+    result = np.array([_movmean(i) for i in result])
+
+    # flip
+    result = result * -1 if flip else result
 
     if ax is None:
         fig, ax = plt.subplots(1, 1)
