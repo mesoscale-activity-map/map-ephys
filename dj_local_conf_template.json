@@ -11,5 +11,6 @@
     "display.width": 14,
     "display.show_tuple_count": true,
     "history": [],
-    "do_unittest": true
+    "do_unittest": true,
+    "custom": {}
 }

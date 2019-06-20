@@ -139,12 +139,16 @@ def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
 
     # get photostim duration
     default_stim_dur = 0.5
-    stim_dur = (experiment.Photostim & experiment.PhotostimEvent
-                * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')).fetch('duration')
-    if len(stim_dur) > 1:
-        raise Exception('Multiple stim duration found')
+    stim_durs = np.unique((experiment.Photostim & experiment.PhotostimEvent
+                           * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')
+                           & probe_insert_key).fetch('duration'))
+    if len(stim_durs) == 0:
+        stim_dur = default_stim_dur
+    elif len(stim_durs) > 1:
+        print(f'Found multiple stim durations: {stim_durs} - select {min(stim_durs)}')
+        stim_dur = min(stim_durs)
     else:
-        stim_dur = stim_dur[0] if stim_dur[0] else default_stim_dur
+        stim_dur = stim_durs[0] if len(stim_durs) == 1 and stim_durs[0] else default_stim_dur
 
     units = ephys.Unit & probe_insert_key & 'unit_quality = "good"'
 
@@ -344,12 +348,16 @@ def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
 
     # get photostim duration
     default_stim_dur = 0.5
-    stim_dur = (experiment.Photostim & experiment.PhotostimEvent
-                * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')).fetch('duration')
-    if len(stim_dur) != 1:
-        raise Exception('Multiple stim duration found')
+    stim_durs = np.unique((experiment.Photostim & experiment.PhotostimEvent
+                           * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')
+                           & probe_insert_key).fetch('duration'))
+    if len(stim_durs) == 0:
+        stim_dur = default_stim_dur
+    elif len(stim_durs) > 1:
+        print(f'Found multiple stim durations: {stim_durs} - select {min(stim_durs)}')
+        stim_dur = min(stim_durs)
     else:
-        stim_dur = stim_dur[0] if stim_dur[0] else default_stim_dur
+        stim_dur = stim_durs[0] if len(stim_durs) == 1 and stim_durs[0] else default_stim_dur
 
     if insert['hemisphere'] == 'left':
         psth_s_i = psth_s_l
