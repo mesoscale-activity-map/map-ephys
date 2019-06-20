@@ -141,7 +141,7 @@ def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
     default_stim_dur = 0.5
     stim_dur = (experiment.Photostim & experiment.PhotostimEvent
                 * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')).fetch('duration')
-    if len(stim_dur) != 1:
+    if len(stim_dur) > 1:
         raise Exception('Multiple stim duration found')
     else:
         stim_dur = stim_dur[0] if stim_dur[0] else default_stim_dur
