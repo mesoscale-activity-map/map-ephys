@@ -107,27 +107,29 @@ class TrialCondition(dj.Lookup):
                     'trial_instruction': 'right'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_stim',  # TODO: this condition needs to exclude 'ignore' outcome - quick tricky under this current implementation
+                'trial_condition_desc': 'all_noearlylick_both_alm_stim',
                 'trial_condition_func': '_get_trials_include_stim',
                 'trial_condition_arg': {
+                    '_outcome': 'ignore',
                     'task': 'audio delay',
                     'task_protocol': 1,
                     'early_lick': 'no early',
                     'brain_location_name': 'both_alm'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_nostim', # TODO: this condition needs to exclude 'ignore' outcome - quick tricky under this current implementation
+                'trial_condition_desc': 'all_noearlylick_both_alm_nostim',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
+                    '_outcome': 'ignore',
                     'task': 'audio delay',
                     'task_protocol': 1,
-                    'early_lick': 'no early',
-                    'brain_location_name': 'both_alm'}
+                    'early_lick': 'no early'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_stim_left',  # TODO: no ignore
+                'trial_condition_desc': 'all_noearlylick_both_alm_stim_left',
                 'trial_condition_func': '_get_trials_include_stim',
                 'trial_condition_arg': {
+                    '_outcome': 'ignore',
                     'task': 'audio delay',
                     'task_protocol': 1,
                     'early_lick': 'no early',
@@ -135,19 +137,20 @@ class TrialCondition(dj.Lookup):
                     'brain_location_name': 'both_alm'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_nostim_left',   # TODO: no ignore
+                'trial_condition_desc': 'all_noearlylick_both_alm_nostim_left',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
+                    '_outcome': 'ignore',
                     'task': 'audio delay',
                     'task_protocol': 1,
                     'early_lick': 'no early',
-                    'trial_instruction': 'left',
-                    'brain_location_name': 'both_alm'}
+                    'trial_instruction': 'left'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_stim_right',   # TODO: no ignore
+                'trial_condition_desc': 'all_noearlylick_both_alm_stim_right',
                 'trial_condition_func': '_get_trials_include_stim',
                 'trial_condition_arg': {
+                    '_outcome': 'ignore',
                     'task': 'audio delay',
                     'task_protocol': 1,
                     'early_lick': 'no early',
@@ -155,14 +158,14 @@ class TrialCondition(dj.Lookup):
                     'brain_location_name': 'both_alm'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_nostim_right',   # TODO: no ignore
+                'trial_condition_desc': 'all_noearlylick_both_alm_nostim_right',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
+                    '_outcome': 'ignore',
                     'task': 'audio delay',
                     'task_protocol': 1,
                     'early_lick': 'no early',
-                    'trial_instruction': 'right',
-                    'brain_location_name': 'both_alm'}
+                    'trial_instruction': 'right'}
             },
         )
         # generate key XXX: complicated why not just key from description?
@@ -190,33 +193,48 @@ class TrialCondition(dj.Lookup):
 
         log.debug('_get_trials_exclude_stim: {}'.format(kwargs))
 
-        stim_key = {k: v for k, v in kwargs.items()
-                    if k in (set(experiment.Photostim.heading.names)
-                             - set(experiment.Session.heading.names))}
+        restr, _restr = {}, {}
+        for k, v in kwargs.items():
+            if k.startswith('_'):
+                _restr[k[1:]] = v
+            else:
+                restr[k] = v
 
-        behav_key = {k: v for k, v in kwargs.items()
-                     if k not in stim_key}
+        stim_attrs = set(experiment.Photostim.heading.names) - set(experiment.Session.heading.names)
+        behav_attrs = set(experiment.BehaviorTrial.heading.names)
 
-        return ((experiment.BehaviorTrial & behav_key)
-                - experiment.PhotostimTrial)
+        _stim_key = {k: v for k, v in _restr.items() if k in stim_attrs}
+        _behav_key = {k: v for k, v in _restr.items() if k in behav_attrs}
 
+        stim_key = {k: v for k, v in restr.items() if k in stim_attrs}
+        behav_key = {k: v for k, v in restr.items() if k in behav_attrs}
+
+        return (((experiment.BehaviorTrial & behav_key) - (_behav_key if _behav_key else [])) -
+                (experiment.PhotostimEvent * (experiment.Photostim & stim_key) - (_stim_key if _stim_key else [])).proj())
 
     @classmethod
     def _get_trials_include_stim(cls, **kwargs):
 
         log.debug('_get_trials_include_stim: {}'.format(kwargs))
 
-        stim_key = {k: v for k, v in kwargs.items()
-                    if k in (set(experiment.Photostim.heading.names)
-                             - set(experiment.Session.heading.names))}
+        restr, _restr = {}, {}
+        for k, v in kwargs.items():
+            if k.startswith('_'):
+                _restr[k[1:]] = v
+            else:
+                restr[k] = v
 
-        behav_key = {k: v for k, v in kwargs.items()
-                     if k not in stim_key}
+        stim_attrs = set(experiment.Photostim.heading.names) - set(experiment.Session.heading.names)
+        behav_attrs = set(experiment.BehaviorTrial.heading.names)
 
-        return ((experiment.BehaviorTrial & behav_key) &
-                (experiment.BehaviorTrial
-                 * experiment.PhotostimEvent
-                 * experiment.Photostim & stim_key).proj())
+        _stim_key = {k: v for k, v in _restr.items() if k in stim_attrs}
+        _behav_key = {k: v for k, v in _restr.items() if k in behav_attrs}
+
+        stim_key = {k: v for k, v in restr.items() if k in stim_attrs}
+        behav_key = {k: v for k, v in restr.items() if k in behav_attrs}
+
+        return (((experiment.BehaviorTrial & behav_key) - (_behav_key if _behav_key else [])) &
+                (experiment.PhotostimEvent * (experiment.Photostim & stim_key) - (_stim_key if _stim_key else [])).proj())
 
 
 @schema

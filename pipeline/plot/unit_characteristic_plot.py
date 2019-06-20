@@ -202,13 +202,16 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
 
     good_unit = ephys.Unit & {'unit_quality': 'good'}
 
+    hemi = (ephys.ProbeInsertion.InsertionLocation
+            * experiment.BrainLocation & probe_insert_key).fetch1('hemisphere')
+
     conds_i = (psth.TrialCondition
                & {'trial_condition_desc':
-                  'good_noearlylick_left_hit'}).fetch('KEY')
+                  'good_noearlylick_left_hit' if hemi == 'left' else 'good_noearlylick_right_hit'}).fetch('KEY')
 
     conds_c = (psth.TrialCondition
                & {'trial_condition_desc':
-                  'good_noearlylick_right_hit'}).fetch('KEY')
+                  'good_noearlylick_right_hit' if hemi == 'left' else 'good_noearlylick_left_hit'}).fetch('KEY')
 
     sel_i = (ephys.Unit * psth.UnitSelectivity
              & 'unit_selectivity = "ipsi-selective"' & probe_insert_key)
@@ -263,13 +266,17 @@ def plot_avg_contra_ipsi_psth(probe_insert_key, axs=None):
                          'period_start')
 
     good_unit = ephys.Unit & {'unit_quality': 'good'}
+
+    hemi = (ephys.ProbeInsertion.InsertionLocation
+            * experiment.BrainLocation & probe_insert_key).fetch1('hemisphere')
+
     conds_i = (psth.TrialCondition
                & {'trial_condition_desc':
-                  'good_noearlylick_left_hit'}).fetch('KEY')
+                  'good_noearlylick_left_hit' if hemi == 'left' else 'good_noearlylick_right_hit'}).fetch('KEY')
 
     conds_c = (psth.TrialCondition
                & {'trial_condition_desc':
-                  'good_noearlylick_right_hit'}).fetch('KEY')
+                  'good_noearlylick_right_hit' if hemi == 'left' else 'good_noearlylick_left_hit'}).fetch('KEY')
 
     sel_i = (ephys.Unit * psth.UnitSelectivity
              & 'unit_selectivity = "ipsi-selective"' & probe_insert_key)
@@ -461,13 +468,14 @@ def _plot_avg_psth(ipsi_psth, contra_psth, vlines={}, ax=None, title=''):
         np.array([i[0] for i in ipsi_psth])).mean(axis=0)
     ipsi_edges = ipsi_psth[0][1][:-1]
 
-    ax.plot(contra_edges, avg_contra_psth, 'b')
-    ax.plot(ipsi_edges, avg_ipsi_psth, 'r')
+    ax.plot(contra_edges, avg_contra_psth, 'b', label='contra')
+    ax.plot(ipsi_edges, avg_ipsi_psth, 'r', label='ipsi')
 
     for x in vlines:
         ax.axvline(x=x, linestyle='--', color='k')
 
     # cosmetic
+    ax.legend()
     ax.set_title(title)
     ax.set_ylabel('Firing Rate (spike/s)')
     ax.set_xlabel('Time (s)')
