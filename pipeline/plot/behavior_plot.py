@@ -280,7 +280,7 @@ def plot_polar_histogram(data, ax, bin_counts=30):
     # make a polar plot
     bars = ax.bar(theta, radii, width=width, bottom=bottom)
 
-    # set the lable go clockwise and start from the top
+    # set the label starting from East
     ax.set_theta_zero_location("E")
     # clockwise
     ax.set_theta_direction(1)
