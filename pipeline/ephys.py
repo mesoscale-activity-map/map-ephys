@@ -149,7 +149,6 @@ class Unit(dj.Imported):
     unit_posx : double # (um) estimated x position of the unit relative to probe's (0,0)
     unit_posy : double # (um) estimated y position of the unit relative to probe's (0,0)
     spike_times : longblob  # (s) from the start of the first data point used in clustering
-    isi : longblob  # (s) inter-spike interval
     unit_amp : double
     unit_snr : double
     waveform : blob # average spike waveform
@@ -218,10 +217,10 @@ class UnitStat(dj.Computed):
     def make(self, key):
         def make_insert():
             for unit in (Unit & key).fetch('KEY'):
-                isi = (Unit & unit).fetch1('isi')
                 trial_spikes, tr_start, tr_stop = (TrialSpikes * experiment.SessionTrial & unit).fetch(
                     'spike_times', 'start_time', 'stop_time')
+                isi = np.hstack(np.diff(spks) for spks in trial_spikes)
                 yield {**unit,
                        'isi_violation': sum((isi < self.isi_violation_thresh).astype(int)) / len(isi),
-                       'avg_firing_rate': len(np.concatenate(trial_spikes)) / sum(tr_stop - tr_start)}
+                       'avg_firing_rate': len(np.hstack(trial_spikes)) / sum(tr_stop - tr_start)}
         self.insert(make_insert())

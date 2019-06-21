@@ -230,17 +230,17 @@ class EphysIngest(dj.Imported):
             #pdb.set_trace()
 
             # Unit - with JRclust clustering method
+            ekey['clustering_method'] = 'jrclust'
             def build_unit_insert():
                 for u_id, (u, (u_spk_trials, u_spk_times)) in enumerate(unit_trial_spks.items()):
                     # unit spike times - realign back to trial-start, relative to 1st trial
                     spk_times = sorted(u_spk_times + (goCue / sRateHz)[u_spk_trials] + trial_start_time[u_spk_trials])
-                    isi = np.concatenate(np.diff(u_spk_times[u_spk_trials == tr_id]) for tr_id in set(u_spk_trials))
-                    yield (dict(ekey, clustering_method='jrclust', unit=u, unit_uid=u, unit_quality=strs[u_id],
+                    yield (dict(ekey, unit=u, unit_uid=u, unit_quality=strs[u_id],
                                       electrode_config_id=electrode_config_id, probe=probe_part_no,
                                       electrode_group=0, electrode=int(viSite_clu[u_id]),
                                       unit_posx=vrPosX_clu[u_id], unit_posy=vrPosY_clu[u_id],
                                       unit_amp=vrVpp_uv_clu[u_id], unit_snr=vrSnr_clu[u_id],
-                                      spike_times=spk_times, isi=isi, waveform=trWav_raw_clu[u_id][0]))
+                                      spike_times=spk_times, waveform=trWav_raw_clu[u_id][0]))
 
             ephys.Unit.insert(build_unit_insert(), allow_direct_insert=True)
 
