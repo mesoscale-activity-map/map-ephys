@@ -138,17 +138,10 @@ def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
                        'all_noearlylick_both_alm_stim'}).fetch1('KEY')
 
     # get photostim duration
-    default_stim_dur = 0.5
     stim_durs = np.unique((experiment.Photostim & experiment.PhotostimEvent
                            * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')
                            & probe_insert_key).fetch('duration'))
-    if len(stim_durs) == 0:
-        stim_dur = default_stim_dur
-    elif len(stim_durs) > 1:
-        print(f'Found multiple stim durations: {stim_durs} - select {min(stim_durs)}')
-        stim_dur = min(stim_durs)
-    else:
-        stim_dur = stim_durs[0] if len(stim_durs) == 1 and stim_durs[0] else default_stim_dur
+    stim_dur = _extract_one_stim_dur(stim_durs)
 
     units = ephys.Unit & probe_insert_key & 'unit_quality != "all"'
 
@@ -165,13 +158,11 @@ def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
         bistim_psth, bistim_edge = (
             psth.UnitPsth & {**unit, **bi_stim_cond}).fetch1('unit_psth')
 
-        # compute the firing rate difference between contra vs. ipsi within the 0.5s stimulation duration
-        frate_change = (np.abs(bistim_psth[np.logical_and(bistim_edge[1:] > cue_onset,
-                                                          bistim_edge[1:] <= cue_onset + stim_dur)].mean()
-                               - nostim_psth[np.logical_and(bistim_edge[1:] > cue_onset,
-                                                            bistim_edge[1:] <= cue_onset + stim_dur)].mean())
-                        / nostim_psth[np.logical_and(bistim_edge[1:] > cue_onset,
-                                                            bistim_edge[1:] <= cue_onset + stim_dur)].mean())
+        # compute the firing rate difference between contra vs. ipsi within the stimulation duration
+        ctrl_frate = nostim_psth[np.logical_and(nostim_edge[1:] >= cue_onset, nostim_edge[1:] <= cue_onset + stim_dur)]
+        stim_frate = bistim_psth[np.logical_and(bistim_edge[1:] >= cue_onset, bistim_edge[1:] <= cue_onset + stim_dur)]
+
+        frate_change = np.abs(stim_frate.mean() - ctrl_frate.mean()) / ctrl_frate.mean()
 
         metrics.loc[u_idx] = (int(unit['unit']), x, y, frate_change)
 
@@ -336,17 +327,10 @@ def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
                    'all_noearlylick_both_alm_nostim_right'}).fetch('unit_psth')
 
     # get photostim duration
-    default_stim_dur = 0.5
     stim_durs = np.unique((experiment.Photostim & experiment.PhotostimEvent
                            * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')
                            & probe_insert_key).fetch('duration'))
-    if len(stim_durs) == 0:
-        stim_dur = default_stim_dur
-    elif len(stim_durs) > 1:
-        print(f'Found multiple stim durations: {stim_durs} - select {min(stim_durs)}')
-        stim_dur = min(stim_durs)
-    else:
-        stim_dur = stim_durs[0] if len(stim_durs) == 1 and stim_durs[0] else default_stim_dur
+    stim_dur = _extract_one_stim_dur(stim_durs)
 
     if insert['hemisphere'] == 'left':
         psth_s_i = psth_s_l
@@ -538,6 +522,21 @@ def _movmean(data, nsamp=5):
     ret = np.cumsum(data, dtype=float)
     ret[nsamp:] = ret[nsamp:] - ret[:-nsamp]
     return ret[nsamp - 1:] / nsamp
+
+
+def _extract_one_stim_dur(stim_durs):
+    """
+    In case of multiple photostim durations - pick the shortest duration
+    In case of no photostim durations - return the default of 0.5s
+    """
+    default_stim_dur = 0.5
+    if len(stim_durs) == 0:
+        return default_stim_dur
+    elif len(stim_durs) > 1:
+        print(f'Found multiple stim durations: {stim_durs} - select {min(stim_durs)}')
+        return min(stim_durs)
+    else:
+        return stim_durs[0] if len(stim_durs) == 1 and stim_durs[0] else default_stim_dur
 
 
 def jointplot_w_hue(data, x, y, hue=None, colormap=None,
