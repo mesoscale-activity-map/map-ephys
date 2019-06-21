@@ -509,7 +509,7 @@ def _plot_with_sem(data, t_vec, ax, c='k'):
     ax.spines['top'].set_visible(False)
 
 
-def _compute_isi_violation(spike_times, isi_thresh=2):
+def _compute_isi_violation(spike_times, isi_thresh=0.002):
     isi = np.diff(spike_times)
     return sum((isi < isi_thresh).astype(int)) / len(isi)
 
