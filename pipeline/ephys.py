@@ -208,7 +208,7 @@ class UnitStat(dj.Computed):
     avg_firing_rate: float  # (Hz)
     """
 
-    isi_violation_thresh = 0.02  # violation threshold of 2 ms
+    isi_violation_thresh = 0.002  # violation threshold of 2 ms
 
     # TODO: we need all TrialSpikes to be inserted prior to this calc, thus there may be a race condition here
 

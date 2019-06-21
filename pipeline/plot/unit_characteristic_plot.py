@@ -19,7 +19,7 @@ def plot_clustering_quality(probe_insert_key):
 
     metrics = {'amp': amp,
                'snr': snr,
-               'isi': np.array(isi_violation),
+               'isi': np.array(isi_violation) * 100,  # to percentage
                'rate': np.array(spk_rate)}
     label_mapper = {'amp': 'Amplitude',
                     'snr': 'Signal to noise ratio (SNR)',
