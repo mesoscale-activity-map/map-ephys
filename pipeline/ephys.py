@@ -4,6 +4,8 @@ import datajoint as dj
 from . import lab, experiment, ccf
 from . import get_schema_name
 
+import numpy as np
+
 schema = dj.schema(get_schema_name('ephys'))
 [lab, experiment, ccf]  # NOQA flake8
 
@@ -120,6 +122,15 @@ class LabeledTrack(dj.Manual):
 
 
 @schema
+class ClusteringMethod(dj.Lookup):
+    definition = """
+    clustering_method: varchar(16)
+    """
+
+    contents = zip(['jrclust', 'kilosort'])
+
+
+@schema
 class Unit(dj.Imported):
     """
     A certain portion of the recording is used for clustering (could very well be the entire recording)
@@ -129,7 +140,8 @@ class Unit(dj.Imported):
     definition = """
     # Sorted unit
     -> ProbeInsertion
-    unit  : smallint
+    -> ClusteringMethod
+    unit: smallint
     ---
     unit_uid : int # unique across sessions/animals
     -> UnitQualityType
@@ -137,6 +149,7 @@ class Unit(dj.Imported):
     unit_posx : double # (um) estimated x position of the unit relative to probe's (0,0)
     unit_posy : double # (um) estimated y position of the unit relative to probe's (0,0)
     spike_times : longblob  # (s) from the start of the first data point used in clustering
+    isi : longblob  # (s) inter-spike interval
     unit_amp : double
     unit_snr : double
     waveform : blob # average spike waveform
@@ -185,3 +198,30 @@ class TrialSpikes(dj.Computed):
     ---
     spike_times : longblob # (s) spike times for each trial, relative to go cue
     """
+
+
+@schema
+class UnitStat(dj.Computed):
+    definition = """
+    -> Unit
+    ---
+    isi_violation: float    # 
+    avg_firing_rate: float  # (Hz)
+    """
+
+    isi_violation_thresh = 0.02  # violation threshold of 2 ms
+
+    # TODO: we need all TrialSpikes to be inserted prior to this calc, thus there may be a race condition here
+
+    key_source = ProbeInsertion & TrialSpikes
+
+    def make(self, key):
+        def make_insert():
+            for unit in (Unit & key).fetch('KEY'):
+                isi = (Unit & unit).fetch1('isi')
+                trial_spikes, tr_start, tr_stop = (TrialSpikes * experiment.SessionTrial & unit).fetch(
+                    'spike_times', 'start_time', 'stop_time')
+                yield {**unit,
+                       'isi_violation': sum((isi < self.isi_violation_thresh).astype(int)) / len(isi),
+                       'avg_firing_rate': len(np.concatenate(trial_spikes)) / sum(tr_stop - tr_start)}
+        self.insert(make_insert())

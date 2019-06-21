@@ -13,9 +13,9 @@ from pipeline import experiment, ephys, psth
 m_scale = 1200
 
 def plot_clustering_quality(probe_insert_key):
-    amp, snr, spk_times = (ephys.Unit * ephys.ProbeInsertion.InsertionLocation & probe_insert_key).fetch(
-        'unit_amp', 'unit_snr', 'spike_times')
-    isi_violation, spk_rate = zip(*((_compute_isi_violation(spk), _compute_spike_rate(spk)) for spk in spk_times))
+    amp, snr, spk_rate, isi_violation = (ephys.Unit * ephys.UnitStat
+                                         * ephys.ProbeInsertion.InsertionLocation & probe_insert_key).fetch(
+        'unit_amp', 'unit_snr', 'avg_firing_rate', 'isi_violation')
 
     metrics = {'amp': amp,
                'snr': snr,
@@ -40,11 +40,11 @@ def plot_clustering_quality(probe_insert_key):
 
 
 def plot_unit_characteristic(probe_insert_key, axs=None):
-    amp, snr, spk_times, x, y, insertion_depth = (ephys.Unit * ephys.ProbeInsertion.InsertionLocation
-                                                  & probe_insert_key & 'unit_quality != "all"').fetch(
-        'unit_amp', 'unit_snr', 'spike_times', 'unit_posx', 'unit_posy', 'dv_location')
+    amp, snr, spk_rate, x, y, insertion_depth = (
+            ephys.Unit * ephys.ProbeInsertion.InsertionLocation * ephys.UnitStat
+            & probe_insert_key & 'unit_quality != "all"').fetch(
+        'unit_amp', 'unit_snr', 'avg_firing_rate', 'unit_posx', 'unit_posy', 'dv_location')
 
-    spk_rate = np.array(list(_compute_spike_rate(spk) for spk in spk_times))
     insertion_depth = np.where(np.isnan(insertion_depth), 0, insertion_depth)
 
     metrics = pd.DataFrame(list(zip(*(amp/amp.max(), snr/snr.max(), spk_rate/spk_rate.max(), x, y + insertion_depth))))
@@ -507,15 +507,6 @@ def _plot_with_sem(data, t_vec, ax, c='k'):
     ax.fill_between(t_vec, v_mean - v_sem, v_mean + v_sem, alpha=0.25, facecolor=c)
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
-
-
-def _compute_isi_violation(spike_times, isi_thresh=2):
-    isi = np.diff(spike_times)
-    return sum((isi < isi_thresh).astype(int)) / len(isi)
-
-
-def _compute_spike_rate(spike_times):
-    return len(spike_times) / (spike_times[-1] - spike_times[0])
 
 
 def _movmean(data, nsamp=5):
