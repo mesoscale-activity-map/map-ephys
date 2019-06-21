@@ -269,22 +269,22 @@ def plot_avg_contra_ipsi_psth(probe_insert_key, axs=None):
              & 'unit_selectivity = "contra-selective"' & probe_insert_key)
 
     psth_is_it = (((psth.UnitPsth & conds_i)
-                   * ephys.Unit.proj('unit_posx', 'unit_posy'))
+                   * ephys.Unit.proj('unit_posy'))
                   & good_unit.proj() & sel_i.proj()).fetch(
                       'unit_psth', order_by='unit_posy desc')
 
     psth_is_ct = (((psth.UnitPsth & conds_c)
-                   * ephys.Unit.proj('unit_posx', 'unit_posy'))
+                   * ephys.Unit.proj('unit_posy'))
                   & good_unit.proj() & sel_i.proj()).fetch(
                       'unit_psth', order_by='unit_posy desc')
 
     psth_cs_ct = (((psth.UnitPsth & conds_c)
-                   * ephys.Unit.proj('unit_posx', 'unit_posy'))
+                   * ephys.Unit.proj('unit_posy'))
                   & good_unit.proj() & sel_c.proj()).fetch(
                       'unit_psth', order_by='unit_posy desc')
 
     psth_cs_it = (((psth.UnitPsth & conds_i)
-                   * ephys.Unit.proj('unit_posx', 'unit_posy'))
+                   * ephys.Unit.proj('unit_posy'))
                   & good_unit.proj() & sel_c.proj()).fetch(
                       'unit_psth', order_by='unit_posy desc')
 
@@ -525,9 +525,9 @@ def _extract_one_stim_dur(stim_durs):
         return default_stim_dur
     elif len(stim_durs) > 1:
         print(f'Found multiple stim durations: {stim_durs} - select {min(stim_durs)}')
-        return min(stim_durs)
+        return float(min(stim_durs))
     else:
-        return stim_durs[0] if len(stim_durs) == 1 and stim_durs[0] else default_stim_dur
+        return float(stim_durs[0]) if len(stim_durs) == 1 and stim_durs[0] else default_stim_dur
 
 
 def jointplot_w_hue(data, x, y, hue=None, colormap=None,
