@@ -61,8 +61,7 @@ class UnitQualityType(dj.Lookup):
         ('good', 'single unit'),
         ('ok', 'probably a single unit, but could be contaminated'),
         ('multi', 'multi unit'),
-        ('all', 'all units'),
-        ('ok or good', 'include both ok and good unit')
+        ('all', 'all units')
     ]
 
 
