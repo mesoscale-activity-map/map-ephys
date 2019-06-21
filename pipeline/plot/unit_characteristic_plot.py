@@ -209,11 +209,11 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
 
     conds_i = (psth.TrialCondition
                & {'trial_condition_desc':
-                  'good_noearlylick_left_hit' if hemi == 'left' else 'good_noearlylick_right_hit'}).fetch('KEY')
+                  'good_noearlylick_left_hit' if hemi == 'left' else 'good_noearlylick_right_hit'}).fetch1('KEY')
 
     conds_c = (psth.TrialCondition
                & {'trial_condition_desc':
-                  'good_noearlylick_right_hit' if hemi == 'left' else 'good_noearlylick_left_hit'}).fetch('KEY')
+                  'good_noearlylick_right_hit' if hemi == 'left' else 'good_noearlylick_left_hit'}).fetch1('KEY')
 
     sel_i = (ephys.Unit * psth.UnitSelectivity
              & 'unit_selectivity = "ipsi-selective"' & probe_insert_key)
@@ -233,10 +233,8 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
     # contra selective ipsi trials
     psth_cs_it = (psth.UnitPsth * sel_c.proj('unit_posy') & conds_i).fetch(order_by='unit_posy desc')
 
-    # always look at the difference in ipsi-trial subtracting contra-trial
-
-    _plot_stacked_psth_diff(psth_cs_it, psth_cs_ct, ax=axs[0],
-                            vlines=period_starts)
+    _plot_stacked_psth_diff(psth_cs_ct, psth_cs_it, ax=axs[0],
+                            vlines=period_starts, flip=True)
 
     axs[0].set_title('Contra-selective Units')
     axs[0].set_ylabel('Unit (by depth)')
@@ -498,13 +496,13 @@ def _plot_stacked_psth_diff(psth_a, psth_b, vlines=[], ax=None, flip=False):
     b_data = np.array([r[0] for r in psth_b['unit_psth']])
 
     result = a_data - b_data
-    result = result / np.repeat(result.max(axis=1)[:, None], 149, axis=1)
+    result = result / np.repeat(result.max(axis=1)[:, None], result.shape[1], axis=1)
+
+    # color flip
+    result = result * -1 if flip else result
 
     # moving average
     result = np.array([_movmean(i) for i in result])
-
-    # flip
-    result = result * -1 if flip else result
 
     if ax is None:
         fig, ax = plt.subplots(1, 1)
