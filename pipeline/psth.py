@@ -454,16 +454,6 @@ class UnitSelectivity(dj.Computed):
         '''
         log.debug('UnitSelectivity.make(): key: {}'.format(key))
 
-        # verify insertion location is present,
-        egpos = None
-        try:
-            egpos = (ephys.ProbeInsertion.InsertionLocation
-                     * experiment.BrainLocation & key).fetch1()
-        except dj.DataJointError as e:
-            if 'exactly one tuple' in repr(e):
-                log.error('... Insertion Location missing. skipping')
-                return
-
         # fetch region selectivity,
         sels = (PeriodSelectivity & key).fetch('period_selectivity')
 
@@ -474,41 +464,10 @@ class UnitSelectivity(dj.Computed):
             self.insert1({**key, 'unit_selectivity': 'non-selective'})
             return
 
-        # left/right spikes,
-        left_trial_spikes = ((ephys.TrialSpikes & key)
-                             & (experiment.BehaviorTrial()
-                                 & {'task': 'audio delay'}
-                                 & {'early_lick': 'no early'}
-                                 & {'outcome': 'hit'}
-                                 & {'trial_instruction': 'left'})
-                             - experiment.PhotostimEvent).fetch('spike_times')
+        contra_frate, ipsi_frate = (PeriodSelectivity & key & 'period in ("sample", "delay", "response")').fetch(
+            'contra_firing_rate', 'ipsi_firing_rate')
 
-        right_trial_spikes = ((ephys.TrialSpikes & key)
-                              & (experiment.BehaviorTrial()
-                                 & {'task': 'audio delay'}
-                                 & {'early_lick': 'no early'}
-                                 & {'outcome': 'hit'}
-                                 & {'trial_instruction': 'right'})
-                              - experiment.PhotostimEvent).fetch('spike_times')
-
-        # compute their average firing rate,
-        period_starts, period_ends = (experiment.Period & key).fetch('period_start', 'period_end')
-        dur = sum(period_ends - period_starts)
-
-        freq_l = (len(np.concatenate(left_trial_spikes))
-                  / (len(left_trial_spikes) * dur))
-        freq_r = (len(np.concatenate(right_trial_spikes))
-                  / (len(right_trial_spikes) * dur))
-
-        # and determine their ipsi/contra preference via frequency.
-        if egpos['hemisphere'] == 'left':
-            freq_i = freq_l
-            freq_c = freq_r
-        else:
-            freq_i = freq_r
-            freq_c = freq_l
-
-        pref = ('ipsi-selective' if freq_i > freq_c else 'contra-selective')
+        pref = ('ipsi-selective' if ipsi_frate.mean() > contra_frate.mean() else 'contra-selective')
 
         log.debug('... prefers: {}'.format(pref))
 
