@@ -84,44 +84,6 @@ class CellType(dj.Lookup):
 
 
 @schema
-class ElectrodeCCFPosition(dj.Manual):
-    definition = """
-    -> ProbeInsertion
-    """
-
-    class ElectrodePosition(dj.Part):
-        definition = """
-        -> lab.ElectrodeConfig.Electrode
-        -> ccf.CCF
-        """
-
-    class ElectrodePositionError(dj.Part):
-        definition = """
-        -> lab.ElectrodeConfig.Electrode
-        -> ccf.CCFLabel
-        x   :  int   # (um)
-        y   :  int   # (um)
-        z   :  int   # (um)
-        """
-
-
-@schema
-class LabeledTrack(dj.Manual):
-    definition = """
-    -> ProbeInsertion
-    ---
-    labeling_date : date # in case we labeled the track not during a recorded session we can specify the exact date here
-    dye_color  : varchar(32)
-    """
-
-    class Point(dj.Part):
-        definition = """
-        -> LabeledTrack
-        -> ccf.CCF
-        """
-
-
-@schema
 class ClusteringMethod(dj.Lookup):
     definition = """
     clustering_method: varchar(16)

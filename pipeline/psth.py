@@ -456,8 +456,6 @@ class UnitSelectivity(dj.Computed):
         # fetch region selectivity,
         sels = (PeriodSelectivity & key).fetch('period_selectivity')
 
-        assert len(sels) == 3  # one more sanity check, making sure we have all 3 periods
-
         if (sels == 'non-selective').all():
             log.debug('... no UnitSelectivity for unit')
             self.insert1({**key, 'unit_selectivity': 'non-selective'})

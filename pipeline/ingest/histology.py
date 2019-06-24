@@ -10,6 +10,7 @@ from pipeline import lab
 from pipeline import ephys
 from pipeline import experiment
 from pipeline import ccf
+from pipeline import histology
 from pipeline.ingest import ephys as ephys_ingest
 
 from code import interact
@@ -112,16 +113,16 @@ class HistologyIngest(dj.Imported):
             # but hitting ccf coordinate issues..:
 
             log.info('inserting channel ccf position')
-            ephys.ElectrodeCCFPosition.insert1(egmap[probe])
+            histology.ElectrodeCCFPosition.insert1(egmap[probe])
 
             for r in recs:
                 log.debug('... adding probe/position: {}'.format(r))
                 try:
-                    ephys.ElectrodeCCFPosition.ElectrodePosition.insert1(
+                    histology.ElectrodeCCFPosition.ElectrodePosition.insert1(
                         r, ignore_extra_fields=True, allow_direct_insert=True)
                 except Exception as e:
                     log.warning('... ERROR!')
-                    ephys.ElectrodeCCFPosition.ElectrodePositionError.insert1(
+                    histology.ElectrodeCCFPosition.ElectrodePositionError.insert1(
                         r, ignore_extra_fields=True, allow_direct_insert=True)
 
             log.info('... ok.')
