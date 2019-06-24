@@ -130,11 +130,11 @@ def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
     cue_onset = (experiment.Period & 'period = "delay"').fetch1('period_start')
 
     no_stim_cond = (psth.TrialCondition
-                    & {'trial_condition_desc':
+                    & {'trial_condition_name':
                        'all_noearlylick_both_alm_nostim'}).fetch1('KEY')
 
     bi_stim_cond = (psth.TrialCondition
-                    & {'trial_condition_desc':
+                    & {'trial_condition_name':
                        'all_noearlylick_both_alm_stim'}).fetch1('KEY')
 
     # get photostim duration
@@ -199,11 +199,11 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
             * experiment.BrainLocation & probe_insert_key).fetch1('hemisphere')
 
     conds_i = (psth.TrialCondition
-               & {'trial_condition_desc':
+               & {'trial_condition_name':
                   'good_noearlylick_left_hit' if hemi == 'left' else 'good_noearlylick_right_hit'}).fetch1('KEY')
 
     conds_c = (psth.TrialCondition
-               & {'trial_condition_desc':
+               & {'trial_condition_name':
                   'good_noearlylick_right_hit' if hemi == 'left' else 'good_noearlylick_left_hit'}).fetch1('KEY')
 
     sel_i = (ephys.Unit * psth.UnitSelectivity
@@ -255,11 +255,11 @@ def plot_avg_contra_ipsi_psth(probe_insert_key, axs=None):
             * experiment.BrainLocation & probe_insert_key).fetch1('hemisphere')
 
     conds_i = (psth.TrialCondition
-               & {'trial_condition_desc':
+               & {'trial_condition_name':
                   'good_noearlylick_left_hit' if hemi == 'left' else 'good_noearlylick_right_hit'}).fetch('KEY')
 
     conds_c = (psth.TrialCondition
-               & {'trial_condition_desc':
+               & {'trial_condition_name':
                   'good_noearlylick_right_hit' if hemi == 'left' else 'good_noearlylick_left_hit'}).fetch('KEY')
 
     sel_i = (ephys.Unit * psth.UnitSelectivity
@@ -311,19 +311,19 @@ def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
                          'period_start')
 
     psth_s_l = (psth.UnitPsth * psth.TrialCondition
-                & {'trial_condition_desc':
+                & {'trial_condition_name':
                    'all_noearlylick_both_alm_stim_left'}).fetch('unit_psth')
 
     psth_n_l = (psth.UnitPsth * psth.TrialCondition
-                & {'trial_condition_desc':
+                & {'trial_condition_name':
                    'all_noearlylick_both_alm_nostim_left'}).fetch('unit_psth')
 
     psth_s_r = (psth.UnitPsth * psth.TrialCondition
-                & {'trial_condition_desc':
+                & {'trial_condition_name':
                    'all_noearlylick_both_alm_stim_right'}).fetch('unit_psth')
 
     psth_n_r = (psth.UnitPsth * psth.TrialCondition
-                & {'trial_condition_desc':
+                & {'trial_condition_name':
                    'all_noearlylick_both_alm_nostim_right'}).fetch('unit_psth')
 
     # get photostim duration
