@@ -12,9 +12,6 @@ from pipeline import experiment
 from pipeline import ccf
 from pipeline.ingest import ephys as ephys_ingest
 
-from code import interact
-from collections import ChainMap
-
 from .. import get_schema_name
 
 schema = dj.schema(get_schema_name('ingest_histology'))
@@ -31,15 +28,15 @@ class HistologyIngest(dj.Imported):
     class HistologyFile(dj.Part):
         definition = """
         -> master
-        probe_insertion_number:        tinyint         # electrode group
-        histology_file:         varchar(255)    # rig file subpath
+        probe_insertion_number:         tinyint         # electrode group
+        histology_file:                 varchar(255)    # rig file subpath
         """
 
     def make(self, key):
         '''
         HistologyIngest .make() function
         '''
-        # todo: check the length of the `site.ont.name` variable,
+        # TODO: check the length of the `site.ont.name` variable,
         #   and only ingest the sites with an ontology associated to it.
         log.info('HistologyIngest().make(): key: {}'.format(key))
 
@@ -53,9 +50,11 @@ class HistologyIngest(dj.Imported):
         ).fetch1('water_restriction_number')
 
         egmap = {e['insertion_number']: e
-                 for e in (ephys.ProbeInsertion & session).fetch('KEY')}
+                 for e in (ephys.ProbeInsertion
+                           * lab.ElectrodeConfig.ElectrodeGroup
+                           & session).fetch('KEY')}
 
-        errlabel = ccf.CCFLabel.CCF_R3_20UM_ERROR
+        sz = 20   # 20um voxel size
 
         for probe in range(1, 3):
 
@@ -69,7 +68,9 @@ class HistologyIngest(dj.Imported):
             # directory: {h2o}/{yyyy-mm-dd}/histology
             # file: landmarks_{h2o}_{YYYYMMDD}_{probe}_siteInfo.mat
 
-            directory = pathlib.Path(water, session_date.strftime('%Y-%m-%d'), 'histology')
+            directory = pathlib.Path(
+                water, session_date.strftime('%Y-%m-%d'), 'histology')
+
             file = 'landmarks_{}_{}_{}_siteInfo.mat'.format(
                 water, session['session_date'].strftime('%Y%m%d'), probe)
             subpath = directory / file
@@ -83,28 +84,25 @@ class HistologyIngest(dj.Imported):
             log.info('... found probe {} histology file {}'.format(
                 probe, fullpath))
 
-            hist = scio.loadmat(fullpath, struct_as_record=False, squeeze_me=True)['site']
+            hist = scio.loadmat(
+                fullpath, struct_as_record=False, squeeze_me=True)['site']
+
             # probe CCF 3D positions
-            pos_xyz = np.vstack([hist.pos.x, hist.pos.y, hist.pos.z]).T * 20  # 20um spacing (y-wise) between channels
+            pos_xyz = np.vstack([hist.pos.x, hist.pos.y, hist.pos.z]).T * sz
 
             # probe CCF regions
-            names = hist.ont.name  # there are 1000 names here, 1-960 represents the names for each electrode sites (960 sites for npx probe), ignore the last 40
+            names = hist.ont.name
             valid = [isinstance(n, (str,)) for n in names]
             goodn = np.where(np.array(valid))[0]
 
-            # XXX: to verify - electrode off-by-one in ingest (e.g. mat->py)??
-            # note, hard-code for neuropixels probe -> only one ElectrodeGroup (electrode_group=0)
-            electrodes = np.array((ephys.ProbeInsertion * lab.ElectrodeConfig.Electrode
-                                   & egmap[probe] & 'electrode_group=0').fetch(
-                'KEY', order_by='electrode asc'))
+            electrodes = (ephys.ProbeInsertion * lab.ElectrodeConfig.Electrode
+                          & egmap[probe]).fetch(order_by='electrode asc')
 
-            # interact('histoloading', local=dict(ChainMap(locals(), globals())))
-
-            # XXX: off by one in ephys.ElectrodeGroup 'builder' routine?
-            #   .. relatedly, we index pos_xyz by 'goodn' directly,
+            # XXX: we index pos_xyz by 'goodn' directly,
             #   .. rather than via electrodes[goodn]['electrode']
-            recs = ({**p_i, 'ccf_label_id': ccf.CCFLabel.CCF_R3_20UM_ID, 'x': x, 'y': y, 'z': z}
-                    for p_i, (x, y, z) in zip(electrodes[goodn], pos_xyz[goodn]))
+
+            recs = ((*l[0], ccf.CCFLabel.CCF_R3_20UM_ID, *l[1]) for l in
+                    zip(electrodes[goodn], pos_xyz[goodn]))
 
             # ideally:
             # ephys.ElectrodeGroup.ElectrodePosition.insert(
@@ -112,15 +110,16 @@ class HistologyIngest(dj.Imported):
             # but hitting ccf coordinate issues..:
 
             log.info('inserting channel ccf position')
-            ephys.ElectrodeCCFPosition.insert1(egmap[probe])
+            ephys.ElectrodeCCFPosition.insert1(
+                egmap[probe], ignore_extra_fields=True)
 
             for r in recs:
                 log.debug('... adding probe/position: {}'.format(r))
                 try:
                     ephys.ElectrodeCCFPosition.ElectrodePosition.insert1(
                         r, ignore_extra_fields=True, allow_direct_insert=True)
-                except Exception as e:
-                    log.warning('... ERROR!')
+                except Exception as e:  # XXX: no way to be more precise in dj
+                    log.warning('... ERROR!'.format(repr(e)))
                     ephys.ElectrodeCCFPosition.ElectrodePositionError.insert1(
                         r, ignore_extra_fields=True, allow_direct_insert=True)
 
