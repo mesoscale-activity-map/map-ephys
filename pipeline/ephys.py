@@ -172,9 +172,7 @@ class UnitStat(dj.Computed):
 
     isi_violation_thresh = 0.002  # violation threshold of 2 ms
 
-    # TODO: we need all TrialSpikes to be inserted prior to this calc, thus there may be a race condition here
-
-    key_source = ProbeInsertion & TrialSpikes
+    key_source = ProbeInsertion & experiment.SessionTrial - (experiment.SessionTrial * Unit - TrialSpikes)
 
     def make(self, key):
         def make_insert():
