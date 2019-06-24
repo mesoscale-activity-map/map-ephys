@@ -10,6 +10,7 @@ from pipeline import lab
 from pipeline import ephys
 from pipeline import experiment
 from pipeline import ccf
+from pipeline import histology
 from pipeline.ingest import ephys as ephys_ingest
 
 from .. import get_schema_name
@@ -116,7 +117,7 @@ class HistologyIngest(dj.Imported):
             for r in recs:
                 log.debug('... adding probe/position: {}'.format(r))
                 try:
-                    ephys.ElectrodeCCFPosition.ElectrodePosition.insert1(
+                    histology.ElectrodeCCFPosition.ElectrodePosition.insert1(
                         r, ignore_extra_fields=True, allow_direct_insert=True)
                 except Exception as e:  # XXX: no way to be more precise in dj
                     log.warning('... ERROR!'.format(repr(e)))

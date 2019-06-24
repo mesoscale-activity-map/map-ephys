@@ -47,9 +47,10 @@ class TrialCondition(dj.Lookup):
     '''
 
     definition = """
-    trial_condition_id:         varchar(32)     # hash of trial_condition_arg
+    trial_condition_name:       varchar(128)     # user-friendly name of condition
     ---
-    trial_condition_desc:       varchar(1000)   # trial condition description
+    trial_condition_hash:       varchar(32)     # trial condition hash - hash of func and arg
+    unique index (trial_condition_hash)
     trial_condition_func:       varchar(36)     # trial retrieval function
     trial_condition_arg:        longblob        # trial retrieval arguments
     """
@@ -58,7 +59,7 @@ class TrialCondition(dj.Lookup):
     def contents(self):
         contents_data = (
             {
-                'trial_condition_desc': 'good_noearlylick_hit',
+                'trial_condition_name': 'good_noearlylick_hit',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
@@ -67,7 +68,7 @@ class TrialCondition(dj.Lookup):
                     'early_lick': 'no early'}
             },
             {
-                'trial_condition_desc': 'good_noearlylick_left_hit',
+                'trial_condition_name': 'good_noearlylick_left_hit',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
@@ -77,7 +78,7 @@ class TrialCondition(dj.Lookup):
                     'trial_instruction': 'left'}
             },
             {
-                'trial_condition_desc': 'good_noearlylick_right_hit',
+                'trial_condition_name': 'good_noearlylick_right_hit',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
@@ -87,7 +88,7 @@ class TrialCondition(dj.Lookup):
                     'trial_instruction': 'right'}
             },
             {
-                'trial_condition_desc': 'good_noearlylick_left_miss',
+                'trial_condition_name': 'good_noearlylick_left_miss',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
@@ -97,7 +98,7 @@ class TrialCondition(dj.Lookup):
                     'trial_instruction': 'left'}
             },
             {
-                'trial_condition_desc': 'good_noearlylick_right_miss',
+                'trial_condition_name': 'good_noearlylick_right_miss',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
@@ -107,7 +108,7 @@ class TrialCondition(dj.Lookup):
                     'trial_instruction': 'right'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_stim',
+                'trial_condition_name': 'all_noearlylick_both_alm_stim',
                 'trial_condition_func': '_get_trials_include_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -117,7 +118,7 @@ class TrialCondition(dj.Lookup):
                     'brain_location_name': 'both_alm'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_nostim',
+                'trial_condition_name': 'all_noearlylick_both_alm_nostim',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -126,7 +127,7 @@ class TrialCondition(dj.Lookup):
                     'early_lick': 'no early'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_stim_left',
+                'trial_condition_name': 'all_noearlylick_both_alm_stim_left',
                 'trial_condition_func': '_get_trials_include_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -137,7 +138,7 @@ class TrialCondition(dj.Lookup):
                     'brain_location_name': 'both_alm'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_nostim_left',
+                'trial_condition_name': 'all_noearlylick_both_alm_nostim_left',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -147,7 +148,7 @@ class TrialCondition(dj.Lookup):
                     'trial_instruction': 'left'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_stim_right',
+                'trial_condition_name': 'all_noearlylick_both_alm_stim_right',
                 'trial_condition_func': '_get_trials_include_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -158,7 +159,7 @@ class TrialCondition(dj.Lookup):
                     'brain_location_name': 'both_alm'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_nostim_right',
+                'trial_condition_name': 'all_noearlylick_both_alm_nostim_right',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -169,15 +170,14 @@ class TrialCondition(dj.Lookup):
             },
         )
         # generate key XXX: complicated why not just key from description?
-        return ({**d, 'trial_condition_id':
-                 key_hash({'trial_condition_desc': d['trial_condition_desc'],
-                           'trial_condition_func': d['trial_condition_func'],
+        return ({**d, 'trial_condition_hash':
+                 key_hash({'trial_condition_func': d['trial_condition_func'],
                            **d['trial_condition_arg']})}
                 for d in contents_data)
 
     @classmethod
-    def get_trials(cls, trial_condition_desc):
-        return cls.get_func({'trial_condition_desc': trial_condition_desc})()
+    def get_trials(cls, trial_condition_name):
+        return cls.get_func({'trial_condition_name': trial_condition_name})()
 
     @classmethod
     def get_func(cls, key):
@@ -243,7 +243,7 @@ class UnitPsth(dj.Computed):
     -> TrialCondition
     -> ephys.Unit
     ---
-    unit_psth=NULL:                             longblob
+    unit_psth=NULL: longblob
     """
     psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
 
@@ -251,8 +251,7 @@ class UnitPsth(dj.Computed):
         log.info('UnitPsth.make(): key: {}'.format(key))
 
         # expand TrialCondition to trials,
-        trials = TrialCondition.get_trials(
-            (TrialCondition & key).fetch1('trial_condition_desc'))
+        trials = TrialCondition.get_trials(key['trial_condition_name'])
 
         # fetch related spike times
         q = (ephys.TrialSpikes & key & trials.proj())
@@ -343,7 +342,7 @@ class PeriodSelectivity(dj.Computed):
 
     alpha = 0.05  # default alpha value
 
-    key_source = experiment.Period * (ephys.Unit & 'unit_quality = "good"')
+    key_source = experiment.Period * (ephys.Unit & 'unit_quality != "all"')
 
     def make(self, key):
         '''
@@ -372,7 +371,7 @@ class PeriodSelectivity(dj.Computed):
         lr = ['left', 'right']
         behav = (experiment.BehaviorTrial & spikes_q.proj()).fetch(
             order_by='trial asc')
-        behav_lr = {k: np.where(behav['trial_instruction'] == k) for k in lr}
+        behav_lr = {k: np.where(behav['trial_instruction'] == k)[0] for k in lr}
 
         if egpos['hemisphere'] == 'left':
             behav_i = behav_lr['left']
@@ -389,7 +388,7 @@ class PeriodSelectivity(dj.Computed):
                       for st, pad in zip(spikes['spike_times'],
                                          repeat([math.nan]*ydim))]))
 
-        # with which to calculate the selctivity over the given period
+        # with which to calculate the selectivity over the given period
         period = (experiment.Period & key).fetch1()
 
         # by determining the period boundaries,
@@ -408,12 +407,13 @@ class PeriodSelectivity(dj.Computed):
         # and testing for selectivity.
         freq_i = freq[behav_i]
         freq_c = freq[behav_c]
-        t_stat, pval = sc_stats.ttest_ind(freq_i, freq_c, equal_var=False)
+        t_stat, pval = sc_stats.ttest_ind(freq_i, freq_c, equal_var=True)
 
         freq_i_m = np.average(freq_i)
         freq_c_m = np.average(freq_c)
 
-        pval = 1 if np.isnan(pval) else pval  # FIXME / HACK for nan pval
+
+        pval = 1 if np.isnan(pval) else pval
         if pval > self.alpha:
             pref = 'non-selective'
         else:
@@ -441,7 +441,12 @@ class UnitSelectivity(dj.Computed):
     -> Selectivity.proj(unit_selectivity='selectivity')
     """
 
-    key_source = ephys.Unit & PeriodSelectivity
+    # Unit Selectivity is computed only for units
+    # that has PeriodSelectivity computed for "sample" and "delay" and "response"
+    key_source = (ephys.Unit
+                  & (PeriodSelectivity & 'period = "sample"')
+                  & (PeriodSelectivity & 'period = "delay"')
+                  & (PeriodSelectivity & 'period = "response"'))
 
     def make(self, key):
         '''
@@ -449,61 +454,18 @@ class UnitSelectivity(dj.Computed):
         '''
         log.debug('UnitSelectivity.make(): key: {}'.format(key))
 
-        # verify insertion location is present,
-        egpos = None
-        try:
-            egpos = (ephys.ProbeInsertion.InsertionLocation
-                     * experiment.BrainLocation & key).fetch1()
-        except dj.DataJointError as e:
-            if 'exactly one tuple' in repr(e):
-                log.error('... Insertion Location missing. skipping')
-                return
-
         # fetch region selectivity,
-        sel = (PeriodSelectivity & key
-               & "p_value <= '{}'".format(PeriodSelectivity.alpha)).fetch(
-                   as_dict=True)
+        sels = (PeriodSelectivity & key).fetch('period_selectivity')
 
-        if not sel:
+        if (sels == 'non-selective').all():
             log.debug('... no UnitSelectivity for unit')
+            self.insert1({**key, 'unit_selectivity': 'non-selective'})
             return
 
-        # left/right spikes,
-        trials_l, spikes_l = ((ephys.TrialSpikes & key)
-                              & (experiment.BehaviorTrial()
-                                 & {'task': 'audio delay'}
-                                 & {'early_lick': 'no early'}
-                                 & {'outcome': 'hit'}
-                                 & {'trial_instruction': 'left'})
-                              - experiment.PhotostimEvent).fetch(
-                                  'trial', 'spike_times')
+        contra_frate, ipsi_frate = (PeriodSelectivity & key & 'period in ("sample", "delay", "response")').fetch(
+            'contra_firing_rate', 'ipsi_firing_rate')
 
-        trials_r, spikes_r = ((ephys.TrialSpikes & key)
-                              & (experiment.BehaviorTrial()
-                                 & {'task': 'audio delay'}
-                                 & {'early_lick': 'no early'}
-                                 & {'outcome': 'hit'}
-                                 & {'trial_instruction': 'right'})
-                              - experiment.PhotostimEvent).fetch(
-                                  'trial', 'spike_times')
-
-        # compute their average firing rate,
-        dur = experiment.Period.trial_duration
-
-        freq_l = (len(np.concatenate(spikes_l))
-                  / (len(np.unique(trials_l)) * dur))
-        freq_r = (len(np.concatenate(spikes_r))
-                  / (len(np.unique(trials_r)) * dur))
-
-        # and determine their ipsi/contra preference via frequency.
-        if egpos['hemisphere'] == 'left':
-            freq_i = freq_l
-            freq_c = freq_r
-        else:
-            freq_i = freq_r
-            freq_c = freq_l
-
-        pref = ('ipsi-selective' if freq_i > freq_c else 'contra-selective')
+        pref = ('ipsi-selective' if ipsi_frate.mean() > contra_frate.mean() else 'contra-selective')
 
         log.debug('... prefers: {}'.format(pref))
 

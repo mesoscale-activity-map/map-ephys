@@ -226,25 +226,23 @@ class EphysIngest(dj.Imported):
                                for u in set(cluster_ids)}
             trial_start_time = viT_offset_file / sRateHz
 
-            # save guard routines:
-            print(f'Trial range: {min(spike_trials)} - {max(spike_trials)}')
-            print(f'goCue length: {len(goCue)}')
-            print(f'Unit counts: {len(unit_trial_spks)}')
-            assert len(goCue) == len(trial_start_time)
-            assert max(spike_trials) < len(trial_start_time)
-
             log.info('inserting units for session {s}'.format(s=behavior['session']))
             #pdb.set_trace()
-            ephys.Unit().insert((dict(ekey, unit=x, unit_uid=x, unit_quality=strs[x-1],
+
+            # Unit - with JRclust clustering method
+            ekey['clustering_method'] = 'jrclust'
+            def build_unit_insert():
+                for u_id, (u, (u_spk_trials, u_spk_times)) in enumerate(unit_trial_spks.items()):
+                    # unit spike times - realign back to trial-start, relative to 1st trial
+                    spk_times = sorted(u_spk_times + (goCue / sRateHz)[u_spk_trials] + trial_start_time[u_spk_trials])
+                    yield (dict(ekey, unit=u, unit_uid=u, unit_quality=strs[u_id],
                                       electrode_config_id=electrode_config_id, probe=probe_part_no,
-                                      electrode_group=0, electrode=int(viSite_clu[x-1]),
-                                      unit_posx=vrPosX_clu[x-1], unit_posy=vrPosY_clu[x-1],
-                                      unit_amp=vrVpp_uv_clu[x-1], unit_snr=vrSnr_clu[x-1],
-                                      spike_times=sorted(u_spk_times + (goCue / sRateHz)[u_spk_trials]
-                                                         + trial_start_time[u_spk_trials]),  # re-align back to trial-start, relative to 1st trial
-                                      waveform=trWav_raw_clu[x-1][0])
-                                 for x, (u_spk_trials, u_spk_times) in unit_trial_spks.items()),
-                                allow_direct_insert=True)  # batch insert the units
+                                      electrode_group=0, electrode=int(viSite_clu[u_id]),
+                                      unit_posx=vrPosX_clu[u_id], unit_posy=vrPosY_clu[u_id],
+                                      unit_amp=vrVpp_uv_clu[u_id], unit_snr=vrSnr_clu[u_id],
+                                      spike_times=spk_times, waveform=trWav_raw_clu[u_id][0]))
+
+            ephys.Unit.insert(build_unit_insert(), allow_direct_insert=True)
 
             # UnitTrial
             log.info('inserting UnitTrial information')
@@ -270,7 +268,7 @@ class EphysIngest(dj.Imported):
 
                 for x, (u_spk_trials, u_spk_times) in unit_trial_spks.items():
                     ib.insert(dict(ekey, unit=x,
-                                    trial=spike_trials_fix[tr] - startB) for tr in set(spike_trials))
+                                   trial=spike_trials_fix[tr] - startB) for tr in set(spike_trials))
                     if ib.flush():
                         log.debug('... UnitTrial spike')
 
@@ -279,8 +277,8 @@ class EphysIngest(dj.Imported):
                               allow_direct_insert = True) as ib:
                 for x, (u_spk_trials, u_spk_times) in unit_trial_spks.items():
                     ib.insert(dict(ekey, unit=x,
-                                    spike_times=u_spk_times[u_spk_trials == tr],
-                                    trial=spike_trials_fix[tr] - startB) for tr in set(spike_trials))
+                                   spike_times=u_spk_times[u_spk_trials == tr],
+                                   trial=spike_trials_fix[tr] - startB) for tr in set(spike_trials))
                     if ib.flush():
                         log.debug('... TrialSpike spike')
 
