@@ -90,12 +90,14 @@ class ElectrodeCCFPosition(dj.Manual):
 
     class ElectrodePosition(dj.Part):
         definition = """
+        -> master
         -> lab.ElectrodeConfig.Electrode
         -> ccf.CCF
         """
 
     class ElectrodePositionError(dj.Part):
         definition = """
+        -> master
         -> lab.ElectrodeConfig.Electrode
         -> ccf.CCFLabel
         x   :  int   # (um)
