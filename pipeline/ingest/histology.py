@@ -41,32 +41,6 @@ class HistologyIngest(dj.Imported):
         landmark_file:                  varchar(255)    # rig file subpath
         """
 
-    '''
-    @schema
-    class LabeledProbeTrack(dj.Manual):
-        definition = """
-        -> ephys.ProbeInsertion
-        ---
-        labeling_date=NULL:         date
-        dye_color=NULL:             varchar(32)
-        """
-
-        class Point(dj.Part):
-            definition = """
-            -> master
-            -> ccf.CCF
-            """
-
-        class PointError(dj.Part):
-            definition = """
-            -> master
-            -> CCFLabel
-            x   :  int   # (um)
-            y   :  int   # (um)
-            z   :  int   # (um)
-            """
-    '''
-
     def make(self, key):
         '''
         HistologyIngest .make() function
@@ -157,7 +131,7 @@ class HistologyIngest(dj.Imported):
         # ideally:
         # ephys.ElectrodeGroup.ElectrodePosition.insert(
         #     recs, allow_direct_insert=True)
-        # but hitting ccf coordinate issues..:
+        # but hitting ccf coordinate issues..
 
         log.info('inserting channel ccf position')
         ephys.ElectrodeCCFPosition.insert1(
@@ -178,7 +152,7 @@ class HistologyIngest(dj.Imported):
     def load_histology_track(key, session, probe, egmap, rigpath, subject_id,
                              session_date, water):
 
-        conv = (('landmark_id', str), ('warp', bool),
+        conv = (('landmark_name', str), ('warp', bool),
                 ('raw_x', float), ('raw_y', float), ('raw_z', float),
                 ('x', float), ('y', float), ('z', float))
 
@@ -199,37 +173,31 @@ class HistologyIngest(dj.Imported):
                 recs.append(rec)
 
         # Raw -> CCF Transformation
-        # XXX: we have 1x record per subject, but session copies of data..?
-        if not (histology.RawToCCFTransformation
-                & {'subject_id': subject_id}).fetch(limit=1):
 
-            log.info('... adding raw to ccf {}')
+        top = {'subject_id': subject_id}
+
+        if not (histology.RawToCCFTransformation & top).fetch(limit=1):
+
+            log.info('... adding new raw -> ccf coordinates')
             histology.RawToCCFTransformation.insert1(
-                key, allow_direct_insert=True)
+                top, allow_direct_insert=True)
 
-            for rec in (r for r in recs if recs['warp'] is True):
+            histology.RawToCCFTransformation.Landmark.insert1(
+                ({**top, **rec} for rec in
+                 (r for r in recs if r['warp'] is True)),
+                allow_direct_insert=True, ignore_extra_fields=True)
 
-                histology.RawToCCFTransformation.insert1(
-                    {'subject_id': subject_id, **rec},
-                    allow_direct_insert=True)
+        else:
+            log.debug('... skipping raw -> ccf coordinates')
 
         # LabeledProbeTrack
+
         top = {**egmap[probe], 'labeling_date': None, 'dye_color': None}
 
         histology.LabeledProbeTrack.insert1(
             top, ignore_extra_fields=True, allow_direct_insert=True)
 
-        for rec in (r for r in recs if recs['warp'] is False):
-
-            dat = {**top, **rec}
-
-            try:
-
-                histology.LabeledProbeTrack.Point.insert1(
-                    dat, ignore_extra_fields=True, allow_direct_insert=True)
-
-            except Exception as e:  # XXX: too loose
-
-                log.error('LabeledProbeTrack.Point error: {}'.format(repr(e)))
-                histology.LabeledProbeTrack.PointError.insert1(
-                    dat, ignore_extra_fields=True, allow_direct_insert=True)
+        histology.LabeledProbeTrack.Point.insert1(
+            ({**top, **rec} for rec in
+             (r for r in recs if r['warp'] is False)),
+            ignore_extra_fields=True, allow_direct_insert=True)
