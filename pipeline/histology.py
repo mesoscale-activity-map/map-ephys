@@ -9,7 +9,7 @@ schema = dj.schema(get_schema_name('histology'))
 
 @schema
 class CCFToMRITransformation(dj.Imported):
-    definition = """  # once per project - a mapping between CCF coords and MRI coords (e.g. average MRI from 10 brains)
+    definition = """  # one per project - a mapping between CCF coords and MRI coords (e.g. average MRI from 10 brains)
     project_name: varchar(32)  # e.g. MAP
     """
 
@@ -19,9 +19,9 @@ class CCFToMRITransformation(dj.Imported):
         landmark_id: int
         ---
         landmark_name='': varchar(32)
-        mri_x: float  # (um)
-        mri_y: float  # (um)
-        mri_z: float  # (um)
+        mri_x: float  # (mm)
+        mri_y: float  # (mm)
+        mri_z: float  # (mm)
         ccf_x: float  # (um)
         ccf_y: float  # (um)
         ccf_z: float  # (um)
@@ -29,8 +29,8 @@ class CCFToMRITransformation(dj.Imported):
 
 
 @schema
-class RawToCCFTransformation(dj.Imported):
-    definition = """
+class SubjectToCCFTransformation(dj.Imported):
+    definition = """  # one per subject
     -> lab.Subject
     """
 
@@ -39,9 +39,9 @@ class RawToCCFTransformation(dj.Imported):
         -> master
         landmark_name:          char(8)         # pt-N from landmark file.
         ---
-        raw_x:                  float           # (um)
-        raw_y:                  float           # (um)
-        raw_z:                  float           # (um)
+        subj_x:                 float           # (a.u.)
+        subj_y:                 float           # (a.u.)
+        subj_z:                 float           # (a.u.)
         ccf_x:                  float           # (um)
         ccf_y:                  float           # (um)
         ccf_z:                  float           # (um)
@@ -86,10 +86,11 @@ class LabeledProbeTrack(dj.Manual):
         -> master
         order: int
         ---
-        ccf_x: float
-        ccf_y: float
-        ccf_z: float
+        ccf_x: float  # (um)
+        ccf_y: float  # (um)
+        ccf_z: float  # (um)
         """
+
 
 @schema
 class EphysCharacteristic(dj.Imported):
@@ -97,9 +98,11 @@ class EphysCharacteristic(dj.Imported):
     -> ephys.ProbeInsertion
     -> lab.ElectrodeConfig.Electrode
     ---
-    lfp_power: float
+    lfp_theta_power: float
+    lfp_beta_power: float
+    lfp_gama_power: float
     waveform_amplitude: float
     waveform_width: float
-    firing_rate: float
-    percentage_change: float
+    mua: float
+    photstim_effect: float
     """
