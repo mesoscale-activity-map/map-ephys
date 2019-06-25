@@ -123,23 +123,23 @@ class EphysIngest(dj.Imported):
             electrode_group = {'probe': probe_part_no, 'electrode_group': 0}
             electrode_group_member = [{**electrode_group, 'electrode': chn} for chn in range(1, 385)]
             electrode_config_name = 'npx_first384'  # user-friendly name - npx probe config with the first 384 channels
-            electrode_config_id = dict_to_hash(
+            electrode_config_hash = dict_to_hash(
                 {**electrode_group, **{str(idx): k for idx, k in enumerate(electrode_group_member)}})
             # extract ElectrodeConfig, check DB to reference if exists, else create
-            if ({'probe': probe_part_no, 'electrode_config_id': electrode_config_id}
+            if ({'probe': probe_part_no, 'electrode_config_name': electrode_config_name}
                     not in lab.ElectrodeConfig()):
                 log.info('create Neuropixels electrode configuration (lab.ElectrodeConfig)')
                 lab.ElectrodeConfig.insert1({
                     'probe': probe_part_no,
-                    'electrode_config_id': electrode_config_id,
+                    'electrode_config_hash': electrode_config_hash,
                     'electrode_config_name': electrode_config_name})
-                lab.ElectrodeConfig.ElectrodeGroup.insert1({'electrode_config_id': electrode_config_id,
+                lab.ElectrodeConfig.ElectrodeGroup.insert1({'electrode_config_name': electrode_config_name,
                                                             **electrode_group})
                 lab.ElectrodeConfig.Electrode.insert(
-                    {'electrode_config_id': electrode_config_id, **member} for member in electrode_group_member)
+                    {'electrode_config_name': electrode_config_name, **member} for member in electrode_group_member)
 
             log.info('inserting probe insertion')
-            ephys.ProbeInsertion.insert1(dict(ekey, probe=probe_part_no, electrode_config_id=electrode_config_id))
+            ephys.ProbeInsertion.insert1(dict(ekey, probe=probe_part_no, electrode_config_name=electrode_config_name))
 
             #
             # Extract spike data
@@ -236,7 +236,7 @@ class EphysIngest(dj.Imported):
                     # unit spike times - realign back to trial-start, relative to 1st trial
                     spk_times = sorted(u_spk_times + (goCue / sRateHz)[u_spk_trials] + trial_start_time[u_spk_trials])
                     yield (dict(ekey, unit=u, unit_uid=u, unit_quality=strs[u_id],
-                                      electrode_config_id=electrode_config_id, probe=probe_part_no,
+                                      electrode_config_name=electrode_config_name, probe=probe_part_no,
                                       electrode_group=0, electrode=int(viSite_clu[u_id]),
                                       unit_posx=vrPosX_clu[u_id], unit_posy=vrPosY_clu[u_id],
                                       unit_amp=vrVpp_uv_clu[u_id], unit_snr=vrSnr_clu[u_id],

@@ -129,6 +129,6 @@ class AnnotatedBrainSurface(dj.Manual):
     definition = """  # iso-surface of annotated brain in CCF coordinate frame
     annotated_brain_name: varchar(36)  # e.g. Annotation_new_10_ds222_16bit
     ---
-    vertices: longblob
+    vertices: longblob  # (px)
     edges: longblob
     """

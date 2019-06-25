@@ -22,7 +22,9 @@ class CCFToMRITransformation(dj.Imported):
         mri_x: float  # (um)
         mri_y: float  # (um)
         mri_z: float  # (um)
-        -> ccf.CCF
+        ccf_x: float  # (um)
+        ccf_y: float  # (um)
+        ccf_z: float  # (um)
         """
 
 
@@ -40,7 +42,9 @@ class RawToCCFTransformation(dj.Imported):
         raw_x: float  # (um)
         raw_y: float  # (um)
         raw_z: float  # (um)
-        -> ccf.CCF
+        ccf_x: float  # (um)
+        ccf_y: float  # (um)
+        ccf_z: float  # (um)
         """
 
 
@@ -52,12 +56,14 @@ class ElectrodeCCFPosition(dj.Manual):
 
     class ElectrodePosition(dj.Part):
         definition = """
+        -> master
         -> lab.ElectrodeConfig.Electrode
         -> ccf.CCF
         """
 
     class ElectrodePositionError(dj.Part):
         definition = """
+        -> master
         -> lab.ElectrodeConfig.Electrode
         -> ccf.CCFLabel
         x   :  int   # (um)
@@ -78,7 +84,11 @@ class LabeledProbeTrack(dj.Manual):
     class Point(dj.Part):
         definition = """
         -> master
-        -> ccf.CCF
+        order: int
+        ---
+        ccf_x: float
+        ccf_y: float
+        ccf_z: float
         """
 
     class PointError(dj.Part):

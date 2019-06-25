@@ -85,6 +85,7 @@ class HistologyIngest(dj.Imported):
         ).fetch1('water_restriction_number')
 
         egmap = {e['insertion_number']: e
+
                  for e in (ephys.ProbeInsertion
                            * lab.ElectrodeConfig.ElectrodeGroup
                            & session).fetch('KEY')}

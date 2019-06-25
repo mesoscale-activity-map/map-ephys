@@ -73,19 +73,19 @@ def unit_psth(unit_key):
     """
 
     ipsi_hit_cond_key = (TrialCondition
-                         & {'trial_condition_desc':
+                         & {'trial_condition_name':
                             'good_noearlylick_left_hit'}).fetch1('KEY')
 
     contra_hit_cond_key = (TrialCondition
-                           & {'trial_condition_desc':
+                           & {'trial_condition_name':
                               'good_noearlylick_right_hit'}).fetch1('KEY')
 
     ipsi_miss_cond_key = (TrialCondition
-                          & {'trial_condition_desc':
+                          & {'trial_condition_name':
                              'good_noearlylick_left_miss'}).fetch1('KEY')
 
     contra_miss_cond_key = (TrialCondition
-                            & {'trial_condition_desc':
+                            & {'trial_condition_name':
                                'good_noearlylick_right_miss'}).fetch1('KEY')
 
     ipsi_hit_unit_psth = UnitPsth.get_plotting_data(
