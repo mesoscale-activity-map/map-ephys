@@ -118,7 +118,8 @@ class HistologyIngest(dj.Imported):
             probepath, struct_as_record=False, squeeze_me=True)['site']
 
         # probe CCF 3D positions
-        pos_xyz = np.vstack([hist.pos.x, hist.pos.y, hist.pos.z]).T * sz
+        pos_xyz = np.vstack([hist.pos.x, hist.pos.y, hist.pos.z,
+                             hist.warp.x, hist.warp.y, hist.warp.z]).T * sz
 
         # probe CCF regions
         names = hist.ont.name
@@ -154,7 +155,7 @@ class HistologyIngest(dj.Imported):
     def _load_histology_track(self, key, session, egmap, probe, trackpath):
 
         conv = (('landmark_name', str), ('warp', lambda x: x == 'true'),
-                ('raw_x', float), ('raw_y', float), ('raw_z', float),
+                ('subj_x', float), ('subj_y', float), ('subj_z', float),
                 ('ccf_x', float), ('ccf_y', float), ('ccf_z', float))
 
         if not trackpath.exists():
@@ -171,18 +172,18 @@ class HistologyIngest(dj.Imported):
                 rec = {c[0]: c[1](d) for c, d in zip(conv, row)}
                 recs.append(rec)
 
-        # Raw -> CCF Transformation
+        # Subject -> CCF Transformation
 
         top = {'subject_id': session['subject_id']}
 
-        if not (histology.RawToCCFTransformation & top).fetch(limit=1):
+        if not (histology.SubjectToCCFTransformation & top).fetch(limit=1):
 
             log.info('... adding new raw -> ccf coordinates')
 
-            histology.RawToCCFTransformation.insert1(
+            histology.SubjectToCCFTransformation.insert1(
                 top, allow_direct_insert=True)
 
-            histology.RawToCCFTransformation.Landmark.insert(
+            histology.SubjectToCCFTransformation.Landmark.insert(
                 ({**top, **rec} for rec in
                  (r for r in recs if r['warp'] is True)),
                 allow_direct_insert=True, ignore_extra_fields=True)

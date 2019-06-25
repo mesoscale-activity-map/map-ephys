@@ -5,6 +5,8 @@ import logging
 
 import numpy as np
 import datajoint as dj
+import pathlib
+import scipy.io as scio
 
 from tifffile import imread
 
@@ -39,9 +41,9 @@ class CCF(dj.Lookup):
     definition = """
     # Common Coordinate Framework
     -> CCFLabel
-    x   :  int   # (um)
-    y   :  int   # (um)
-    z   :  int   # (um)
+    ccf_x   :  int   # (um)
+    ccf_y   :  int   # (um)
+    ccf_z   :  int   # (um)
     """
 
 
@@ -127,8 +129,18 @@ class CCFAnnotation(dj.Manual):
 @schema
 class AnnotatedBrainSurface(dj.Manual):
     definition = """  # iso-surface of annotated brain in CCF coordinate frame
-    annotated_brain_name: varchar(36)  # e.g. Annotation_new_10_ds222_16bit
+    annotated_brain_name: varchar(100)  # e.g. Annotation_new_10_ds222_16bit
     ---
     vertices: longblob  # (px)
-    edges: longblob
+    faces: longblob
     """
+
+    @classmethod
+    def load_matlab_mesh(self, mesh_fp):
+        mesh_fp = pathlib.Path(mesh_fp).resolve()
+        assert mesh_fp.exists()
+        mesh = scio.loadmat(mesh_fp, struct_as_record = False, squeeze_me = True)['mesh']
+        self.insert1(dict(annotated_brain_name=mesh_fp.stem,
+                          vertices=mesh.vertices,
+                          faces=mesh.faces - 1),  #  0-base index
+                     allow_direct_insert=True)
