@@ -41,9 +41,9 @@ class CCF(dj.Lookup):
     definition = """
     # Common Coordinate Framework
     -> CCFLabel
-    x   :  int   # (um)
-    y   :  int   # (um)
-    z   :  int   # (um)
+    ccf_x   :  int   # (um)
+    ccf_y   :  int   # (um)
+    ccf_z   :  int   # (um)
     """
 
 

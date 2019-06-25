@@ -89,7 +89,7 @@ class Photostim(dj.Manual):
         # NOT USED CURRENT
         definition = """
         -> master
-        (profile_x, profile_y, profile_z) -> ccf.CCF(x, y, z)
+        (profile_x, profile_y, profile_z) -> ccf.CCF(ccf_x, ccf_y, ccf_z)
         ---
         intensity_timecourse   :  longblob  # (mW/mm^2)
         """
