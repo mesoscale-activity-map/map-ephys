@@ -145,4 +145,5 @@ class AnnotatedBrainSurface(dj.Manual):
         mesh = scio.loadmat(mesh_fp, struct_as_record = False, squeeze_me = True)['mesh']
         self.insert1(dict(annotated_brain_name=mesh_fp.stem,
                           vertices=mesh.vertices,
-                          faces=mesh.faces), allow_direct_insert=True)
+                          faces=mesh.faces - 1),  #  0-base index
+                     allow_direct_insert=True)
