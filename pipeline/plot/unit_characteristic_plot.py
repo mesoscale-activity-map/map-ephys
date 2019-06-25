@@ -1,5 +1,4 @@
 import numpy as np
-import scipy as sp
 import datajoint as dj
 
 import matplotlib as mpl
@@ -13,13 +12,13 @@ from pipeline import experiment, ephys, psth
 m_scale = 1200
 
 def plot_clustering_quality(probe_insert_key):
-    amp, snr, spk_times = (ephys.Unit * ephys.ProbeInsertion.InsertionLocation & probe_insert_key).fetch(
-        'unit_amp', 'unit_snr', 'spike_times')
-    isi_violation, spk_rate = zip(*((_compute_isi_violation(spk), _compute_spike_rate(spk)) for spk in spk_times))
+    amp, snr, spk_rate, isi_violation = (ephys.Unit * ephys.UnitStat
+                                         * ephys.ProbeInsertion.InsertionLocation & probe_insert_key).fetch(
+        'unit_amp', 'unit_snr', 'avg_firing_rate', 'isi_violation')
 
     metrics = {'amp': amp,
                'snr': snr,
-               'isi': np.array(isi_violation),
+               'isi': np.array(isi_violation) * 100,  # to percentage
                'rate': np.array(spk_rate)}
     label_mapper = {'amp': 'Amplitude',
                     'snr': 'Signal to noise ratio (SNR)',
@@ -40,11 +39,11 @@ def plot_clustering_quality(probe_insert_key):
 
 
 def plot_unit_characteristic(probe_insert_key, axs=None):
-    amp, snr, spk_times, x, y, insertion_depth = (ephys.Unit * ephys.ProbeInsertion.InsertionLocation
-                                                  & probe_insert_key & 'unit_quality != "all"').fetch(
-        'unit_amp', 'unit_snr', 'spike_times', 'unit_posx', 'unit_posy', 'dv_location')
+    amp, snr, spk_rate, x, y, insertion_depth = (
+            ephys.Unit * ephys.ProbeInsertion.InsertionLocation * ephys.UnitStat
+            & probe_insert_key & 'unit_quality != "all"').fetch(
+        'unit_amp', 'unit_snr', 'avg_firing_rate', 'unit_posx', 'unit_posy', 'dv_location')
 
-    spk_rate = np.array(list(_compute_spike_rate(spk) for spk in spk_times))
     insertion_depth = np.where(np.isnan(insertion_depth), 0, insertion_depth)
 
     metrics = pd.DataFrame(list(zip(*(amp/amp.max(), snr/snr.max(), spk_rate/spk_rate.max(), x, y + insertion_depth))))
@@ -130,11 +129,11 @@ def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
     cue_onset = (experiment.Period & 'period = "delay"').fetch1('period_start')
 
     no_stim_cond = (psth.TrialCondition
-                    & {'trial_condition_desc':
+                    & {'trial_condition_name':
                        'all_noearlylick_both_alm_nostim'}).fetch1('KEY')
 
     bi_stim_cond = (psth.TrialCondition
-                    & {'trial_condition_desc':
+                    & {'trial_condition_name':
                        'all_noearlylick_both_alm_stim'}).fetch1('KEY')
 
     # get photostim duration
@@ -199,11 +198,11 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
             * experiment.BrainLocation & probe_insert_key).fetch1('hemisphere')
 
     conds_i = (psth.TrialCondition
-               & {'trial_condition_desc':
+               & {'trial_condition_name':
                   'good_noearlylick_left_hit' if hemi == 'left' else 'good_noearlylick_right_hit'}).fetch1('KEY')
 
     conds_c = (psth.TrialCondition
-               & {'trial_condition_desc':
+               & {'trial_condition_name':
                   'good_noearlylick_right_hit' if hemi == 'left' else 'good_noearlylick_left_hit'}).fetch1('KEY')
 
     sel_i = (ephys.Unit * psth.UnitSelectivity
@@ -255,11 +254,11 @@ def plot_avg_contra_ipsi_psth(probe_insert_key, axs=None):
             * experiment.BrainLocation & probe_insert_key).fetch1('hemisphere')
 
     conds_i = (psth.TrialCondition
-               & {'trial_condition_desc':
+               & {'trial_condition_name':
                   'good_noearlylick_left_hit' if hemi == 'left' else 'good_noearlylick_right_hit'}).fetch('KEY')
 
     conds_c = (psth.TrialCondition
-               & {'trial_condition_desc':
+               & {'trial_condition_name':
                   'good_noearlylick_right_hit' if hemi == 'left' else 'good_noearlylick_left_hit'}).fetch('KEY')
 
     sel_i = (ephys.Unit * psth.UnitSelectivity
@@ -269,22 +268,22 @@ def plot_avg_contra_ipsi_psth(probe_insert_key, axs=None):
              & 'unit_selectivity = "contra-selective"' & probe_insert_key)
 
     psth_is_it = (((psth.UnitPsth & conds_i)
-                   * ephys.Unit.proj('unit_posx', 'unit_posy'))
+                   * ephys.Unit.proj('unit_posy'))
                   & good_unit.proj() & sel_i.proj()).fetch(
                       'unit_psth', order_by='unit_posy desc')
 
     psth_is_ct = (((psth.UnitPsth & conds_c)
-                   * ephys.Unit.proj('unit_posx', 'unit_posy'))
+                   * ephys.Unit.proj('unit_posy'))
                   & good_unit.proj() & sel_i.proj()).fetch(
                       'unit_psth', order_by='unit_posy desc')
 
     psth_cs_ct = (((psth.UnitPsth & conds_c)
-                   * ephys.Unit.proj('unit_posx', 'unit_posy'))
+                   * ephys.Unit.proj('unit_posy'))
                   & good_unit.proj() & sel_c.proj()).fetch(
                       'unit_psth', order_by='unit_posy desc')
 
     psth_cs_it = (((psth.UnitPsth & conds_i)
-                   * ephys.Unit.proj('unit_posx', 'unit_posy'))
+                   * ephys.Unit.proj('unit_posy'))
                   & good_unit.proj() & sel_c.proj()).fetch(
                       'unit_psth', order_by='unit_posy desc')
 
@@ -311,19 +310,19 @@ def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
                          'period_start')
 
     psth_s_l = (psth.UnitPsth * psth.TrialCondition
-                & {'trial_condition_desc':
+                & {'trial_condition_name':
                    'all_noearlylick_both_alm_stim_left'}).fetch('unit_psth')
 
     psth_n_l = (psth.UnitPsth * psth.TrialCondition
-                & {'trial_condition_desc':
+                & {'trial_condition_name':
                    'all_noearlylick_both_alm_nostim_left'}).fetch('unit_psth')
 
     psth_s_r = (psth.UnitPsth * psth.TrialCondition
-                & {'trial_condition_desc':
+                & {'trial_condition_name':
                    'all_noearlylick_both_alm_stim_right'}).fetch('unit_psth')
 
     psth_n_r = (psth.UnitPsth * psth.TrialCondition
-                & {'trial_condition_desc':
+                & {'trial_condition_name':
                    'all_noearlylick_both_alm_nostim_right'}).fetch('unit_psth')
 
     # get photostim duration
@@ -509,15 +508,6 @@ def _plot_with_sem(data, t_vec, ax, c='k'):
     ax.spines['top'].set_visible(False)
 
 
-def _compute_isi_violation(spike_times, isi_thresh=0.002):
-    isi = np.diff(spike_times)
-    return sum((isi < isi_thresh).astype(int)) / len(isi)
-
-
-def _compute_spike_rate(spike_times):
-    return len(spike_times) / (spike_times[-1] - spike_times[0])
-
-
 def _movmean(data, nsamp=5):
     ret = np.cumsum(data, dtype=float)
     ret[nsamp:] = ret[nsamp:] - ret[:-nsamp]
@@ -534,9 +524,9 @@ def _extract_one_stim_dur(stim_durs):
         return default_stim_dur
     elif len(stim_durs) > 1:
         print(f'Found multiple stim durations: {stim_durs} - select {min(stim_durs)}')
-        return min(stim_durs)
+        return float(min(stim_durs))
     else:
-        return stim_durs[0] if len(stim_durs) == 1 and stim_durs[0] else default_stim_dur
+        return float(stim_durs[0]) if len(stim_durs) == 1 and stim_durs[0] else default_stim_dur
 
 
 def jointplot_w_hue(data, x, y, hue=None, colormap=None,

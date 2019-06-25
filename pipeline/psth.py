@@ -47,9 +47,10 @@ class TrialCondition(dj.Lookup):
     '''
 
     definition = """
-    trial_condition_id:         varchar(32)     # hash of trial_condition_arg
+    trial_condition_name:       varchar(128)     # user-friendly name of condition
     ---
-    trial_condition_desc:       varchar(1000)   # trial condition description
+    trial_condition_hash:       varchar(32)     # trial condition hash - hash of func and arg
+    unique index (trial_condition_hash)
     trial_condition_func:       varchar(36)     # trial retrieval function
     trial_condition_arg:        longblob        # trial retrieval arguments
     """
@@ -58,7 +59,7 @@ class TrialCondition(dj.Lookup):
     def contents(self):
         contents_data = (
             {
-                'trial_condition_desc': 'good_noearlylick_hit',
+                'trial_condition_name': 'good_noearlylick_hit',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
@@ -67,7 +68,7 @@ class TrialCondition(dj.Lookup):
                     'early_lick': 'no early'}
             },
             {
-                'trial_condition_desc': 'good_noearlylick_left_hit',
+                'trial_condition_name': 'good_noearlylick_left_hit',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
@@ -77,7 +78,7 @@ class TrialCondition(dj.Lookup):
                     'trial_instruction': 'left'}
             },
             {
-                'trial_condition_desc': 'good_noearlylick_right_hit',
+                'trial_condition_name': 'good_noearlylick_right_hit',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
@@ -87,7 +88,7 @@ class TrialCondition(dj.Lookup):
                     'trial_instruction': 'right'}
             },
             {
-                'trial_condition_desc': 'good_noearlylick_left_miss',
+                'trial_condition_name': 'good_noearlylick_left_miss',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
@@ -97,7 +98,7 @@ class TrialCondition(dj.Lookup):
                     'trial_instruction': 'left'}
             },
             {
-                'trial_condition_desc': 'good_noearlylick_right_miss',
+                'trial_condition_name': 'good_noearlylick_right_miss',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'audio delay',
@@ -107,7 +108,7 @@ class TrialCondition(dj.Lookup):
                     'trial_instruction': 'right'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_stim',
+                'trial_condition_name': 'all_noearlylick_both_alm_stim',
                 'trial_condition_func': '_get_trials_include_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -117,7 +118,7 @@ class TrialCondition(dj.Lookup):
                     'brain_location_name': 'both_alm'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_nostim',
+                'trial_condition_name': 'all_noearlylick_both_alm_nostim',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -126,7 +127,7 @@ class TrialCondition(dj.Lookup):
                     'early_lick': 'no early'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_stim_left',
+                'trial_condition_name': 'all_noearlylick_both_alm_stim_left',
                 'trial_condition_func': '_get_trials_include_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -137,7 +138,7 @@ class TrialCondition(dj.Lookup):
                     'brain_location_name': 'both_alm'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_nostim_left',
+                'trial_condition_name': 'all_noearlylick_both_alm_nostim_left',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -147,7 +148,7 @@ class TrialCondition(dj.Lookup):
                     'trial_instruction': 'left'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_stim_right',
+                'trial_condition_name': 'all_noearlylick_both_alm_stim_right',
                 'trial_condition_func': '_get_trials_include_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -158,7 +159,7 @@ class TrialCondition(dj.Lookup):
                     'brain_location_name': 'both_alm'}
             },
             {
-                'trial_condition_desc': 'all_noearlylick_both_alm_nostim_right',
+                'trial_condition_name': 'all_noearlylick_both_alm_nostim_right',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -169,15 +170,14 @@ class TrialCondition(dj.Lookup):
             },
         )
         # generate key XXX: complicated why not just key from description?
-        return ({**d, 'trial_condition_id':
-                 key_hash({'trial_condition_desc': d['trial_condition_desc'],
-                           'trial_condition_func': d['trial_condition_func'],
+        return ({**d, 'trial_condition_hash':
+                 key_hash({'trial_condition_func': d['trial_condition_func'],
                            **d['trial_condition_arg']})}
                 for d in contents_data)
 
     @classmethod
-    def get_trials(cls, trial_condition_desc):
-        return cls.get_func({'trial_condition_desc': trial_condition_desc})()
+    def get_trials(cls, trial_condition_name):
+        return cls.get_func({'trial_condition_name': trial_condition_name})()
 
     @classmethod
     def get_func(cls, key):
@@ -243,7 +243,7 @@ class UnitPsth(dj.Computed):
     -> TrialCondition
     -> ephys.Unit
     ---
-    unit_psth=NULL:                             longblob
+    unit_psth=NULL: longblob
     """
     psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
 
@@ -251,8 +251,7 @@ class UnitPsth(dj.Computed):
         log.info('UnitPsth.make(): key: {}'.format(key))
 
         # expand TrialCondition to trials,
-        trials = TrialCondition.get_trials(
-            (TrialCondition & key).fetch1('trial_condition_desc'))
+        trials = TrialCondition.get_trials(key['trial_condition_name'])
 
         # fetch related spike times
         q = (ephys.TrialSpikes & key & trials.proj())
@@ -413,6 +412,7 @@ class PeriodSelectivity(dj.Computed):
         freq_i_m = np.average(freq_i)
         freq_c_m = np.average(freq_c)
 
+
         pval = 1 if np.isnan(pval) else pval
         if pval > self.alpha:
             pref = 'non-selective'
@@ -456,8 +456,6 @@ class UnitSelectivity(dj.Computed):
 
         # fetch region selectivity,
         sels = (PeriodSelectivity & key).fetch('period_selectivity')
-
-        assert len(sels) == 3  # one more sanity check, making sure we have all 3 periods
 
         if (sels == 'non-selective').all():
             log.debug('... no UnitSelectivity for unit')

@@ -4,6 +4,8 @@ import datajoint as dj
 from . import lab, experiment, ccf
 from . import get_schema_name
 
+import numpy as np
+
 schema = dj.schema(get_schema_name('ephys'))
 [lab, experiment, ccf]  # NOQA flake8
 
@@ -82,41 +84,12 @@ class CellType(dj.Lookup):
 
 
 @schema
-class ElectrodeCCFPosition(dj.Manual):
+class ClusteringMethod(dj.Lookup):
     definition = """
-    -> ProbeInsertion
+    clustering_method: varchar(16)
     """
 
-    class ElectrodePosition(dj.Part):
-        definition = """
-        -> lab.ElectrodeConfig.Electrode
-        -> ccf.CCF
-        """
-
-    class ElectrodePositionError(dj.Part):
-        definition = """
-        -> lab.ElectrodeConfig.Electrode
-        -> ccf.CCFLabel
-        x   :  int   # (um)
-        y   :  int   # (um)
-        z   :  int   # (um)
-        """
-
-
-@schema
-class LabeledTrack(dj.Manual):
-    definition = """
-    -> ProbeInsertion
-    ---
-    labeling_date : date # in case we labeled the track not during a recorded session we can specify the exact date here
-    dye_color  : varchar(32)
-    """
-
-    class Point(dj.Part):
-        definition = """
-        -> LabeledTrack
-        -> ccf.CCF
-        """
+    contents = zip(['jrclust', 'kilosort'])
 
 
 @schema
@@ -129,7 +102,8 @@ class Unit(dj.Imported):
     definition = """
     # Sorted unit
     -> ProbeInsertion
-    unit  : smallint
+    -> ClusteringMethod
+    unit: smallint
     ---
     unit_uid : int # unique across sessions/animals
     -> UnitQualityType
@@ -185,3 +159,28 @@ class TrialSpikes(dj.Computed):
     ---
     spike_times : longblob # (s) spike times for each trial, relative to go cue
     """
+
+
+@schema
+class UnitStat(dj.Computed):
+    definition = """
+    -> Unit
+    ---
+    isi_violation: float    # 
+    avg_firing_rate: float  # (Hz)
+    """
+
+    isi_violation_thresh = 0.002  # violation threshold of 2 ms
+
+    key_source = ProbeInsertion & experiment.SessionTrial - (experiment.SessionTrial * Unit - TrialSpikes)
+
+    def make(self, key):
+        def make_insert():
+            for unit in (Unit & key).fetch('KEY'):
+                trial_spikes, tr_start, tr_stop = (TrialSpikes * experiment.SessionTrial & unit).fetch(
+                    'spike_times', 'start_time', 'stop_time')
+                isi = np.hstack(np.diff(spks) for spks in trial_spikes)
+                yield {**unit,
+                       'isi_violation': sum((isi < self.isi_violation_thresh).astype(int)) / len(isi),
+                       'avg_firing_rate': len(np.hstack(trial_spikes)) / sum(tr_stop - tr_start)}
+        self.insert(make_insert())
