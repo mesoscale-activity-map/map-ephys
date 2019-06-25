@@ -13,7 +13,7 @@ def plot_correct_proportion(session_key, window_size=None, axis=None):
     For a particular session (specified by session_key), extract all behavior trials
     Get outcome of each trials, map to (0, 1) - 1 if 'hit'
     Compute the moving average of these outcomes, based on the specified window_size (number of trial to average)
-    window_size is set to 10% of the total trial number if not supplied
+    window_size is set to 10% of the total trial number if not specified
     """
 
     trial_outcomes = (experiment.BehaviorTrial & session_key).fetch('outcome')
@@ -92,14 +92,13 @@ def plot_photostim_effect(session_key, photostim_key, axis=None):
     return axis
 
 
-def plot_jaw_movement(session_key, unit_key, tongue_thres=430, trial_limit=10, axis=None):
+def plot_jaw_movement(session_key, unit_key, tongue_thres=430, trial_limit=10, axs=None):
     """
     Plot jaw movement per trial, time-locked to cue-onset, with spike times overlay
     :param session_key: session where the trials are from
     :param unit_key: unit for spike times overlay
     :param tongue_thres: y-pos of the toungue to be considered "protruding out of the mouth"
     :param trial_limit: number of trial to plot
-    :param axis:
     """
     trk = (tracking.Tracking.JawTracking * tracking.Tracking.TongueTracking
            * experiment.BehaviorTrial & session_key & experiment.ActionEvent & ephys.TrialSpikes)
@@ -127,17 +126,19 @@ def plot_jaw_movement(session_key, unit_key, tongue_thres=430, trial_limit=10, a
 
             yield jaw, tongue_out_bool, spike_times, tvec
 
-    if not axis or len(axis) < 2:
+    if not axs:
         fig, axis = plt.subplots(1, 2, figsize=(16, 8))
+    assert len(axs) == 2
 
     h_spacing = 0.5 * tongue_thres
     for trial_tracks, ax, ax_name, spk_color in zip((l_trial_trk, r_trial_trk),
-                                                    axis, ('left lick trials', 'right lick trials'), ('b', 'r')):
+                                                    axs, ('left lick trials', 'right lick trials'), ('b', 'r')):
         for tr_id, (jaw, tongue_out_bool, spike_times, tvec) in enumerate(get_trial_track(trial_tracks)):
             ax.plot(tvec, jaw + tr_id * h_spacing, 'k', linewidth=2)
             ax.plot(tvec[tongue_out_bool], jaw[tongue_out_bool] + tr_id * h_spacing, '.', color='lime', markersize=2)
-            ax.plot(spike_times, np.full_like(spike_times, jaw.mean() + 1.5*jaw.std()) + tr_id * h_spacing,
-                    '.', color=spk_color, markersize=2)
+            ax.plot(spike_times, np.full_like(spike_times, jaw[tongue_out_bool].mean()
+                                              + 4*jaw[tongue_out_bool].std()) + tr_id * h_spacing,
+                    '.', color=spk_color, markersize=4)
             ax.set_title(ax_name)
             ax.axvline(x=0, linestyle='--', color='k')
 

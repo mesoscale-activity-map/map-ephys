@@ -10,6 +10,7 @@ from pipeline import lab
 from pipeline import ephys
 from pipeline import experiment
 from pipeline import ccf
+from pipeline import histology
 from pipeline.ingest import ephys as ephys_ingest
 
 from code import interact
@@ -53,9 +54,10 @@ class HistologyIngest(dj.Imported):
         ).fetch1('water_restriction_number')
 
         egmap = {e['insertion_number']: e
-                 for e in (ephys.ProbeInsertion & session).fetch('KEY')}
+                 for e in (ephys.ProbeInsertion * lab.ElectrodeConfig.ElectrodeGroup & session).fetch('KEY')}
 
         errlabel = ccf.CCFLabel.CCF_R3_20UM_ERROR
+        sz = 20  # 20um voxel size
 
         for probe in range(1, 3):
 
@@ -85,7 +87,7 @@ class HistologyIngest(dj.Imported):
 
             hist = scio.loadmat(fullpath, struct_as_record=False, squeeze_me=True)['site']
             # probe CCF 3D positions
-            pos_xyz = np.vstack([hist.pos.x, hist.pos.y, hist.pos.z]).T * 20  # 20um spacing (y-wise) between channels
+            pos_xyz = np.vstack([hist.pos.x, hist.pos.y, hist.pos.z]).T * sz  # 20um spacing (y-wise) between channels
 
             # probe CCF regions
             names = hist.ont.name  # there are 1000 names here, 1-960 represents the names for each electrode sites (960 sites for npx probe), ignore the last 40
@@ -95,8 +97,7 @@ class HistologyIngest(dj.Imported):
             # XXX: to verify - electrode off-by-one in ingest (e.g. mat->py)??
             # note, hard-code for neuropixels probe -> only one ElectrodeGroup (electrode_group=0)
             electrodes = np.array((ephys.ProbeInsertion * lab.ElectrodeConfig.Electrode
-                                   & egmap[probe] & 'electrode_group=0').fetch(
-                'KEY', order_by='electrode asc'))
+                                   & egmap[probe]).fetch(order_by='electrode asc'))
 
             # interact('histoloading', local=dict(ChainMap(locals(), globals())))
 
@@ -112,16 +113,16 @@ class HistologyIngest(dj.Imported):
             # but hitting ccf coordinate issues..:
 
             log.info('inserting channel ccf position')
-            ephys.ElectrodeCCFPosition.insert1(egmap[probe])
+            histology.ElectrodeCCFPosition.insert1(egmap[probe], ignore_extra_fields=True)
 
             for r in recs:
                 log.debug('... adding probe/position: {}'.format(r))
                 try:
-                    ephys.ElectrodeCCFPosition.ElectrodePosition.insert1(
+                    histology.ElectrodeCCFPosition.ElectrodePosition.insert1(
                         r, ignore_extra_fields=True, allow_direct_insert=True)
                 except Exception as e:
-                    log.warning('... ERROR!')
-                    ephys.ElectrodeCCFPosition.ElectrodePositionError.insert1(
+                    log.warning('... ERROR!') # XXX: no way to be more precise in dj
+                    histology.ElectrodeCCFPosition.ElectrodePositionError.insert1(
                         r, ignore_extra_fields=True, allow_direct_insert=True)
 
             log.info('... ok.')

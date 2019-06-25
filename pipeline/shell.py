@@ -68,6 +68,10 @@ def ingest_histology(*args):
 
 
 def populate_psth(*args):
+
+    log.info('ephys.UnitStat.populate()')
+    ephys.UnitStat.populate()
+
     log.info('psth.UnitPsth.populate()')
     psth.UnitPsth.populate()
 
