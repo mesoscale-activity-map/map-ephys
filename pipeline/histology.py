@@ -94,7 +94,7 @@ class LabeledProbeTrack(dj.Manual):
         ---
         ccf_x: float  # (um)
         ccf_y: float  # (um)
-        ccf_z: float  # (um)
+        ccf_z: float  # (um)    
         """
 
 
