@@ -51,6 +51,15 @@ class HistologyIngest(dj.Imported):
 
         session = (experiment.Session & key).fetch1()
 
+        egmap = {e['insertion_number']: e
+                 for e in (ephys.ProbeInsertion
+                           * lab.ElectrodeConfig.ElectrodeGroup
+                           & session).fetch('KEY')}
+
+        if not len(egmap):
+            log.info('... no probe information. skipping.'.format(key))
+            return
+
         rigpath = ephys_ingest.EphysDataPath().fetch1('data_path')
         subject_id = session['subject_id']
         session_date = session['session_date']
@@ -58,22 +67,26 @@ class HistologyIngest(dj.Imported):
             lab.WaterRestriction() & {'subject_id': subject_id}
         ).fetch1('water_restriction_number')
 
-        egmap = {e['insertion_number']: e
-                 for e in (ephys.ProbeInsertion
-                           * lab.ElectrodeConfig.ElectrodeGroup
-                           & session).fetch('KEY')}
+        directory = pathlib.Path(
+            rigpath, water, session_date.strftime('%Y-%m-%d'), 'histology')
 
         for probe in range(1, 3):
 
+            probefile = 'landmarks_{}_{}_{}_siteInfo.mat'.format(
+                water, session['session_date'].strftime('%Y%m%d'), probe)
+            trackfile = 'landmarks_{}_{}_{}.csv'.format(
+                water, session['session_date'].strftime('%Y%m%d'), probe)
+
+            probepath = directory / probefile
+            trackpath = directory / trackfile
+
             try:
 
-                # self._condensify(key, session, probe, egmap, file)
+                self._load_histology_probe(
+                    key, session, egmap, probe, probepath)
 
-                self._load_histology_probe(key, session, probe, egmap, rigpath,
-                                           subject_id, session_date, water)
-
-                self._load_histology_track(key, session, probe, egmap, rigpath,
-                                           subject_id, session_date, water)
+                self._load_histology_track(
+                    key, session, egmap, probe, trackpath)
 
             except StopIteration:
                 pass
@@ -81,8 +94,7 @@ class HistologyIngest(dj.Imported):
         log.info('HistologyIngest().make(): {} complete.'.format(key))
         self.insert1(key)
 
-    def _load_histology_probe(self, key, session, probe, egmap, rigpath,
-                              subject_id, session_date, water):
+    def _load_histology_probe(self, key, session, egmap, probe, probepath):
 
         sz = 20   # 20um voxel size
 
@@ -93,29 +105,17 @@ class HistologyIngest(dj.Imported):
             log.info(msg)
             raise StopIteration(msg)
 
-        # subpaths like:
-        # directory: {h2o}/{yyyy-mm-dd}/histology
-        # file: landmarks_{h2o}_{YYYYMMDD}_{probe}_siteInfo.mat
-
-        directory = pathlib.Path(
-            water, session_date.strftime('%Y-%m-%d'), 'histology')
-
-        file = 'landmarks_{}_{}_{}_siteInfo.mat'.format(
-            water, session['session_date'].strftime('%Y%m%d'), probe)
-        subpath = directory / file
-        fullpath = rigpath / subpath
-
-        if not fullpath.exists():
+        if not probepath.exists():
             msg = '... probe {} histology file {} N/A, skipping.'.format(
-                probe, fullpath)
+                probe, probepath)
             log.info(msg)
             raise StopIteration(msg)  # skip to next probe
 
         log.info('... found probe {} histology file {}'.format(
-            probe, fullpath))
+            probe, probepath))
 
         hist = scio.loadmat(
-            fullpath, struct_as_record=False, squeeze_me=True)['site']
+            probepath, struct_as_record=False, squeeze_me=True)['site']
 
         # probe CCF 3D positions
         pos_xyz = np.vstack([hist.pos.x, hist.pos.y, hist.pos.z]).T * sz
@@ -151,29 +151,20 @@ class HistologyIngest(dj.Imported):
 
         log.info('... ok.')
 
-    def _load_histology_track(self, key, session, probe, egmap, rigpath,
-                              subject_id, session_date, water):
+    def _load_histology_track(self, key, session, egmap, probe, trackpath):
 
         conv = (('landmark_name', str), ('warp', lambda x: x == 'true'),
                 ('raw_x', float), ('raw_y', float), ('raw_z', float),
                 ('ccf_x', float), ('ccf_y', float), ('ccf_z', float))
 
-        directory = pathlib.Path(
-            water, session_date.strftime('%Y-%m-%d'), 'histology')
-
-        file = 'landmarks_{}_{}_{}.csv'.format(
-            water, session['session_date'].strftime('%Y%m%d'), probe)
-        subpath = directory / file
-        fullpath = rigpath / subpath
-
-        if not fullpath.exists():
+        if not trackpath.exists():
             msg = '... probe {} track file {} N/A, skipping.'.format(
-                probe, fullpath)
+                probe, trackpath)
             log.info(msg)
             raise Exception(msg)  # error: no histology without track info
 
         recs = []
-        with open(fullpath, newline='') as f:
+        with open(trackpath, newline='') as f:
             rdr = csv.reader(f)
             for row in rdr:
                 assert len(row) == 8
@@ -182,7 +173,7 @@ class HistologyIngest(dj.Imported):
 
         # Raw -> CCF Transformation
 
-        top = {'subject_id': subject_id}
+        top = {'subject_id': session['subject_id']}
 
         if not (histology.RawToCCFTransformation & top).fetch(limit=1):
 
