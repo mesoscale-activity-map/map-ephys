@@ -37,14 +37,14 @@ class RawToCCFTransformation(dj.Imported):
     class Landmark(dj.Part):
         definition = """
         -> master
-        landmark_name='': varchar(8)
+        landmark_name:          char(8)         # pt-N from landmark file.
         ---
-        raw_x: float  # (um)
-        raw_y: float  # (um)
-        raw_z: float  # (um)
-        ccf_x: float  # (um)
-        ccf_y: float  # (um)
-        ccf_z: float  # (um)
+        raw_x:                  float           # (um)
+        raw_y:                  float           # (um)
+        raw_z:                  float           # (um)
+        ccf_x:                  float           # (um)
+        ccf_y:                  float           # (um)
+        ccf_z:                  float           # (um)
         """
 
 
@@ -66,9 +66,9 @@ class ElectrodeCCFPosition(dj.Manual):
         -> master
         -> lab.ElectrodeConfig.Electrode
         -> ccf.CCFLabel
-        x   :  int   # (um)
-        y   :  int   # (um)
-        z   :  int   # (um)
+        x: int   # (um)
+        y: int   # (um)
+        z: int   # (um)
         """
 
 
@@ -90,16 +90,6 @@ class LabeledProbeTrack(dj.Manual):
         ccf_y: float
         ccf_z: float
         """
-
-    class PointError(dj.Part):
-        definition = """
-        -> master
-        -> ccf.CCFLabel
-        x   :  int   # (um)
-        y   :  int   # (um)
-        z   :  int   # (um)
-        """
-
 
 @schema
 class EphysCharacteristic(dj.Imported):
