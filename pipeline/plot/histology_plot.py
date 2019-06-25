@@ -12,16 +12,17 @@ from pipeline import experiment, ephys, ccf, histology
 
 
 def plot_probe_tracks(session_key, ax=None):
-    mm_per_px = 0.02
+    um_per_px = 20
     # fetch mesh
     vertices, faces = (ccf.AnnotatedBrainSurface
                        & 'annotated_brain_name = "Annotation_new_10_ds222_16bit_isosurf"').fetch1(
         'vertices', 'faces')
-    vertices = vertices * mm_per_px
+    vertices = vertices * um_per_px
 
     probe_tracks = {}
     for probe_insert in (ephys.ProbeInsertion & session_key).fetch('KEY'):
-        points = (histology.LabeledProbeTrack.Point & probe_insert).fetch('ccf_x', 'ccf_y', 'ccf_z', order_by='"order"')
+        points = (histology.LabeledProbeTrack.Point & probe_insert).fetch(
+            'ccf_x', 'ccf_y', 'ccf_z', order_by='"electrode"')
         probe_tracks[probe_insert['insertion_number']] = np.vstack(zip(*points))
 
     if ax is None:
@@ -35,16 +36,13 @@ def plot_probe_tracks(session_key, ax=None):
     ax.w_yaxis.set_pane_color((0, 0, 0, 1.0))
     ax.w_zaxis.set_pane_color((0, 0, 0, 1.0))
     ax.grid(False)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_zticks([])
     ax.invert_zaxis()
 
-    for k, v in probe_tracks.items():
-        v = v * mm_per_px
-        ax.plot(v[:, 0], v[:, 2], v[:, 1], 'r', label = f'probe {k}')
-
     ax.plot_trisurf(vertices[:, 0], vertices[:, 1], faces, vertices[:, 2],
-                    alpha=0.2, lw=0)
+                    alpha=0.25, lw=0)
 
+    colors = ['r', 'g', 'y', 'b']
+    for (k, v), c in zip(probe_tracks.items(), colors):
+        ax.plot(v[:, 0], v[:, 2], v[:, 1], c, label=f'probe {k}')
 
+    ax.set_title('Probe Track in CCF (um)')
