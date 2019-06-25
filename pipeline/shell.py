@@ -11,11 +11,13 @@ from pipeline import lab
 from pipeline import experiment
 from pipeline import ccf
 from pipeline import ephys
+from pipeline import histology
 from pipeline import tracking
 from pipeline import psth
 from pipeline import publication
 
-pipeline_modules = [lab, ccf, experiment, ephys, tracking, psth, publication]
+pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth,
+                    publication]
 
 log = logging.getLogger(__name__)
 

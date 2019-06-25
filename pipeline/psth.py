@@ -412,6 +412,7 @@ class PeriodSelectivity(dj.Computed):
         freq_i_m = np.average(freq_i)
         freq_c_m = np.average(freq_c)
 
+
         pval = 1 if np.isnan(pval) else pval
         if pval > self.alpha:
             pref = 'non-selective'

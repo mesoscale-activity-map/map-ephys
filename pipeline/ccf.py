@@ -32,11 +32,8 @@ class CCFLabel(dj.Lookup):
     CCF_R3_20UM_ID = 0
     CCF_R3_20UM_DESC = 'Allen Institute Mouse CCF, Rev. 3, 20uM Resolution'
     CCF_R3_20UM_TYPE = 'CCF_R3_20UM'
-    CCF_R3_20UM_ERROR = 'CCF Error'  # annotation text for 'error' region
 
-    contents = [
-        (CCF_R3_20UM_ID, 3, 20,
-         "Allen Institute Mouse CCF, Revision 3, 20 uM Resolution",)]
+    contents = [(CCF_R3_20UM_ID, 3, 20, CCF_R3_20UM_DESC)]
 
 
 @schema

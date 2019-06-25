@@ -2,11 +2,9 @@ import datajoint as dj
 
 from . import lab, experiment, ccf, ephys
 from . import get_schema_name
-
-import numpy as np
+[lab, experiment, ccf, ephys]  # schema imports only
 
 schema = dj.schema(get_schema_name('histology'))
-
 
 
 @schema
@@ -39,15 +37,14 @@ class RawToCCFTransformation(dj.Imported):
     class Landmark(dj.Part):
         definition = """
         -> master
-        landmark_id: int
+        landmark_name:          char(8)         # pt-N from landmark file.
         ---
-        landmark_name='': varchar(32)
-        raw_x: float  # (um)
-        raw_y: float  # (um)
-        raw_z: float  # (um)
-        ccf_x: float  # (um)
-        ccf_y: float  # (um)
-        ccf_z: float  # (um)
+        raw_x:                  float           # (um)
+        raw_y:                  float           # (um)
+        raw_z:                  float           # (um)
+        ccf_x:                  float           # (um)
+        ccf_y:                  float           # (um)
+        ccf_z:                  float           # (um)
         """
 
 
@@ -69,9 +66,9 @@ class ElectrodeCCFPosition(dj.Manual):
         -> master
         -> lab.ElectrodeConfig.Electrode
         -> ccf.CCFLabel
-        x   :  int   # (um)
-        y   :  int   # (um)
-        z   :  int   # (um)
+        x: int   # (um)
+        y: int   # (um)
+        z: int   # (um)
         """
 
 
@@ -80,8 +77,8 @@ class LabeledProbeTrack(dj.Manual):
     definition = """
     -> ephys.ProbeInsertion
     ---
-    labeling_date : date # in case we labeled the track not during a recorded session we can specify the exact date here
-    dye_color  : varchar(32)
+    labeling_date=NULL:         date
+    dye_color=NULL:             varchar(32)
     """
 
     class Point(dj.Part):
@@ -93,7 +90,6 @@ class LabeledProbeTrack(dj.Manual):
         ccf_y: float
         ccf_z: float
         """
-
 
 @schema
 class EphysCharacteristic(dj.Imported):
@@ -107,4 +103,3 @@ class EphysCharacteristic(dj.Imported):
     firing_rate: float
     percentage_change: float
     """
-
