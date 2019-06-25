@@ -61,7 +61,7 @@ class ElectrodeCCFPosition(dj.Manual):
         -> ccf.CCF
         mri_x: float  # (mm)
         mri_y: float  # (mm)
-        mri_z: float  # (mm)  
+        mri_z: float  # (mm)
         """
 
     class ElectrodePositionError(dj.Part):
