@@ -238,9 +238,10 @@ class Probe(dj.Lookup):
 class ElectrodeConfig(dj.Lookup):
     definition = """
     -> Probe
-    electrode_config_id: varchar(36)  # hash of the group and group_member (ensure uniqueness)
-    ---
     electrode_config_name: varchar(16)  # user friendly name
+    ---
+    electrode_config_hash: varchar(36)  # hash of the group and group_member (ensure uniqueness)
+    unique index (electrode_config_hash)
     """
 
     class ElectrodeGroup(dj.Part):
