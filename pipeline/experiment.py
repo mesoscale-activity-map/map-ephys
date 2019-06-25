@@ -89,7 +89,7 @@ class Photostim(dj.Manual):
         # NOT USED CURRENT
         definition = """
         -> master
-        (profile_x, profile_y, profile_z) -> ccf.CCF(x, y, z)
+        (profile_x, profile_y, profile_z) -> ccf.CCF(ccf_x, ccf_y, ccf_z)
         ---
         intensity_timecourse   :  longblob  # (mW/mm^2)
         """
@@ -180,8 +180,6 @@ class Period(dj.Lookup):
     period_start: float  # (s) start of this period relative to GO CUE
     period_end: float    # (s) end of this period relative to GO CUE
     """
-
-    trial_duration = 1.2 + 2.4  # HACK: hmm..
 
     contents = [('sample', -2.4, -1.2),
                 ('delay', -1.2, 0.0),

@@ -11,11 +11,13 @@ from pipeline import lab
 from pipeline import experiment
 from pipeline import ccf
 from pipeline import ephys
+from pipeline import histology
 from pipeline import tracking
 from pipeline import psth
 from pipeline import publication
 
-pipeline_modules = [lab, ccf, experiment, ephys, tracking, psth, publication]
+pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth,
+                    publication]
 
 log = logging.getLogger(__name__)
 
@@ -68,6 +70,10 @@ def ingest_histology(*args):
 
 
 def populate_psth(*args):
+
+    log.info('ephys.UnitStat.populate()')
+    ephys.UnitStat.populate()
+
     log.info('psth.UnitPsth.populate()')
     psth.UnitPsth.populate()
 
@@ -111,6 +117,7 @@ def shell(*args):
 
 
 def ccfload(*args):
+    ccf.AnnotatedBrainSurface.load_matlab_mesh('Annotation_new_10_ds222_16bit_isosurf.mat')
     ccf.CCFAnnotation.load_ccf_r3_20um()
 
 
