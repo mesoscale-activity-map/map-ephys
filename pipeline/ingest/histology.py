@@ -118,7 +118,8 @@ class HistologyIngest(dj.Imported):
             probepath, struct_as_record=False, squeeze_me=True)['site']
 
         # probe CCF 3D positions
-        pos_xyz = np.vstack([hist.pos.x, hist.pos.y, hist.pos.z]).T * sz
+        pos_xyz = np.vstack([hist.pos.x, hist.pos.y, hist.pos.z,
+                             hist.warp.x, hist.warp.y, hist.warp.z]).T * sz
 
         # probe CCF regions
         names = hist.ont.name

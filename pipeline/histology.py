@@ -59,6 +59,9 @@ class ElectrodeCCFPosition(dj.Manual):
         -> master
         -> lab.ElectrodeConfig.Electrode
         -> ccf.CCF
+        mri_x: float  # (mm)
+        mri_y: float  # (mm)
+        mri_z: float  # (mm)
         """
 
     class ElectrodePositionError(dj.Part):
@@ -66,9 +69,12 @@ class ElectrodeCCFPosition(dj.Manual):
         -> master
         -> lab.ElectrodeConfig.Electrode
         -> ccf.CCFLabel
-        x: int   # (um)
-        y: int   # (um)
-        z: int   # (um)
+        ccf_x: int   # (um)
+        ccf_y: int   # (um)
+        ccf_z: int   # (um)
+        mri_x: float  # (mm)
+        mri_y: float  # (mm)
+        mri_z: float  # (mm)
         """
 
 
