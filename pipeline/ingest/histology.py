@@ -59,24 +59,30 @@ class HistologyIngest(dj.Imported):
         ).fetch1('water_restriction_number')
 
         egmap = {e['insertion_number']: e
-
                  for e in (ephys.ProbeInsertion
                            * lab.ElectrodeConfig.ElectrodeGroup
                            & session).fetch('KEY')}
 
         for probe in range(1, 3):
 
-            self.load_histology_probe(key, session, probe, egmap, rigpath,
-                                      subject_id, session_date, water)
+            try:
 
-            self.load_histology_track(key, session, probe, egmap, rigpath,
-                                      subject_id, session_date, water)
+                # self._condensify(key, session, probe, egmap, file)
+
+                self._load_histology_probe(key, session, probe, egmap, rigpath,
+                                           subject_id, session_date, water)
+
+                self._load_histology_track(key, session, probe, egmap, rigpath,
+                                           subject_id, session_date, water)
+
+            except StopIteration:
+                pass
 
         log.info('HistologyIngest().make(): {} complete.'.format(key))
         self.insert1(key)
 
-    def load_histology_probe(self, key, session, probe, egmap, rigpath,
-                             subject_id, session_date, water):
+    def _load_histology_probe(self, key, session, probe, egmap, rigpath,
+                              subject_id, session_date, water):
 
         sz = 20   # 20um voxel size
 
@@ -103,7 +109,7 @@ class HistologyIngest(dj.Imported):
             msg = '... probe {} histology file {} N/A, skipping.'.format(
                 probe, fullpath)
             log.info(msg)
-            raise StopIteration(msg)
+            raise StopIteration(msg)  # skip to next probe
 
         log.info('... found probe {} histology file {}'.format(
             probe, fullpath))
@@ -122,19 +128,15 @@ class HistologyIngest(dj.Imported):
         electrodes = (ephys.ProbeInsertion * lab.ElectrodeConfig.Electrode
                       & egmap[probe]).fetch(order_by='electrode asc')
 
-        # XXX: we index pos_xyz by 'goodn' directly,
-        #   .. rather than via electrodes[goodn]['electrode']
+        # XXX: we index pos_xyz by 'goodn' directly, rather than via
+        #   .. electrodes[goodn]['electrode']
 
         recs = ((*l[0], ccf.CCFLabel.CCF_R3_20UM_ID, *l[1]) for l in
                 zip(electrodes[goodn], pos_xyz[goodn]))
 
-        # ideally:
-        # ephys.ElectrodeGroup.ElectrodePosition.insert(
-        #     recs, allow_direct_insert=True)
-        # but hitting ccf coordinate issues..
-
+        # ideally ElectrodePosition.insert(...) but some are outside of CCF...
         log.info('inserting channel ccf position')
-        ephys.ElectrodeCCFPosition.insert1(
+        histology.ElectrodeCCFPosition.insert1(
             egmap[probe], ignore_extra_fields=True)
 
         for r in recs:
@@ -143,26 +145,32 @@ class HistologyIngest(dj.Imported):
                 histology.ElectrodeCCFPosition.ElectrodePosition.insert1(
                     r, ignore_extra_fields=True, allow_direct_insert=True)
             except Exception as e:  # XXX: no way to be more precise in dj
-                log.warning('... ERROR!'.format(repr(e)))
-                ephys.ElectrodeCCFPosition.ElectrodePositionError.insert1(
+                log.warning('... ERROR!: {}'.format(repr(e)))
+                histology.ElectrodeCCFPosition.ElectrodePositionError.insert1(
                     r, ignore_extra_fields=True, allow_direct_insert=True)
 
         log.info('... ok.')
 
-    def load_histology_track(key, session, probe, egmap, rigpath, subject_id,
-                             session_date, water):
+    def _load_histology_track(self, key, session, probe, egmap, rigpath,
+                              subject_id, session_date, water):
 
-        conv = (('landmark_name', str), ('warp', bool),
+        conv = (('landmark_name', str), ('warp', lambda x: x == 'true'),
                 ('raw_x', float), ('raw_y', float), ('raw_z', float),
-                ('x', float), ('y', float), ('z', float))
+                ('ccf_x', float), ('ccf_y', float), ('ccf_z', float))
 
         directory = pathlib.Path(
             water, session_date.strftime('%Y-%m-%d'), 'histology')
 
-        file = 'landmarks_{}_{}_{}_siteInfo.csv'.format(
+        file = 'landmarks_{}_{}_{}.csv'.format(
             water, session['session_date'].strftime('%Y%m%d'), probe)
         subpath = directory / file
         fullpath = rigpath / subpath
+
+        if not fullpath.exists():
+            msg = '... probe {} track file {} N/A, skipping.'.format(
+                probe, fullpath)
+            log.info(msg)
+            raise Exception(msg)  # error: no histology without track info
 
         recs = []
         with open(fullpath, newline='') as f:
@@ -179,10 +187,11 @@ class HistologyIngest(dj.Imported):
         if not (histology.RawToCCFTransformation & top).fetch(limit=1):
 
             log.info('... adding new raw -> ccf coordinates')
+
             histology.RawToCCFTransformation.insert1(
                 top, allow_direct_insert=True)
 
-            histology.RawToCCFTransformation.Landmark.insert1(
+            histology.RawToCCFTransformation.Landmark.insert(
                 ({**top, **rec} for rec in
                  (r for r in recs if r['warp'] is True)),
                 allow_direct_insert=True, ignore_extra_fields=True)
@@ -197,7 +206,7 @@ class HistologyIngest(dj.Imported):
         histology.LabeledProbeTrack.insert1(
             top, ignore_extra_fields=True, allow_direct_insert=True)
 
-        histology.LabeledProbeTrack.Point.insert1(
-            ({**top, **rec} for rec in
-             (r for r in recs if r['warp'] is False)),
+        histology.LabeledProbeTrack.Point.insert(
+            ({**top, 'order': rec[0], **rec[1]} for rec in
+             enumerate((r for r in recs if r['warp'] is False))),
             ignore_extra_fields=True, allow_direct_insert=True)
