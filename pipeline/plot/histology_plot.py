@@ -20,9 +20,9 @@ def plot_probe_tracks(session_key, ax=None):
     vertices = vertices * mm_per_px
 
     probe_tracks = {}
-    for probe_insert in (ephys.ProbeInsertion & session_key):
-        points = (histology.LabeledProbeTrack.Point & probe_insert).fetch('ccf_x', 'ccf_y', 'ccf_z', order_by='order')
-        probe_tracks[probe_insert.fetch1('insertion_number')] = np.hstack(zip(*points))
+    for probe_insert in (ephys.ProbeInsertion & session_key).fetch('KEY'):
+        points = (histology.LabeledProbeTrack.Point & probe_insert).fetch('ccf_x', 'ccf_y', 'ccf_z', order_by='"order"')
+        probe_tracks[probe_insert['insertion_number']] = np.vstack(zip(*points))
 
     if ax is None:
         fig = plt.figure()
@@ -40,6 +40,9 @@ def plot_probe_tracks(session_key, ax=None):
     ax.set_zticks([])
     ax.invert_zaxis()
 
+    for k, v in probe_tracks.items():
+        v = v * mm_per_px
+        ax.plot(v[:, 0], v[:, 2], v[:, 1], 'r', label = f'probe {k}')
 
     ax.plot_trisurf(vertices[:, 0], vertices[:, 1], faces, vertices[:, 2],
                     alpha=0.2, lw=0)
