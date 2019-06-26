@@ -127,7 +127,7 @@ def plot_jaw_movement(session_key, unit_key, tongue_thres=430, trial_limit=10, a
             yield jaw, tongue_out_bool, spike_times, tvec
 
     if not axs:
-        fig, axis = plt.subplots(1, 2, figsize=(16, 8))
+        fig, axs = plt.subplots(1, 2, figsize=(16, 8))
     assert len(axs) == 2
 
     h_spacing = 0.5 * tongue_thres

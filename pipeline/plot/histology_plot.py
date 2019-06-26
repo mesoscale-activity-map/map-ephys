@@ -22,7 +22,7 @@ def plot_probe_tracks(session_key, ax=None):
     probe_tracks = {}
     for probe_insert in (ephys.ProbeInsertion & session_key).fetch('KEY'):
         points = (histology.LabeledProbeTrack.Point & probe_insert).fetch(
-            'ccf_x', 'ccf_y', 'ccf_z', order_by='"electrode"')
+            'ccf_x', 'ccf_y', 'ccf_z', order_by='"order"')
         probe_tracks[probe_insert['insertion_number']] = np.vstack(zip(*points))
 
     if ax is None:
