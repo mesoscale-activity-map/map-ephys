@@ -172,7 +172,7 @@ class UnitStat(dj.Computed):
 
     isi_violation_thresh = 0.002  # violation threshold of 2 ms
 
-    key_source = ProbeInsertion & experiment.SessionTrial - (experiment.SessionTrial * Unit - TrialSpikes)
+    key_source = ProbeInsertion & experiment.SessionTrial.proj() - (experiment.SessionTrial * Unit - TrialSpikes.proj())
 
     def make(self, key):
         def make_insert():
