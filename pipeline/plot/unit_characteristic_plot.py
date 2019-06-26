@@ -309,19 +309,19 @@ def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
                      & 'period in ("sample", "delay", "response")').fetch(
                          'period_start')
 
-    psth_s_l = (psth.UnitPsth * psth.TrialCondition
+    psth_s_l = (psth.UnitPsth * psth.TrialCondition & probe_insert_key
                 & {'trial_condition_name':
                    'all_noearlylick_both_alm_stim_left'}).fetch('unit_psth')
 
-    psth_n_l = (psth.UnitPsth * psth.TrialCondition
+    psth_n_l = (psth.UnitPsth * psth.TrialCondition & probe_insert_key
                 & {'trial_condition_name':
                    'all_noearlylick_both_alm_nostim_left'}).fetch('unit_psth')
 
-    psth_s_r = (psth.UnitPsth * psth.TrialCondition
+    psth_s_r = (psth.UnitPsth * psth.TrialCondition & probe_insert_key
                 & {'trial_condition_name':
                    'all_noearlylick_both_alm_stim_right'}).fetch('unit_psth')
 
-    psth_n_r = (psth.UnitPsth * psth.TrialCondition
+    psth_n_r = (psth.UnitPsth * psth.TrialCondition & probe_insert_key
                 & {'trial_condition_name':
                    'all_noearlylick_both_alm_nostim_right'}).fetch('unit_psth')
 
