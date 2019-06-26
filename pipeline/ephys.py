@@ -166,8 +166,8 @@ class UnitStat(dj.Computed):
     definition = """
     -> Unit
     ---
-    isi_violation: float    # 
-    avg_firing_rate: float  # (Hz)
+    isi_violation=null: float    # 
+    avg_firing_rate=null: float  # (Hz)
     """
 
     isi_violation_thresh = 0.002  # violation threshold of 2 ms
@@ -181,6 +181,6 @@ class UnitStat(dj.Computed):
                     'spike_times', 'start_time', 'stop_time')
                 isi = np.hstack(np.diff(spks) for spks in trial_spikes)
                 yield {**unit,
-                       'isi_violation': sum((isi < self.isi_violation_thresh).astype(int)) / len(isi),
-                       'avg_firing_rate': len(np.hstack(trial_spikes)) / sum(tr_stop - tr_start)}
+                       'isi_violation': sum((isi < self.isi_violation_thresh).astype(int)) / len(isi) if isi.size else None,
+                       'avg_firing_rate': len(np.hstack(trial_spikes)) / sum(tr_stop - tr_start) if isi.size else None}
         self.insert(make_insert())
