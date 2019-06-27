@@ -57,7 +57,7 @@ class ElectrodeCCFPosition(dj.Manual):
     class ElectrodePosition(dj.Part):
         definition = """
         -> master
-        -> lab.ElectrodeConfig.Electrode
+        -> lab.Probe.Electrode
         -> ccf.CCF
         mri_x: float  # (mm)
         mri_y: float  # (mm)
@@ -67,7 +67,7 @@ class ElectrodeCCFPosition(dj.Manual):
     class ElectrodePositionError(dj.Part):
         definition = """
         -> master
-        -> lab.ElectrodeConfig.Electrode
+        -> lab.Probe.Electrode
         -> ccf.CCFLabel
         ccf_x: int   # (um)
         ccf_y: int   # (um)

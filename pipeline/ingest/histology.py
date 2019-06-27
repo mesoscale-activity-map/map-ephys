@@ -126,11 +126,8 @@ class HistologyIngest(dj.Imported):
         valid = [isinstance(n, (str,)) for n in names]
         goodn = np.where(np.array(valid))[0]
 
-        electrodes = (ephys.ProbeInsertion * lab.ElectrodeConfig.Electrode
+        electrodes = (ephys.ProbeInsertion.proj() * lab.Probe.Electrode.proj()
                       & egmap[probe]).fetch(order_by='electrode asc')
-
-        # XXX: we index pos_xyz by 'goodn' directly, rather than via
-        #   .. electrodes[goodn]['electrode']
 
         recs = ((*l[0], ccf.CCFLabel.CCF_R3_20UM_ID, *l[1]) for l in
                 zip(electrodes[goodn], pos_xyz[goodn]))
