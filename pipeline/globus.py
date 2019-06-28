@@ -32,10 +32,11 @@ class GlobusStorageManager:
         self.auth_client.oauth2_start_flow(refresh_tokens=True)
         self.xfer_client = None
 
-        if 'globus.token' not in dj.config:
-            self.login()
-        else:
+        custom = dj.config.get('custom', None)
+        if custom and 'globus.token' in custom:
             self.refresh()
+        else:
+            self.login()
 
     # authentication methods
 
@@ -60,15 +61,17 @@ class GlobusStorageManager:
 
         self.xfer_client = TransferClient(authorizer=xfer_auth)
 
-        dj.config['globus.token'] = xfer_rt
+        custom = dj.config.get('custom', {})
+        custom['globus.token'] = xfer_rt
+        dj.config['custom'] = custom
 
     def refresh(self):
         ''' use refresh token to refresh access token '''
         auth_client = self.auth_client
 
         xfer_auth = RefreshTokenAuthorizer(
-            dj.config['globus.token'], auth_client, access_token=None,
-            expires_at=None)
+            dj.config['custom']['globus.token'], auth_client,
+            access_token=None, expires_at=None)
 
         self.xfer_client = TransferClient(authorizer=xfer_auth)
 
