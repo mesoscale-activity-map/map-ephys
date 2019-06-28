@@ -1,10 +1,16 @@
 
 import os
 import logging
+import pathlib
 
 import datajoint as dj
 
-from . import lab, experiment, ephys
+from . import lab
+from . import experiment
+from . import ephys
+from . import tracking
+
+
 from pipeline.globus import GlobusStorageManager
 from . import get_schema_name
 
@@ -27,21 +33,39 @@ class GlobusStorageLocation(dj.Lookup):
 
     @property
     def contents(self):
-        if 'globus.storage_locations' in dj.config['custom']:  # for local testing
-            return dj.config['custom']['globus.storage_locations']
+        custom = dj.config.get('custom', None)
+        if custom and 'globus.storage_locations' in custom:  # test config
+            return custom['globus.storage_locations']
 
         return (('raw-ephys',
                  '5b875fda-4185-11e8-bb52-0ac6873fc732',
-                 'publication/raw-ephys'),)
+                 'publication/raw-ephys'),
+                ('raw-video',
+                 '5b875fda-4185-11e8-bb52-0ac6873fc732',
+                 'publication/raw-video'),)
 
-    @property
-    def local_endpoint(self):
-        if 'globus.local_endpoint' in dj.config:
-            return (dj.config['custom']['globus.local_endpoint'],
-                    dj.config['custom']['globus.local_endpoint_subdir'],
-                    dj.config['custom']['globus.local_endpoint_local_path'])
-        else:
-            raise dj.DataJointError("globus_local_endpoint not configured")
+    @classmethod
+    def local_endpoint(cls, globus_alias=None):
+        '''
+        return local endpoint for globus_alias from dj.config
+        expects:
+          globus.local_endpoints: {
+            globus_alias: {
+              'endpoint': uuid,  # UUID of local endpoint
+              'endpoint_subdir': str,  # unix-style path within endpoint
+              'endpoint_path': str  # corresponding local path
+          }
+        '''
+        custom = dj.config.get('custom', None)
+        if custom and 'globus.local_endpoints' in custom:
+            try:
+                return custom['globus.local_endpoints'][globus_alias]
+            except KeyError:
+                pass
+
+        raise dj.DataJointError(
+            "globus_local_endpoints for {} not configured".format(
+                globus_alias))
 
 
 @schema
@@ -104,6 +128,7 @@ class ArchivedRawEphysTrial(dj.Imported):
     definition = """
     -> experiment.SessionTrial
     -> ephys.ProbeInsertion
+    ---
     -> GlobusStorageLocation
     """
 
@@ -146,7 +171,12 @@ class ArchivedRawEphysTrial(dj.Imported):
         # ['subject_id', 'session', 'trial', 'electrode_group', 'globus_alias']
 
         log.debug(key)
-        lep, lep_sub, lep_dir = GlobusStorageLocation().local_endpoint
+        globus_alias = 'raw-ephys'
+        le = GlobusStorageLocation.local_endpoint(globus_alias)
+        lep, lep_sub, lep_dir = (le['endpoint'],
+                                 le['endpoint_subdir'],
+                                 le['endpoint_path'])
+
         log.info('local_endpoint: {}:{} -> {}'.format(lep, lep_sub, lep_dir))
 
         # get session related information needed for filenames/records
@@ -194,15 +224,17 @@ class ArchivedRawEphysTrial(dj.Imported):
 
         log.info('found files for key: {}'.format([f[1] for f in ffound]))
 
-        repname, rep, rep_sub = (GlobusStorageLocation() & key).fetch()[0]
+        repname, rep, rep_sub = (GlobusStorageLocation()
+                                 & {'globus_alias': globus_alias}).fetch(
+                                     limit=1)[0]
 
         gsm = self.get_gsm()
         gsm.activate_endpoint(lep)  # XXX: cache this / prevent duplicate RPC?
         gsm.activate_endpoint(rep)  # XXX: cache this / prevent duplicate RPC?
 
-        if not ArchivedRawEphysTrial & key:
+        if not self & key:
             log.info('ArchivedRawEphysTrial.insert1()')
-            ArchivedRawEphysTrial.insert1(key)
+            self.insert1({**key, 'globus_alias': globus_alias})
 
         ftmap = {'ap-30kHz': ArchivedRawEphysTrial.ArchivedApChannel,
                  'ap-30kHz-meta': ArchivedRawEphysTrial.ArchivedApMeta,
@@ -228,14 +260,18 @@ class ArchivedRawEphysTrial(dj.Imported):
 
                 ft_class.insert1(key)
 
-    def retrieve(self):
+    @classmethod
+    def retrieve(cls):
+        self = cls()
         for key in self:
             self.retrieve1(key)
 
-    def retrieve1(self, key):
+    @classmethod
+    def retrieve1(cls, key):
         '''
         retrieve related files for a given key
         '''
+        self = cls()
 
         # >>> list(key.keys())
         # ['subject_id', 'session', 'trial', 'electrode_group', 'globus_alia
@@ -288,3 +324,191 @@ class ArchivedRawEphysTrial(dj.Imported):
                     emsg = "couldn't transfer {} to {}".format(srcp, dstp)
                     log.error(emsg)
                     raise dj.DataJointError(emsg)
+
+
+@schema
+class ArchivedVideoFile(dj.Imported):
+    '''
+    ArchivedVideoFile storage
+
+    Note: video_file_name tracked here as trial->file map is non-deterministic
+
+    XXX:
+
+    Using key-source based loookup as is currently done,
+    may have trials for which there is no tracking,
+    so camera cannot be determined to do file lookup, thus videos are missed.
+    This could be resolved via schema adjustment, or file-traversal
+    based 'opportunistic' registration strategy, more TBD.
+    '''
+
+    definition = """
+    -> tracking.Tracking
+    ---
+    -> GlobusStorageLocation
+    video_file_name:                     varchar(1024)  # file name for trial
+    """
+
+    ingest = None  # ingest module reference
+    gsm = None  # for GlobusStorageManager
+
+    @classmethod
+    def get_ingest(cls):
+        '''
+        return tracking_ingest module
+        not imported globally to prevent ingest schema creation for client case
+        '''
+        log.debug('ArchivedVideoFile.get_ingest()')
+        if cls.ingest is None:
+            from .ingest import tracking as tracking_ingest
+            cls.ingest = tracking_ingest
+
+        return cls.ingest
+
+    def get_gsm(self):
+        log.debug('ArchivedVideoFile.get_gsm()')
+        if self.gsm is None:
+            self.gsm = GlobusStorageManager()
+
+        return self.gsm
+
+    def make(self, key):
+        '''
+        determine available files from local endpoint and publish
+        (create database records and transfer to globus)
+        '''
+        log.info('ArchivedVideoFile.make(): {}'.format(key))
+
+        globus_alias = 'raw-video'
+        le = GlobusStorageLocation.local_endpoint(globus_alias)
+        lep, lep_sub, lep_dir = (le['endpoint'],
+                                 le['endpoint_subdir'],
+                                 le['endpoint_path'])
+
+        log.info('local_endpoint: {}:{} -> {}'.format(lep, lep_sub, lep_dir))
+
+        h2o = (lab.WaterRestriction & key).fetch1('water_restriction_number')
+
+        trial = key['trial']
+        session = (experiment.Session & key).fetch1()
+        sdate = session['session_date']
+        sdate_iso = sdate.isoformat()  # YYYY-MM-DD
+        sdate_sml = "{}{:02d}{:02d}".format(sdate.year, sdate.month, sdate.day)
+
+        trk = (tracking.TrackingDevice
+               * (tracking.Tracking & key).proj()).fetch1()
+
+        tdev = trk['tracking_device']  # NOQA: notused
+        tpos = trk['tracking_position']
+
+        camtrial = '{}_{}_{}.txt'.format(h2o, sdate_sml, tpos)
+
+        tracking_ingest = self.get_ingest()
+        tpaths = tracking_ingest.TrackingDataPath.fetch(as_dict=True)
+
+        campath = None
+        tbase, vbase = None, None  # tracking, video session base paths
+        for p in tpaths:
+
+            tdat = p['tracking_data_path']
+
+            tbase = pathlib.Path(tdat, h2o, sdate_iso, 'tracking')
+            vbase = pathlib.Path(tdat, h2o, sdate_iso, 'video')
+
+            campath = tbase / camtrial
+
+            log.debug('trying camera position trial map: {}'.format(campath))
+
+            if campath.exists():  # XXX: uses 1st found
+                break
+
+            log.debug('tracking path {} n/a - skipping'.format(tbase))
+            campath = None
+
+        if not campath:
+            log.warning('tracking data not found for {} '.format(tpos))
+            return
+
+        tmap = tracking_ingest.TrackingIngest.load_campath(campath)
+
+        if trial not in tmap:
+            log.warning('nonexistant trial {}.. skipping'.format(trial))
+            return
+
+        repname, rep, rep_sub = (GlobusStorageLocation
+                                 & {'globus_alias': globus_alias}).fetch(
+                                     limit=1)[0]
+
+        vmatch = '{}_{}_{}-*'.format(h2o, tpos, tmap[trial])
+        vglob = list(vbase.glob(vmatch))
+
+        if len(vglob) != 1:  # XXX: error instead of warning?
+            log.warning('more than one video found: {}'.format(vglob))
+            return
+
+        vfile = vglob[0].name
+        gfile = '{}/{}/{}/{}'.format(h2o, sdate_iso, 'video', vfile)  # subpath
+        srcp = '{}:{}/{}'.format(lep, lep_sub, gfile)  # source path
+        dstp = '{}:{}/{}'.format(rep, rep_sub, gfile)  # dest path
+
+        gsm = self.get_gsm()
+        gsm.activate_endpoint(lep)  # XXX: cache this / prevent duplicate RPC?
+        gsm.activate_endpoint(rep)  # XXX: cache this / prevent duplicate RPC?
+
+        log.info('transferring {} to {}'.format(srcp, dstp))
+        if not gsm.cp(srcp, dstp):
+            emsg = "couldn't transfer {} to {}".format(srcp, dstp)
+            log.error(emsg)
+            raise dj.DataJointError(emsg)
+
+        self.insert1({**key, 'globus_alias': globus_alias,
+                      'video_file_name': vfile})
+
+    def retrieve(self):
+        for key in self:
+            self.retrieve1(key)
+
+    def retrieve1(self, key):
+        '''
+        retrieve related files for a given key
+        '''
+        log.debug(key)
+
+        # get remote file information
+        linfo = (self * GlobusStorageLocation & key).fetch1()
+
+        rep = linfo['globus_endpoint']
+        rep_sub = linfo['globus_path']
+        vfile = linfo['video_file_name']
+
+        # get session related information needed for filenames/records
+        sinfo = ((lab.WaterRestriction
+                  * lab.Subject.proj()
+                  * ((tracking.TrackingDevice
+                      * tracking.Tracking.proj()) & key)
+                  * experiment.Session
+                  * experiment.SessionTrial) & key).fetch1()
+
+        h2o = sinfo['water_restriction_number']
+        sdate_iso = sinfo['session_date'].isoformat()   # YYYY-MM-DD
+
+        # get local endpoint information
+        globus_alias = 'raw-video'
+        le = GlobusStorageLocation.local_endpoint(globus_alias)
+        lep, lep_sub = le['endpoint'], le['endpoint_subdir']
+
+        # build source/destination paths & initiate transfer
+        gfile = '{}/{}/{}/{}'.format(h2o, sdate_iso, 'video', vfile)
+
+        srcp = '{}:{}/{}'.format(rep, rep_sub, gfile)  # source path
+        dstp = '{}:{}/{}'.format(lep, lep_sub, gfile)  # dset path
+
+        gsm = self.get_gsm()
+        gsm.activate_endpoint(lep)  # XXX: cache this / prevent duplicate RPC?
+        gsm.activate_endpoint(rep)  # XXX: cache this / prevent duplicate RPC?
+
+        log.info('transferring {} to {}'.format(srcp, dstp))
+        if not gsm.cp(dstp, srcp):
+            emsg = "couldn't transfer {} to {}".format(srcp, dstp)
+            log.error(emsg)
+            raise dj.DataJointError(emsg)
