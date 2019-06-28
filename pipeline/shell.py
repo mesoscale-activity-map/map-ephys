@@ -117,7 +117,6 @@ def shell(*args):
 
 
 def ccfload(*args):
-    ccf.AnnotatedBrainSurface.load_matlab_mesh('Annotation_new_10_ds222_16bit_isosurf.mat')
     ccf.CCFAnnotation.load_ccf_r3_20um()
 
 

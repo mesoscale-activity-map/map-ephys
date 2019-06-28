@@ -162,8 +162,9 @@ class TrackingIngest(dj.Imported):
 
             log.info('... done.')
 
-    def load_campath(self, campath):
-        ''' load camera position-to-trial map '''
+    @staticmethod
+    def load_campath(campath):
+        ''' load camera position file-to-trial map '''
         log.debug("load_campath(): {}".format(campath))
         with open(campath, 'r') as f:
             return {int(k): int(v) for i in f
