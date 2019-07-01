@@ -162,7 +162,13 @@ class UnitCoarseBrainLocation(dj.Computed):
         brain_area, hemi, skull_ref = (experiment.BrainLocation & (ProbeInsertion.InsertionLocation & key)).fetch1(
             'brain_area', 'hemisphere', 'skull_reference')
 
-        brain_area_rules = (BrainAreaDepthCriteria & key).fetch(as_dict=True)
+        brain_area_rules = (BrainAreaDepthCriteria & key).fetch(as_dict=True, order_by='depth_upper')
+
+        # validate rule - non-overlapping depth criteria
+        if len(brain_area_rules) > 1:
+            upper, lower = zip(*[(v['depth_upper'], v['depth_lower']) for v in brain_area_rules])
+            if ((np.array(lower)[:-1] - np.array(upper)[1:]) >= 0).all():
+                raise Exception('Overlapping depth criteria')
 
         coarse_brain_area = None
         for rule in brain_area_rules:
