@@ -134,6 +134,58 @@ class Unit(dj.Imported):
 
 
 @schema
+class BrainAreaDepthCriteria(dj.Manual):
+    definition = """
+    -> ProbeInsertion
+    -> lab.BrainArea
+    ---
+    depth_upper: float  # (um)
+    depth_lower: float  # (um)
+    """
+
+
+@schema
+class UnitCoarseBrainLocation(dj.Computed):
+    definition = """
+    # Estimated unit position in the brain
+    -> Unit
+    ---
+    -> [nullable] experiment.BrainLocation
+    """
+
+    key_source = Unit & BrainAreaDepthCriteria
+
+    def make(self, key):
+        posy = (Unit & key).fetch1('unit_posy')
+
+        # get brain location info from this ProbeInsertion
+        brain_area, hemi, skull_ref = (experiment.BrainLocation & (ProbeInsertion.InsertionLocation & key)).fetch1(
+            'brain_area', 'hemisphere', 'skull_reference')
+
+        brain_area_rules = (BrainAreaDepthCriteria & key).fetch(as_dict=True, order_by='depth_upper')
+
+        # validate rule - non-overlapping depth criteria
+        if len(brain_area_rules) > 1:
+            upper, lower = zip(*[(v['depth_upper'], v['depth_lower']) for v in brain_area_rules])
+            if ((np.array(lower)[:-1] - np.array(upper)[1:]) >= 0).all():
+                raise Exception('Overlapping depth criteria')
+
+        coarse_brain_area = None
+        for rule in brain_area_rules:
+            if rule['depth_upper'] < posy <= rule['depth_lower']:
+                coarse_brain_area = rule['brain_area']
+                break
+
+        if coarse_brain_area is None:
+            self.insert1(key)
+        else:
+            coarse_brain_location = (experiment.BrainLocation & {'brain_area': coarse_brain_area,
+                                                                 'hemisphere': hemi,
+                                                                 'skull_reference': skull_ref}).fetch1('KEY')
+            self.insert1({**key, **coarse_brain_location})
+
+
+@schema
 class UnitComment(dj.Manual):
     definition = """
     -> Unit
