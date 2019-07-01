@@ -133,6 +133,50 @@ class Unit(dj.Imported):
         """
 
 
+class BrainAreaDepthCriteria(dj.Manual):
+    definition = """
+    -> ProbeInsertion
+    -> lab.BrainArea
+    ---
+    depth_upper: float  # (um)
+    depth_lower: float  # (um)
+    """
+
+
+class UnitCoarseBrainLocation(dj.Computed):
+    definition = """
+    # Estimated unit position in the brain
+    -> Unit
+    ---
+    -> [nullable] experiment.BrainLocation
+    """
+
+    key_source = Unit & BrainAreaDepthCriteria
+
+    def make(self, key):
+        posy = (Unit & key).fetch1('posy')
+
+        # get brain location info from this ProbeInsertion
+        brain_area, hemi, skull_ref = (experiment.BrainLocation & key).fetch1(
+            'brain_area', 'hemisphere', 'skull_reference')
+
+        brain_area_rules = (BrainAreaDepthCriteria & key).fetch(as_dict=True)
+
+        coarse_brain_area = None
+        for rule in brain_area_rules:
+            if np.logical_and(posy > rule['depth_upper'], posy <= rule['depth_lower']):
+                coarse_brain_area = rule['brain_area']
+                break
+
+        if coarse_brain_area is None:
+            self.insert1(key)
+        else:
+            coarse_brain_location = (experiment.BrainLocation & {'brain_area': coarse_brain_area,
+                                                                 'hemisphere': hemi,
+                                                                 'skull_reference': skull_ref}).fetch1('KEY')
+            self.insert1({**key, **coarse_brain_location})
+
+
 @schema
 class UnitComment(dj.Manual):
     definition = """
