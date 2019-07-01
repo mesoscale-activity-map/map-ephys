@@ -166,7 +166,7 @@ class UnitCoarseBrainLocation(dj.Computed):
 
         coarse_brain_area = None
         for rule in brain_area_rules:
-            if np.logical_and(posy > rule['depth_upper'], posy <= rule['depth_lower']):
+            if rule['depth_upper'] < posy <= rule['depth_lower']:
                 coarse_brain_area = rule['brain_area']
                 break
 
