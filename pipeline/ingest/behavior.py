@@ -378,11 +378,11 @@ class BehaviorIngest(dj.Imported):
 
             try:    
                 tkey['trial'] = i
-                tkey['trial_uid'] = i # Arseny has unique id to identify some trials
+                tkey['trial_uid'] = i  # Arseny has unique id to identify some trials
                 tkey['start_time'] = t.state_times[startindex][0]
                 tkey['stop_time'] = t.state_times[endindex][0]
             except IndexError:
-                log.warning('skipping trial {i}: error indexing {s}/{e} into {t}'.format(i=i,s=str(startindex), e=str(endindex), t=str(t.state_times)))
+                log.warning('skipping trial {i}: error indexing {s}/{e} into {t}'.format(i=i, s=str(startindex), e=str(endindex), t=str(t.state_times)))
                 continue
 
             log.debug('BehaviorIngest.make(): Trial().insert1')  # TODO msg
@@ -637,9 +637,11 @@ class BehaviorIngest(dj.Imported):
             if t.stim:
                 log.info('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
                 rows['photostim_trial'].append(tkey)
+                delay_period_idx = np.where(t.state_data == states['DelayPeriod'])[0][0]
                 rows['photostim_trial_event'].append(dict(
                     tkey, **photostims[t.stim], photostim_event_id=len(rows['photostim_trial_event']),
-                    photostim_event_time=tkey['start_time'], power=0.0))
+                    photostim_event_time=t.state_times[delay_period_idx],
+                    power=5.5))
 
             # end of trial loop.
 
