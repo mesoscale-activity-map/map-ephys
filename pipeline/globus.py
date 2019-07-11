@@ -159,6 +159,38 @@ class GlobusStorageManager:
         ep, path = self.ep_parts(endpoint_path)
         return self.xfer_client.operation_ls(ep, path=path)
 
+    def fts(self, ep_path, cb=None):
+        '''
+        traverse a heirarchy, calling 'cb' at each node.
+        '''
+
+        def _cb(ep, dirname, node):
+            ''' default 'print path' callback '''
+            if node['DATA_TYPE'] == 'file':
+                basename = node['name']
+            else:
+                basename = node['path']
+
+            print('{}:{}/{}'.format(ep, dirname, basename))
+
+        ep, path = self.ep_parts(ep_path)
+        cb = _cb if not cb else cb
+
+        stack = []
+        stack.append(path)
+
+        while len(stack):
+
+            u = stack.pop()
+            e = self.ls('{}:{}'.format(ep, u))
+
+            cb(ep, u, e)
+            for ei in e['DATA']:
+                if ei['type'] == 'dir':
+                    stack.append('{}/{}'.format(u, ei['name']))
+                else:
+                    cb(ep, u, ei)
+
     def mkdir(self, ep_path):
         ''' create a directory at ep_path '''
         ep, path = self.ep_parts(ep_path)
