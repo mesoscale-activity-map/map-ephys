@@ -30,13 +30,13 @@ log = logging.getLogger(__name__)
 #       also, could be separate issue from which is better.
 
 def find_path(path, fname):
-    print('finding', fname, 'in', path)
+    log.info('finding', fname, 'in', path)
 
     for root, dirs, files in os.walk(path):
-        print('RigDataFile.make(): entering {r}'.format(r=root))
+        log.info('RigDataFile.make(): entering {r}'.format(r=root))
         for f in files:
             if f == fname:
-                print('found', root, f)
+                log.info('found', root, f)
                 return Path(root) / Path(f)
 
     return None
@@ -56,7 +56,7 @@ def fix_session(session_key):
             filelist.append(found)
 
     if len(filelist) != len(files):
-        print("session {} has behavior files missing. skipping")
+        log.warning("session {} has behavior files missing. skipping")
         return
 
     #
@@ -81,6 +81,13 @@ def fix_session(session_key):
                   'state_data', 'event_data', 'event_times'))
 
     for f in filelist:
+
+        if os.stat(f).st_size/1024 < 1000:
+            log.info('skipping file {f} - too small'.format(f=f))
+            continue
+
+        log.debug('loading file {}'.format(f))
+
         mat = spio.loadmat(f, squeeze_me=True)
 
         SessionData = mat['SessionData'].flatten()
@@ -505,10 +512,15 @@ def fix_session(session_key):
 
         pe_k = {k: v for k, v in pev.items() if k in pe.primary_key}
 
-        (pe & pe_k)._update('photostim_event_time',
-                            pev['photostim_event_time'])
+        try:
+            (pe & pe_k)._update('photostim_event_time',
+                                pev['photostim_event_time'])
 
-        (pe & pe_k)._update('power', pev['power'])
+            (pe & pe_k)._update('power', pev['power'])
+        except Exception as e:
+            log.error('exception with pe_k : {}, pev: {} - {}'.format(
+                pe_k, pev, repr(e)))
+            raise
 
 
 def verify_session(session_key):
@@ -522,7 +534,7 @@ def fix_0001_photostim():
 
     fix_history.schema.connection.start_transaction()
 
-    fh = {'fix_name': 'fix_0001_photostim', 'fix_timestamp': datetime.now() }
+    fh = {'fix_name': 'fix_0001_photostim', 'fix_timestamp': datetime.now()}
 
     fix_history.FixHistory.insert1(fh)
 
@@ -538,4 +550,3 @@ def fix_0001_photostim():
 
 if __name__ == '__main__':
     fix_0001_photostim()
-
