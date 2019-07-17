@@ -1,4 +1,4 @@
-# map-ephys
+# map-ephys advanced user guide
 
 Mesoscale Activity Project Pipeline - Advanced User Guide
 
