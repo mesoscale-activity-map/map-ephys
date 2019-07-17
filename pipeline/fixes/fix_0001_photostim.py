@@ -127,7 +127,7 @@ def fix_session(session_key):
 
     # all files were internally invalid or size < 100k
     if not trials:
-        log.warning('skipping date {d}, no valid files'.format(d=date))
+        log.warning('skipping .. no valid files')
 
     #
     # Trial data seems valid; synthesize session id & add session record
