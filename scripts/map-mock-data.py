@@ -17,6 +17,8 @@ from pipeline import lab
 from pipeline import ccf
 from pipeline import experiment
 from pipeline import ephys
+from pipeline import histology
+from pipeline import tracking
 from pipeline import publication
 from pipeline import get_schema_name
 
@@ -31,23 +33,25 @@ def usage_exit():
 def dropdbs():
     print('dropping databases')
     for d in ['ingest_histology', 'ingest_ephys', 'ingest_tracking',
-              'ingest_behavior', 'publication', 'psth', 'tracking', 'ephys',
-              'experiment', 'lab', 'ccf']:
+              'ingest_behavior', 'publication', 'psth', 'tracking',
+              'histology', 'ephys', 'experiment', 'ccf', 'lab']:
         dname = get_schema_name(d)
         print('..  {} ({})'.format(d, dname))
         try:
             schema = dj.schema(dname)
             schema.drop(force=True)
-        except:
-            pass
+        except Exception as e:
+            print("....  couldn't drop database {} : {}".format(d, repr(e)))
 
 
 def mockdata():
     print('populating with mock data')
-    reload(ccf)
     reload(lab)
+    reload(ccf)
     reload(experiment)
     reload(ephys)
+    reload(histology)
+    reload(tracking)
     reload(publication)
     try:
         # TODO: these should be loaded in a more 'official' way
