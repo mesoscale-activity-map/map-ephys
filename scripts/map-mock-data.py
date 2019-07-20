@@ -635,9 +635,9 @@ def post_ephys(*args):
                 'session': 1,
                 'insertion_number': 1,
                 'brain_location_name': 'right_alm',
-                # ml_location:
-                # ap_location:
-                # dv_location:
+                'ml_location': 1500,
+                'ap_location': 2500,
+                'dv_location': 1668.9,
                 # ml_angle:
                 # ap_angle:
             }
@@ -648,9 +648,9 @@ def post_ephys(*args):
                 'session': 1,
                 'insertion_number': 1,
                 'brain_location_name': 'right_medulla',
-                # ml_location:
-                # ap_location:
-                # dv_location:
+                'ml_location': 1000,
+                'ap_location': 6500,
+                'dv_location': 5237.5,
                 # ml_angle:
                 # ap_angle:
             }
@@ -660,6 +660,9 @@ def post_ephys(*args):
 
         ephys.ProbeInsertion.InsertionLocation().insert1(
             rec, skip_duplicates=True)
+        ephys.ProbeInsertion.RecordingSystemSetup().insert1(
+            {**rec, 'sampling_rate': 30000}, ignore_extra_fields=True,
+            skip_duplicates=True)
 
 
 def preload(*args):
