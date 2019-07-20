@@ -17,6 +17,8 @@ from pipeline import lab
 from pipeline import ccf
 from pipeline import experiment
 from pipeline import ephys
+from pipeline import histology
+from pipeline import tracking
 from pipeline import publication
 from pipeline import get_schema_name
 
@@ -31,23 +33,25 @@ def usage_exit():
 def dropdbs():
     print('dropping databases')
     for d in ['ingest_histology', 'ingest_ephys', 'ingest_tracking',
-              'ingest_behavior', 'publication', 'psth', 'tracking', 'ephys',
-              'experiment', 'lab', 'ccf']:
+              'ingest_behavior', 'publication', 'psth', 'tracking',
+              'histology', 'ephys', 'experiment', 'ccf', 'lab']:
         dname = get_schema_name(d)
         print('..  {} ({})'.format(d, dname))
         try:
             schema = dj.schema(dname)
             schema.drop(force=True)
-        except:
-            pass
+        except Exception as e:
+            print("....  couldn't drop database {} : {}".format(d, repr(e)))
 
 
 def mockdata():
     print('populating with mock data')
-    reload(ccf)
     reload(lab)
+    reload(ccf)
     reload(experiment)
     reload(ephys)
+    reload(histology)
+    reload(tracking)
     reload(publication)
     try:
         # TODO: these should be loaded in a more 'official' way
@@ -631,9 +635,9 @@ def post_ephys(*args):
                 'session': 1,
                 'insertion_number': 1,
                 'brain_location_name': 'right_alm',
-                # ml_location:
-                # ap_location:
-                # dv_location:
+                'ml_location': 1500,
+                'ap_location': 2500,
+                'dv_location': 1668.9,
                 # ml_angle:
                 # ap_angle:
             }
@@ -644,9 +648,9 @@ def post_ephys(*args):
                 'session': 1,
                 'insertion_number': 1,
                 'brain_location_name': 'right_medulla',
-                # ml_location:
-                # ap_location:
-                # dv_location:
+                'ml_location': 1000,
+                'ap_location': 6500,
+                'dv_location': 5237.5,
                 # ml_angle:
                 # ap_angle:
             }
@@ -656,6 +660,9 @@ def post_ephys(*args):
 
         ephys.ProbeInsertion.InsertionLocation().insert1(
             rec, skip_duplicates=True)
+        ephys.ProbeInsertion.RecordingSystemSetup().insert1(
+            {**rec, 'sampling_rate': 30000}, ignore_extra_fields=True,
+            skip_duplicates=True)
 
 
 def preload(*args):
