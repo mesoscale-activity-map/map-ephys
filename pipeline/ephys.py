@@ -36,7 +36,7 @@ class ProbeInsertion(dj.Manual):
         definition = """
         -> master
         ---
-        sampling_rate: float  # (Hz)
+        sampling_rate: int  # (Hz)
         """
 
 
