@@ -20,15 +20,12 @@ Notes:
     if include, this means .mat cell arrays will vary by shape and need
     handling locally.
 
-  - touch times: n/a - replace with?
-  - whisker angle: n/a - replace with?
-  - whisker distance to pole: n/a - replace with?
-  - pole on / off times: n/a - replace with?
-  - photostim starts at start of delay period.
-  - photostim model support:
-    a) we don't model on/off but start(variable w/r/t go)/duration(fixed)
-    b) start is modeled per trial
-    b) power is fixed per session
+  - Photostim Data (task_stimulation):
+
+    - Experimental data doesn't contain actual start/end/power times;
+      Start is captured per trial with power/duration modelled as session
+      parameters. This implies that power+off time in export data are
+      synthetic.
 
 '''
 
