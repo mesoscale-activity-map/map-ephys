@@ -140,6 +140,7 @@ class EphysIngest(dj.Imported):
 
             log.info('inserting probe insertion')
             ephys.ProbeInsertion.insert1(dict(ekey, probe=probe_part_no, electrode_config_name=electrode_config_name))
+            ephys.ProbeInsertion.RecordingSystemSetup.insert1(dict(ekey, sampling_rate=30000))
 
             #
             # Extract spike data

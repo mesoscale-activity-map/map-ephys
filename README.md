@@ -79,7 +79,7 @@ DataJoint tables within each schema and their relationship to each other.
 
 This portion of the pipeline will be used to record annotation information in the Allen Institute's [Common Coordinate Framework](http://help.brain-map.org/download/attachments/2818169/MouseCCF.pdf)
 
-![CCF ERD](pipeline/ccf.png)
+![CCF ERD](images/ccf.png)
 
 ### EPhys
 
@@ -87,14 +87,14 @@ This portion of the pipeline is used to store / process Electrophysiology
 related records such as electrode type and position information, detected for
 the MAP recordings.
 
-![ephys ERD](pipeline/ephys.png)
+![ephys ERD](images/ephys.png)
 
 ### Experiment
 
 This portion of the pipeline is used to store / process experiment related
 records such as task, event, and experiment session for for the MAP experiment.
 
-![experiment ERD](pipeline/experiment.png)
+![experiment ERD](images/experiment.png)
 
 ### Lab
 
@@ -105,7 +105,7 @@ Lab](https://github.com/mesoscale-activity-map/map-lab) schema; in the future
 the map-ephys data kept here will be merged into a single map-lab database
 shared between various experiments in the lab.
 
-![pipeline ERD](pipeline/lab.png)
+![pipeline ERD](images/lab.png)
 
 ## Publication
 
@@ -114,7 +114,7 @@ of raw data as published to the petrel service (see [Raw Recording File
 Publication and Retrieval](#raw-recording-file-publication-and-retrieval),
 below)
 
-![publication ERD](pipeline/publication.png)
+![publication ERD](images/publication.png)
 
 ## Mapshell
 
