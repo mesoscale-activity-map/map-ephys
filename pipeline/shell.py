@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 
 def usage_exit():
-    print("usage: {p} [{c}]"
+    print("usage: {p} [{c}] <args>"
           .format(p=os.path.basename(sys.argv[0]),
                   c='|'.join(list(actions.keys()))))
     sys.exit(0)
@@ -114,7 +114,12 @@ def publish(*args):
 
 
 def export_recording(*args):
-    ik = eval(args[0])  # "{k: v}" -> dict(k=v)
+    if not args:
+        print("usage: {} export-recording \"probe key\"\n"
+              "  where \"probe key\" specifies a ProbeInsertion")
+        return
+
+    ik = eval(args[0])  # "{k: v}" -> {k: v}
     fn = args[1] if len(args) > 1 else None
     export.export_recording(ik, fn)
 
