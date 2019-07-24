@@ -3,6 +3,8 @@
 
 import math
 
+from collections import defaultdict
+
 import numpy as np
 import scipy.io as scio
 
@@ -20,15 +22,12 @@ Notes:
     if include, this means .mat cell arrays will vary by shape and need
     handling locally.
 
-  - touch times: n/a - replace with?
-  - whisker angle: n/a - replace with?
-  - whisker distance to pole: n/a - replace with?
-  - pole on / off times: n/a - replace with?
-  - photostim starts at start of delay period.
-  - photostim model support:
-    a) we don't model on/off but start(variable w/r/t go)/duration(fixed)
-    b) start is modeled per trial
-    b) power is fixed per session
+  - Photostim Data (task_stimulation):
+
+    - Experimental data doesn't contain actual start/end/power times;
+      Start is captured per trial with power/duration modelled as session
+      parameters. This implies that power+off time in export data are
+      synthetic.
 
 '''
 
@@ -79,11 +78,10 @@ def export_recording(insert_key, filepath=None):
     insertion = (ephys.ProbeInsertion.InsertionLocation & insert_key).fetch1()
     units = (ephys.Unit & insert_key).fetch()
 
-    # unit_trial = (ephys.Unit.UnitTrial & insert_key).fetch()  # trash?
+    trial_spikes = (ephys.TrialSpikes & insert_key).fetch(order_by='trial asc')
 
-    trial_spikes = (ephys.TrialSpikes & insert_key).fetch()
+    behav = (experiment.BehaviorTrial & insert_key).fetch(order_by='trial asc')
 
-    behav = (experiment.BehaviorTrial & insert_key).fetch()
     trials = behav['trial']
 
     exports = ['neuron_single_units', 'neuron_unit_info', 'behavior_report',
@@ -99,20 +97,25 @@ def export_recording(insert_key, filepath=None):
 
     # [[u0t0.spikes, ..., u0tN.spikes], ..., [uNt0.spikes, ..., uNtN.spikes]]
 
-    edata['neuron_single_units'] = np.array([
-        trial_spikes[np.where(trial_spikes['unit'] == u)]
-        for u in units['unit']])[0]['spike_times']
+    _su = defaultdict(list)
+
+    ts = trial_spikes[['unit', 'trial', 'spike_times']]
+
+    for u, t in ((u, t) for t in trials for u in units['unit']):
+        ud = ts[np.logical_and(ts['unit'] == u, ts['trial'] == t)]
+        if ud:
+            _su[u].append(ud['spike_times'])
+        else:
+            _su[u].append(np.array([]))
+
+    # FIXME: yields (unit, trials) shape rather than (unit (trials))
+    edata['neuron_single_units'] = np.array(
+        [np.array(_su[i]) for i in sorted(_su.keys())])
 
     # neuron_unit_info
     # ----------------
     #
     # [[depth_in_um, cell_type, recording_location] ...]
-
-
-    # from code import interact
-    # from collections import ChainMap
-    # interact('export_session',
-    #          local=dict(ChainMap(locals(), globals())))
 
     dv = insertion['dv_location']
     loc = insertion['brain_location_name']
