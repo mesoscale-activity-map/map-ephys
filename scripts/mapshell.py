@@ -14,4 +14,4 @@ if __name__ == '__main__':
     shell.logsetup(os.environ.get('MAP_LOGLEVEL', 'INFO'))
 
     action = sys.argv[1]
-    shell.actions[action](sys.argv[2:])
+    shell.actions[action](*sys.argv[2:])

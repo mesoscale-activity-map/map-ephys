@@ -36,7 +36,7 @@ class ProbeInsertion(dj.Manual):
         definition = """
         -> master
         ---
-        sampling_rate: float  # (Hz)
+        sampling_rate: int  # (Hz)
         """
 
 
@@ -96,8 +96,10 @@ class ClusteringMethod(dj.Lookup):
     definition = """
     clustering_method: varchar(16)
     """
+    # jrclust is the version Dave uses (it's actually jrclust_v3)
+    # jrclust_v4 is the version Susu uses
 
-    contents = zip(['jrclust', 'kilosort'])
+    contents = zip(['jrclust', 'kilosort', 'jrclust_v4'])
 
 
 @schema

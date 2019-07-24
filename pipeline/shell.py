@@ -15,6 +15,8 @@ from pipeline import histology
 from pipeline import tracking
 from pipeline import psth
 from pipeline import publication
+from pipeline import export
+
 
 pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth,
                     publication]
@@ -23,7 +25,7 @@ log = logging.getLogger(__name__)
 
 
 def usage_exit():
-    print("usage: {p} [{c}]"
+    print("usage: {p} [{c}] <args>"
           .format(p=os.path.basename(sys.argv[0]),
                   c='|'.join(list(actions.keys()))))
     sys.exit(0)
@@ -74,6 +76,9 @@ def populate_psth(*args):
     log.info('ephys.UnitStat.populate()')
     ephys.UnitStat.populate()
 
+    log.info('ephys.UnitCellType.populate()')
+    ephys.UnitCellType.populate()
+
     log.info('psth.UnitPsth.populate()')
     psth.UnitPsth.populate()
 
@@ -108,6 +113,17 @@ def publish(*args):
     publication.ArchivedRawEphysTrial.populate()
 
 
+def export_recording(*args):
+    if not args:
+        print("usage: {} export-recording \"probe key\"\n"
+              "  where \"probe key\" specifies a ProbeInsertion")
+        return
+
+    ik = eval(args[0])  # "{k: v}" -> {k: v}
+    fn = args[1] if len(args) > 1 else None
+    export.export_recording(ik, fn)
+
+
 def shell(*args):
     interact('map shell.\n\nschema modules:\n\n  - {m}\n'
              .format(m='\n  - '.join(
@@ -135,6 +151,7 @@ actions = {
     'ingest-histology': ingest_histology,
     'populate-psth': populate_psth,
     'publish': publish,
+    'export-recording': export_recording,
     'shell': shell,
     'erd': erd,
     'ccfload': ccfload,
