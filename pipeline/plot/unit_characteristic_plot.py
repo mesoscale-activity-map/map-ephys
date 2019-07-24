@@ -11,9 +11,10 @@ from pipeline import experiment, ephys, psth
 
 m_scale = 1200
 
-def plot_clustering_quality(probe_insert_key):
+def plot_clustering_quality(probe_insertion):
+    probe_insertion = probe_insertion.proj()
     amp, snr, spk_rate, isi_violation = (ephys.Unit * ephys.UnitStat
-                                         * ephys.ProbeInsertion.InsertionLocation & probe_insert_key).fetch(
+                                         * ephys.ProbeInsertion.InsertionLocation & probe_insertion).fetch(
         'unit_amp', 'unit_snr', 'avg_firing_rate', 'isi_violation')
 
     metrics = {'amp': amp,
@@ -38,10 +39,11 @@ def plot_clustering_quality(probe_insert_key):
         ax.spines['top'].set_visible(False)
 
 
-def plot_unit_characteristic(probe_insert_key, axs=None):
+def plot_unit_characteristic(probe_insertion, axs=None):
+    probe_insertion = probe_insertion.proj()
     amp, snr, spk_rate, x, y, insertion_depth = (
             ephys.Unit * ephys.ProbeInsertion.InsertionLocation * ephys.UnitStat
-            & probe_insert_key & 'unit_quality != "all"').fetch(
+            & probe_insertion & 'unit_quality != "all"').fetch(
         'unit_amp', 'unit_snr', 'avg_firing_rate', 'unit_posx', 'unit_posy', 'dv_location')
 
     insertion_depth = np.where(np.isnan(insertion_depth), 0, insertion_depth)
@@ -72,11 +74,12 @@ def plot_unit_characteristic(probe_insert_key, axs=None):
         ax.set_xlim((-10, 60))
 
 
-def plot_unit_selectivity(probe_insert_key, axs=None):
+def plot_unit_selectivity(probe_insertion, axs=None):
+    probe_insertion = probe_insertion.proj()
     attr_names = ['unit', 'period', 'period_selectivity', 'contra_firing_rate',
                        'ipsi_firing_rate', 'unit_posx', 'unit_posy', 'dv_location']
     selective_units = (psth.PeriodSelectivity * ephys.Unit * ephys.ProbeInsertion.InsertionLocation
-                       * experiment.Period & probe_insert_key & 'period_selectivity != "non-selective"').fetch(*attr_names)
+                       * experiment.Period & probe_insertion & 'period_selectivity != "non-selective"').fetch(*attr_names)
     selective_units = pd.DataFrame(selective_units).T
     selective_units.columns = attr_names
     selective_units.period_selectivity.astype('category')
@@ -122,10 +125,11 @@ def plot_unit_selectivity(probe_insert_key, axs=None):
         ax.spines['top'].set_visible(False)
         ax.set_title(f'{title}\n% contra: {contra_p:.2f}\n% ipsi: {100-contra_p:.2f}')
         ax.set_xlim((-10, 60))
-        ax.set_ylim((0, ymax))
+        # ax.set_ylim((0, ymax))
 
 
-def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
+def plot_unit_bilateral_photostim_effect(probe_insertion, axs=None):
+    probe_insertion = probe_insertion.proj()
     cue_onset = (experiment.Period & 'period = "delay"').fetch1('period_start')
 
     no_stim_cond = (psth.TrialCondition
@@ -139,10 +143,10 @@ def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
     # get photostim duration
     stim_durs = np.unique((experiment.Photostim & experiment.PhotostimEvent
                            * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')
-                           & probe_insert_key).fetch('duration'))
+                           & probe_insertion).fetch('duration'))
     stim_dur = _extract_one_stim_dur(stim_durs)
 
-    units = ephys.Unit & probe_insert_key & 'unit_quality != "all"'
+    units = ephys.Unit & probe_insertion & 'unit_quality != "all"'
 
     metrics = pd.DataFrame(columns=['unit', 'x', 'y', 'frate_change'])
 
@@ -184,7 +188,8 @@ def plot_unit_bilateral_photostim_effect(probe_insert_key, axs=None):
     axs.set_xlim((-10, 60))
 
 
-def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
+def plot_stacked_contra_ipsi_psth(units, axs=None):
+    units = units.proj()
 
     if axs is None:
         fig, axs = plt.subplots(1, 2, figsize=(20, 20))
@@ -194,8 +199,7 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
                      & 'period in ("sample", "delay", "response")').fetch(
                          'period_start')
 
-    hemi = (ephys.ProbeInsertion.InsertionLocation
-            * experiment.BrainLocation & probe_insert_key).fetch1('hemisphere')
+    hemi = _get_units_hemisphere(units)
 
     conds_i = (psth.TrialCondition
                & {'trial_condition_name':
@@ -206,10 +210,10 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
                   'good_noearlylick_right_hit' if hemi == 'left' else 'good_noearlylick_left_hit'}).fetch1('KEY')
 
     sel_i = (ephys.Unit * psth.UnitSelectivity
-             & 'unit_selectivity = "ipsi-selective"' & probe_insert_key)
+             & 'unit_selectivity = "ipsi-selective"' & units)
 
     sel_c = (ephys.Unit * psth.UnitSelectivity
-             & 'unit_selectivity = "contra-selective"' & probe_insert_key)
+             & 'unit_selectivity = "contra-selective"' & units)
 
     # ipsi selective ipsi trials
     psth_is_it = (psth.UnitPsth * sel_i.proj('unit_posy') & conds_i).fetch(order_by='unit_posy desc')
@@ -238,7 +242,8 @@ def plot_stacked_contra_ipsi_psth(probe_insert_key, axs=None):
     axs[1].set_xlabel('Time to go (s)')
 
 
-def plot_avg_contra_ipsi_psth(probe_insert_key, axs=None):
+def plot_avg_contra_ipsi_psth(units, axs=None):
+    units = units.proj()
 
     if axs is None:
         fig, axs = plt.subplots(1, 2, figsize=(16, 6))
@@ -248,10 +253,9 @@ def plot_avg_contra_ipsi_psth(probe_insert_key, axs=None):
                      & 'period in ("sample", "delay", "response")').fetch(
                          'period_start')
 
-    good_unit = ephys.Unit & 'unit_quality != "all"'
+    hemi = _get_units_hemisphere(units)
 
-    hemi = (ephys.ProbeInsertion.InsertionLocation
-            * experiment.BrainLocation & probe_insert_key).fetch1('hemisphere')
+    good_unit = ephys.Unit & 'unit_quality != "all"'
 
     conds_i = (psth.TrialCondition
                & {'trial_condition_name':
@@ -262,10 +266,10 @@ def plot_avg_contra_ipsi_psth(probe_insert_key, axs=None):
                   'good_noearlylick_right_hit' if hemi == 'left' else 'good_noearlylick_left_hit'}).fetch('KEY')
 
     sel_i = (ephys.Unit * psth.UnitSelectivity
-             & 'unit_selectivity = "ipsi-selective"' & probe_insert_key)
+             & 'unit_selectivity = "ipsi-selective"' & units)
 
     sel_c = (ephys.Unit * psth.UnitSelectivity
-             & 'unit_selectivity = "contra-selective"' & probe_insert_key)
+             & 'unit_selectivity = "contra-selective"' & units)
 
     psth_is_it = (((psth.UnitPsth & conds_i)
                    * ephys.Unit.proj('unit_posy'))
@@ -297,41 +301,42 @@ def plot_avg_contra_ipsi_psth(probe_insert_key, axs=None):
         ax.set_ylim((0, ymax))
 
 
-def plot_psth_bilateral_photostim_effect(probe_insert_key, axs=None):
+def plot_psth_bilateral_photostim_effect(units, axs=None):
+    units = units.proj()
+
     if axs is None:
         fig, axs = plt.subplots(1, 2, figsize=(16, 6))
     assert axs.size == 2
 
-    insert = (ephys.ProbeInsertion.InsertionLocation
-              * experiment.BrainLocation & probe_insert_key).fetch1()
+    hemi = _get_units_hemisphere(units)
 
     period_starts = (experiment.Period
                      & 'period in ("sample", "delay", "response")').fetch(
                          'period_start')
 
-    psth_s_l = (psth.UnitPsth * psth.TrialCondition & probe_insert_key
+    psth_s_l = (psth.UnitPsth * psth.TrialCondition & units
                 & {'trial_condition_name':
                    'all_noearlylick_both_alm_stim_left'}).fetch('unit_psth')
 
-    psth_n_l = (psth.UnitPsth * psth.TrialCondition & probe_insert_key
+    psth_n_l = (psth.UnitPsth * psth.TrialCondition & units
                 & {'trial_condition_name':
                    'all_noearlylick_both_alm_nostim_left'}).fetch('unit_psth')
 
-    psth_s_r = (psth.UnitPsth * psth.TrialCondition & probe_insert_key
+    psth_s_r = (psth.UnitPsth * psth.TrialCondition & units
                 & {'trial_condition_name':
                    'all_noearlylick_both_alm_stim_right'}).fetch('unit_psth')
 
-    psth_n_r = (psth.UnitPsth * psth.TrialCondition & probe_insert_key
+    psth_n_r = (psth.UnitPsth * psth.TrialCondition & units
                 & {'trial_condition_name':
                    'all_noearlylick_both_alm_nostim_right'}).fetch('unit_psth')
 
     # get photostim duration
     stim_durs = np.unique((experiment.Photostim & experiment.PhotostimEvent
                            * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')
-                           & probe_insert_key).fetch('duration'))
+                           & units).fetch('duration'))
     stim_dur = _extract_one_stim_dur(stim_durs)
 
-    if insert['hemisphere'] == 'left':
+    if hemi == 'left':
         psth_s_i = psth_s_l
         psth_n_i = psth_n_l
         psth_s_c = psth_s_r
@@ -527,6 +532,13 @@ def _extract_one_stim_dur(stim_durs):
         return float(min(stim_durs))
     else:
         return float(stim_durs[0]) if len(stim_durs) == 1 and stim_durs[0] else default_stim_dur
+
+def _get_units_hemisphere(units):
+    hemispheres = np.unique((ephys.ProbeInsertion.InsertionLocation
+                             * experiment.BrainLocation & units).fetch('hemisphere'))
+    if len(hemispheres) > 1:
+        raise Exception('Error! The specified units belongs to both hemispheres...')
+    return hemispheres[0]
 
 
 def jointplot_w_hue(data, x, y, hue=None, colormap=None,
