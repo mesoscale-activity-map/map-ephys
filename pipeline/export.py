@@ -104,20 +104,22 @@ def export_recording(insert_key, filepath=None):
     for u, t in ((u, t) for t in trials for u in units['unit']):
         ud = ts[np.logical_and(ts['unit'] == u, ts['trial'] == t)]
         if ud:
-            _su[u].append(ud['spike_times'])
+            _su[u].append(ud['spike_times'][0])
         else:
             _su[u].append(np.array([]))
 
-    # FIXME: yields (unit, trials) shape rather than (unit (trials))
-    edata['neuron_single_units'] = np.array(
-        [np.array(_su[i]) for i in sorted(_su.keys())])
+    ndarray_object = np.empty((len(_su.keys()), 1), dtype=np.object)
+    for idx, i in enumerate(sorted(_su.keys())):
+        ndarray_object[idx, 0] = np.array(_su[i], ndmin=2).T
+
+    edata['neuron_single_units'] = ndarray_object
 
     # neuron_unit_info
     # ----------------
     #
     # [[depth_in_um, cell_type, recording_location] ...]
 
-    dv = insertion['dv_location']
+    dv = insertion['dv_location'] if insertion['dv_location'] else np.nan
     loc = insertion['brain_location_name']
 
     types = (ephys.UnitCellType & insert_key).fetch()
