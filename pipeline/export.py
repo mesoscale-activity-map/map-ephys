@@ -130,8 +130,9 @@ def export_recording(insert_key, filepath=None):
 
     _ui = []
     for u in units:
+
         if u['unit'] in types['unit']:
-            typ = types[np.where(types['unit'] == units[0]['unit'])][0]
+            typ = types[np.where(types['unit'] == u['unit'])][0]
             _ui.append([u['unit_posy'] + dv, typ['cell_type'], loc])
         else:
             _ui.append([u['unit_posy'] + dv, 'unknown', loc])
@@ -259,7 +260,7 @@ def export_recording(insert_key, filepath=None):
     # savemat
     # -------
 
-    print('... saving to {}: filepath', end='')
+    print('... saving to {}:'.format(filepath), end='')
 
     scio.savemat(filepath, edata)
 
