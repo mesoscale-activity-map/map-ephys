@@ -215,21 +215,6 @@ def plot_windowed_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), w_size=0.01, bi
     tvec = np.linspace(xlim[0], xlim[1], insta_phase.shape[1])
     windows = np.arange(xlim[0], xlim[1], w_size)
 
-    #### temporary plot for debug only
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
-    for k, ph in enumerate(insta_phase[:20]):
-        ax1.plot(tvec, 10*k + ph, '.')
-        ax1.axhline(y=10*k, linestyle='--', color='k', linewidth=0.75)
-    for x in windows:
-        ax1.axvline(x=x, linestyle='--', color='k', linewidth=0.75)
-    ax1.axvline(x=0, linestyle='--', color='k')
-    fig.show()
-
-    ax2.hist(insta_phase[:15, np.where(np.logical_and(
-        tvec >= -0.02, tvec <= 0.0))[0]].flatten(), 40)
-    fig.show()
-    ####
-
     # plot
     col_counts = 8
     row_counts = int(np.ceil(len(windows) / col_counts))
@@ -254,34 +239,21 @@ def plot_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), bin_counts=20):
     l_trial_trk = trks & 'trial_instruction="left"' & 'early_lick="no early"'
     r_trial_trk = trks & 'trial_instruction="right"' & 'early_lick="no early"'
 
-    def get_trial_track(trial_tracks):
-        for tr_id, jaw, trial_instruct, go_time in zip(
-                *(trial_tracks * experiment.TrialEvent & 'trial_event_type="go"').fetch(
-                    'trial', 'jaw_y', 'trial_instruction', 'trial_event_time')):
+    insta_phases = []
+    for trial_trks in (l_trial_trk, r_trial_trk):
+        tr_ids, jaws, trial_instructs, go_times = (trial_trks * experiment.TrialEvent & 'trial_event_type="go"').fetch(
+            'trial', 'jaw_y', 'trial_instruction', 'trial_event_time')
 
-            first_lick_time = (experiment.ActionEvent & session_key
-                               & {'trial': tr_id} & {'action_event_type': f'{trial_instruct} lick'}).fetch(
-                    'action_event_time', order_by='action_event_time', limit=1)
+        flattened_jaws = np.hstack(jaws)
+        jsize = np.cumsum([0] + [j.size for j in jaws])
+        _, phase = compute_insta_phase_amp(flattened_jaws, tracking_fs, freq_band = (5, 15))
+        stacked_insta_phase = [phase[start: end] for start, end in zip(jsize[:-1], jsize[1:])]
 
-            align_time = first_lick_time[0] if first_lick_time.size > 0 else go_time
+        # realign and segment - return trials x times
+        insta_phases.append(np.vstack(get_trial_track(session_key, tr_ids, stacked_insta_phase,
+                                                      trial_instructs, go_times, tracking_fs, xlim)))
 
-            t = np.arange(len(jaw)) / tracking_fs - float(align_time)
-            segmented_jaw = jaw[np.logical_and(t >= xlim[0], t <= xlim[1])]
-            if len(segmented_jaw) == (xlim[1] - xlim[0]) * tracking_fs:
-                yield segmented_jaw
-
-    l_jaw_trackings = np.vstack(get_trial_track(l_trial_trk))  # trials x times
-    r_jaw_trackings = np.vstack(get_trial_track(r_trial_trk))  # trials x times
-
-    b, a = signal.butter(5, (5, 15), btype='band', fs=tracking_fs)
-
-    filt_l_jaw_trackings = signal.filtfilt(b, a, l_jaw_trackings, axis=1)
-    l_insta_phase = np.angle(signal.hilbert(filt_l_jaw_trackings, axis=1))
-    # l_insta_phase = np.degrees(l_insta_phase) % 360  # convert to degree [0, 360]
-
-    filt_r_jaw_trackings = signal.filtfilt(b, a, r_jaw_trackings, axis=1)
-    r_insta_phase = np.angle(signal.hilbert(filt_r_jaw_trackings, axis=1))
-    # r_insta_phase = np.degrees(r_insta_phase) % 360  # convert to degree [0, 360]
+    l_insta_phase, r_insta_phase = insta_phases
 
     fig, axs = plt.subplots(1, 2, figsize=(12, 8), subplot_kw=dict(polar=True))
     fig.subplots_adjust(wspace=0.6)
