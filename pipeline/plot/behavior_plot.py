@@ -197,7 +197,7 @@ def plot_trial_jaw_movement(trial_key):
 
 def plot_windowed_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), w_size=0.01, bin_counts=20):
     trks = (tracking.Tracking.JawTracking * experiment.BehaviorTrial
-            & session_key & experiment.TrialEvent & 'trial_instruction="left"')
+            & session_key & experiment.TrialEvent)
     tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & session_key).fetch1('sampling_rate'))
 
     tr_ids, jaws, trial_instructs, go_times = (trks * experiment.TrialEvent & 'trial_event_type="go"').fetch(
@@ -305,8 +305,7 @@ def get_trial_track(session_key, tr_ids, data, trial_instructs, go_times, fs, xl
 
         t = np.arange(len(jaw)) / fs - float(align_time)
         segmented_jaw = jaw[np.logical_and(t >= xlim[0], t <= xlim[1])]
-        if len(segmented_jaw) == (xlim[1] - xlim[0]) * fs:
-            yield segmented_jaw
+        yield segmented_jaw[:int(np.floor((xlim[1] - xlim[0]) * fs)-1)]
 
 
 def compute_insta_phase_amp(data, fs, freq_band=(5, 15)):
