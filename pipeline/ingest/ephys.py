@@ -301,7 +301,7 @@ class EphysIngest(dj.Imported):
 
         # build spike arrays
         unit_spikes = np.array([spikes[np.where(units == u)]
-                                for u in set(units)])
+                                for u in set(units)]) - trial_start[0]
 
         unit_trial_spikes = np.array(
             [[trial_spikes[t][np.where(trial_units[t] == u)]
@@ -309,9 +309,6 @@ class EphysIngest(dj.Imported):
 
         # create probe insertion records
         self._gen_probe_insert(sinfo, probe)
-
-        # XXX: why do we have build_unit_insert previously?
-        # ... skipped here
 
         # TODO: electrode config should be passed back above & used here
 
@@ -390,7 +387,6 @@ class EphysIngest(dj.Imported):
         # from code import interact
         # from collections import ChainMap
         # interact('_load_v3', local=dict(ChainMap(locals(), globals())))
-
 
     def _load_v4(self, sinfo, dpath, fpath):
         '''
