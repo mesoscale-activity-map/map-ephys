@@ -295,6 +295,9 @@ def get_trial_track(session_key, tr_ids, data, trial_instructs, go_times, fs, xl
             or 'go cue' if no lick found
     Segment based on 'xlim'
     """
+
+    d_length = int(np.floor((xlim[1] - xlim[0]) * fs) - 1)
+
     for tr_id, jaw, trial_instruct, go_time in zip(tr_ids, data, trial_instructs, go_times):
 
         first_lick_time = (experiment.ActionEvent & session_key
@@ -305,7 +308,8 @@ def get_trial_track(session_key, tr_ids, data, trial_instructs, go_times, fs, xl
 
         t = np.arange(len(jaw)) / fs - float(align_time)
         segmented_jaw = jaw[np.logical_and(t >= xlim[0], t <= xlim[1])]
-        yield segmented_jaw[:int(np.floor((xlim[1] - xlim[0]) * fs)-1)]
+        if len(segmented_jaw) >= d_length:
+            yield segmented_jaw[:d_length]
 
 
 def compute_insta_phase_amp(data, fs, freq_band=(5, 15)):
