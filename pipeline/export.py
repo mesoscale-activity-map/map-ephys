@@ -96,6 +96,7 @@ def export_recording(insert_key, filepath=None):
     # -------------------
 
     # [[u0t0.spikes, ..., u0tN.spikes], ..., [uNt0.spikes, ..., uNtN.spikes]]
+    print('... neuron_single_units:', end='')
 
     _su = defaultdict(list)
 
@@ -114,10 +115,13 @@ def export_recording(insert_key, filepath=None):
 
     edata['neuron_single_units'] = ndarray_object
 
+    print('ok.')
+
     # neuron_unit_info
     # ----------------
     #
     # [[depth_in_um, cell_type, recording_location] ...]
+    print('... neuron_unit_info:', end='')
 
     dv = insertion['dv_location'] if insertion['dv_location'] else np.nan
     loc = insertion['brain_location_name']
@@ -126,27 +130,36 @@ def export_recording(insert_key, filepath=None):
 
     _ui = []
     for u in units:
+
         if u['unit'] in types['unit']:
-            typ = types[np.where(types['unit'] == units[0]['unit'])][0]
+            typ = types[np.where(types['unit'] == u['unit'])][0]
             _ui.append([u['unit_posy'] + dv, typ['cell_type'], loc])
         else:
             _ui.append([u['unit_posy'] + dv, 'unknown', loc])
 
     edata['neuron_unit_info'] = np.array(_ui, dtype='O')
 
+    print('ok.')
+
     # behavior_report
     # ---------------
+    print('... behavior_report:', end='')
 
     behavior_report_map = {'hit': 1, 'miss': 0, 'ignore': 0}  # XXX: ignore ok?
     edata['behavior_report'] = np.array([
         behavior_report_map[i] for i in behav['outcome']])
 
+    print('ok.')
+
     # behavior_early_report
     # ---------------------
+    print('... behavior_early_report:', end='')
 
     early_report_map = {'early': 1, 'no early': 0}
     edata['behavior_early_report'] = np.array([
         early_report_map[i] for i in behav['early_lick']])
+
+    print('ok.')
 
     # behavior_touch_times
     # --------------------
@@ -155,6 +168,7 @@ def export_recording(insert_key, filepath=None):
 
     # behavior_lick_times
     # -------------------
+    print('... behavior_lick_times:', end='')
 
     _lt = []
     licks = (experiment.ActionEvent() & insert_key
@@ -171,15 +185,21 @@ def export_recording(insert_key, filepath=None):
     behavior_whisker_angle = None  # NOQA no data
     behavior_whisker_dist2pol = None  # NOQA no data
 
+    print('ok.')
+
     # task_trial_type
     # ---------------
+    print('... task_trial_type:', end='')
 
     task_trial_type_map = {'left': 'l', 'right': 'r'}
     edata['task_trial_type'] = np.array([
         task_trial_type_map[i] for i in behav['trial_instruction']], dtype='O')
 
+    print('ok.')
+
     # task_stimulation
     # ----------------
+    print('... task_stimulation:', end='')
 
     _ts = []  # [[power, type, on-time, off-time], ...]
 
@@ -217,6 +237,8 @@ def export_recording(insert_key, filepath=None):
 
     edata['task_stimulation'] = np.array(_ts)
 
+    print('ok.')
+
     # task_pole_time
     # --------------
 
@@ -225,12 +247,21 @@ def export_recording(insert_key, filepath=None):
     # task_cue_time
     # -------------
 
+    print('... task_cue_time:', end='')
+
     _tct = (experiment.TrialEvent()
             & {**insert_key, 'trial_event_type': 'go'}).fetch(
                 'trial_event_time')
 
     edata['task_cue_time'] = np.array([float(i) for i in _tct])
 
-    print('saving to', filepath)
+    print('ok.')
+
+    # savemat
+    # -------
+
+    print('... saving to {}:'.format(filepath), end='')
 
     scio.savemat(filepath, edata)
+
+    print('ok.')
