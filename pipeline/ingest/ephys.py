@@ -117,8 +117,171 @@ class EphysIngest(dj.Imported):
             loader = self._load_v4
 
         for f in files:
-            data = loader(sinfo, rigpath, dpath, f.relative_to(dpath))
-            # print('loading data ' + data)
+            self._load(loader(sinfo, rigpath, dpath, f.relative_to(dpath)))
+
+    def _load(self, data):
+
+        sinfo = data['sinfo']
+        rigpath = data['rigpath']
+        dpath = data['dpath']
+        fpath = data['fpath']
+        ef_path = data['ef_path']
+        bf_path = data['bf_path']
+        probe = data['probe']
+        skey = data['skey']
+        hz = data['hz']
+        spikes = data['spikes']
+        spike_sites = data['spike_sites']
+        units = data['units']
+        unit_wav = data['unit_wav']
+        unit_notes = data['unit_notes']
+        unit_xpos = data['unit_xpos']
+        unit_ypos = data['unit_ypos']
+        unit_amp = data['unit_amp']
+        unit_snr = data['unit_snr']
+        vmax_unit_site = data['vmax_unit_site']
+        trial_start = data['trial_start']
+        trial_go = data['trial_go']
+        sync_ephys = data['sync_ephys']
+        sync_behav = data['sync_behav']
+        trial_fix = data['trial_fix']
+
+        # Determine trial (re)numbering for ephys:
+        #
+        # - if ephys & bitcode match, determine ephys-to-behavior trial shift
+        #   when needed for different-length recordings
+        # - otherwise, use trial number correction array (bf['trialNum'])
+
+        sync_behav_start = np.where(sync_behav == sync_ephys[0])[0][0]
+        sync_behav_range = sync_behav[sync_behav_start:][:len(sync_ephys)]
+
+        if not np.all(np.equal(sync_ephys, sync_behav_range)):
+            try:
+                log.info('ephys/bitcode trial mismatch - attempting fix')
+                start_behav = -1
+                trials = trial_fix - start_behav
+            except IndexError:
+                raise Exception('Bitcode Mismatch')
+        else:
+            if len(sync_behav) < len(sync_ephys):
+                start_behav = np.where(sync_behav[0] == sync_ephys)[0][0]
+            elif len(sync_behav) > len(sync_ephys):
+                start_behav = - np.where(sync_ephys[0] == sync_behav)[0][0]
+            else:
+                start_behav = 0
+            trials = np.arange(len(sync_behav_range)) - start_behav
+
+        # trialize the spikes & subtract go cue
+        t, trial_spikes, trial_units = 0, [], []
+
+        while t < len(trial_start) - 1:
+
+            s0, s1 = trial_start[t], trial_start[t+1]
+
+            trial_idx = np.where((spikes > s0) & (spikes < s1))
+
+            trial_spikes.append(spikes[trial_idx] - trial_go[t])
+            trial_units.append(units[trial_idx])
+
+            t += 1
+
+        # ... including the last trial
+        trial_idx = np.where((spikes > s1))
+        trial_spikes.append(spikes[trial_idx] - trial_go[t])
+        trial_units.append(units[trial_idx])
+
+        trial_spikes = np.array(trial_spikes)
+        trial_units = np.array(trial_units)
+
+        # convert spike data to seconds
+        spikes = spikes / hz
+        trial_start = trial_start / hz
+        trial_spikes = trial_spikes / hz
+
+        # build spike arrays
+        unit_spikes = np.array([spikes[np.where(units == u)]
+                                for u in set(units)]) - trial_start[0]
+
+        unit_trial_spikes = np.array(
+            [[trial_spikes[t][np.where(trial_units[t] == u)]
+              for t in range(len(trials))] for u in set(units)])
+
+        # create probe insertion records
+        self._gen_probe_insert(sinfo, probe)
+
+        # TODO: electrode config should be passed back above & used here
+
+        # insert Unit
+        log.info('.. ephys.Unit')
+
+        with InsertBuffer(ephys.Unit, 10, skip_duplicates=True,
+                          allow_direct_insert=True) as ib:
+
+            for i, u in enumerate(set(units)):
+
+                ib.insert1({**skey,
+                            'insertion_number': probe,
+                            'clustering_method': 'jrclust',
+                            'unit': u,
+                            'unit_uid': u,
+                            'unit_quality': unit_notes[i],
+                            'probe': '15131808323',
+                            'electrode_config_name': 'npx_first384',
+                            'electrode_group': 0,
+                            'electrode': vmax_unit_site[i],
+                            'unit_posx': unit_xpos[i],
+                            'unit_posy': unit_ypos[i],
+                            'unit_amp': unit_amp[i],
+                            'unit_snr': unit_snr[i],
+                            'spike_times': unit_spikes[i],
+                            'waveform': unit_wav[i][0]})
+
+                if ib.flush():
+                    log.debug('....', u)
+
+        # insert Unit.UnitTrial
+        log.info('.. ephys.Unit.UnitTrial')
+
+        with InsertBuffer(ephys.Unit.UnitTrial, 10000, skip_duplicates=True,
+                          allow_direct_insert=True) as ib:
+
+            for i, u in enumerate(set(units)):
+                for t in range(len(trials)):
+                    if len(unit_trial_spikes[i][t]):
+                        ib.insert1({**skey,
+                                    'insertion_number': probe,
+                                    'clustering_method': 'jrclust',
+                                    'unit': u,
+                                    'trial': trials[t]})
+                        if ib.flush():
+                            log.debug('.... (u: {}, t: {})'.format(u, t))
+
+        # insert TrialSpikes
+        log.info('.. ephys.TrialSpikes')
+        with InsertBuffer(ephys.TrialSpikes, 10000, skip_duplicates=True,
+                          allow_direct_insert=True) as ib:
+
+            for i, u in enumerate(set(units)):
+                for t in range(len(trials)):
+                    if len(unit_trial_spikes[i][t]):
+                        ib.insert1({**skey,
+                                    'insertion_number': probe,
+                                    'clustering_method': 'jrclust',
+                                    'unit': u,
+                                    'trial': trials[t],
+                                    'spike_times': unit_trial_spikes[i][t]})
+                        if ib.flush():
+                            log.debug('.... (u: {}, t: {})'.format(u, t))
+
+        log.info('.. inserting file load information')
+
+        self.insert1(skey, skip_duplicates=True)
+
+        EphysIngest.EphysFile().insert1(
+            {**skey, 'probe_insertion_number': probe,
+             'ephys_file': str(ef_path.relative_to(rigpath))})
+
+        log.info('ephys ingest for {} complete'.format(skey))
 
     def _gen_probe_insert(self, sinfo, probe):
         '''
@@ -248,146 +411,36 @@ class EphysIngest(dj.Imported):
                       & {**skey, 'trial_note_type': 'bitcode'}).fetch(
                           'trial_note', order_by='trial')
 
-        sync_behav_start = np.where(sync_behav == sync_ephys[0])[0][0]
-        sync_behav_range = sync_behav[sync_behav_start:][:len(sync_ephys)]
+        trial_fix = bf['trialNum'] if 'trialNum' in bf else None
 
-        # Determine trial (re)numbering for ephys:
-        #
-        # - if ephys & bitcode match, determine ephys-to-behavior trial shift
-        #   when needed for different-length recordings
-        # - otherwise, use trial number correction array (bf['trialNum'])
+        data = {
+            'sinfo': sinfo,
+            'rigpath': rigpath,
+            'dpath': dpath,
+            'fpath': fpath,
+            'ef_path': ef_path,
+            'bf_path': bf_path,
+            'probe': probe,
+            'skey': skey,
+            'hz': hz,
+            'spikes': spikes,
+            'spike_sites': spike_sites,
+            'units': units,
+            'unit_wav': unit_wav,
+            'unit_notes': unit_notes,
+            'unit_xpos': unit_xpos,
+            'unit_ypos': unit_ypos,
+            'unit_amp': unit_amp,
+            'unit_snr': unit_snr,
+            'vmax_unit_site': vmax_unit_site,
+            'trial_start': trial_start,
+            'trial_go': trial_go,
+            'sync_ephys': sync_ephys,
+            'sync_behav': sync_behav,
+            'trial_fix': trial_fix,
+        }
 
-        if not np.all(np.equal(sync_ephys, sync_behav_range)):
-            try:
-                log.info('ephys/bitcode trial mismatch - attempting fix')
-                start_behav = -1
-                trials = bf['trialNum'] - start_behav
-            except IndexError:
-                raise Exception('Bitcode Mismatch')
-        else:
-            if len(sync_behav) < len(sync_ephys):
-                start_behav = np.where(sync_behav[0] == sync_ephys)[0][0]
-            elif len(sync_behav) > len(sync_ephys):
-                start_behav = - np.where(sync_ephys[0] == sync_behav)[0][0]
-            else:
-                start_behav = 0
-            trials = np.arange(len(sync_behav_range)) - start_behav
-
-        # trialize the spikes & subtract go cue
-        t, trial_spikes, trial_units = 0, [], []
-
-        while t < len(trial_start) - 1:
-
-            s0, s1 = trial_start[t], trial_start[t+1]
-
-            trial_idx = np.where((spikes > s0) & (spikes < s1))
-
-            trial_spikes.append(spikes[trial_idx] - trial_go[t])
-            trial_units.append(units[trial_idx])
-
-            t += 1
-
-        # ... including the last trial
-        trial_idx = np.where((spikes > s1))
-        trial_spikes.append(spikes[trial_idx] - trial_go[t])
-        trial_units.append(units[trial_idx])
-
-        trial_spikes = np.array(trial_spikes)
-        trial_units = np.array(trial_units)
-
-        # convert spike data to seconds
-        spikes = spikes / hz
-        trial_start = trial_start / hz
-        trial_spikes = trial_spikes / hz
-
-        # build spike arrays
-        unit_spikes = np.array([spikes[np.where(units == u)]
-                                for u in set(units)]) - trial_start[0]
-
-        unit_trial_spikes = np.array(
-            [[trial_spikes[t][np.where(trial_units[t] == u)]
-              for t in range(len(trials))] for u in set(units)])
-
-        # create probe insertion records
-        self._gen_probe_insert(sinfo, probe)
-
-        # TODO: electrode config should be passed back above & used here
-
-        # insert Unit
-        log.info('.. ephys.Unit')
-
-        with InsertBuffer(ephys.Unit, 10, skip_duplicates=True,
-                          allow_direct_insert=True) as ib:
-
-            for i, u in enumerate(set(units)):
-
-                ib.insert1({**skey,
-                            'insertion_number': probe,
-                            'clustering_method': 'jrclust',
-                            'unit': u,
-                            'unit_uid': u,
-                            'unit_quality': unit_notes[i],
-                            'probe': '15131808323',
-                            'electrode_config_name': 'npx_first384',
-                            'electrode_group': 0,
-                            'electrode': vmax_unit_site[i],
-                            'unit_posx': unit_xpos[i],
-                            'unit_posy': unit_ypos[i],
-                            'unit_amp': unit_amp[i],
-                            'unit_snr': unit_snr[i],
-                            'spike_times': unit_spikes[i],
-                            'waveform': unit_wav[i][0]})
-
-                if ib.flush():
-                    log.debug('....', u)
-
-        # insert Unit.UnitTrial
-        log.info('.. ephys.Unit.UnitTrial')
-
-        with InsertBuffer(ephys.Unit.UnitTrial, 10000, skip_duplicates=True,
-                          allow_direct_insert=True) as ib:
-
-            for i, u in enumerate(set(units)):
-                for t in range(len(trials)):
-                    if len(unit_trial_spikes[i][t]):
-                        ib.insert1({**skey,
-                                    'insertion_number': probe,
-                                    'clustering_method': 'jrclust',
-                                    'unit': u,
-                                    'trial': trials[t]})
-                        if ib.flush():
-                            log.debug('.... (u: {}, t: {})'.format(u, t))
-
-        # insert TrialSpikes
-        log.info('.. ephys.TrialSpikes')
-        with InsertBuffer(ephys.TrialSpikes, 10000, skip_duplicates=True,
-                          allow_direct_insert=True) as ib:
-
-            for i, u in enumerate(set(units)):
-                for t in range(len(trials)):
-                    if len(unit_trial_spikes[i][t]):
-                        ib.insert1({**skey,
-                                    'insertion_number': probe,
-                                    'clustering_method': 'jrclust',
-                                    'unit': u,
-                                    'trial': trials[t],
-                                    'spike_times': unit_trial_spikes[i][t]})
-                        if ib.flush():
-                            log.debug('.... (u: {}, t: {})'.format(u, t))
-
-        log.info('.. inserting file load information')
-
-        self.insert1(skey, skip_duplicates=True)
-
-        EphysIngest.EphysFile().insert1(
-            {**skey, 'probe_insertion_number': probe,
-             'ephys_file': str(ef_path.relative_to(rigpath))})
-
-        log.info('ephys ingest for {} complete'.format(skey))
-
-        # from code import interact
-        # from collections import ChainMap
-        # interact('_load_v3', local=dict(ChainMap(locals(), globals())))
+        return data
 
     def _load_v4(self, sinfo, rigpath, dpath, fpath):
         '''
@@ -432,7 +485,7 @@ class EphysIngest(dj.Imported):
         unit_notes = ef['clusterNotes']                 # curation notes
         unit_notes = np.array(ef['clusterNotes'][:].flatten())
 
-        # these don't seem to be doing
+        # FIXME: these don't seem to be doing
         unit_notes = np.array(['fixme' for i in unit_notes
                                if type(i) == h5py.h5r.Reference])
         assert np.all(unit_notes == 'fixme')  # FIXME why
@@ -457,7 +510,17 @@ class EphysIngest(dj.Imported):
                       & {**skey, 'trial_note_type': 'bitcode'}).fetch(
                           'trial_note', order_by='trial')
 
+        trial_fix = bf['trialNum'] if 'trialNum' in bf else None
+
         data = {
+            'sinfo': sinfo,
+            'rigpath': rigpath,
+            'dpath': dpath,
+            'fpath': fpath,
+            'ef_path': ef_path,
+            'bf_path': bf_path,
+            'probe': probe,
+            'skey': skey,
             'hz': hz,
             'spikes': spikes,
             'spike_sites': spike_sites,
@@ -473,6 +536,7 @@ class EphysIngest(dj.Imported):
             'trial_go': trial_go,
             'sync_ephys': sync_ephys,
             'sync_behav': sync_behav,
+            'trial_fix': trial_fix,
         }
 
         return data
