@@ -99,12 +99,12 @@ class EphysIngest(dj.Imported):
         v3spec = '{}_g0_*.imec.ap_imec3_opt3_jrc.mat'.format(h2o)
         v3files = list(dpath.glob(dglob.format(v3spec)))
 
-        v4spec = '{}_g0_*.imec.ap_imec3_opt3_v4.mat'.format(h2o)  # TODO v4ify
+        v4spec = '{}_g0_*.imec?.ap_res.mat'.format(h2o)  # TODO v4ify
         v4files = list(dpath.glob(dglob.format(v4spec)))
 
-        if v3files and v4files:
+        if (v3files and v4files) or not (v3files or v4files):
             log.warning(
-                'found v3files ({}) and v4files ({}). Skipping.'.format(
+                'Error - v3files ({}) + v4files ({}). Skipping.'.format(
                     v3files, v4files))
             return
 
@@ -179,7 +179,8 @@ class EphysIngest(dj.Imported):
         Arguments:
 
           - sinfo: lab.WaterRestriction * lab.Subject * experiment.Session
-          - dpath: expanded rig data path
+          - rigpath: rig path root
+          - dpath: expanded rig data path (rigpath/h2o/YYYY-MM-DD)
           - fpath: file path under dpath
 
         Returns:
@@ -388,15 +389,86 @@ class EphysIngest(dj.Imported):
         # from collections import ChainMap
         # interact('_load_v3', local=dict(ChainMap(locals(), globals())))
 
-    def _load_v4(self, sinfo, dpath, fpath):
+    def _load_v4(self, sinfo, rigpath, dpath, fpath):
         '''
         Ephys data loader for JRClust v4 files.
         Arguments:
           - sinfo: lab.WaterRestriction * lab.Subject * experiment.Session
-          - dpath: expanded rig data path
+          - rigpath: rig path root
+          - dpath: expanded rig data path (rigpath/h2o/YYYY-MM-DD)
           - fpath: file path under dpath
         '''
-        pass
+
+        h2o = sinfo['water_restriction_number']
+        skey = {k: v for k, v in sinfo.items()
+                if k in experiment.Session.primary_key}
+
+        probe = fpath.parts[0]
+
+        ef_path = pathlib.Path(dpath, fpath)
+        bf_path = pathlib.Path(dpath, probe, '{}_bitcode.mat'.format(h2o))
+
+        log.info('.. jrclust v4 data load:')
+        log.info('.... sinfo: {}'.format(sinfo))
+        log.info('.... probe: {}'.format(probe))
+
+        log.info('.... loading ef_path: {}'.format(str(ef_path)))
+        ef = h5py.File(str(pathlib.Path(dpath, fpath)))  # ephys file
+
+        # TODO: bitcode files to be delivered
+        #
+        # log.info('.... loading bf_path: {}'.format(str(bf_path)))
+        # bf = spio.loadmat(pathlib.Path(
+        #     dpath, probe, '{}_bitcode.mat'.format(h2o)))  # bitcode file
+
+        # extract unit data
+        try:   # FIXME 'P' not in sample v4 data
+            hz = ef['P']['sRateHz'][0][0]                   # sampling rate
+        except KeyError:
+            hz = 30000  # ... hmm lookup via electrode config?
+
+        spikes = ef['spikeTimes'][0]                    # spikes times
+        spike_sites = ef['spikeSites'][0]               # spike electrode
+
+        units = ef['spikeClusters'][0]                  # spike:unit id
+        unit_wav = ef['meanWfLocalRaw'][0]              # waveform
+
+        unit_notes = ef['clusterNotes']                 # curation notes
+        unit_notes = np.array(ef['clusterNotes'][:].flatten())
+
+        # these don't seem to be doing
+        unit_notes = np.array(['fixme' for i in unit_notes
+                               if type(i) == h5py.h5r.Reference])
+        assert np.all(unit_notes == 'fixme')  # FIXME why
+
+        unit_xpos = ef['clusterCentroids'][0]           # x position
+        unit_ypos = ef['clusterCentroids'][1]           # y position
+
+        unit_amp = ef['unitVppRaw'][0]                  # amplitude
+        unit_snr = ef['unitSNR'][0]                     # signal to noise
+
+        vmax_unit_site = ef['clusterSites']             # max amplitude site
+        vmax_unit_site = np.array(vmax_unit_site[:].flatten(), dtype=np.int64)
+
+        data = {
+            'hz': hz,
+            'spikes': spikes,
+            'spike_sites': spike_sites,
+            'units': units,
+            'unit_wav': unit_wav,
+            'unit_notes': unit_notes,
+            'unit_xpos': unit_xpos,
+            'unit_ypos': unit_ypos,
+            'unit_amp': unit_amp,
+            'unit_snr': unit_snr,
+            'vmax_unit_site': vmax_unit_site,
+        }
+
+        from code import interact
+        from collections import ChainMap
+        interact('_load_v4', local=dict(ChainMap(locals(), globals())))
+
+        return data
 
     def make_v3(self, sinfo, key):
         '''
