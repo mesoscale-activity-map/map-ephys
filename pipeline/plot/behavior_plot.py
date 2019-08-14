@@ -136,7 +136,7 @@ def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, axs
     for trial_tracks, ax, ax_name, spk_color in zip((l_trial_trk, r_trial_trk), axs,
                                                     ('left lick trials', 'right lick trials'), ('b', 'r')):
         for tr_id, (jaw, tongue_out_bool, spike_times, tvec) in enumerate(get_trial_track(trial_tracks)):
-            ax.plot(tvec, jaw + tr_id * h_spacing, 'k', linewidth=2)
+            ax.plot(tvec, jaw + tr_id * h_spacing, '.k', markersize=1)
             ax.plot(tvec[tongue_out_bool], jaw[tongue_out_bool] + tr_id * h_spacing, '.', color='lime', markersize=2)
             ax.plot(spike_times, np.full_like(spike_times, jaw[tongue_out_bool].mean()
                                               + 4*jaw[tongue_out_bool].std()) + tr_id * h_spacing,

@@ -265,6 +265,7 @@ class BehaviorIngest(dj.Imported):
         # all files were internally invalid or size < 100k
         if not trials:
             log.warning('skipping date {d}, no valid files'.format(d=date))
+            return
 
         #
         # Trial data seems valid; synthesize session id & add session record
