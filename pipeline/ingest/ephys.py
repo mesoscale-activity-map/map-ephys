@@ -406,7 +406,6 @@ class EphysIngest(dj.Imported):
         probe = fpath.parts[0]
 
         ef_path = pathlib.Path(dpath, fpath)
-        bf_path = pathlib.Path(dpath, probe, '{}_bitcode.mat'.format(h2o))
 
         log.info('.. jrclust v4 data load:')
         log.info('.... sinfo: {}'.format(sinfo))
@@ -415,17 +414,14 @@ class EphysIngest(dj.Imported):
         log.info('.... loading ef_path: {}'.format(str(ef_path)))
         ef = h5py.File(str(pathlib.Path(dpath, fpath)))  # ephys file
 
-        # TODO: bitcode files to be delivered
-        #
-        # log.info('.... loading bf_path: {}'.format(str(bf_path)))
-        # bf = spio.loadmat(pathlib.Path(
-        #     dpath, probe, '{}_bitcode.mat'.format(h2o)))  # bitcode file
+        # bitcode path (ex: 'SC022_030319_Imec3_bitcode.mat')
+        bf_path = list(pathlib.Path(dpath, probe).glob(
+            '{}_*_*_bitcode.mat'.format(h2o)))[0]
+        log.info('.... loading bf_path: {}'.format(str(bf_path)))
+        bf = spio.loadmat(str(bf_path))
 
         # extract unit data
-        try:   # FIXME 'P' not in sample v4 data
-            hz = ef['P']['sRateHz'][0][0]                   # sampling rate
-        except KeyError:
-            hz = 30000  # ... hmm lookup via electrode config?
+        hz = bf['Imec0_SR'][0][0]                       # sampling rate
 
         spikes = ef['spikeTimes'][0]                    # spikes times
         spike_sites = ef['spikeSites'][0]               # spike electrode
@@ -450,6 +446,17 @@ class EphysIngest(dj.Imported):
         vmax_unit_site = ef['clusterSites']             # max amplitude site
         vmax_unit_site = np.array(vmax_unit_site[:].flatten(), dtype=np.int64)
 
+        # TODO: decode_notes(unit_notes) (see above 'fixme')
+
+        # XXX: probe specific ImecN?
+        trial_start = bf['sTrigImec0'].flatten() - 7500  # start of trials
+        trial_go = bf['goCueImec0'].flatten()
+
+        sync_ephys = bf['bitCodeS']                      # ephys sync codes
+        sync_behav = (experiment.TrialNote()             # behavior sync codes
+                      & {**skey, 'trial_note_type': 'bitcode'}).fetch(
+                          'trial_note', order_by='trial')
+
         data = {
             'hz': hz,
             'spikes': spikes,
@@ -462,11 +469,11 @@ class EphysIngest(dj.Imported):
             'unit_amp': unit_amp,
             'unit_snr': unit_snr,
             'vmax_unit_site': vmax_unit_site,
+            'trial_start': trial_start,
+            'trial_go': trial_go,
+            'sync_ephys': sync_ephys,
+            'sync_behav': sync_behav,
         }
-
-        from code import interact
-        from collections import ChainMap
-        interact('_load_v4', local=dict(ChainMap(locals(), globals())))
 
         return data
 
