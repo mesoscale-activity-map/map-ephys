@@ -630,7 +630,7 @@ def post_ephys(*args):
         fname = ef['ephys_file']
         print('attempting Probe InsertionLocation for fname: ', end='')
         if re.match('.*2018-12-07.*dl59.*.mat', fname):
-            rec = {
+            recs = [{
                 'subject_id': 435884,
                 'session': 1,
                 'insertion_number': 1,
@@ -640,29 +640,39 @@ def post_ephys(*args):
                 'dv_location': 1668.9,
                 # ml_angle:
                 # ap_angle:
-            }
-            print('match!: {}'.format(rec))
+            }]
+            print('match!: {}'.format(recs))
         elif re.match('.*2018-07-16.*tw34.*.mat', fname):
-            rec = {
+            recs = [{
                 'subject_id': 412330,
                 'session': 1,
                 'insertion_number': 1,
+                'brain_location_name': 'right_alm',
+                'ml_location': 1500,
+                'ap_location': 2500,
+                'dv_location': 2103.2,
+                # ml_angle:
+                # ap_angle:
+            },{
+                'subject_id': 412330,
+                'session': 1,
+                'insertion_number': 2,
                 'brain_location_name': 'right_medulla',
                 'ml_location': 1000,
                 'ap_location': 6500,
                 'dv_location': 5237.5,
                 # ml_angle:
                 # ap_angle:
-            }
-            print('match!: {}'.format(rec))
+            }]
+            print('match!: {}'.format(recs))
         else:
             print('no match!')
 
-        ephys.ProbeInsertion.InsertionLocation().insert1(
-            rec, skip_duplicates=True)
-        ephys.ProbeInsertion.RecordingSystemSetup().insert1(
-            {**rec, 'sampling_rate': 30000}, ignore_extra_fields=True,
-            skip_duplicates=True)
+        ephys.ProbeInsertion.InsertionLocation().insert(
+            recs, skip_duplicates=True)
+        ephys.ProbeInsertion.RecordingSystemSetup().insert(
+            [{**r, 'sampling_rate': 30000} for r in recs],
+            ignore_extra_fields=True, skip_duplicates=True)
 
 
 def preload(*args):
