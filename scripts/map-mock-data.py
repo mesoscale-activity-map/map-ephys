@@ -60,6 +60,11 @@ def mockdata():
             'fullname': 'Dave Liu'},
             skip_duplicates=True
         )
+        lab.Person().insert1({
+            'username': 'susu',
+            'fullname': 'Susu Chen'},
+            skip_duplicates=True
+        )
         lab.ModifiedGene().insert1({
             'gene_modification': 'VGAT-Chr2-EYFP Jax',
             'gene_modification_description': 'VGAT'},
@@ -525,7 +530,24 @@ def mockdata():
             'wr_start_weight': 21.0},
             skip_duplicates=True
         )
-
+        # Subject 888888 / SC022 FIXME MOCKED VALUES
+        lab.Subject().insert1({
+            'subject_id': 888888,
+            'username': 'susu',
+            'cage_number': 888888,
+            'date_of_birth': '2018-08-06',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates=True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 888888,
+            'water_restriction_number': 'SC022',
+            'cage_number': 888888,
+            'wr_start_date': '2018-09-30',
+            'wr_start_weight': 21.0},
+            skip_duplicates=True
+        )
         lab.Rig().insert1({
             'rig': 'TRig1',
             'room': '2w.334',
