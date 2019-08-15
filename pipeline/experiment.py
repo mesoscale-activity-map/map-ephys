@@ -302,4 +302,3 @@ class PassivePhotostimTrial(dj.Computed):
 
     def make(self, key):
         self.insert1(key)
-
