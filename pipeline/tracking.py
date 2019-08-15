@@ -22,8 +22,8 @@ class TrackingDevice(dj.Lookup):
     tracking_device_description:        varchar(100)    # device description
     """
     contents = [
-       ('Camera 0', 'side', 300, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)'),
-       ('Camera 1', 'bottom', 300, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)')]
+       ('Camera 0', 'side', 1/0.0034, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)'),
+       ('Camera 1', 'bottom', 1//0.0034, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)')]
 
 
 @schema

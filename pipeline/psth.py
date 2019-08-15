@@ -190,7 +190,7 @@ class TrialCondition(dj.Lookup):
 
     @classmethod
     def _get_trials_exclude_stim(cls, **kwargs):
-
+        # Note: inclusion (attr) is AND - exclusion (_attr) is OR
         log.debug('_get_trials_exclude_stim: {}'.format(kwargs))
 
         restr, _restr = {}, {}
@@ -209,12 +209,12 @@ class TrialCondition(dj.Lookup):
         stim_key = {k: v for k, v in restr.items() if k in stim_attrs}
         behav_key = {k: v for k, v in restr.items() if k in behav_attrs}
 
-        return (((experiment.BehaviorTrial & behav_key) - (_behav_key if _behav_key else [])) -
-                (experiment.PhotostimEvent * (experiment.Photostim & stim_key) - (_stim_key if _stim_key else [])).proj())
+        return (((experiment.BehaviorTrial & behav_key) - [{k: v} for k, v in _behav_key.items()]) -
+                (experiment.PhotostimEvent * (experiment.Photostim & stim_key) - [{k: v} for k, v in _stim_key.items()]).proj())
 
     @classmethod
     def _get_trials_include_stim(cls, **kwargs):
-
+        # Note: inclusion (attr) is AND - exclusion (_attr) is OR
         log.debug('_get_trials_include_stim: {}'.format(kwargs))
 
         restr, _restr = {}, {}
@@ -233,8 +233,8 @@ class TrialCondition(dj.Lookup):
         stim_key = {k: v for k, v in restr.items() if k in stim_attrs}
         behav_key = {k: v for k, v in restr.items() if k in behav_attrs}
 
-        return (((experiment.BehaviorTrial & behav_key) - (_behav_key if _behav_key else [])) &
-                (experiment.PhotostimEvent * (experiment.Photostim & stim_key) - (_stim_key if _stim_key else [])).proj())
+        return (((experiment.BehaviorTrial & behav_key) - [{k: v} for k, v in _behav_key.items()]) &
+                (experiment.PhotostimEvent * (experiment.Photostim & stim_key) - [{k: v} for k, v in _stim_key.items()]).proj())
 
 
 @schema

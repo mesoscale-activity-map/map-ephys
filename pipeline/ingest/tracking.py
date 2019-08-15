@@ -101,7 +101,6 @@ class TrackingIngest(dj.Imported):
 
             i = 0
             for t in tmap:  # load tracking for trial
-
                 if tmap[t] not in trials:
                     log.warning('nonexistant trial {}.. skipping'.format(t))
                     continue
@@ -167,7 +166,7 @@ class TrackingIngest(dj.Imported):
         ''' load camera position file-to-trial map '''
         log.debug("load_campath(): {}".format(campath))
         with open(campath, 'r') as f:
-            return {int(k): int(v) for i in f
+            return {int(k): int(v) - 1 for i in f
                     for k, v in (i.strip().split('\t'),)}
 
     def load_tracking(self, trkpath):

@@ -75,6 +75,16 @@ the `notebook` portion of repository demonstrating usage of the pipeline.
 
 See the jupyter notebook `notebooks/Overview.ipynb` for more details.
 
+## Access via Jupyter Hub
+
+A MAP-dedicated Jupyter Hub can be access at https://map-jupyter.datajoint.io/
+
+Users can sign in using their GitHub account. Please contact chris@vathes.com for database credential if you don't already have one.
+
+Once signed in, the foler `/work` is dedicated for each user to freely experiment with the pipeline. 
+Guidelines, tutorial materials, example notebooks can be found under `/workshop` or `/map-ephys/notebook`
+
+
 ## Local Installation and Setup
 
 Direct installation without a source checkout can be done directly via pip:
@@ -91,7 +101,7 @@ command. For example:
 
 This will make the MAP pipeline modules available to your python interpreter as
 'pipeline'. A convenience script, `mapshell.py` is available for basic queries
-and use of administrative tasks - see the [advanced user guide][(README-advanced.md) for more details.
+and use of administrative tasks - see the [advanced user guide](README-advanced.md) for more details.
 
 ## Schema
 
