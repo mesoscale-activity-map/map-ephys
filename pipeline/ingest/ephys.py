@@ -264,15 +264,14 @@ class EphysIngest(dj.Imported):
 
             for i, u in enumerate(set(units)):
                 for t in range(len(trials)):
-                    if len(unit_trial_spikes[i][t]):
-                        ib.insert1({**skey,
-                                    'insertion_number': probe,
-                                    'clustering_method': 'jrclust',
-                                    'unit': u,
-                                    'trial': trials[t],
-                                    'spike_times': unit_trial_spikes[i][t]})
-                        if ib.flush():
-                            log.debug('.... (u: {}, t: {})'.format(u, t))
+                    ib.insert1({**skey,
+                                'insertion_number': probe,
+                                'clustering_method': 'jrclust',
+                                'unit': u,
+                                'trial': trials[t],
+                                'spike_times': unit_trial_spikes[i][t]})
+                    if ib.flush():
+                        log.debug('.... (u: {}, t: {})'.format(u, t))
 
         log.info('.. inserting file load information')
 
