@@ -530,7 +530,6 @@ def mockdata():
             'wr_start_weight': 21.0},
             skip_duplicates=True
         )
-
         # Subject 432572 / dl56
         lab.Subject().insert1({
             'subject_id': 432572,
@@ -559,7 +558,6 @@ def mockdata():
             'animal_source': 'Jackson labs'},
             skip_duplicates=True
         )
-
         lab.WaterRestriction().insert1({
             'subject_id': 888888,
             'water_restriction_number': 'SC022',
@@ -568,10 +566,7 @@ def mockdata():
             'wr_start_weight': 21.0},
             skip_duplicates=True
         )
-=======
-
         # Rig
->>>>>>> upstream/master
         lab.Rig().insert1({
             'rig': 'TRig1',
             'room': '2w.334',
