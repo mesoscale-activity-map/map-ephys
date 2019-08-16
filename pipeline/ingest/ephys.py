@@ -123,10 +123,7 @@ class EphysIngest(dj.Imported):
 
         sinfo = data['sinfo']
         rigpath = data['rigpath']
-        dpath = data['dpath']
-        fpath = data['fpath']
         ef_path = data['ef_path']
-        bf_path = data['bf_path']
         probe = data['probe']
         skey = data['skey']
         hz = data['hz']
@@ -145,6 +142,10 @@ class EphysIngest(dj.Imported):
         sync_ephys = data['sync_ephys']
         sync_behav = data['sync_behav']
         trial_fix = data['trial_fix']
+
+        # remove noise clusters
+        units, spikes, spike_sites = (v[i] for v, i in zip(
+            (units, spikes, spike_sites), repeat((units > 0))))
 
         # Determine trial (re)numbering for ephys:
         #
@@ -398,11 +399,6 @@ class EphysIngest(dj.Imported):
 
         unit_notes = decode_notes(ef, unit_notes)
 
-        # remove noise clusters
-        units, spikes, spike_sites = (v[i] for v, i in zip(
-            (units, spikes, spike_sites), repeat((units > 0))))
-
-        # synchronize ephys data to behavior data
         trial_start = bf['sTrig'].flatten() - 7500      # start of trials
         trial_go = bf['goCue'].flatten()                # go cues
 
@@ -416,10 +412,7 @@ class EphysIngest(dj.Imported):
         data = {
             'sinfo': sinfo,
             'rigpath': rigpath,
-            'dpath': dpath,
-            'fpath': fpath,
             'ef_path': ef_path,
-            'bf_path': bf_path,
             'probe': probe,
             'skey': skey,
             'hz': hz,
@@ -457,6 +450,7 @@ class EphysIngest(dj.Imported):
                 if k in experiment.Session.primary_key}
 
         probe = fpath.parts[0]
+        imec = 'Imec{}'.format(int(probe) - 1)          # probe key substring
 
         ef_path = pathlib.Path(dpath, fpath)
 
@@ -474,21 +468,26 @@ class EphysIngest(dj.Imported):
         bf = spio.loadmat(str(bf_path))
 
         # extract unit data
-        hz = bf['Imec0_SR'][0][0]                       # sampling rate
+        hz = bf['{}_SR'.format(imec)][0][0]             # sampling rate
 
         spikes = ef['spikeTimes'][0]                    # spikes times
         spike_sites = ef['spikeSites'][0]               # spike electrode
 
         units = ef['spikeClusters'][0]                  # spike:unit id
-        unit_wav = ef['meanWfLocalRaw'][0]              # waveform
+        unit_wav = ef['meanWfLocalRaw']                 # waveform
 
         unit_notes = ef['clusterNotes']                 # curation notes
-        unit_notes = np.array(ef['clusterNotes'][:].flatten())
 
-        # FIXME: these don't seem to be doing
-        unit_notes = np.array(['fixme' for i in unit_notes
-                               if type(i) == h5py.h5r.Reference])
-        assert np.all(unit_notes == 'fixme')  # FIXME why
+        def decode_notes(fh, notes):
+            '''
+            dereference and decode unit notes, translate to local labels
+            '''
+            note_map = {'single': 'good', 'ok': 'ok', 'multi': 'multi',
+                        '\x00\x00': 'all'}  # 'all' is default / null label
+
+            return [note_map[str().join(chr(c) for c in fh[n])] for n in notes]
+
+        unit_notes = decode_notes(ef, unit_notes[:].flatten())
 
         unit_xpos = ef['clusterCentroids'][0]           # x position
         unit_ypos = ef['clusterCentroids'][1]           # y position
@@ -499,14 +498,13 @@ class EphysIngest(dj.Imported):
         vmax_unit_site = ef['clusterSites']             # max amplitude site
         vmax_unit_site = np.array(vmax_unit_site[:].flatten(), dtype=np.int64)
 
-        # TODO: decode_notes(unit_notes) (see above 'fixme')
+        start_idx, go_idx = (s.format(imec) for s in ('sTrig{}', 'goCue{}'))
 
-        # XXX: probe specific ImecN?
-        trial_start = bf['sTrigImec0'].flatten() - 7500  # start of trials
-        trial_go = bf['goCueImec0'].flatten()
+        trial_start = bf[start_idx].flatten() - 7500    # trial start
+        trial_go = bf[go_idx].flatten()                 # trial go cues
 
-        sync_ephys = bf['bitCodeS']                      # ephys sync codes
-        sync_behav = (experiment.TrialNote()             # behavior sync codes
+        sync_ephys = bf['bitCodeS']                     # ephys sync codes
+        sync_behav = (experiment.TrialNote()            # behavior sync codes
                       & {**skey, 'trial_note_type': 'bitcode'}).fetch(
                           'trial_note', order_by='trial')
 
@@ -515,10 +513,7 @@ class EphysIngest(dj.Imported):
         data = {
             'sinfo': sinfo,
             'rigpath': rigpath,
-            'dpath': dpath,
-            'fpath': fpath,
             'ef_path': ef_path,
-            'bf_path': bf_path,
             'probe': probe,
             'skey': skey,
             'hz': hz,
