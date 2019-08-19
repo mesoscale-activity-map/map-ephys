@@ -60,6 +60,11 @@ def mockdata():
             'fullname': 'Dave Liu'},
             skip_duplicates=True
         )
+        lab.Person().insert1({
+            'username': 'susu',
+            'fullname': 'Susu Chen'},
+            skip_duplicates=True
+        )
         lab.ModifiedGene().insert1({
             'gene_modification': 'VGAT-Chr2-EYFP Jax',
             'gene_modification_description': 'VGAT'},
@@ -525,7 +530,43 @@ def mockdata():
             'wr_start_weight': 21.0},
             skip_duplicates=True
         )
-
+        # Subject 432572 / dl56
+        lab.Subject().insert1({
+            'subject_id': 432572,
+            'username': 'daveliu',
+            'cage_number': 161125,
+            'date_of_birth': '2018-06-28',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates=True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 432572,
+            'water_restriction_number': 'dl56',
+            'cage_number': 161125,
+            'wr_start_date': '2018-09-10',
+            'wr_start_weight': 21.0},
+            skip_duplicates=True
+        )
+        # Subject 888888 / SC022 FIXME MOCKED VALUES
+        lab.Subject().insert1({
+            'subject_id': 888888,
+            'username': 'susu',
+            'cage_number': 888888,
+            'date_of_birth': '2018-08-06',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates=True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 888888,
+            'water_restriction_number': 'SC022',
+            'cage_number': 888888,
+            'wr_start_date': '2018-09-30',
+            'wr_start_weight': 21.0},
+            skip_duplicates=True
+        )
+        # Rig
         lab.Rig().insert1({
             'rig': 'TRig1',
             'room': '2w.334',
@@ -658,6 +699,47 @@ def post_ephys(*args):
                 'session': 1,
                 'insertion_number': 2,
                 'brain_location_name': 'right_medulla',
+                'ml_location': 1000,
+                'ap_location': 6500,
+                'dv_location': 5237.5,
+                # ml_angle:
+                # ap_angle:
+            }]
+            print('match!: {}'.format(recs))
+        elif re.match('.*SC022/2019-03-03.*', fname):
+            # FIXME: all values completely made up for initial validation tests
+            kbase = {'subject_id': 888888, 'session': 1}
+            recs = [{
+                **kbase,
+                'insertion_number': 1,
+                'brain_location_name': 'right_alm',
+                'ml_location': 1000,
+                'ap_location': 6500,
+                'dv_location': 5237.5,
+                # ml_angle:
+                # ap_angle:
+            },{
+                **kbase,
+                'insertion_number': 2,
+                'brain_location_name': 'right_medulla',
+                'ml_location': 1000,
+                'ap_location': 6500,
+                'dv_location': 5237.5,
+                # ml_angle:
+                # ap_angle:
+            },{
+                **kbase,
+                'insertion_number': 3,
+                'brain_location_name': 'left_alm',
+                'ml_location': 1000,
+                'ap_location': 6500,
+                'dv_location': 5237.5,
+                # ml_angle:
+                # ap_angle:
+            },{
+                **kbase,
+                'insertion_number': 4,
+                'brain_location_name': 'left_medulla',
                 'ml_location': 1000,
                 'ap_location': 6500,
                 'dv_location': 5237.5,
