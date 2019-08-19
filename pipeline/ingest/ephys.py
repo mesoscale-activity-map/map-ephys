@@ -335,6 +335,16 @@ class EphysIngest(dj.Imported):
         ephys.ProbeInsertion.RecordingSystemSetup.insert1(
             {**ekey, 'sampling_rate': 30000})
 
+    @staticmethod
+    def _decode_notes(fh, notes):
+        '''
+        dereference and decode unit notes, translate to local labels
+        '''
+        note_map = {'single': 'good', 'ok': 'ok', 'multi': 'multi',
+                    '\x00\x00': 'all'}  # 'all' is default / null label
+
+        return [note_map[str().join(chr(c) for c in fh[n])] for n in notes]
+
     def _load_v3(self, sinfo, rigpath, dpath, fpath):
         '''
         Ephys data loader for JRClust v4 files.
@@ -376,27 +386,21 @@ class EphysIngest(dj.Imported):
 
         spikes = ef['viTime_spk'][0]                    # spike times
         spike_sites = ef['viSite_spk'][0]               # spike electrode
+
         units = ef['S_clu']['viClu'][0]                 # spike:unit id
         unit_wav = ef['S_clu']['trWav_raw_clu']         # waveform
+
         unit_notes = ef['S_clu']['csNote_clu'][0]       # curation notes
+        unit_notes = self._decode_notes(ef, unit_notes)
+
         unit_xpos = ef['S_clu']['vrPosX_clu'][0]        # x position
         unit_ypos = ef['S_clu']['vrPosY_clu'][0]        # y position
+
         unit_amp = ef['S_clu']['vrVpp_uv_clu'][0]       # amplitude
         unit_snr = ef['S_clu']['vrSnr_clu'][0]          # signal to noise
 
         vmax_unit_site = ef['S_clu']['viSite_clu']      # max amplitude site
         vmax_unit_site = np.array(vmax_unit_site[:].flatten(), dtype=np.int64)
-
-        def decode_notes(fh, notes):
-            '''
-            dereference and decode unit notes, translate to local labels
-            '''
-            note_map = {'single': 'good', 'ok': 'ok', 'multi': 'multi',
-                        '\x00\x00': 'all'}  # 'all' is default / null label
-
-            return [note_map[str().join(chr(c) for c in fh[n])] for n in notes]
-
-        unit_notes = decode_notes(ef, unit_notes)
 
         trial_start = bf['sTrig'].flatten() - 7500      # start of trials
         trial_go = bf['goCue'].flatten()                # go cues
@@ -476,17 +480,7 @@ class EphysIngest(dj.Imported):
         unit_wav = ef['meanWfLocalRaw']                 # waveform
 
         unit_notes = ef['clusterNotes']                 # curation notes
-
-        def decode_notes(fh, notes):
-            '''
-            dereference and decode unit notes, translate to local labels
-            '''
-            note_map = {'single': 'good', 'ok': 'ok', 'multi': 'multi',
-                        '\x00\x00': 'all'}  # 'all' is default / null label
-
-            return [note_map[str().join(chr(c) for c in fh[n])] for n in notes]
-
-        unit_notes = decode_notes(ef, unit_notes[:].flatten())
+        unit_notes = self._decode_notes(ef, unit_notes[:].flatten())
 
         unit_xpos = ef['clusterCentroids'][0]           # x position
         unit_ypos = ef['clusterCentroids'][1]           # y position
