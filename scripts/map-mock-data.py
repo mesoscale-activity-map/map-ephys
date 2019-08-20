@@ -548,7 +548,27 @@ def mockdata():
             'wr_start_weight': 21.0},
             skip_duplicates=True
         )
-        # Subject 888888 / SC022 FIXME MOCKED VALUES
+
+        # Subject 412753 / dl36
+        lab.Subject().insert1({
+            'subject_id': 412753,
+            'username': 'daveliu',
+            'cage_number': 154570,
+            'date_of_birth': '2017-12-07',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates=True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 412753,
+            'water_restriction_number': 'dl36',
+            'cage_number': 154570,
+            'wr_start_date': '2017-03-30',
+            'wr_start_weight': 21.0},
+            skip_duplicates=True
+        )
+
+        # Subject 888888 / SC022
         lab.Subject().insert1({
             'subject_id': 888888,
             'username': 'susu',
@@ -647,6 +667,52 @@ def mockdata():
             skip_duplicates=True
         )
 
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'left_striatum',
+            'brain_area': 'Striatum',
+            'hemisphere': 'left',
+            'skull_reference': 'Bregma'},
+            skip_duplicates=True
+        )
+
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'right_striatum',
+            'brain_area': 'Striatum',
+            'hemisphere': 'right',
+            'skull_reference': 'Bregma'},
+            skip_duplicates=True
+        )
+
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'both_striatum',
+            'brain_area': 'Striatum',
+            'hemisphere': 'both',
+            'skull_reference': 'Bregma'},
+            skip_duplicates=True
+        )
+
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'left_thalamus',
+            'brain_area': 'Thalamus',
+            'hemisphere': 'left',
+            'skull_reference': 'Bregma'},
+            skip_duplicates=True
+        )
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'right_thalamus',
+            'brain_area': 'Thalamus',
+            'hemisphere': 'right',
+            'skull_reference': 'Bregma'},
+            skip_duplicates=True
+        )
+        experiment.BrainLocation.insert1({
+            'brain_location_name': 'both_thalamus',
+            'brain_area': 'Thalamus',
+            'hemisphere': 'both',
+            'skull_reference': 'Bregma'},
+            skip_duplicates=True
+        )
+
         # Probe (Neuropixel)
         npx_probe_model = '15131808323'   # using Model No. - SN TBD?
         lab.Probe.insert1({
@@ -707,42 +773,67 @@ def post_ephys(*args):
             }]
             print('match!: {}'.format(recs))
         elif re.match('.*SC022/2019-03-03.*', fname):
-            # FIXME: all values completely made up for initial validation tests
+            # FIXME: 15deg dv angle -> ?
+            # FIXME: 'you should add 175um to the note depths
+            #   'because where I used as zero reference is where the 1st tip
+            #    enters the dura' ...
             kbase = {'subject_id': 888888, 'session': 1}
             recs = [{
                 **kbase,
                 'insertion_number': 1,
-                'brain_location_name': 'right_alm',
-                'ml_location': 1000,
-                'ap_location': 6500,
-                'dv_location': 5237.5,
+                'brain_location_name': 'left_alm',
+                'ml_location': 1500,
+                'ap_location': 2500,
+                'dv_location': 2900,
                 # ml_angle:
                 # ap_angle:
             },{
                 **kbase,
                 'insertion_number': 2,
-                'brain_location_name': 'right_medulla',
-                'ml_location': 1000,
-                'ap_location': 6500,
-                'dv_location': 5237.5,
+                'brain_location_name': 'right_alm',
+                'ml_location': 1500,
+                'ap_location': 2500,
+                'dv_location': 2900,
                 # ml_angle:
                 # ap_angle:
             },{
                 **kbase,
                 'insertion_number': 3,
-                'brain_location_name': 'left_alm',
+                'brain_location_name': 'left_striatum',
                 'ml_location': 1000,
-                'ap_location': 6500,
-                'dv_location': 5237.5,
+                'ap_location': 2800,
+                'dv_location': 4500,
                 # ml_angle:
                 # ap_angle:
             },{
                 **kbase,
                 'insertion_number': 4,
-                'brain_location_name': 'left_medulla',
+                'brain_location_name': 'left_striatum',
                 'ml_location': 1000,
-                'ap_location': 6500,
-                'dv_location': 5237.5,
+                'ap_location': 2800,
+                'dv_location': 4500,
+                # ml_angle:
+                # ap_angle:
+            }]
+            print('match!: {}'.format(recs))
+        elif re.match('.*2018-07-10.*dl36.*.mat', fname):
+            kbase = {'subject_id': 412753, 'session': 1}
+            recs = [{
+                **kbase,
+                'insertion_number': 1,
+                'brain_location_name': 'right_alm',
+                'ml_location': 1000,
+                'ap_location': 2500,
+                'dv_location': 2019.4,
+                # ml_angle:
+                # ap_angle:
+            },{
+                **kbase,
+                'insertion_number': 2,
+                'brain_location_name': 'right_thalamus',
+                'ml_location': 1000,
+                'ap_location': 1750,
+                'dv_location': 4954.8,
                 # ml_angle:
                 # ap_angle:
             }]

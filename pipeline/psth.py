@@ -248,7 +248,7 @@ class UnitPsth(dj.Computed):
     psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
 
     def make(self, key):
-        log.info('UnitPsth.make(): key: {}'.format(key))
+        log.debug('UnitPsth.make(): key: {}'.format(key))
 
         # expand TrialCondition to trials,
         trials = TrialCondition.get_trials(key['trial_condition_name'])
