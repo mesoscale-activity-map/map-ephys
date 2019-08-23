@@ -56,6 +56,11 @@ def mockdata():
     try:
         # TODO: these should be loaded in a more 'official' way
         lab.Person().insert1({
+            'username': 'unknown',
+            'fullname': 'Unknown'},
+            skip_duplicates=True
+        )
+        lab.Person().insert1({
             'username': 'daveliu',
             'fullname': 'Dave Liu'},
             skip_duplicates=True

@@ -94,12 +94,14 @@ class EphysIngest(dj.Imported):
         date = key['session_date'].strftime('%Y-%m-%d')
 
         dpath = pathlib.Path(rigpath, h2o, date)
-        dglob = '[0-9]/{}'
+        dglob = '[0-9]/{}'  # probe directory pattern
 
-        v3spec = '{}_g0_*.imec.ap_imec3_opt3_jrc.mat'.format(h2o)
+        v3spec = '{}_*_jrc.mat'.format(h2o)
+        # old v3spec = '{}_g0_*.imec.ap_imec3_opt3_jrc.mat'.format(h2o)
         v3files = list(dpath.glob(dglob.format(v3spec)))
 
-        v4spec = '{}_g0_*.imec?.ap_res.mat'.format(h2o)  # TODO v4ify
+        v4spec = '{}_*.ap_res.mat'.format(h2o)
+        # old v4spec = '{}_g0_*.imec?.ap_res.mat'.format(h2o)  # TODO v4ify
         v4files = list(dpath.glob(dglob.format(v4spec)))
 
         if (v3files and v4files) or not (v3files or v4files):
@@ -126,6 +128,7 @@ class EphysIngest(dj.Imported):
         ef_path = data['ef_path']
         probe = data['probe']
         skey = data['skey']
+        method = data['method']
         hz = data['hz']
         spikes = data['spikes']
         spike_sites = data['spike_sites']
@@ -222,7 +225,7 @@ class EphysIngest(dj.Imported):
 
                 ib.insert1({**skey,
                             'insertion_number': probe,
-                            'clustering_method': 'jrclust',
+                            'clustering_method': method,
                             'unit': u,
                             'unit_uid': u,
                             'unit_quality': unit_notes[i],
@@ -251,7 +254,7 @@ class EphysIngest(dj.Imported):
                     if len(unit_trial_spikes[i][t]):
                         ib.insert1({**skey,
                                     'insertion_number': probe,
-                                    'clustering_method': 'jrclust',
+                                    'clustering_method': method,
                                     'unit': u,
                                     'trial': trials[t]})
                         if ib.flush():
@@ -266,7 +269,7 @@ class EphysIngest(dj.Imported):
                 for t in range(len(trials)):
                     ib.insert1({**skey,
                                 'insertion_number': probe,
-                                'clustering_method': 'jrclust',
+                                'clustering_method': method,
                                 'unit': u,
                                 'trial': trials[t],
                                 'spike_times': unit_trial_spikes[i][t]})
@@ -418,6 +421,7 @@ class EphysIngest(dj.Imported):
             'ef_path': ef_path,
             'probe': probe,
             'skey': skey,
+            'method': 'jrclust',
             'hz': hz,
             'spikes': spikes,
             'spike_sites': spike_sites,
@@ -509,6 +513,7 @@ class EphysIngest(dj.Imported):
             'ef_path': ef_path,
             'probe': probe,
             'skey': skey,
+            'method': 'jrclust_v4',
             'hz': hz,
             'spikes': spikes,
             'spike_sites': spike_sites,
