@@ -73,6 +73,27 @@ class BehaviorIngest(dj.Imported):
         -> experiment.TrialEvent
         """
 
+    @staticmethod
+    def get_session_user():
+        '''
+        Determine desired 'session user' for a session.
+
+        - 1st, try dj.config['custom']['session.user']
+        - 2nd, try dj.config['database.user']
+        - else, use 'unknown'
+
+        TODO: multi-user / bulk ingest support
+        '''
+        session_user = dj.config.get('custom', {}).get('session.user', None)
+
+        session_user = (dj.config.get('database.user')
+                        if not session_user else session_user)
+
+        if len(lab.Person() & {'username': session_user}):
+            return session_user
+        else:
+            return 'unknown'
+
     @property
     def key_source(self):
 
@@ -159,7 +180,7 @@ class BehaviorIngest(dj.Imported):
         skey = {}
         skey['subject_id'] = subject_id
         skey['session_date'] = date
-        skey['username'] = 'daveliu'  # username has to be changed
+        skey['username'] = self.get_session_user()
 
         # File paths conform to the pattern:
         # dl7/TW_autoTrain/Session Data/dl7_TW_autoTrain_20180104_132813.mat
