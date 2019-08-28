@@ -38,6 +38,8 @@ def plot_clustering_quality(probe_insertion):
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
 
+    return fig
+
 
 def plot_unit_characteristic(probe_insertion, axs=None):
     probe_insertion = probe_insertion.proj()
@@ -48,7 +50,7 @@ def plot_unit_characteristic(probe_insertion, axs=None):
 
     insertion_depth = np.where(np.isnan(insertion_depth), 0, insertion_depth)
 
-    metrics = pd.DataFrame(list(zip(*(amp/amp.max(), snr/snr.max(), spk_rate/spk_rate.max(), x, y + insertion_depth))))
+    metrics = pd.DataFrame(list(zip(*(amp/amp.max(), snr/snr.max(), spk_rate/spk_rate.max(), x, y - insertion_depth))))
     metrics.columns = ['amp', 'snr', 'rate', 'x', 'y']
 
     if axs is None:
@@ -73,6 +75,8 @@ def plot_unit_characteristic(probe_insertion, axs=None):
         ax.set_title(title)
         ax.set_xlim((-10, 60))
 
+    return fig if 'fig' in locals() else None
+
 
 def plot_unit_selectivity(probe_insertion, axs=None):
     probe_insertion = probe_insertion.proj()
@@ -86,7 +90,7 @@ def plot_unit_selectivity(probe_insertion, axs=None):
 
     # --- account for insertion depth (manipulator depth)
     selective_units.unit_posy = (selective_units.unit_posy
-                                 + np.where(np.isnan(selective_units.dv_location.values.astype(float)),
+                                 - np.where(np.isnan(selective_units.dv_location.values.astype(float)),
                                             0, selective_units.dv_location.values.astype(float)))
 
     # --- get ipsi vs. contra firing rate difference
@@ -125,11 +129,16 @@ def plot_unit_selectivity(probe_insertion, axs=None):
         ax.spines['top'].set_visible(False)
         ax.set_title(f'{title}\n% contra: {contra_p:.2f}\n% ipsi: {100-contra_p:.2f}')
         ax.set_xlim((-10, 60))
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
         # ax.set_ylim((0, ymax))
+
+    return fig if 'fig' in locals() else None
 
 
 def plot_unit_bilateral_photostim_effect(probe_insertion, axs=None):
     probe_insertion = probe_insertion.proj()
+    dv_loc = (ephys.ProbeInsertion.InsertionLocation & probe_insertion).fetch1('dv_location')
     cue_onset = (experiment.Period & 'period = "delay"').fetch1('period_start')
 
     no_stim_cond = (psth.TrialCondition
@@ -148,10 +157,10 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, axs=None):
 
     units = ephys.Unit & probe_insertion & 'unit_quality != "all"'
 
-    metrics = pd.DataFrame(columns=['unit', 'x', 'y', 'frate_change'])
+    metrics = pd.DataFrame(columns=['unit', 'x', 'y', 'frate_change'])  # TODO: account for dv_location
 
     # XXX: could be done with 1x fetch+join
-    for u_idx, unit in enumerate(units.fetch('KEY')):
+    for u_idx, unit in enumerate(units.fetch('KEY', order_by='unit')):
 
         x, y = (ephys.Unit & unit).fetch1('unit_posx', 'unit_posy')
 
@@ -165,9 +174,10 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, axs=None):
         ctrl_frate = nostim_psth[np.logical_and(nostim_edge[1:] >= cue_onset, nostim_edge[1:] <= cue_onset + stim_dur)]
         stim_frate = bistim_psth[np.logical_and(bistim_edge[1:] >= cue_onset, bistim_edge[1:] <= cue_onset + stim_dur)]
 
-        frate_change = np.abs(stim_frate.mean() - ctrl_frate.mean()) / ctrl_frate.mean()
+        frate_change = (stim_frate.mean() - ctrl_frate.mean()) / ctrl_frate.mean()
+        frate_change = abs(frate_change) if frate_change < 0 else 0.0001
 
-        metrics.loc[u_idx] = (int(unit['unit']), x, y, frate_change)
+        metrics.loc[u_idx] = (int(unit['unit']), x, y - dv_loc, frate_change)
 
     metrics.frate_change = metrics.frate_change / metrics.frate_change.max()
 
@@ -186,6 +196,8 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, axs=None):
     axs.spines['top'].set_visible(False)
     axs.set_title('% change')
     axs.set_xlim((-10, 60))
+
+    return fig if 'fig' in locals() else None
 
 
 def plot_stacked_contra_ipsi_psth(units, axs=None):
@@ -300,6 +312,8 @@ def plot_avg_contra_ipsi_psth(units, axs=None):
     for ax in axs:
         ax.set_ylim((0, ymax))
 
+    return fig if 'fig' in locals() else None
+
 
 def plot_psth_bilateral_photostim_effect(units, axs=None):
     units = units.proj()
@@ -362,6 +376,8 @@ def plot_psth_bilateral_photostim_effect(units, axs=None):
              & 'period = "delay"').fetch1('period_start')
     axs[1].axvspan(delay, delay + stim_dur, alpha=0.3, color='royalblue')
 
+    return fig if 'fig' in locals() else None
+
 
 def plot_coding_direction(units, time_period=None, axs=None):
     _, proj_contra_trial, proj_ipsi_trial, time_stamps = psth.compute_CD_projected_psth(
@@ -383,6 +399,8 @@ def plot_coding_direction(units, time_period=None, axs=None):
     axs.spines['top'].set_visible(False)
     axs.set_ylabel('CD projection (a.u.)')
     axs.set_xlabel('Time (s)')
+
+    return fig if 'fig' in locals() else None
 
 
 def plot_paired_coding_direction(unit_g1, unit_g2, labels=None, time_period=None):
@@ -439,6 +457,7 @@ def plot_paired_coding_direction(unit_g1, unit_g2, labels=None, time_period=None
                             figsize=(8, 6), fig=None, scatter_kws=None)
     jplot['fig'].show()
 
+    return fig
 
 # ---------- PLOTTING HELPER FUNCTIONS --------------
 

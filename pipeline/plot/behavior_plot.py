@@ -93,7 +93,7 @@ def plot_photostim_effect(session_key, photostim_key, axis=None, title=''):
     return axis
 
 
-def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, axs=None):
+def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(-0.5, 1.5), axs=None):
     """
     Plot jaw movement per trial, time-locked to cue-onset, with spike times overlay
     :param session_key: session where the trials are from
@@ -120,15 +120,17 @@ def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, axs
                                & {'action_event_type': f'{tr["trial_instruction"]} lick'}).fetch(
                 'action_event_time', order_by='action_event_time', limit=1)[0]
             go_time = (experiment.TrialEvent & tr & 'trial_event_type="go"').fetch1('trial_event_time')
+            # print(f'Go time: {go_time} - First lick: {first_lick_time}')
 
             spike_times = (ephys.TrialSpikes & tr & unit_key).fetch1('spike_times')
+            # print(f'\tFirst spike: {spike_times[0]}')
             spike_times = spike_times + float(go_time) - float(first_lick_time)  # realigned to first-lick
 
             tvec = tvec - float(first_lick_time)
 
             yield jaw, tongue_out_bool, spike_times, tvec
 
-    if not axs:
+    if axs is None:
         fig, axs = plt.subplots(1, 2, figsize=(16, 8))
     assert len(axs) == 2
 
@@ -138,14 +140,13 @@ def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, axs
         for tr_id, (jaw, tongue_out_bool, spike_times, tvec) in enumerate(get_trial_track(trial_tracks)):
             ax.plot(tvec, jaw + tr_id * h_spacing, '.k', markersize=1)
             ax.plot(tvec[tongue_out_bool], jaw[tongue_out_bool] + tr_id * h_spacing, '.', color='lime', markersize=2)
-            ax.plot(spike_times, np.full_like(spike_times, jaw[tongue_out_bool].mean()
-                                              + 4*jaw[tongue_out_bool].std()) + tr_id * h_spacing,
+            ax.plot(spike_times, np.full_like(spike_times, jaw[tongue_out_bool].mean() + h_spacing/10) + tr_id * h_spacing,
                     '|', color=spk_color, markersize=4)
             ax.set_title(ax_name)
             ax.axvline(x=0, linestyle='--', color='k')
 
             # cosmetic
-            ax.set_xlim((-0.5, 1.5))
+            ax.set_xlim(xlim)
             ax.set_yticks([])
             ax.spines['left'].set_visible(False)
             ax.spines['right'].set_visible(False)
