@@ -254,7 +254,7 @@ class UnitPsth(dj.Computed):
         trials = TrialCondition.get_trials(key['trial_condition_name'])
 
         # fetch related spike times
-        q = (ephys.TrialSpikes & key & trials.proj())
+        q = (ephys.Unit.TrialSpikes & key & trials.proj())
         spikes = q.fetch('spike_times')
 
         if len(spikes) == 0:
@@ -286,8 +286,8 @@ class UnitPsth(dj.Computed):
         unit condition and included / excluded condition (sub-)variables.
         Returns a dictionary of the form:
           {
-             'trials': ephys.TrialSpikes.trials,
-             'spikes': ephys.TrialSpikes.spikes,
+             'trials': ephys.Unit.TrialSpikes.trials,
+             'spikes': ephys.Unit.TrialSpikes.spikes,
              'psth': UnitPsth.unit_psth,
              'raster': Spike * Trial raster [np.array, np.array]
           }
@@ -301,7 +301,7 @@ class UnitPsth(dj.Computed):
 
         psth = (UnitPsth & {**condition_key, **unit_key}).fetch1()['unit_psth']
 
-        spikes, trials = (ephys.TrialSpikes & trials & unit_key).fetch(
+        spikes, trials = (ephys.Unit.TrialSpikes & trials & unit_key).fetch(
             'spike_times', 'trial', order_by='trial asc')
 
         raster = [np.concatenate(spikes),
@@ -361,7 +361,7 @@ class PeriodSelectivity(dj.Computed):
                 return
 
         # retrieving the spikes of interest,
-        spikes_q = ((ephys.TrialSpikes & key)
+        spikes_q = ((ephys.Unit.TrialSpikes & key)
                     & (experiment.BehaviorTrial()
                        & {'task': 'audio delay'}
                        & {'early_lick': 'no early'}
@@ -477,7 +477,7 @@ def compute_unit_psth(unit_key, trial_keys, per_trial=False):
     Compute unit-level psth for the specified unit and trial-set - return (time,)
     If per_trial == True, compute trial-level psth - return (trial#, time)
     """
-    q = (ephys.TrialSpikes & unit_key & trial_keys)
+    q = (ephys.Unit.TrialSpikes & unit_key & trial_keys)
     if not q:
         return None
 
@@ -545,10 +545,10 @@ def compute_CD_projected_psth(units, time_period=None):
     # get units and trials - ensuring they have trial-spikes
     contra_trials = (TrialCondition().get_trials(
         'good_noearlylick_right_hit' if unit_hemi == 'left' else 'good_noearlylick_left_hit')
-                     & session_key & ephys.TrialSpikes).fetch('KEY')
+                     & session_key & ephys.Unit.TrialSpikes).fetch('KEY')
     ipsi_trials = (TrialCondition().get_trials(
         'good_noearlylick_left_hit' if unit_hemi == 'left' else 'good_noearlylick_right_hit')
-                     & session_key & ephys.TrialSpikes).fetch('KEY')
+                     & session_key & ephys.Unit.TrialSpikes).fetch('KEY')
 
     # get per-trial unit psth for all units - unit# x (trial# x time)
     contra_trial_psths, contra_edges = zip(*(compute_unit_psth(unit, contra_trials, per_trial=True)
