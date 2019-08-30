@@ -470,7 +470,7 @@ class EphysIngest(dj.Imported):
 
         # bitcode path (ex: 'SC022_030319_Imec3_bitcode.mat')
         bf_path = list(pathlib.Path(dpath, probe).glob(
-            '{}_*_*_bitcode.mat'.format(h2o)))[0]
+            '{}_*bitcode.mat'.format(h2o)))[0]
         log.info('.... loading bf_path: {}'.format(str(bf_path)))
         bf = spio.loadmat(str(bf_path))
 
