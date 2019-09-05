@@ -27,7 +27,7 @@ class ProbeInsertion(dj.Manual):
         -> experiment.BrainLocation
         ml_location=null: float # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
         ap_location=null: float # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
-        dv_location=null: float # um from dura to first site of probe; ventral is positive; based on manipulator coordinates/reconstructed track
+        dv_location=null: float # um from dura to first site of the probe; ventral is positive; based on manipulator coordinates/reconstructed track
         ml_angle=null: float # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
         ap_angle=null: float # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive. 
         """
@@ -253,7 +253,8 @@ class UnitStat(dj.Computed):
 
     isi_violation_thresh = 0.002  # violation threshold of 2 ms
 
-    key_source = ProbeInsertion & experiment.SessionTrial.proj() - (experiment.SessionTrial * Unit - Unit.TrialSpikes.proj())
+    # NOTE - this key_source logic relies on ALL TrialSpikes ingest all at once in a transaction
+    key_source = ProbeInsertion & TrialSpikes
 
     def make(self, key):
         def make_insert():

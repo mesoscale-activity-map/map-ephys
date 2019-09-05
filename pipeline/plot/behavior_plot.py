@@ -8,7 +8,7 @@ from scipy import signal
 from pipeline import experiment, tracking, ephys
 
 
-def plot_correct_proportion(session_key, window_size=None, axis=None):
+def plot_correct_proportion(session_key, window_size=None, axs=None):
     """
     For a particular session (specified by session_key), extract all behavior trials
     Get outcome of each trials, map to (0, 1) - 1 if 'hit'
@@ -24,18 +24,19 @@ def plot_correct_proportion(session_key, window_size=None, axis=None):
 
     mv_outcomes = signal.convolve(trial_outcomes, kernel, mode='same')
 
-    if not axis:
+    fig = None
+    if not axs:
         fig, axis = plt.subplots(1, 1)
 
-    axis.bar(range(len(mv_outcomes)), trial_outcomes * mv_outcomes.max(), alpha=0.3)
-    axis.plot(range(len(mv_outcomes)), mv_outcomes, 'k', linewidth=3)
-    axis.set_xlabel('Trial')
-    axis.set_ylabel('Proportion correct')
+    axs.bar(range(len(mv_outcomes)), trial_outcomes * mv_outcomes.max(), alpha=0.3)
+    axs.plot(range(len(mv_outcomes)), mv_outcomes, 'k', linewidth=3)
+    axs.set_xlabel('Trial')
+    axs.set_ylabel('Proportion correct')
 
-    return axis
+    return fig
 
 
-def plot_photostim_effect(session_key, photostim_key, axis=None, title=''):
+def plot_photostim_effect(session_key, photostim_key, axs=None, title=''):
     """
     For all trials in this "session_key", split to 4 groups:
     + control left-lick
@@ -69,31 +70,32 @@ def plot_photostim_effect(session_key, photostim_key, axis=None, title=''):
     cp_stim_left = get_correct_proportion(stim_left)
     cp_stim_right = get_correct_proportion(stim_right)
 
-    if not axis:
-        fig, axis = plt.subplots(1, 1)
+    fig = None
+    if not axs:
+        fig, axs = plt.subplots(1, 1)
 
-    axis.plot([0, 1], [cp_ctrl_left, cp_stim_left], 'b', label='lick left trials')
-    axis.plot([0, 1], [cp_ctrl_right, cp_stim_right], 'r', label='lick right trials')
+    axs.plot([0, 1], [cp_ctrl_left, cp_stim_left], 'b', label='lick left trials')
+    axs.plot([0, 1], [cp_ctrl_right, cp_stim_right], 'r', label='lick right trials')
 
     # plot cosmetic
     ylim = (min([cp_ctrl_left, cp_stim_left, cp_ctrl_right, cp_stim_right]) - 0.1, 1)
     ylim = (0, 1) if ylim[0] < 0 else ylim
 
-    axis.set_xlim((0, 1))
-    axis.set_ylim(ylim)
-    axis.set_xticks([0, 1])
-    axis.set_xticklabels(['Control', 'Photostim'])
-    axis.set_ylabel('Proportion correct')
+    axs.set_xlim((0, 1))
+    axs.set_ylim(ylim)
+    axs.set_xticks([0, 1])
+    axs.set_xticklabels(['Control', 'Photostim'])
+    axs.set_ylabel('Proportion correct')
 
-    axis.legend(loc='lower left')
-    axis.spines['right'].set_visible(False)
-    axis.spines['top'].set_visible(False)
-    axis.set_title(title)
+    axs.legend(loc='lower left')
+    axs.spines['right'].set_visible(False)
+    axs.spines['top'].set_visible(False)
+    axs.set_title(title)
 
-    return axis
+    return fig
 
 
-def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, axs=None):
+def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(-0.5, 1.5), axs=None):
     """
     Plot jaw movement per trial, time-locked to cue-onset, with spike times overlay
     :param session_key: session where the trials are from
@@ -120,6 +122,7 @@ def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, axs
                                & {'action_event_type': f'{tr["trial_instruction"]} lick'}).fetch(
                 'action_event_time', order_by='action_event_time', limit=1)[0]
             go_time = (experiment.TrialEvent & tr & 'trial_event_type="go"').fetch1('trial_event_time')
+            # print(f'Go time: {go_time} - First lick: {first_lick_time}')
 
             spike_times = (ephys.Unit.TrialSpikes & tr & unit_key).fetch1('spike_times')
             spike_times = spike_times + float(go_time) - float(first_lick_time)  # realigned to first-lick
@@ -128,7 +131,8 @@ def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, axs
 
             yield jaw, tongue_out_bool, spike_times, tvec
 
-    if not axs:
+    fig = None
+    if axs is None:
         fig, axs = plt.subplots(1, 2, figsize=(16, 8))
     assert len(axs) == 2
 
@@ -138,18 +142,19 @@ def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, axs
         for tr_id, (jaw, tongue_out_bool, spike_times, tvec) in enumerate(get_trial_track(trial_tracks)):
             ax.plot(tvec, jaw + tr_id * h_spacing, '.k', markersize=1)
             ax.plot(tvec[tongue_out_bool], jaw[tongue_out_bool] + tr_id * h_spacing, '.', color='lime', markersize=2)
-            ax.plot(spike_times, np.full_like(spike_times, jaw[tongue_out_bool].mean()
-                                              + 4*jaw[tongue_out_bool].std()) + tr_id * h_spacing,
+            ax.plot(spike_times, np.full_like(spike_times, jaw[tongue_out_bool].mean() + h_spacing/10) + tr_id * h_spacing,
                     '|', color=spk_color, markersize=4)
             ax.set_title(ax_name)
             ax.axvline(x=0, linestyle='--', color='k')
 
             # cosmetic
-            ax.set_xlim((-0.5, 1.5))
+            ax.set_xlim(xlim)
             ax.set_yticks([])
             ax.spines['left'].set_visible(False)
             ax.spines['right'].set_visible(False)
             ax.spines['top'].set_visible(False)
+
+    return fig
 
 
 def plot_trial_jaw_movement(trial_key):
@@ -192,7 +197,7 @@ def plot_trial_jaw_movement(trial_key):
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
 
-    return axs
+    return fig
 
 
 def plot_windowed_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), w_size=0.01, bin_counts=20):
@@ -231,6 +236,8 @@ def plot_windowed_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), w_size=0.01, bi
         ax.set_xlabel(f'{w_start*1000:.0f} to {(w_start + w_size)*1000:.0f}ms', fontweight='bold')
         ax.axis('on')
 
+    return fig
+
 
 def plot_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), bin_counts=20):
     trks = (tracking.Tracking.JawTracking * experiment.BehaviorTrial & session_key & experiment.TrialEvent)
@@ -262,6 +269,8 @@ def plot_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), bin_counts=20):
     axs[0].set_title('left lick trials', loc='left', fontweight='bold')
     plot_polar_histogram(r_insta_phase.flatten(), axs[1], bin_counts=bin_counts)
     axs[1].set_title('right lick trials', loc='left', fontweight='bold')
+
+    return fig
 
 
 def plot_polar_histogram(data, ax=None, bin_counts=30):
