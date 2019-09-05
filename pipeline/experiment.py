@@ -67,7 +67,6 @@ class TaskProtocol(dj.Lookup):
          ]
 
 
-
 @schema
 class Photostim(dj.Manual):
     definition = """
