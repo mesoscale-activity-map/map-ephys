@@ -261,8 +261,8 @@ class EphysIngest(dj.Imported):
                             log.debug('.... (u: {}, t: {})'.format(u, t))
 
         # insert TrialSpikes
-        log.info('.. ephys.TrialSpikes')
-        with InsertBuffer(ephys.TrialSpikes, 10000, skip_duplicates=True,
+        log.info('.. ephys.Unit.TrialSpikes')
+        with InsertBuffer(ephys.Unit.TrialSpikes, 10000, skip_duplicates=True,
                           allow_direct_insert=True) as ib:
 
             for i, u in enumerate(set(units)):

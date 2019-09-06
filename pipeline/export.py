@@ -78,7 +78,7 @@ def export_recording(insert_key, filepath=None):
     insertion = (ephys.ProbeInsertion.InsertionLocation & insert_key).fetch1()
     units = (ephys.Unit & insert_key).fetch()
 
-    trial_spikes = (ephys.TrialSpikes & insert_key).fetch(order_by='trial asc')
+    trial_spikes = (ephys.Unit.TrialSpikes & insert_key).fetch(order_by='trial asc')
 
     behav = (experiment.BehaviorTrial & insert_key).fetch(order_by='trial asc')
 
