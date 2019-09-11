@@ -279,6 +279,10 @@ def write_to_activity_viewer_json(probe_insertion, filepath=None, per_period=Fal
              & probe_insertion & 'unit_quality != "all"').fetch(
         'unit', 'ccf_x', 'ccf_y', 'ccf_z', 'avg_firing_rate', order_by='unit')
 
+    if len(units) == 0:
+        print('The units in the specified ProbeInsertion do not have CCF data yet')
+        return
+
     penetration_group = {'id': uid, 'points': []}
 
     for unit, x, y, z, spk_rate in zip(*units):
