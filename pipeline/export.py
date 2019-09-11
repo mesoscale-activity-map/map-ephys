@@ -1,13 +1,11 @@
 import math
-
 from collections import defaultdict
-
 import numpy as np
 import scipy.io as scio
 import json
 import pathlib
+from tqdm import tqdm
 from datetime import datetime
-
 from pipeline import lab
 from pipeline import experiment
 from pipeline import ephys
@@ -279,13 +277,13 @@ def write_to_activity_viewer_json(probe_insertion, filepath=None, per_period=Fal
              & probe_insertion & 'unit_quality != "all"').fetch(
         'unit', 'ccf_x', 'ccf_y', 'ccf_z', 'avg_firing_rate', order_by='unit')
 
-    if len(units) == 0:
+    if len(units[0]) == 0:
         print('The units in the specified ProbeInsertion do not have CCF data yet')
         return
 
     penetration_group = {'id': uid, 'points': []}
 
-    for unit, x, y, z, spk_rate in zip(*units):
+    for unit, x, y, z, spk_rate in tqdm(zip(*units)):
         contra_frate, ipsi_frate = (psth.PeriodSelectivity & probe_insertion
                                     & f'unit={unit}' & 'period in ("sample", "delay", "response")').fetch(
             'contra_firing_rate', 'ipsi_firing_rate')
@@ -299,20 +297,14 @@ def write_to_activity_viewer_json(probe_insertion, filepath=None, per_period=Fal
             radius = [spk_rate]
 
         unit_dict = {'id': unit, 'x': x, 'y': y, 'z': z, 'alpha': 0.8,
-                     'color': {'t': range(len(sel_color)), 'vals': sel_color},
-                     'radius': {'t': range(len(radius)), 'vals': radius}}
+                     'color': {'t': list(range(len(sel_color))), 'vals': sel_color},
+                     'radius': {'t': list(range(len(radius))), 'vals': radius}}
 
         penetration_group['points'].append(unit_dict)
 
     if filepath:
         path = pathlib.Path(filepath)
-        assert path.exists()
         with open(path, 'w') as fp:
-            json.dump(penetration_group, fp)
-    else:
-        return json.dumps(penetration_group)
+            json.dump(penetration_group, fp, default=str)
 
-
-
-
-
+    return penetration_group

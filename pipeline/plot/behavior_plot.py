@@ -346,3 +346,94 @@ def compute_insta_phase_amp(data, fs, freq_band=(5, 15)):
         return insta_amp.reshape((trial_count, time_count)), insta_phase.reshape((trial_count, time_count))
     else:
         return insta_amp, insta_phase
+
+
+def get_event_locked_tracking_insta_phase(trials, event, d_name):
+    """
+    Get instantaneous phase of the jaw movement, at the time of the specified "event", for each of the specified "trials"
+    :param trials: query of the SessionTrial - note: the subsequent fetch() will be order_by='trial'
+    :param event: "event" can be
+     + a list of time equal length to the trials - specifying the time of each trial to extract the insta-phase
+     + a single string, representing the event-name to extract the time for each trial
+        In such case, the "event" can be the events in
+            + experiment.TrialEvent
+            + experiment.ActionEvent
+        In the case that multiple of such "event_name" are found in a trial, the 1st one will be selected
+            (e.g. multiple "lick left", then the 1st "lick left" is selected)
+    :param d_name: any attribute name under the tracking.Tracking table - e.g. 'jaw_y', 'tongue_x', etc.
+    :return: list of instantaneous phase, in the same order of specified "trials"
+    """
+
+    trials = trials.proj()
+
+    tracking_fs = (tracking.TrackingDevice & tracking.Tracking & trials).fetch('sampling_rate')
+    if len(set(tracking_fs)) > 1:
+        raise Exception('Multiple tracking Fs found!')
+    else:
+        tracking_fs = float(tracking_fs[0])
+
+    # ---- process the "d_name" input ----
+    nose_types = [n for n in tracking.Tracking.NoseTracking.heading.names if n not in tracking.Tracking.heading.names]
+    tongue_types = [n for n in tracking.Tracking.TongueTracking.heading.names if n not in tracking.Tracking.heading.names]
+    jaw_types = [n for n in tracking.Tracking.JawTracking.heading.names if n not in tracking.Tracking.heading.names]
+
+    if d_name not in nose_types + tongue_types + jaw_types:
+        print(f'Unknown tracking type: {d_name}\nAvailable tracking types are: {nose_types + tongue_types + jaw_types}')
+        return
+
+    for trk_types, trk_tbl in zip((nose_types, tongue_types, jaw_types),
+                                  (tracking.Tracking.NoseTracking, tracking.Tracking.TongueTracking, tracking.Tracking.JawTracking)):
+        if d_name in trk_types:
+            d_tbl = trk_tbl
+
+    # ---- process the "event" input ----
+    if isinstance(event, (list, np.array)):
+        assert len(event) == len(trials)
+        tr_ids, trk_data = trials.aggr(d_tbl, trk_data=d_name, keep_all_rows=True).fetch(
+            'trial', 'trk_data', order_by='trial')
+
+        eve_idx = np.array(event).astype(float) * tracking_fs
+
+    elif isinstance(event, str):
+        trial_event_types = experiment.TrialEventType.fetch('trial_event_type')
+        action_event_types = experiment.ActionEventType.fetch('action_event_type')
+
+        if event in trial_event_types:
+            event_tbl = experiment.TrialEvent
+            eve_attr = 'trial_event_type'
+        elif event in action_event_types:
+            event_tbl = experiment.ActionEvent
+            eve_attr = 'action_event_type'
+        else:
+            print(f'Unknown event: {event}\nAvailable events are: {list(trial_event_types) + list(action_event_types)}')
+            return
+
+        tr_ids, trk_data, eve_times = trials.aggr(d_tbl, trk_data=d_name, keep_all_rows=True).aggr(
+            event_tbl & {eve_attr: event}, 'trk_data', event_time='min(action_event_time)', keep_all_rows=True).fetch(
+            'trial', 'trk_data', 'event_time', order_by='trial')
+
+        eve_idx = eve_times.astype(float) * tracking_fs
+
+    else:
+        print('Unknown "event" argument!')
+        return
+
+    # ---- the computation part ----
+
+    # for trials with no jaw data (None), set to np.nan array
+    no_trk_trid = [idx for idx, jaw in enumerate(trk_data) if jaw is None]
+    with_trk_trid = np.array(list(set(range(len(trk_data))) ^ set(no_trk_trid))).astype(int)
+
+    trk_data = [d for d in trk_data if d is not None]
+
+    flattened_jaws = np.hstack(trk_data)
+    jsize = np.cumsum([0] + [j.size for j in trk_data])
+    _, phase = compute_insta_phase_amp(flattened_jaws, tracking_fs, freq_band=(5, 15))
+    stacked_insta_phase = [phase[start: end] for start, end in zip(jsize[:-1], jsize[1:])]
+
+    trial_eve_insta_phase = [stacked_insta_phase[np.where(with_trk_trid == tr_id)[0][0]][int(e_idx)]
+                             if not np.isnan(e_idx) and tr_id in with_trk_trid else np.nan
+                             for tr_id, e_idx in enumerate(eve_idx)]
+
+    return trial_eve_insta_phase
+
