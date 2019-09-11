@@ -74,19 +74,19 @@ def ingest_histology(*args):
 def populate_psth(*args):
 
     log.info('ephys.UnitStat.populate()')
-    ephys.UnitStat.populate()
+    ephys.UnitStat.populate(reserve_jobs=True, display_progress=True)
 
     log.info('ephys.UnitCellType.populate()')
-    ephys.UnitCellType.populate()
+    ephys.UnitCellType.populate(reserve_jobs=True, display_progress=True)
 
     log.info('psth.UnitPsth.populate()')
-    psth.UnitPsth.populate()
+    psth.UnitPsth.populate(reserve_jobs=True, display_progress=True)
 
     log.info('psth.PeriodSelectivity.populate()')
-    psth.PeriodSelectivity.populate()
+    psth.PeriodSelectivity.populate(reserve_jobs=True, display_progress=True)
 
     log.info('psth.UnitSelectivity.populate()')
-    psth.UnitSelectivity.populate()
+    psth.UnitSelectivity.populate(reserve_jobs=True, display_progress=True)
 
 
 def nuke_all():
