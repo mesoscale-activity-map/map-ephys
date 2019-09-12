@@ -387,7 +387,7 @@ def get_event_locked_tracking_insta_phase(trials, event, d_name):
             d_tbl = trk_tbl
 
     # ---- process the "event" input ----
-    if isinstance(event, (list, np.array)):
+    if isinstance(event, (list, np.ndarray)):
         assert len(event) == len(trials)
         tr_ids, trk_data = trials.aggr(d_tbl, trk_data=d_name, keep_all_rows=True).fetch(
             'trial', 'trk_data', order_by='trial')
@@ -400,16 +400,18 @@ def get_event_locked_tracking_insta_phase(trials, event, d_name):
 
         if event in trial_event_types:
             event_tbl = experiment.TrialEvent
-            eve_attr = 'trial_event_type'
+            eve_type_attr = 'trial_event_type'
+            eve_time_attr = 'trial_event_time'
         elif event in action_event_types:
             event_tbl = experiment.ActionEvent
-            eve_attr = 'action_event_type'
+            eve_type_attr = 'action_event_type'
+            eve_time_attr = 'trial_event_time'
         else:
             print(f'Unknown event: {event}\nAvailable events are: {list(trial_event_types) + list(action_event_types)}')
             return
 
         tr_ids, trk_data, eve_times = trials.aggr(d_tbl, trk_data=d_name, keep_all_rows=True).aggr(
-            event_tbl & {eve_attr: event}, 'trk_data', event_time='min(action_event_time)', keep_all_rows=True).fetch(
+            event_tbl & {eve_type_attr: event}, 'trk_data', event_time=f'min({eve_time_attr})', keep_all_rows=True).fetch(
             'trial', 'trk_data', 'event_time', order_by='trial')
 
         eve_idx = eve_times.astype(float) * tracking_fs
@@ -423,6 +425,10 @@ def get_event_locked_tracking_insta_phase(trials, event, d_name):
     # for trials with no jaw data (None), set to np.nan array
     no_trk_trid = [idx for idx, jaw in enumerate(trk_data) if jaw is None]
     with_trk_trid = np.array(list(set(range(len(trk_data))) ^ set(no_trk_trid))).astype(int)
+
+    if len(with_trk_trid) == 0:
+        print(f'The specified trials do not have any {d_name}')
+        return
 
     trk_data = [d for d in trk_data if d is not None]
 
