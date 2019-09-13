@@ -8,12 +8,13 @@ from scipy import signal
 from pipeline import experiment, tracking, ephys
 
 
-def plot_correct_proportion(session_key, window_size=None, axs=None):
+def plot_correct_proportion(session_key, window_size=None, axs=None, plot=True):
     """
     For a particular session (specified by session_key), extract all behavior trials
     Get outcome of each trials, map to (0, 1) - 1 if 'hit'
     Compute the moving average of these outcomes, based on the specified window_size (number of trial to average)
     window_size is set to 10% of the total trial number if not specified
+    Return the figure handle and the performance data array
     """
 
     trial_outcomes = (experiment.BehaviorTrial & session_key).fetch('outcome')
@@ -25,15 +26,16 @@ def plot_correct_proportion(session_key, window_size=None, axs=None):
     mv_outcomes = signal.convolve(trial_outcomes, kernel, mode='same')
 
     fig = None
-    if not axs:
-        fig, axis = plt.subplots(1, 1)
+    if plot:
+        if not axs:
+            fig, axis = plt.subplots(1, 1)
 
-    axs.bar(range(len(mv_outcomes)), trial_outcomes * mv_outcomes.max(), alpha=0.3)
-    axs.plot(range(len(mv_outcomes)), mv_outcomes, 'k', linewidth=3)
-    axs.set_xlabel('Trial')
-    axs.set_ylabel('Proportion correct')
+        axs.bar(range(len(mv_outcomes)), trial_outcomes * mv_outcomes.max(), alpha=0.3)
+        axs.plot(range(len(mv_outcomes)), mv_outcomes, 'k', linewidth=3)
+        axs.set_xlabel('Trial')
+        axs.set_ylabel('Proportion correct')
 
-    return fig
+    return fig, mv_outcomes
 
 
 def plot_photostim_effect(session_key, photostim_key, axs=None, title=''):
@@ -442,4 +444,3 @@ def get_event_locked_tracking_insta_phase(trials, event, d_name):
                              for tr_id, e_idx in enumerate(eve_idx)]
 
     return trial_eve_insta_phase
-
