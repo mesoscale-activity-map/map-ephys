@@ -37,12 +37,8 @@ class GlobusStorageLocation(dj.Lookup):
         if custom and 'globus.storage_locations' in custom:  # test config
             return custom['globus.storage_locations']
 
-        return (('raw-ephys',
-                 '5b875fda-4185-11e8-bb52-0ac6873fc732',
-                 'publication/raw-ephys'),
-                ('raw-video',
-                 '5b875fda-4185-11e8-bb52-0ac6873fc732',
-                 'publication/raw-video'),)
+        return (('raw-ephys', '5b875fda-4185-11e8-bb52-0ac6873fc732', '/')
+                ('raw-video', '5b875fda-4185-11e8-bb52-0ac6873fc732', '/'))
 
     @classmethod
     def local_endpoint(cls, globus_alias=None):
@@ -56,17 +52,14 @@ class GlobusStorageLocation(dj.Lookup):
               'endpoint_path': str  # corresponding local path
           }
         '''
-        custom = dj.config.get('custom', None)
-        if custom and 'globus.local_endpoints' in custom:
-            try:
-                return custom['globus.local_endpoints'][globus_alias]
-            except KeyError:
-                pass
+        le = dj.config.get('custom', {}).get('globus.local_endpoints', None)
 
-        raise dj.DataJointError(
-            "globus_local_endpoints for {} not configured".format(
-                globus_alias))
+        if le is None or globus_alias not in le:
 
+            raise dj.DataJointError(
+                "globus_local_endpoints for {} not configured".format(
+                    globus_alias))
+    
 
 @schema
 class GlobusPublishedDataSet(dj.Manual):
@@ -109,7 +102,6 @@ class RawEphysFileTypes(dj.Lookup):
                  '.imec.lf.meta',
                  None,
                  "recording metadata for 'lf-2.5kHz' files")]
-
 
 @schema
 class ArchivedRawEphysTrial(dj.Imported):
@@ -333,13 +325,24 @@ class ArchivedVideoFile(dj.Imported):
 
     Note: video_file_name tracked here as trial->file map is non-deterministic
 
+    Directory locations of the form:
+
+    {Water restriction number}\{Session Date}\video
+
+    with file naming convention of the form:
+
+    {Water restriction number}_{camera-position-string}_NNN-NNNN.avi
+
+    Where 'NNN' is determined from the 'tracking map file' which maps
+    trials to videos as outlined in tracking.py
+
     XXX:
 
     Using key-source based loookup as is currently done,
     may have trials for which there is no tracking,
     so camera cannot be determined to do file lookup, thus videos are missed.
     This could be resolved via schema adjustment, or file-traversal
-    based 'opportunistic' registration strategy, more TBD.
+    based 'opportunistic' registration strategy.
     '''
 
     definition = """
