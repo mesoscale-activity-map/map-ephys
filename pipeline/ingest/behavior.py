@@ -42,8 +42,11 @@ class RigDataPath(dj.Lookup):
 
     @property
     def contents(self):
-        if 'rig_data_paths' in dj.config['custom']:  # for local testing
-            return dj.config['custom']['rig_data_paths']
+
+        custom_paths = dj.config.get('custom', {}).get('rig_data_paths', None)
+
+        if custom_paths:
+            return custom_paths
 
         return (('TRig1', r'\\MOHARB-NUC1\Documents\Arduino\Bpod_Train1\Bpod Local\Data', 0), # Hardcode the rig path
                 ('TRig2', r'\\MOHARB-WW2\C\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
