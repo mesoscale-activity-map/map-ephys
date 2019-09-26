@@ -167,11 +167,11 @@ class GlobusStorageManager:
         def _cb(ep, dirname, node):
             ''' default 'print path' callback '''
             if node['DATA_TYPE'] == 'file':
-                basename = node['name']
+                t, basename = 'f', node['name']
             else:
-                basename = node['path']
+                t, basename = 'd', node['path']
 
-            print('{}:{}/{}'.format(ep, dirname, basename))
+            print('{} {}:{}/{}'.format(t, ep, dirname, basename))
 
         ep, path = self.ep_parts(ep_path)
         cb = _cb if not cb else cb
