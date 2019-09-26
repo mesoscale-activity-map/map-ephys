@@ -37,8 +37,8 @@ class GlobusStorageLocation(dj.Lookup):
         if custom and 'globus.storage_locations' in custom:  # test config
             return custom['globus.storage_locations']
 
-        return (('raw-ephys', '5b875fda-4185-11e8-bb52-0ac6873fc732', '/')
-                ('raw-video', '5b875fda-4185-11e8-bb52-0ac6873fc732', '/'))
+        return (('raw-ephys', '5b875fda-4185-11e8-bb52-0ac6873fc732', '/'),
+                ('raw-video', '5b875fda-4185-11e8-bb52-0ac6873fc732', '/'),)
 
     @classmethod
     def local_endpoint(cls, globus_alias=None):
@@ -59,7 +59,9 @@ class GlobusStorageLocation(dj.Lookup):
             raise dj.DataJointError(
                 "globus_local_endpoints for {} not configured".format(
                     globus_alias))
-    
+
+        return le[globus_alias]
+
 
 @schema
 class GlobusPublishedDataSet(dj.Manual):
