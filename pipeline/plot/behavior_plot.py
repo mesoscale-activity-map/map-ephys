@@ -38,7 +38,7 @@ def plot_correct_proportion(session_key, window_size=None, axs=None, plot=True):
     return fig, mv_outcomes
 
 
-def plot_photostim_effect(session_key, photostim_key, axs=None, title=''):
+def plot_photostim_effect(session_key, photostim_key, axs=None, title='', plot=True):
     """
     For all trials in this "session_key", split to 4 groups:
     + control left-lick
@@ -74,26 +74,28 @@ def plot_photostim_effect(session_key, photostim_key, axs=None, title=''):
     cp_stim_right = get_correct_proportion(stim_right)
 
     fig = None
-    if not axs:
-        fig, axs = plt.subplots(1, 1)
 
-    axs.plot([0, 1], [cp_ctrl_left, cp_stim_left], 'b', label='lick left trials')
-    axs.plot([0, 1], [cp_ctrl_right, cp_stim_right], 'r', label='lick right trials')
+    if plot:
+        if not axs:
+            fig, axs = plt.subplots(1, 1)
 
-    # plot cosmetic
-    ylim = (min([cp_ctrl_left, cp_stim_left, cp_ctrl_right, cp_stim_right]) - 0.1, 1)
-    ylim = (0, 1) if ylim[0] < 0 else ylim
+        axs.plot([0, 1], [cp_ctrl_left, cp_stim_left], 'b', label='lick left trials')
+        axs.plot([0, 1], [cp_ctrl_right, cp_stim_right], 'r', label='lick right trials')
 
-    axs.set_xlim((0, 1))
-    axs.set_ylim(ylim)
-    axs.set_xticks([0, 1])
-    axs.set_xticklabels(['Control', 'Photostim'])
-    axs.set_ylabel('Proportion correct')
+        # plot cosmetic
+        ylim = (min([cp_ctrl_left, cp_stim_left, cp_ctrl_right, cp_stim_right]) - 0.1, 1)
+        ylim = (0, 1) if ylim[0] < 0 else ylim
 
-    axs.legend(loc='lower left')
-    axs.spines['right'].set_visible(False)
-    axs.spines['top'].set_visible(False)
-    axs.set_title(title)
+        axs.set_xlim((0, 1))
+        axs.set_ylim(ylim)
+        axs.set_xticks([0, 1])
+        axs.set_xticklabels(['Control', 'Photostim'])
+        axs.set_ylabel('Proportion correct')
+
+        axs.legend(loc='lower left')
+        axs.spines['right'].set_visible(False)
+        axs.spines['top'].set_visible(False)
+        axs.set_title(title)
 
     return fig, (cp_ctrl_left, cp_ctrl_right), (cp_stim_left, cp_stim_right)
 
