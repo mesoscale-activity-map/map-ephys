@@ -163,14 +163,14 @@ def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, xli
 
 def plot_unit_jaw_phase_dist(session_key, unit_key, bin_counts=20):
     trk = (tracking.Tracking.JawTracking * tracking.Tracking.TongueTracking
-           * experiment.BehaviorTrial & session_key & experiment.ActionEvent & ephys.TrialSpikes)
+           * experiment.BehaviorTrial & session_key & experiment.ActionEvent & ephys.Unit.TrialSpikes)
     tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & session_key).fetch1('sampling_rate'))
 
     l_trial_trk = trk & 'trial_instruction="left"' & 'early_lick="no early"' & 'outcome="hit"'
     r_trial_trk = trk & 'trial_instruction="right"' & 'early_lick="no early"' & 'outcome="hit"'
 
     def get_trial_track(trial_tracks):
-        jaws, spike_times, go_times = (ephys.TrialSpikes * trial_tracks * experiment.TrialEvent
+        jaws, spike_times, go_times = (ephys.Unit.TrialSpikes * trial_tracks * experiment.TrialEvent
                                        & unit_key & 'trial_event_type="go"').fetch(
             'jaw_y', 'spike_times', 'trial_event_time')
         spike_times = spike_times + go_times.astype(float)
