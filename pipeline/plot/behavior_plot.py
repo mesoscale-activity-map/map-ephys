@@ -109,7 +109,7 @@ def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, xli
     :param trial_limit: number of trial to plot to
     """
     trk = (tracking.Tracking.JawTracking * tracking.Tracking.TongueTracking
-           * experiment.BehaviorTrial & session_key & experiment.ActionEvent & ephys.TrialSpikes)
+           * experiment.BehaviorTrial & session_key & experiment.ActionEvent & ephys.Unit.TrialSpikes)
     tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & session_key).fetch1('sampling_rate'))
 
     l_trial_trk = trk & 'trial_instruction="left"' & 'early_lick="no early"' & 'outcome="hit"'
@@ -128,7 +128,7 @@ def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, xli
                 'action_event_time', order_by='action_event_time', limit=1)[0]
             go_time = (experiment.TrialEvent & tr & 'trial_event_type="go"').fetch1('trial_event_time')
 
-            spike_times = (ephys.TrialSpikes & tr & unit_key).fetch1('spike_times')
+            spike_times = (ephys.Unit.TrialSpikes & tr & unit_key).fetch1('spike_times')
             spike_times = spike_times + float(go_time) - float(first_lick_time)  # realigned to first-lick
 
             tvec = tvec - float(first_lick_time)
