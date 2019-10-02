@@ -102,7 +102,7 @@ class GlobusStorageManager:
         if not knownok:
             log.debug('activate_endpoint(): not knownok response')
 
-    def _wait(self, task, timeout=10, polling_interval=10):
+    def _wait(self, task, timeout=10, polling_interval=1):
         ''' tranfer client common wait wrapper '''
         return self.xfer_client.task_wait(task, timeout, polling_interval)
 
@@ -171,7 +171,7 @@ class GlobusStorageManager:
             else:
                 t, basename = 'd', node['path']
 
-            print('{} {}:{}/{}'.format(t, ep, dirname, basename))
+            print('{}: {}:{}/{}'.format(t, ep, dirname, basename))
 
         ep, path = self.ep_parts(ep_path)
         cb = _cb if not cb else cb
@@ -196,8 +196,8 @@ class GlobusStorageManager:
         ep, path = self.ep_parts(ep_path)
         return self.xfer_client.operation_mkdir(ep, path=path)
 
-    def rmdir(self, ep_path, recursive=False):
-        ''' remove a directory at ep_path '''
+    def rm(self, ep_path, recursive=False):
+        ''' remove an item at ep_path; recursive for dirs '''
         tc = self.xfer_client
         ep, path = self.ep_parts(ep_path)
         ddata = DeleteData(tc, ep, recursive=recursive)

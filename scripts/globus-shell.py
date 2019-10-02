@@ -38,20 +38,27 @@ class GlobusShell:
         self._cwd = '/' + path.lstrip('/')
 
     def ls(self, ep=None, path=None):
+        # TODO: should strip cwd from each pathname..
 
         ep = ep if ep else self._cep
         path = path if path else self._cwd
 
+        # todo: support ls with arg and also no path cwd
+        # path1 = (path1 if path1.startswith('/')
+        #          else '{}/{}'.format(self._cwd, path1))
+
         lsdat = self._gsm.ls('{}:{}'.format(ep, path))
         for i in iter(lsdat):
             if i['type'] == 'file':
-                print('f: {}/{}'.format(path.lstrip('/'), i['name']))
+                print('f: {}'.format(i['name']))
             else:
-                print('d: {}/{}'.format(path.lstrip('/'), i['name']))
+                print('d: {}'.format(i['name']))
 
         return True
 
     def find(self, ep=None, path=None):
+
+        # FIXME: cwd interpoloate
 
         ep = ep if ep else self._cep
         path = path if path else self._cwd
@@ -60,21 +67,69 @@ class GlobusShell:
         return self._gsm.fts('{}:/{}'.format(ep, path))
 
     def mv(self, ep1, path1, ep2, path2):
+
+        ep1 = ep1 if ep1 else self._cep
+        ep2 = ep2 if ep2 else self._cep
+
         if ep1 != ep2:
             return False
+
+        path1 = (path1 if path1.startswith('/')
+                 else '{}/{}'.format(self._cwd, path1))
+
+        path2 = (path2 if path2.startswith('/')
+                 else '{}/{}'.format(self._cwd, path2))
 
         return self._gsm.rename('{}:/{}'.format(ep1, path1),
                                 '{}:/{}'.format(ep2, path2))
 
     def rm(self, ep, path):
+
+        ep = ep if ep else self._cep
+        path = (path if path.startswith('/')
+                else '{}/{}'.format(self._cwd, path))
+
         return self._gsm.rmdir('{}:/{}'.format(ep, path))
 
+    def rm(self, ep, path):
+
+        ep = ep if ep else self._cep
+        path = (path if path.startswith('/')
+                else '{}/{}'.format(self._cwd, path))
+
+        return self._gsm.rm('{}:/{}'.format(ep, path))
+
+    def rm_r(self, ep, path):
+        # XXX: drop when shell gets 'args' support & add -r flag
+        ep = ep if ep else self._cep
+        path = (path if path.startswith('/')
+                else '{}/{}'.format(self._cwd, path))
+
+        return self._gsm.rm('{}:/{}'.format(ep, path), recursive=True)
+
     def cp(self, ep1, path1, ep2, path2, recursive=False):
+        # XXX: delete_destination_xtra for mirroring?
+        # XXX: recursive -> make flag - false required for file,
+        # true reqd? (or at least accepted) for dirs
+        print('cp', ep1, path1, ep2, path2, recursive)
+
+        ep1 = ep1 if ep1 else self._cep
+        ep2 = ep2 if ep2 else self._cep
+
+        path1 = (path1 if path1.startswith('/')
+                 else '{}/{}'.format(self._cwd, path1))
+
+        path2 = (path2 if path2.startswith('/')
+                 else '{}/{}'.format(self._cwd, path2))
+
         return self._gsm.cp('{}:/{}'.format(ep1, path1),
                             '{}:/{}'.format(ep2, path2), recursive)
 
+    def mkdir(self):
+        raise NotImplementedError('mkdef() plox')
+
     def sh(self, prompt='globus% '):
-        cmds = set(('env', 'pwd', 'cd', 'ls', 'find', 'cp', 'mv', 'rm'))
+        cmds = set(('env', 'pwd', 'cd', 'ls', 'find', 'cp', 'mv', 'rm', 'rm_r'))
 
         while True:
             try:
@@ -84,12 +139,13 @@ class GlobusShell:
 
             cmd, args = data[0], data[1:]
 
-            log.debug('cmd input: {} -> ({}, {}'.format(data, cmd, args))
+            print('cmd input: {} -> ({}, {}'.format(data, cmd, args))
 
             if not cmd or cmd.startswith('#'):
                 continue
             elif cmd in cmds:
                 try:
+                    # TODO: need 'flags' handling so e.g. 'cp -r' set recursive
                     args = (i.split(':') if ':' in i else (None, i)
                             for i in args)
 
