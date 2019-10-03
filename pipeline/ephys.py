@@ -254,7 +254,7 @@ class UnitStat(dj.Computed):
     isi_violation_thresh = 0.002  # violation threshold of 2 ms
 
     # NOTE - this key_source logic relies on ALL TrialSpikes ingest all at once in a transaction
-    key_source = ProbeInsertion & TrialSpikes
+    key_source = ProbeInsertion & Unit.TrialSpikes
 
     def make(self, key):
         def make_insert():

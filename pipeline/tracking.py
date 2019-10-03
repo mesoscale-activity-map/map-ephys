@@ -23,7 +23,7 @@ class TrackingDevice(dj.Lookup):
     """
     contents = [
        ('Camera 0', 'side', 1/0.0034, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)'),
-       ('Camera 1', 'bottom', 1//0.0034, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)')]
+       ('Camera 1', 'bottom', 1/0.0034, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)')]
 
 
 @schema
@@ -47,7 +47,7 @@ class Tracking(dj.Imported):
         ---
         nose_x:                 longblob        # nose x location (px)
         nose_y:                 longblob        # nose y location (px)
-        nose_likelihood:        longblob        # nose location likelyhood
+        nose_likelihood:        longblob        # nose location likelihood
         """
 
     class TongueTracking(dj.Part):
@@ -56,7 +56,7 @@ class Tracking(dj.Imported):
         ---
         tongue_x:               longblob        # tongue x location (px)
         tongue_y:               longblob        # tongue y location (px)
-        tongue_likelihood:      longblob        # tongue location likelyhood
+        tongue_likelihood:      longblob        # tongue location likelihood
         """
 
     class JawTracking(dj.Part):
@@ -65,5 +65,23 @@ class Tracking(dj.Imported):
         ---
         jaw_x:                  longblob        # jaw x location (px)
         jaw_y:                  longblob        # jaw y location (px)
-        jaw_likelihood:         longblob        # jaw location likelyhood
+        jaw_likelihood:         longblob        # jaw location likelihood
+        """
+
+    class LeftPawTracking(dj.Part):
+        definition = """
+        -> Tracking
+        ---
+        left_paw_x:             longblob        # left paw x location (px)
+        left_paw_y:             longblob        # left paw y location (px)
+        left_paw_likelihood:    longblob        # left paw location likelihood
+        """
+
+    class RightPawTracking(dj.Part):
+        definition = """
+        -> Tracking
+        ---
+        right_paw_x:            longblob        # right paw x location (px)
+        right_paw_y:            longblob        # right_paw y location (px)
+        right_paw_likelihood:   longblob        # right_paw location likelihood
         """

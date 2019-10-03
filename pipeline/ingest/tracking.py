@@ -47,6 +47,7 @@ class TrackingIngest(dj.Imported):
         definition = '''
         -> TrackingIngest
         -> experiment.SessionTrial
+        -> tracking.TrackingDevice
         ---
         tracking_file:          varchar(255)            # tracking file subpath
         '''
@@ -56,6 +57,8 @@ class TrackingIngest(dj.Imported):
         TrackingIngest .make() function
         '''
         log.info('TrackingIngest().make(): key: {k}'.format(k=key))
+
+        self.insert1(key)
 
         h2o = (lab.WaterRestriction() & key).fetch1('water_restriction_number')
         session = (experiment.Session() & key).fetch1()
@@ -94,7 +97,7 @@ class TrackingIngest(dj.Imported):
                 log.info('skipping {} - does not exist'.format(campath))
                 continue
 
-            tmap = self.load_campath(campath)
+            tmap = self.load_campath(campath)  # file:trial
 
             n_tmap = len(tmap)
             log.info('loading tracking data for {} trials'.format(n_tmap))
@@ -118,7 +121,8 @@ class TrackingIngest(dj.Imported):
                 tfull = list(tpath.glob(tfile))
 
                 if not tfull or len(tfull) > 1:
-                    log.info('tracking file {} mismatch'.format(tfull))
+                    log.info('file mismatch: file: {} trial: {} ({})'.format(
+                        t, tmap[t], tfull))
                     continue
 
                 tfull = tfull[-1]
@@ -145,21 +149,47 @@ class TrackingIngest(dj.Imported):
                 tracking.Tracking.insert1(
                     recs['tracking'], allow_direct_insert=True)
 
-                tracking.Tracking.NoseTracking.insert1(
-                    recs['nose'], allow_direct_insert=True)
+                if 'nose' in recs:
+                    tracking.Tracking.NoseTracking.insert1(
+                        recs['nose'], allow_direct_insert=True)
 
-                tracking.Tracking.TongueTracking.insert1(
-                    recs['tongue'], allow_direct_insert=True)
+                if 'tongue' in recs:
+                    tracking.Tracking.TongueTracking.insert1(
+                        recs['tongue'], allow_direct_insert=True)
 
-                tracking.Tracking.JawTracking.insert1(
-                    recs['jaw'], allow_direct_insert=True)
+                if 'jaw' in recs:
+                    tracking.Tracking.JawTracking.insert1(
+                        recs['jaw'], allow_direct_insert=True)
+
+                if 'paw_left' in recs:
+                    fmap = {'paw_left_x': 'left_paw_x',  # remap field names
+                            'paw_left_y': 'left_paw_y',
+                            'paw_left_likelihood': 'left_paw_likelihood'}
+
+                    tracking.Tracking.LeftPawTracking.insert1({
+                        **{k: v for k, v in recs['paw_left'].items()
+                           if k not in fmap},
+                        **{fmap[k]: v for k, v in recs['paw_left'].items()
+                           if k in fmap}}, allow_direct_insert=True)
+
+                if 'paw_right' in recs:
+                    fmap = {'paw_right_x': 'right_paw_x',  # remap field names
+                            'paw_right_y': 'right_paw_y',
+                            'paw_right_likelihood': 'right_paw_likelihood'}
+
+                    tracking.Tracking.RightPawTracking.insert1({
+                        **{k: v for k, v in recs['paw_right'].items()
+                           if k not in fmap},
+                        **{fmap[k]: v for k, v in recs['paw_right'].items()
+                           if k in fmap}}, allow_direct_insert=True)
+
+                TrackingIngest.TrackingFile.insert1(
+                    {**key, 'trial': tmap[t], 'tracking_device': tdev,
+                     'tracking_file': str(tfull.relative_to(tdat))})
 
             log.info('... completed {}/{} items.'.format(i, n_tmap))
-            log.info('... saving load record')
 
-            self.insert1(key)
-
-            log.info('... done.')
+        log.info('... done.')
 
     @staticmethod
     def load_campath(campath):
