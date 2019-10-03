@@ -28,7 +28,7 @@ def plot_correct_proportion(session_key, window_size=None, axs=None, plot=True):
     fig = None
     if plot:
         if not axs:
-            fig, axis = plt.subplots(1, 1)
+            fig, axs = plt.subplots(1, 1)
 
         axs.bar(range(len(mv_outcomes)), trial_outcomes * mv_outcomes.max(), alpha=0.3)
         axs.plot(range(len(mv_outcomes)), mv_outcomes, 'k', linewidth=3)
@@ -38,7 +38,7 @@ def plot_correct_proportion(session_key, window_size=None, axs=None, plot=True):
     return fig, mv_outcomes
 
 
-def plot_photostim_effect(session_key, photostim_key, axs=None, title=''):
+def plot_photostim_effect(session_key, photostim_key, axs=None, title='', plot=True):
     """
     For all trials in this "session_key", split to 4 groups:
     + control left-lick
@@ -47,6 +47,7 @@ def plot_photostim_effect(session_key, photostim_key, axs=None, title=''):
     + photostim right-lick (specified by "photostim_key")
     Plot correct proportion for each group
     Note: ignore "early lick" trials
+    Return: fig, (cp_ctrl_left, cp_ctrl_right), (cp_stim_left, cp_stim_right)
     """
 
     ctrl_trials = experiment.BehaviorTrial - experiment.PhotostimTrial & session_key
@@ -73,28 +74,30 @@ def plot_photostim_effect(session_key, photostim_key, axs=None, title=''):
     cp_stim_right = get_correct_proportion(stim_right)
 
     fig = None
-    if not axs:
-        fig, axs = plt.subplots(1, 1)
 
-    axs.plot([0, 1], [cp_ctrl_left, cp_stim_left], 'b', label='lick left trials')
-    axs.plot([0, 1], [cp_ctrl_right, cp_stim_right], 'r', label='lick right trials')
+    if plot:
+        if not axs:
+            fig, axs = plt.subplots(1, 1)
 
-    # plot cosmetic
-    ylim = (min([cp_ctrl_left, cp_stim_left, cp_ctrl_right, cp_stim_right]) - 0.1, 1)
-    ylim = (0, 1) if ylim[0] < 0 else ylim
+        axs.plot([0, 1], [cp_ctrl_left, cp_stim_left], 'b', label='lick left trials')
+        axs.plot([0, 1], [cp_ctrl_right, cp_stim_right], 'r', label='lick right trials')
 
-    axs.set_xlim((0, 1))
-    axs.set_ylim(ylim)
-    axs.set_xticks([0, 1])
-    axs.set_xticklabels(['Control', 'Photostim'])
-    axs.set_ylabel('Proportion correct')
+        # plot cosmetic
+        ylim = (min([cp_ctrl_left, cp_stim_left, cp_ctrl_right, cp_stim_right]) - 0.1, 1)
+        ylim = (0, 1) if ylim[0] < 0 else ylim
 
-    axs.legend(loc='lower left')
-    axs.spines['right'].set_visible(False)
-    axs.spines['top'].set_visible(False)
-    axs.set_title(title)
+        axs.set_xlim((0, 1))
+        axs.set_ylim(ylim)
+        axs.set_xticks([0, 1])
+        axs.set_xticklabels(['Control', 'Photostim'])
+        axs.set_ylabel('Proportion correct')
 
-    return fig
+        axs.legend(loc='lower left')
+        axs.spines['right'].set_visible(False)
+        axs.spines['top'].set_visible(False)
+        axs.set_title(title)
+
+    return fig, (cp_ctrl_left, cp_ctrl_right), (cp_stim_left, cp_stim_right)
 
 
 def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(-0.5, 1.5), axs=None):
@@ -124,7 +127,6 @@ def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, xli
                                & {'action_event_type': f'{tr["trial_instruction"]} lick'}).fetch(
                 'action_event_time', order_by='action_event_time', limit=1)[0]
             go_time = (experiment.TrialEvent & tr & 'trial_event_type="go"').fetch1('trial_event_time')
-            # print(f'Go time: {go_time} - First lick: {first_lick_time}')
 
             spike_times = (ephys.Unit.TrialSpikes & tr & unit_key).fetch1('spike_times')
             spike_times = spike_times + float(go_time) - float(first_lick_time)  # realigned to first-lick
@@ -155,6 +157,48 @@ def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, xli
             ax.spines['left'].set_visible(False)
             ax.spines['right'].set_visible(False)
             ax.spines['top'].set_visible(False)
+
+    return fig
+
+
+def plot_unit_jaw_phase_dist(session_key, unit_key, bin_counts=20):
+    trk = (tracking.Tracking.JawTracking * tracking.Tracking.TongueTracking
+           * experiment.BehaviorTrial & session_key & experiment.ActionEvent & ephys.Unit.TrialSpikes)
+    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & session_key).fetch1('sampling_rate'))
+
+    l_trial_trk = trk & 'trial_instruction="left"' & 'early_lick="no early"' & 'outcome="hit"'
+    r_trial_trk = trk & 'trial_instruction="right"' & 'early_lick="no early"' & 'outcome="hit"'
+
+    def get_trial_track(trial_tracks):
+        jaws, spike_times, go_times = (ephys.Unit.TrialSpikes * trial_tracks * experiment.TrialEvent
+                                       & unit_key & 'trial_event_type="go"').fetch(
+            'jaw_y', 'spike_times', 'trial_event_time')
+        spike_times = spike_times + go_times.astype(float)
+
+        flattened_jaws = np.hstack(jaws)
+        jsize = np.cumsum([0] + [j.size for j in jaws])
+        _, phase = compute_insta_phase_amp(flattened_jaws, tracking_fs, freq_band = (5, 15))
+        stacked_insta_phase = [phase[start: end] for start, end in zip(jsize[:-1], jsize[1:])]
+
+        for spks, jphase in zip(spike_times, stacked_insta_phase):
+            j_tvec = np.arange(len(jphase)) / tracking_fs
+
+            # find the tracking timestamps corresponding to the spiketimes; and get the corresponding phase
+            nearest_indices = np.searchsorted(j_tvec, spks, side="left")
+            nearest_indices = np.where(nearest_indices == len(j_tvec), len(j_tvec) - 1, nearest_indices)
+
+            yield jphase[nearest_indices]
+
+    l_insta_phase = np.hstack(list(get_trial_track(l_trial_trk)))
+    r_insta_phase = np.hstack(list(get_trial_track(r_trial_trk)))
+
+    fig, axs = plt.subplots(1, 2, figsize=(12, 8), subplot_kw=dict(polar=True))
+    fig.subplots_adjust(wspace=0.6)
+
+    plot_polar_histogram(l_insta_phase, axs[0], bin_counts=bin_counts)
+    axs[0].set_title('left lick trials', loc='left', fontweight='bold')
+    plot_polar_histogram(r_insta_phase, axs[1], bin_counts=bin_counts)
+    axs[1].set_title('right lick trials', loc='left', fontweight='bold')
 
     return fig
 
