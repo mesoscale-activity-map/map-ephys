@@ -112,88 +112,6 @@ class RawEphysFileTypes(dj.Lookup):
 
 
 @schema
-class ArchivedRawEphysSession(dj.Imported):
-    definition = """
-    -> experiment.Session
-    """
-
-    class ProbeFolder(dj.Part):
-        definition = """
-        -> master
-        probe_folder_name: varchar(36)
-        """
-
-    class RawProbeData(dj.Part):
-        definition = """
-        -> ArchivedRawEphysSession.ProbeFolder
-        -> DataSet
-        """
-
-
-@schema
-class ArchivedSortedEphysSession(dj.Imported):
-    definition = """
-    -> experiment.Session
-    sorted_name: varchar(128)
-    """
-
-    class ProbeFolder(dj.Part):
-        definition = """
-        -> master
-        probe_folder_name: varchar(36)
-        """
-
-    class SortedProbeData(dj.Part):
-        definition = """
-        -> ArchivedSortedEphysSession.ProbeFolder
-        -> DataSet
-        """
-
-
-@schema
-class PublishedEphysSession(dj.Imported):
-    definition = """
-    -> experiment.Session
-    """
-
-    class ProbeInsertion(dj.Part):
-        definition = """
-        -> master
-        -> ephys.ProbeInsertion
-        ---
-        -> ArchivedRawEphysSession.RawProbeData
-        -> ArchivedSortedEphysSession.SortedProbeData
-        """
-
-
-@schema
-class DataSetType(dj.Lookup):
-    definition = """
-    dataset_type: varchar(64)
-    """
-
-    contents = zip(['trialized', 'continuous', 'sorted_spikes', 'tracking_video'])
-
-
-@schema
-class DataSet(dj.Manual):
-    definition = """
-    dataset_name: varchar(128)
-    ---
-    -> DataSetType
-    """
-
-    class PhysicalFile(dj.Part):
-        definition = """
-        -> master
-        local_rel_path: varchar(128)
-        ---
-        -> FileType
-        -> GlobusStorageLocation
-        """
-
-
-@schema
 class ArchivedRawEphysTrial(dj.Imported):
     """
     Table to track archive of raw ephys trial data.
@@ -406,23 +324,6 @@ class ArchivedRawEphysTrial(dj.Imported):
                     emsg = "couldn't transfer {} to {}".format(srcp, dstp)
                     log.error(emsg)
                     raise dj.DataJointError(emsg)
-
-
-
-@schema
-class ArchivedVideoTracking(dj.Imported):
-    definition = """
-    -> ArchivedSession
-    ---
-    -> DataSet
-    """
-
-    class TrialVideo(dj.Part):
-        definition = """
-        -> tracking.Tracking
-        ---
-        -> DataSet.PhysicalFile
-        """
 
 
 @schema
