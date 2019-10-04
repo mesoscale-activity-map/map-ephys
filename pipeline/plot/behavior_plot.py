@@ -8,6 +8,15 @@ from scipy import signal
 from pipeline import experiment, tracking, ephys
 
 
+# ======== Define some useful variables ==============
+
+_side_cam = {'tracking_device': 'Camera 0'}
+
+_tracked_nose_features = [n for n in tracking.Tracking.NoseTracking.heading.names if n not in tracking.Tracking.heading.names]
+_tracked_tongue_features = [n for n in tracking.Tracking.TongueTracking.heading.names if n not in tracking.Tracking.heading.names]
+_tracked_jaw_features = [n for n in tracking.Tracking.JawTracking.heading.names if n not in tracking.Tracking.heading.names]
+
+
 def plot_correct_proportion(session_key, window_size=None, axs=None, plot=True):
     """
     For a particular session (specified by session_key), extract all behavior trials
@@ -100,16 +109,25 @@ def plot_photostim_effect(session_key, photostim_key, axs=None, title='', plot=T
     return fig, (cp_ctrl_left, cp_ctrl_right), (cp_stim_left, cp_stim_right)
 
 
-def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(-0.5, 1.5), axs=None):
+def plot_tracking(session_key, unit_key,
+                  tracking_feature='jaw_y', camera_key=_side_cam,
+                  trial_offset=0, trial_limit=10, xlim=(-0.5, 1.5), axs=None):
     """
     Plot jaw movement per trial, time-locked to cue-onset, with spike times overlay
     :param session_key: session where the trials are from
     :param unit_key: unit for spike times overlay
+    :param tracking_feature: which tracking feature to plot (default to `jaw_y`)
+    :param camera_key: tracking from which camera to plot (default to Camera 0, i.e. the side camera)
     :param trial_offset: number of trial to plot from
     :param trial_limit: number of trial to plot to
     """
-    trk = (tracking.Tracking.JawTracking * tracking.Tracking.TongueTracking
-           * experiment.BehaviorTrial & session_key & experiment.ActionEvent & ephys.Unit.TrialSpikes)
+
+    if tracking_feature not in _tracked_nose_features + _tracked_tongue_features + _tracked_jaw_features:
+        print(f'Unknown tracking type: {tracking_feature}\nAvailable tracking types are: {_tracked_nose_features + _tracked_tongue_features + _tracked_jaw_features}')
+        return
+
+    trk = (tracking.Tracking.JawTracking * tracking.Tracking.TongueTracking * tracking.Tracking.NoseTracking
+           * experiment.BehaviorTrial & camera_key & session_key & experiment.ActionEvent & ephys.Unit.TrialSpikes)
     tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & session_key).fetch1('sampling_rate'))
 
     l_trial_trk = trk & 'trial_instruction="left"' & 'early_lick="no early"' & 'outcome="hit"'
@@ -117,10 +135,10 @@ def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, xli
 
     def get_trial_track(trial_tracks):
         for tr in trial_tracks.fetch(as_dict=True, offset=trial_offset, limit=trial_limit):
-            jaw = tr['jaw_y']
+            trk_feat = tr[tracking_feature]
             tongue_out_bool = tr['tongue_likelihood'] > 0.9
 
-            sample_counts = len(jaw)
+            sample_counts = len(trk_feat)
             tvec = np.arange(sample_counts) / tracking_fs
 
             first_lick_time = (experiment.ActionEvent & tr
@@ -133,7 +151,7 @@ def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, xli
 
             tvec = tvec - float(first_lick_time)
 
-            yield jaw, tongue_out_bool, spike_times, tvec
+            yield trk_feat, tongue_out_bool, spike_times, tvec
 
     fig = None
     if axs is None:
@@ -143,10 +161,10 @@ def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, xli
     h_spacing = 150
     for trial_tracks, ax, ax_name, spk_color in zip((l_trial_trk, r_trial_trk), axs,
                                                     ('left lick trials', 'right lick trials'), ('b', 'r')):
-        for tr_id, (jaw, tongue_out_bool, spike_times, tvec) in enumerate(get_trial_track(trial_tracks)):
-            ax.plot(tvec, jaw + tr_id * h_spacing, '.k', markersize=1)
-            ax.plot(tvec[tongue_out_bool], jaw[tongue_out_bool] + tr_id * h_spacing, '.', color='lime', markersize=2)
-            ax.plot(spike_times, np.full_like(spike_times, jaw[tongue_out_bool].mean() + h_spacing/10) + tr_id * h_spacing,
+        for tr_id, (trk_feat, tongue_out_bool, spike_times, tvec) in enumerate(get_trial_track(trial_tracks)):
+            ax.plot(tvec, trk_feat + tr_id * h_spacing, '.k', markersize=1)
+            ax.plot(tvec[tongue_out_bool], trk_feat[tongue_out_bool] + tr_id * h_spacing, '.', color='lime', markersize=2)
+            ax.plot(spike_times, np.full_like(spike_times, trk_feat[tongue_out_bool].mean() + h_spacing/10) + tr_id * h_spacing,
                     '|', color=spk_color, markersize=4)
             ax.set_title(ax_name)
             ax.axvline(x=0, linestyle='--', color='k')
@@ -163,7 +181,7 @@ def plot_jaw_movement(session_key, unit_key, trial_offset=0, trial_limit=10, xli
 
 def plot_unit_jaw_phase_dist(session_key, unit_key, bin_counts=20):
     trk = (tracking.Tracking.JawTracking * tracking.Tracking.TongueTracking
-           * experiment.BehaviorTrial & session_key & experiment.ActionEvent & ephys.Unit.TrialSpikes)
+           * experiment.BehaviorTrial & _side_cam & session_key & experiment.ActionEvent & ephys.Unit.TrialSpikes)
     tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & session_key).fetch1('sampling_rate'))
 
     l_trial_trk = trk & 'trial_instruction="left"' & 'early_lick="no early"' & 'outcome="hit"'
@@ -203,32 +221,37 @@ def plot_unit_jaw_phase_dist(session_key, unit_key, bin_counts=20):
     return fig
 
 
-def plot_trial_jaw_movement(trial_key):
+def plot_trial_tracking(trial_key, tracking_feature='jaw_y', camera_key=_side_cam,):
     """
     Plot trial-specific Jaw Movement time-locked to "go" cue
     """
-    trk = (tracking.Tracking.JawTracking * experiment.BehaviorTrial & trial_key & experiment.TrialEvent)
+    if tracking_feature not in _tracked_nose_features + _tracked_tongue_features + _tracked_jaw_features:
+        print(f'Unknown tracking type: {tracking_feature}\nAvailable tracking types are: {_tracked_nose_features + _tracked_tongue_features + _tracked_jaw_features}')
+        return
+
+    trk = (tracking.Tracking.JawTracking * tracking.Tracking.NoseTracking * tracking.Tracking.TongueTracking
+           * experiment.BehaviorTrial & camera_key & trial_key & experiment.TrialEvent)
     if len(trk) == 0:
         return 'The selected trial has no Action Event (e.g. cue start)'
 
     tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & trial_key).fetch1('sampling_rate'))
-    jaw = trk.fetch1('jaw_y')
+    trk_feat = trk.fetch1(tracking_feature)
     go_time = (experiment.TrialEvent & trk & 'trial_event_type="go"').fetch1('trial_event_time')
-    tvec = np.arange(len(jaw)) / tracking_fs - float(go_time)
+    tvec = np.arange(len(trk_feat)) / tracking_fs - float(go_time)
 
     b, a = signal.butter(5, (5, 15), btype='band', fs=tracking_fs)
-    filt_jaw = signal.filtfilt(b, a, jaw)
+    filt_trk_feat = signal.filtfilt(b, a, trk_feat)
 
-    analytic_signal = signal.hilbert(filt_jaw)
+    analytic_signal = signal.hilbert(filt_trk_feat)
     insta_amp = np.abs(analytic_signal)
     insta_phase = np.angle(analytic_signal)
 
     fig, axs = plt.subplots(2, 2, figsize=(16, 6))
     fig.subplots_adjust(hspace=0.4)
 
-    axs[0, 0].plot(tvec, jaw, '.k')
-    axs[0, 0].set_title('Jaw Movement')
-    axs[1, 0].plot(tvec, filt_jaw, '.k')
+    axs[0, 0].plot(tvec, trk_feat, '.k')
+    axs[0, 0].set_title(trk_feat)
+    axs[1, 0].plot(tvec, filt_trk_feat, '.k')
     axs[1, 0].set_title('Bandpass filtered 5-15Hz')
     axs[1, 0].set_xlabel('Time(s)')
     axs[0, 1].plot(tvec, insta_amp, '.k')
@@ -247,9 +270,9 @@ def plot_trial_jaw_movement(trial_key):
 
 
 def plot_windowed_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), w_size=0.01, bin_counts=20):
-    trks = (tracking.Tracking.JawTracking * experiment.BehaviorTrial
+    trks = (tracking.Tracking.JawTracking * experiment.BehaviorTrial & _side_cam
             & session_key & experiment.TrialEvent)
-    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & session_key).fetch1('sampling_rate'))
+    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & _side_cam & session_key).fetch1('sampling_rate'))
 
     tr_ids, jaws, trial_instructs, go_times = (trks * experiment.TrialEvent & 'trial_event_type="go"').fetch(
         'trial', 'jaw_y', 'trial_instruction', 'trial_event_time')
@@ -286,8 +309,8 @@ def plot_windowed_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), w_size=0.01, bi
 
 
 def plot_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), bin_counts=20):
-    trks = (tracking.Tracking.JawTracking * experiment.BehaviorTrial & session_key & experiment.TrialEvent)
-    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & session_key).fetch1('sampling_rate'))
+    trks = (tracking.Tracking.JawTracking * experiment.BehaviorTrial & _side_cam & session_key & experiment.TrialEvent)
+    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & _side_cam & session_key).fetch1('sampling_rate'))
 
     l_trial_trk = trks & 'trial_instruction="left"' & 'early_lick="no early"'
     r_trial_trk = trks & 'trial_instruction="right"' & 'early_lick="no early"'
@@ -393,7 +416,7 @@ def compute_insta_phase_amp(data, fs, freq_band=(5, 15)):
         return insta_amp, insta_phase
 
 
-def get_event_locked_tracking_insta_phase(trials, event, d_name):
+def get_event_locked_tracking_insta_phase(trials, event, tracking_feature):
     """
     Get instantaneous phase of the jaw movement, at the time of the specified "event", for each of the specified "trials"
     :param trials: query of the SessionTrial - note: the subsequent fetch() will be order_by='trial'
@@ -405,7 +428,7 @@ def get_event_locked_tracking_insta_phase(trials, event, d_name):
             + experiment.ActionEvent
         In the case that multiple of such "event_name" are found in a trial, the 1st one will be selected
             (e.g. multiple "lick left", then the 1st "lick left" is selected)
-    :param d_name: any attribute name under the tracking.Tracking table - e.g. 'jaw_y', 'tongue_x', etc.
+    :param tracking_feature: any attribute name under the tracking.Tracking table - e.g. 'jaw_y', 'tongue_x', etc.
     :return: list of instantaneous phase, in the same order of specified "trials"
     """
 
@@ -417,24 +440,21 @@ def get_event_locked_tracking_insta_phase(trials, event, d_name):
     else:
         tracking_fs = float(tracking_fs[0])
 
-    # ---- process the "d_name" input ----
-    nose_types = [n for n in tracking.Tracking.NoseTracking.heading.names if n not in tracking.Tracking.heading.names]
-    tongue_types = [n for n in tracking.Tracking.TongueTracking.heading.names if n not in tracking.Tracking.heading.names]
-    jaw_types = [n for n in tracking.Tracking.JawTracking.heading.names if n not in tracking.Tracking.heading.names]
+    # ---- process the "tracking_feature" input ----
 
-    if d_name not in nose_types + tongue_types + jaw_types:
-        print(f'Unknown tracking type: {d_name}\nAvailable tracking types are: {nose_types + tongue_types + jaw_types}')
+    if tracking_feature not in _tracked_nose_features + _tracked_tongue_features + _tracked_jaw_features:
+        print(f'Unknown tracking type: {tracking_feature}\nAvailable tracking types are: {_tracked_nose_features + _tracked_tongue_features + _tracked_jaw_features}')
         return
 
-    for trk_types, trk_tbl in zip((nose_types, tongue_types, jaw_types),
+    for trk_types, trk_tbl in zip((_tracked_nose_features, _tracked_tongue_features, _tracked_jaw_features),
                                   (tracking.Tracking.NoseTracking, tracking.Tracking.TongueTracking, tracking.Tracking.JawTracking)):
-        if d_name in trk_types:
+        if tracking_feature in trk_types:
             d_tbl = trk_tbl
 
     # ---- process the "event" input ----
     if isinstance(event, (list, np.ndarray)):
         assert len(event) == len(trials)
-        tr_ids, trk_data = trials.aggr(d_tbl, trk_data=d_name, keep_all_rows=True).fetch(
+        tr_ids, trk_data = trials.aggr(d_tbl, trk_data=tracking_feature, keep_all_rows=True).fetch(
             'trial', 'trk_data', order_by='trial')
 
         eve_idx = np.array(event).astype(float) * tracking_fs
@@ -455,7 +475,7 @@ def get_event_locked_tracking_insta_phase(trials, event, d_name):
             print(f'Unknown event: {event}\nAvailable events are: {list(trial_event_types) + list(action_event_types)}')
             return
 
-        tr_ids, trk_data, eve_times = trials.aggr(d_tbl, trk_data=d_name, keep_all_rows=True).aggr(
+        tr_ids, trk_data, eve_times = trials.aggr(d_tbl, trk_data=tracking_feature, keep_all_rows=True).aggr(
             event_tbl & {eve_type_attr: event}, 'trk_data', event_time=f'min({eve_time_attr})', keep_all_rows=True).fetch(
             'trial', 'trk_data', 'event_time', order_by='trial')
 
@@ -472,7 +492,7 @@ def get_event_locked_tracking_insta_phase(trials, event, d_name):
     with_trk_trid = np.array(list(set(range(len(trk_data))) ^ set(no_trk_trid))).astype(int)
 
     if len(with_trk_trid) == 0:
-        print(f'The specified trials do not have any {d_name}')
+        print(f'The specified trials do not have any {tracking_feature}')
         return
 
     trk_data = [d for d in trk_data if d is not None]
