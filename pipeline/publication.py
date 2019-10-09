@@ -613,26 +613,27 @@ class ArchivedVideoTracking(dj.Imported):
 
         # add ArchivedSession
 
-        as_key = {k: v for k, v in key.values
+        as_key = {k: v for k, v in key.items()
                   if k in experiment.Session.primary_key}
-        as_rec = {**as_key, 'globus_storge_location': globus_alias}
+        as_rec = {**as_key, 'globus_alias': globus_alias}
 
-        ArchivedSession.insert1(as_rec, skip_duplicates=True)
+        ArchivedSession.insert1(as_rec, allow_direct_insert=True,
+                                skip_duplicates=True)
 
         # add DataSet
 
         ds_type = 'tracking-video'
-        ds_name = '{}_{}_{}'.format(h20, sdate.isoformat(), ds_type)
-        ds_key = {'globus_storage_location': globus_alias,
-                  'dataset_name': ds_name}
+        ds_name = '{}_{}_{}_{}'.format(h2o, sdate.isoformat(), ds_type, tpos)
+        ds_key = {'globus_alias': globus_alias, 'dataset_name': ds_name}
         ds_rec = {**ds_key, 'dataset_type': ds_type}
 
-        DataSet.insert1(ds_rec)
+        DataSet.insert1(ds_rec, allow_direct_insert=True)
 
         # add ArchivedVideoTracking
 
         vt_key = {**as_key, 'tracking_device': tdev}
-        vt_rec = {**vt_key, 'dataset_name': ds_name}
+        vt_rec = {**vt_key, 'globus_alias': globus_alias,
+                  'dataset_name': ds_name}
 
         self.insert1(vt_rec)
 
@@ -673,9 +674,9 @@ class ArchivedVideoTracking(dj.Imported):
             pf_key = {**ds_key, 'file_subpath': vfile}
             pf_rec = {**pf_key, 'file_type': filetype}
 
-            DataSet.PhysicalFile.insert1({**pf_rec})
+            DataSet.PhysicalFile.insert1({**pf_rec}, allow_direct_insert=True)
                                           
-            trk_key = {k: v for k, v in key
+            trk_key = {k: v for k, v in {**key, 'trial': trial}.items()
                        if k in tracking.Tracking.primary_key}
 
             tv_rec = {**vt_key, **trk_key, **pf_key}
