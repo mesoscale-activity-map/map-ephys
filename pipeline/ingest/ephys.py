@@ -91,7 +91,7 @@ class EphysIngest(dj.Imported):
 
         rigpath = EphysDataPath().fetch1('data_path')
         h2o = sinfo['water_restriction_number']
-        date = key['session_date'].strftime('%Y-%m-%d')
+        date = key['session_date'].strftime('%Y%m%d')
 
         dpath = pathlib.Path(rigpath, h2o, date)
         dglob = '[0-9]/{}'  # probe directory pattern
@@ -241,7 +241,7 @@ class EphysIngest(dj.Imported):
                             'waveform': unit_wav[i][0]})
 
                 if ib.flush():
-                    log.debug('....', u)
+                    log.debug('.... {}'.format(u))
 
         # insert Unit.UnitTrial
         log.info('.. ephys.Unit.UnitTrial')

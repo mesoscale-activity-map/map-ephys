@@ -617,6 +617,12 @@ def mockdata():
             skip_duplicates=True
         )
         lab.Rig().insert1({
+            'rig': 'RRig2',
+            'room': '2w.334',
+            'rig_description': 'Recording rig2'},
+            skip_duplicates=True
+        )
+        lab.Rig().insert1({
             'rig': 'Ephys1',
             'room': '2w.334',
             'rig_description': 'Recording computer'},
