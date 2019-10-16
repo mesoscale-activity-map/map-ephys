@@ -3,6 +3,9 @@ import os
 import logging
 import pathlib
 
+from textwrap import dedent
+from collections import defaultdict
+
 import datajoint as dj
 
 from . import lab
@@ -37,12 +40,8 @@ class GlobusStorageLocation(dj.Lookup):
         if custom and 'globus.storage_locations' in custom:  # test config
             return custom['globus.storage_locations']
 
-        return (('raw-ephys',
-                 '5b875fda-4185-11e8-bb52-0ac6873fc732',
-                 'publication/raw-ephys'),
-                ('raw-video',
-                 '5b875fda-4185-11e8-bb52-0ac6873fc732',
-                 'publication/raw-video'),)
+        return (('raw-ephys', '5b875fda-4185-11e8-bb52-0ac6873fc732', '/'),
+                ('raw-tracking', '5b875fda-4185-11e8-bb52-0ac6873fc732', '/'),)
 
     @classmethod
     def local_endpoint(cls, globus_alias=None):
@@ -56,102 +55,170 @@ class GlobusStorageLocation(dj.Lookup):
               'endpoint_path': str  # corresponding local path
           }
         '''
-        custom = dj.config.get('custom', None)
-        if custom and 'globus.local_endpoints' in custom:
-            try:
-                return custom['globus.local_endpoints'][globus_alias]
-            except KeyError:
-                pass
+        le = dj.config.get('custom', {}).get('globus.local_endpoints', None)
 
-        raise dj.DataJointError(
-            "globus_local_endpoints for {} not configured".format(
-                globus_alias))
+        if le is None or globus_alias not in le:
 
+            raise dj.DataJointError(
+                "globus_local_endpoints for {} not configured".format(
+                    globus_alias))
 
-@schema
-class GlobusPublishedDataSet(dj.Manual):
-    """ Datasets published via Globus """
-    definition = """
-    globus_collection_name:    varchar(255)    # globus publication collection
-    globus_dataset_name:       varchar(255)    # globus dataset name
-    ---
-    -> GlobusStorageLocation
-    globus_doi:                varchar(1000)   # dataset DOI URL
-    """
+        return le[globus_alias]
 
 
 @schema
-class RawEphysFileTypes(dj.Lookup):
-    """
-    Raw Ephys file types/file suffixes:
-    """
-    # decimal(8, 4)
+class ArchivedSession(dj.Imported):
     definition = """
-    raw_ephys_filetype:         varchar(32)     # short filetype description
-    ---
-    raw_ephys_suffix:           varchar(16)     # file suffix
-    raw_ephys_freq=NULL:        Decimal(8, 4)   # kHz; NULL if n/a
-    raw_ephys_descr:            varchar(255)    # more detailed description
-    """
-    contents = [('ap-30kHz',
-                 '.imec.ap.bin',
-                 30.0,
-                 'ap channels @30kHz'),
-                ('ap-30kHz-meta',
-                 '.imec.ap.meta',
-                 None,
-                 "recording metadata for 'ap-30kHz' files"),
-                ('lf-2.5kHz',
-                 '.imec.lf.bin',
-                 2.5,
-                 'lf channels @2.5kHz'),
-                ('lf-2.5kHz-meta',
-                 '.imec.lf.meta',
-                 None,
-                 "recording metadata for 'lf-2.5kHz' files")]
-
-
-@schema
-class ArchivedRawEphysTrial(dj.Imported):
-    """
-    Table to track archive of raw ephys trial data.
-
-    Directory locations of the form:
-
-    {Water restriction number}\{Session Date}\{electrode_group number}
-
-    with file naming convention of the form:
-
-    {water_restriction_number}_{session_date}_{electrode_group}_g0_t{trial}.{raw_ephys_suffix}
-    """
-
-    definition = """
-    -> experiment.SessionTrial
-    -> ephys.ProbeInsertion
+    -> experiment.Session
     ---
     -> GlobusStorageLocation
     """
+
+
+@schema
+class DataSetType(dj.Lookup):
+    definition = """
+    dataset_type: varchar(64)
+    """
+
+    contents = zip(['ephys-raw-trialized',
+                    'ephys-raw-continuous',
+                    'ephys-sorted',
+                    'tracking-video'])
+
+
+@schema
+class FileType(dj.Lookup):
+    definition = """
+    file_type:            varchar(32)           # file type short name
+    ---
+    file_glob:            varchar(64)           # file match pattern
+    file_descr:           varchar(255)          # file type long description
+    """
+
+    @property
+    def contents(self):
+
+        data = [('3a-ap-trial',
+                 '*_g0_t[0-9]*.imec.ap.bin',
+                 '''
+                 3A Probe per-trial AP channels high pass filtered at 
+                 300Hz and sampled at 30kHz - recording file
+                 '''),
+                ('3a-ap-trial-meta',
+                 '*_g0_t[0-9]*.imec.ap.meta',
+                 '''
+                 3A Probe per-trial AP channels high pass 
+                 filtered at 300Hz and sampled at 30kHz - file metadata
+                 '''),
+                ('3a-lf-trial',
+                 '*_g0_t[0-9]*.imec.lf.bin',
+                 '''
+                 3A Probe per-trial AP channels low pass filtered at 
+                 300Hz and sampled at 2.5kHz - recording file
+                 '''),
+                ('3a-lf-trial-meta',
+                 '*_g0_t[0-9]*.imec.lf.meta',
+                 '''
+                 3A Probe per-trial AP channels low pass filtered at 
+                 300Hz and sampled at 2.5kHz - file metadata
+                 '''),
+                ('3b-ap-trial',
+                 '*_????????_g?_t[0-9]*.imec.ap.bin',
+                 '''
+                 3B Probe per-trial AP channels high pass filtered at 
+                 300Hz and sampled at 30kHz - recording file
+                 '''),
+                ('3b-ap-trial-meta',
+                 '*_????????_g?_t[0-9]*.imec.ap.meta',
+                 '''
+                 3B Probe per-trial AP channels high pass 
+                 filtered at 300Hz and sampled at 30kHz - file metadata
+                 '''),
+                ('3b-lf-trial',
+                 '*_????????_g?_t[0-9]*.imec.lf.bin',
+                 '''
+                 3B Probe per-trial AP channels low pass filtered at 
+                 300Hz and sampled at 2.5kHz - recording file
+                 '''),
+                ('3b-lf-trial-meta',
+                 '*_????????_g?_t[0-9]*.imec.lf.meta',
+                 '''
+                 3B Probe per-trial AP channels low pass filtered at 
+                 300Hz and sampled at 2.5kHz - file metadata
+                 '''),
+                ('3b-ap-concat',
+                 '*_????????_g?_tcat.imec.ap.bin',
+                 '''
+                 3B Probe concatenated AP channels high pass filtered at 
+                 300Hz and sampled at 30kHz - recording file
+                 '''),
+                ('3b-ap-concat-meta',
+                 '*_??????_g?_tcat.imec.ap.meta',
+                 '''
+                 3B Probe concatenated AP channels high pass 
+                 filtered at 300Hz and sampled at 30kHz - file metadata
+                 '''),
+                ('3b-lf-concat',
+                 '*_????????_g?_tcat.imec.lf.bin',
+                 '''
+                 3B Probe concatenated AP channels low pass filtered at 
+                 300Hz and sampled at 2.5kHz - recording file
+                 '''),
+                ('3b-lf-concat-meta',
+                 '*_????????_g?_tcat.imec.lf.meta',
+                 '''
+                 3B Probe concatenated AP channels low pass filtered at 
+                 300Hz and sampled at 2.5kHz - file metadata
+                 '''),
+                ('tracking-video-trial',        # TODO: better tracking name
+                 '*.avi',                       # TODO: correct glob
+                 '''
+                 Video Tracking per-trial file at 300fps
+                 ''')]                          # TODO: correct description
+
+        return [[dedent(i).lstrip('\n') for i in r] for r in data]
+
+
+@schema
+class DataSet(dj.Manual):
+    definition = """
+    -> GlobusStorageLocation
+    dataset_name:               varchar(128)
+    ---
+    -> DataSetType
+    """
+
+    class PhysicalFile(dj.Part):
+        definition = """
+        -> master
+        file_subpath:           varchar(128)
+        ---
+        -> FileType
+        """
+
+
+@schema
+class ArchivedRawEphys(dj.Imported):
+    definition = """
+    -> ArchivedSession
+    -> DataSet
+    probe_folder:               tinyint
+    """
+    
+    key_source = experiment.Session
 
     gsm = None  # for GlobusStorageManager
 
-    class ArchivedApChannel(dj.Part):
-        definition = """
-        -> ArchivedRawEphysTrial
-        """
 
-    class ArchivedApMeta(dj.Part):
-        definition = """
-        -> ArchivedRawEphysTrial
-        """
+    class RawEphysTrial(dj.Part):
+        """ file:trial mapping if applicable """
 
-    class ArchivedLfChannel(dj.Part):
         definition = """
-        -> ArchivedRawEphysTrial
-        """
-
-    class ArchivedLfMeta(dj.Part):
-        definition = """
-        -> ArchivedRawEphysTrial
+        -> master
+        -> experiment.SessionTrial
+        ---
+        -> DataSet.PhysicalFile
         """
 
     def get_gsm(self):
@@ -162,13 +229,9 @@ class ArchivedRawEphysTrial(dj.Imported):
         return self.gsm
 
     def make(self, key):
-        '''
-        determine available files from local endpoint and publish
-        (create database records and transfer to globus)
-        '''
-
-        # >>> list(key.keys())
-        # ['subject_id', 'session', 'trial', 'electrode_group', 'globus_alias']
+        """
+        discover files in local endpoint and transfer/register
+        """
 
         log.debug(key)
         globus_alias = 'raw-ephys'
@@ -177,88 +240,159 @@ class ArchivedRawEphysTrial(dj.Imported):
                                  le['endpoint_subdir'],
                                  le['endpoint_path'])
 
+        re, rep, rep_sub = (GlobusStorageLocation()
+                            & {'globus_alias': globus_alias}).fetch1()
+
+
         log.info('local_endpoint: {}:{} -> {}'.format(lep, lep_sub, lep_dir))
 
-        # get session related information needed for filenames/records
-        sinfo = ((lab.WaterRestriction
+        # Get session related information needed for filenames/records
+
+        sinfo = (lab.WaterRestriction
+                  * lab.Subject.proj()
+                  * experiment.Session() & key).fetch1()
+
+        tinfo = ((lab.WaterRestriction
                   * lab.Subject.proj()
                   * experiment.Session()
-                  * experiment.SessionTrial) & key).fetch1()
+                  * experiment.SessionTrial) & key).fetch()
 
         h2o = sinfo['water_restriction_number']
         sdate = sinfo['session_date']
-        eg = key['electrode_group']
-        trial = key['trial']
 
-        # build file locations:
-        # subdir - common subdirectory for globus/native filesystem
-        # fpat: base file pattern for this sessions files
-        # fbase: filesystem base path for this sessions files
-        # gbase: globus-url base path for this sessions files
+        subdir = pathlib.Path(h2o, str(sdate).replace('-','')) # + probeno
+        lep_subdir = pathlib.Path(lep_dir, subdir)
+        
+        probechoice = [str(i) for i in range(1,10)]  # XXX: hardcoded 1-9 probe
 
-        subdir = os.path.join(h2o, str(sdate), str(eg))
-        fpat = '{}_{}_{}_g0_t{}'.format(h2o, sdate, eg, trial)
-        fbase = os.path.join(lep_dir, subdir, fpat)
-        gbase = '/'.join((h2o, str(sdate), str(eg), fpat))
+        file_globs = {i['file_glob']: i['file_type'] for
+                      i in FileType.fetch(as_dict=True)}
 
-        # check for existence of actual files & use to build xfer list
-        log.debug('checking {}'.format(fbase))
+        archive = {} # N : dict(archive_probe)
+        archive_probe = {'dataset': None,
+                         'physical_files': [],
+                         'archived_session': None,
+                         'archived_ephys': None,
+                         'archived_trials': None}
 
-        ffound = []
-        ftypes = RawEphysFileTypes.contents
-        for ft in ftypes:
-            fname = '{}{}'.format(fbase, ft[1])
-            gname = '{}{}'.format(gbase, ft[1])
-            if not os.path.exists(fname):
-                log.debug('... {}: not found'.format(fname))
+        # Process each probe folder
+
+        for lep_probedir in lep_subdir.glob('*'):
+            lep_probe = str(lep_probedir.relative_to(lep_subdir))
+            if lep_probe not in probechoice:
+                log.info('skipping lep_probedir: {} - unexpected name'.format(
+                    lep_probedir))
                 continue
 
-            log.debug('... {}: found'.format(fname))
-            ffound.append((ft, gname,))
+            lep_matchfiles = {}
+            lep_probefiles = lep_probedir.glob('*.*')
 
-        # if files are found, transfer and create publication schema records
+            for pf in lep_probefiles:
+                pfbase = pf.relative_to(lep_probedir)
+                pfmatch = {k: pfbase.match(k) for k in file_globs}
+                if any(pfmatch.values()):
+                    log.debug('found valid file: {}'.format(pf))
+                    lep_matchfiles[pf] = tuple(k for k in pfmatch if pfmatch[k])
+                else:
+                    log.debug('skipping non-match file: {}'.format(pf))
+                    continue
 
-        if not len(ffound):
-            log.info('no files found for key')
-            return
+            # Build/Validate file records
 
-        log.info('found files for key: {}'.format([f[1] for f in ffound]))
+            if not all([len(lep_matchfiles[i]) == 1 for i in lep_matchfiles]):
+                # TODO: handle trial + concatenated match case...
+                log.warning('files matched multiple types'.format(
+                    lep_matchfiles))
+                continue
+            
+            type_to_file = {file_globs[lep_matchfiles[mf][0]]: mf
+                            for mf in lep_matchfiles}
 
-        repname, rep, rep_sub = (GlobusStorageLocation()
-                                 & {'globus_alias': globus_alias}).fetch(
-                                     limit=1)[0]
+            archive_n = dict(archive_probe)
 
-        gsm = self.get_gsm()
-        gsm.activate_endpoint(lep)  # XXX: cache this / prevent duplicate RPC?
-        gsm.activate_endpoint(rep)  # XXX: cache this / prevent duplicate RPC?
+            ds_key, ds_name, ds_type, ds_files, ds_trials = (
+                None, None, None, [], [])
 
-        if not self & key:
-            log.info('ArchivedRawEphysTrial.insert1()')
-            self.insert1({**key, 'globus_alias': globus_alias})
+            if all(['trial' in t for t in type_to_file]):
+                dataset_type = 'ephys-raw-trialized'
 
-        ftmap = {'ap-30kHz': ArchivedRawEphysTrial.ArchivedApChannel,
-                 'ap-30kHz-meta': ArchivedRawEphysTrial.ArchivedApMeta,
-                 'lf-2.5kHz': ArchivedRawEphysTrial.ArchivedLfChannel,
-                 'lf-2.5kHz-meta': ArchivedRawEphysTrial.ArchivedLfMeta}
+                ds_name = '{}_{}_{}'.format(h2o, sdate.isoformat(), dataset_type)
 
-        for ft, gname in ffound:  # XXX: transfer/insert could be batched
-            ft_class = ftmap[ft[0]]
-            if not ft_class & key:
-                srcp = '{}:/{}/{}'.format(lep, lep_sub, gname)
-                dstp = '{}:/{}/{}'.format(rep, rep_sub, gname)
+                ds_key = {'dataset_name': ds_name,
+                          'globus_storage_location': globus_alias}
+
+                for t in type_to_file:
+                    fsp = type_to_file[t].relative_to(lep_dir)
+                    dsf = {**ds_key, 'file_subpath': str(fsp)}
+
+                    # e.g : 'tw34_g0_t0.imec.ap.meta' -> *_t(trial).*
+                    trial = int(fsp.name.split('_t')[1].split('.')[0])
+
+                    if trial not in tinfo['trial']:
+                        log.warning('unknown trial file: {}. skipping'.format(
+                            dsf))
+                        continue
+
+                    ds_trials.append({**dsf, 'trial': trial})
+                    ds_files.append({**dsf, 'file_type': t})
+
+            elif all(['concat' in t for t in type_to_file]):
+                dataset_type = 'ephys-raw-continuous'
+
+                ds_name = '{}_{}_{}'.format(h2o, sdate.isoformat(), dataset_type)
+
+                ds_key = {'dataset_name': ds_name,
+                          'globus_storage_location': globus_alias}
+
+                for t in type_to_file:
+                    fsp = type_to_file[t].relative_to(lep_dir)
+                    ds_files.append({**ds_key,
+                                     'file_subpath': str(fsp),
+                                     'file_type': t})
+
+            else:
+                log.warning("couldn't determine dataset type for {}".format(
+                    lep_probedir))
+                continue
+
+            # Transfer Files
+
+            gsm = self.get_gsm()
+            gsm.activate_endpoint(lep)  # XXX: cache / prevent duplicate RPC?
+            gsm.activate_endpoint(rep)  # XXX: cache / prevent duplicate RPC?
+
+            DataSet.insert1({**ds_key, 'dataset_type': dataset_type},
+                            allow_direct_insert=True)
+
+            for f in ds_files:
+                fsp = ds_files[f]['file_subpath']
+                srcp = '{}:{}/{}'.format(lep, lep_sub, fsp)
+                dstp = '{}:{}/{}'.format(rep, rep_sub, fsp)
 
                 log.info('transferring {} to {}'.format(srcp, dstp))
 
-                # XXX: check if exists 1st? (manually or via API copy-checksum)
+                # XXX: check if exists 1st?
                 if not gsm.cp(srcp, dstp):
                     emsg = "couldn't transfer {} to {}".format(srcp, dstp)
                     log.error(emsg)
                     raise dj.DataJointError(emsg)
 
-                log.info('ArchivedRawEphysTrial.{}.insert1()'
-                         .format(ft_class.__name__))
+                DataSet.PhysicalFile.insert1({**ds_key, **ds_files[f]},
+                                             allow_direct_insert=True)
 
-                ft_class.insert1(key)
+            # Add Records
+            ArchivedSession.insert1(
+                {**key, 'globus_storage_location': globus_alias},
+                skip_duplicates=True, allow_direct_insert=True)
+
+            ArchivedRawEphys.insert1(
+                {**key, **ds_key, 'probe_folder': int(str(lep_probe))},
+                allow_direct_insert=True)
+
+            if dataset_type == 'ephys-raw-trialized':
+                ArchivedRawEphys.ArchivedTrials.insert(
+                    [{**key, **t} for t in ds_trials],
+                    allow_direct_insert=True)
 
     @classmethod
     def retrieve(cls):
@@ -266,13 +400,18 @@ class ArchivedRawEphysTrial(dj.Imported):
         for key in self:
             self.retrieve1(key)
 
+
     @classmethod
     def retrieve1(cls, key):
         '''
         retrieve related files for a given key
         '''
         self = cls()
+        
+        raise NotImplementedError('retrieve not yet implemented')
 
+        # Old / to be updated:
+    
         # >>> list(key.keys())
         # ['subject_id', 'session', 'trial', 'electrode_group', 'globus_alia
 
@@ -326,12 +465,44 @@ class ArchivedRawEphysTrial(dj.Imported):
                     raise dj.DataJointError(emsg)
 
 
+
 @schema
-class ArchivedVideoFile(dj.Imported):
+class ArchivedSortedEphys(dj.Imported):
+    definition = """
+    -> ArchivedSession
+    -> DataSet
+    probe_folder:               tinyint
+    ---
+    sorting_time=null:          datetime
+    """
+
+    key_source = experiment.Session
+
+    def make(self, key):
+        """
+        discover files in local endpoint and transfer/register
+        """
+        raise NotImplementedError('ArchivedSortedEphys.make to be implemented')
+
+
+
+@schema
+class ArchivedVideoTracking(dj.Imported):
     '''
-    ArchivedVideoFile storage
+    ArchivedVideoTracking storage
 
     Note: video_file_name tracked here as trial->file map is non-deterministic
+
+    Directory locations of the form:
+
+    {Water restriction number}\{Session Date}\video
+
+    with file naming convention of the form:
+
+    {Water restriction number}_{camera-position-string}_NNN-NNNN.avi
+
+    Where 'NNN' is determined from the 'tracking map file' which maps
+    trials to videos as outlined in tracking.py
 
     XXX:
 
@@ -339,18 +510,29 @@ class ArchivedVideoFile(dj.Imported):
     may have trials for which there is no tracking,
     so camera cannot be determined to do file lookup, thus videos are missed.
     This could be resolved via schema adjustment, or file-traversal
-    based 'opportunistic' registration strategy, more TBD.
+    based 'opportunistic' registration strategy.
     '''
-
+    
     definition = """
-    -> tracking.Tracking
+    -> ArchivedSession
+    -> tracking.TrackingDevice
     ---
-    -> GlobusStorageLocation
-    video_file_name:                     varchar(1024)  # file name for trial
+    -> DataSet
     """
+
+    key_source = ((tracking.TrackingDevice & tracking.Tracking)
+                  * (experiment.Session & tracking.Tracking))
 
     ingest = None  # ingest module reference
     gsm = None  # for GlobusStorageManager
+
+    class TrialVideo(dj.Part):
+        definition = """
+        -> master
+        -> tracking.Tracking
+        ---
+        -> DataSet.PhysicalFile
+        """
 
     @classmethod
     def get_ingest(cls):
@@ -372,12 +554,14 @@ class ArchivedVideoFile(dj.Imported):
 
         return self.gsm
 
+
     def make(self, key):
-        '''
-        determine available files from local endpoint and publish
-        (create database records and transfer to globus)
-        '''
+        """
+        discover files in local endpoint and transfer/register
+        """
         log.info('ArchivedVideoFile.make(): {}'.format(key))
+
+        # {'tracking_device': 'Camera 0', 'subject_id': 432572, 'session': 1}
 
         globus_alias = 'raw-video'
         le = GlobusStorageLocation.local_endpoint(globus_alias)
@@ -385,130 +569,115 @@ class ArchivedVideoFile(dj.Imported):
                                  le['endpoint_subdir'],
                                  le['endpoint_path'])
 
+        re = (GlobusStorageLocation & {'globus_alias': globus_alias}).fetch1()
+        rep, rep_sub = re['globus_endpoint'], re['globus_path']
+
         log.info('local_endpoint: {}:{} -> {}'.format(lep, lep_sub, lep_dir))
+        log.info('remote_endpoint: {}:{}'.format(rep, rep_sub))
 
         h2o = (lab.WaterRestriction & key).fetch1('water_restriction_number')
 
-        trial = key['trial']
         session = (experiment.Session & key).fetch1()
         sdate = session['session_date']
         sdate_iso = sdate.isoformat()  # YYYY-MM-DD
         sdate_sml = "{}{:02d}{:02d}".format(sdate.year, sdate.month, sdate.day)
 
-        trk = (tracking.TrackingDevice
-               * (tracking.Tracking & key).proj()).fetch1()
+        dev = (tracking.TrackingDevice & key).fetch1()
 
-        tdev = trk['tracking_device']  # NOQA: notused
-        tpos = trk['tracking_position']
+        trks = (tracking.Tracking & key).fetch(order_by='trial', as_dict=True)
+
+        tracking_ingest = self.get_ingest()
+
+        tpath = (tracking_ingest.TrackingDataPath()
+                 & (lab.Rig & session)).fetch1()
+
+        tdev = dev['tracking_device']  # NOQA: notused
+        tpos = dev['tracking_position']
 
         camtrial = '{}_{}_{}.txt'.format(h2o, sdate_sml, tpos)
 
-        tracking_ingest = self.get_ingest()
-        tpaths = tracking_ingest.TrackingDataPath.fetch(as_dict=True)
+        tdat = tpath['tracking_data_path']
 
-        campath = None
-        tbase, vbase = None, None  # tracking, video session base paths
-        for p in tpaths:
+        tbase = pathlib.Path(tdat, h2o, sdate_iso, 'tracking')
+        vbase = pathlib.Path(tdat, h2o, sdate_iso, 'video')
 
-            tdat = p['tracking_data_path']
+        campath = tbase / camtrial
 
-            tbase = pathlib.Path(tdat, h2o, sdate_iso, 'tracking')
-            vbase = pathlib.Path(tdat, h2o, sdate_iso, 'video')
-
-            campath = tbase / camtrial
-
-            log.debug('trying camera position trial map: {}'.format(campath))
-
-            if campath.exists():  # XXX: uses 1st found
-                break
-
-            log.debug('tracking path {} n/a - skipping'.format(tbase))
-            campath = None
-
-        if not campath:
-            log.warning('tracking data not found for {} '.format(tpos))
+        if not campath.exists():  # XXX: uses 1st found
+            log.warning('trial map {} n/a! skipping.'.format(campath))
             return
 
+        log.info('loading trial map: {}'.format(campath))
         tmap = tracking_ingest.TrackingIngest.load_campath(campath)
+        log.debug('loaded trial map: {}'.format(tmap))
 
-        if trial not in tmap:
-            log.warning('nonexistant trial {}.. skipping'.format(trial))
-            return
+        # add ArchivedSession
 
-        repname, rep, rep_sub = (GlobusStorageLocation
-                                 & {'globus_alias': globus_alias}).fetch(
-                                     limit=1)[0]
+        as_key = {k: v for k, v in key.items()
+                  if k in experiment.Session.primary_key}
+        as_rec = {**as_key, 'globus_alias': globus_alias}
 
-        vmatch = '{}_{}_{}-*'.format(h2o, tpos, tmap[trial])
-        vglob = list(vbase.glob(vmatch))
+        ArchivedSession.insert1(as_rec, allow_direct_insert=True,
+                                skip_duplicates=True)
 
-        if len(vglob) != 1:  # XXX: error instead of warning?
-            log.warning('more than one video found: {}'.format(vglob))
-            return
+        # add DataSet
 
-        vfile = vglob[0].name
-        gfile = '{}/{}/{}/{}'.format(h2o, sdate_iso, 'video', vfile)  # subpath
-        srcp = '{}:{}/{}'.format(lep, lep_sub, gfile)  # source path
-        dstp = '{}:{}/{}'.format(rep, rep_sub, gfile)  # dest path
+        ds_type = 'tracking-video'
+        ds_name = '{}_{}_{}_{}'.format(h2o, sdate.isoformat(), ds_type, tpos)
+        ds_key = {'globus_alias': globus_alias, 'dataset_name': ds_name}
+        ds_rec = {**ds_key, 'dataset_type': ds_type}
 
-        gsm = self.get_gsm()
-        gsm.activate_endpoint(lep)  # XXX: cache this / prevent duplicate RPC?
-        gsm.activate_endpoint(rep)  # XXX: cache this / prevent duplicate RPC?
+        DataSet.insert1(ds_rec, allow_direct_insert=True)
 
-        log.info('transferring {} to {}'.format(srcp, dstp))
-        if not gsm.cp(srcp, dstp):
-            emsg = "couldn't transfer {} to {}".format(srcp, dstp)
-            log.error(emsg)
-            raise dj.DataJointError(emsg)
+        # add ArchivedVideoTracking
 
-        self.insert1({**key, 'globus_alias': globus_alias,
-                      'video_file_name': vfile})
+        vt_key = {**as_key, 'tracking_device': tdev}
+        vt_rec = {**vt_key, 'globus_alias': globus_alias,
+                  'dataset_name': ds_name}
 
-    def retrieve(self):
-        for key in self:
-            self.retrieve1(key)
+        self.insert1(vt_rec)
 
-    def retrieve1(self, key):
-        '''
-        retrieve related files for a given key
-        '''
-        log.debug(key)
+        filetype = 'tracking-video-trial'
 
-        # get remote file information
-        linfo = (self * GlobusStorageLocation & key).fetch1()
+        for t in trks:
+            trial = t['trial']
+            log.info('.. tracking trial {} ({})'.format(trial, t))
 
-        rep = linfo['globus_endpoint']
-        rep_sub = linfo['globus_path']
-        vfile = linfo['video_file_name']
+            if t['trial'] not in tmap:
+                log.warning('trial {} not in trial map. skipping!'.format(t))
+                continue
 
-        # get session related information needed for filenames/records
-        sinfo = ((lab.WaterRestriction
-                  * lab.Subject.proj()
-                  * ((tracking.TrackingDevice
-                      * tracking.Tracking.proj()) & key)
-                  * experiment.Session
-                  * experiment.SessionTrial) & key).fetch1()
+            vmatch = '{}_{}_{}-*'.format(h2o, tpos, tmap[trial])
+            vglob = list(vbase.glob(vmatch))
 
-        h2o = sinfo['water_restriction_number']
-        sdate_iso = sinfo['session_date'].isoformat()   # YYYY-MM-DD
+            if len(vglob) != 1:  # XXX: error instead of warning?
+                log.warning('incorrect videos found in {}: {}'.format(
+                    vbase, vglob))
+                continue
+    
+            vfile = vglob[0].name
+            gfile = '{}/{}/{}/{}'.format(h2o, sdate_iso, 'video', vfile)  # subpath
+            srcp = '{}:{}/{}'.format(lep, lep_sub, gfile)  # source path
+            dstp = '{}:{}/{}'.format(rep, rep_sub, gfile)  # dest path
+    
+            gsm = self.get_gsm()
+            gsm.activate_endpoint(lep)  # XXX: cache / prevent duplicate RPC?
+            gsm.activate_endpoint(rep)  # XXX: cache / prevent duplicate RPC?
+    
+            log.info('transferring {} to {}'.format(srcp, dstp))
 
-        # get local endpoint information
-        globus_alias = 'raw-video'
-        le = GlobusStorageLocation.local_endpoint(globus_alias)
-        lep, lep_sub = le['endpoint'], le['endpoint_subdir']
+            if not gsm.cp(srcp, dstp):
+                emsg = "couldn't transfer {} to {}".format(srcp, dstp)
+                log.error(emsg)
+                raise dj.DataJointError(emsg)
 
-        # build source/destination paths & initiate transfer
-        gfile = '{}/{}/{}/{}'.format(h2o, sdate_iso, 'video', vfile)
+            pf_key = {**ds_key, 'file_subpath': vfile}
+            pf_rec = {**pf_key, 'file_type': filetype}
 
-        srcp = '{}:{}/{}'.format(rep, rep_sub, gfile)  # source path
-        dstp = '{}:{}/{}'.format(lep, lep_sub, gfile)  # dset path
+            DataSet.PhysicalFile.insert1({**pf_rec}, allow_direct_insert=True)
+                                          
+            trk_key = {k: v for k, v in {**key, 'trial': trial}.items()
+                       if k in tracking.Tracking.primary_key}
 
-        gsm = self.get_gsm()
-        gsm.activate_endpoint(lep)  # XXX: cache this / prevent duplicate RPC?
-        gsm.activate_endpoint(rep)  # XXX: cache this / prevent duplicate RPC?
-
-        log.info('transferring {} to {}'.format(srcp, dstp))
-        if not gsm.cp(dstp, srcp):
-            emsg = "couldn't transfer {} to {}".format(srcp, dstp)
-            log.error(emsg)
-            raise dj.DataJointError(emsg)
+            tv_rec = {**vt_key, **trk_key, **pf_key}
+            ArchivedVideoTracking.TrialVideo.insert1({**tv_rec})
