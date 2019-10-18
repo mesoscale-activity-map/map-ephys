@@ -14,6 +14,7 @@ from globus_sdk import DeleteData
 from globus_sdk import TransferData
 
 
+DEFAULT_GLOBUS_WAIT_TIMEOUT = 60
 log = logging.getLogger(__name__)
 
 
@@ -30,6 +31,7 @@ class GlobusStorageManager:
 
         self.auth_client = NativeAppAuthClient(self.app_id)
         self.auth_client.oauth2_start_flow(refresh_tokens=True)
+        self.wait_timeout = DEFAULT_GLOBUS_WAIT_TIMEOUT
         self.xfer_client = None
 
         custom = dj.config.get('custom', None)
@@ -102,8 +104,9 @@ class GlobusStorageManager:
         if not knownok:
             log.debug('activate_endpoint(): not knownok response')
 
-    def _wait(self, task, timeout=10, polling_interval=1):
+    def _wait(self, task, timeout=None, polling_interval=1):
         ''' tranfer client common wait wrapper '''
+        timeout = timeout if timeout else self.wait_timeout
         return self.xfer_client.task_wait(task, timeout, polling_interval)
 
     def _tasks(self):
