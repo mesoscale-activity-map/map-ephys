@@ -1,10 +1,8 @@
 
-import os
 import logging
 import pathlib
 
 from textwrap import dedent
-from collections import defaultdict
 
 import datajoint as dj
 
@@ -211,7 +209,6 @@ class ArchivedRawEphys(dj.Imported):
     key_source = experiment.Session
 
     gsm = None  # for GlobusStorageManager
-
 
     class RawEphysTrial(dj.Part):
         """ file:trial mapping if applicable """
@@ -479,9 +476,9 @@ class ArchivedSortedEphys(dj.Imported):
 
 
 @schema
-class ArchivedVideoTracking(dj.Imported):
+class ArchivedTrackingVideo(dj.Imported):
     '''
-    ArchivedVideoTracking storage
+    ArchivedTrackingVideo storage
 
     Note: video_file_name tracked here as trial->file map is non-deterministic
 
@@ -504,7 +501,7 @@ class ArchivedVideoTracking(dj.Imported):
     This could be resolved via schema adjustment, or file-traversal
     based 'opportunistic' registration strategy.
     '''
-    
+
     definition = """
     -> ArchivedSession
     -> tracking.TrackingDevice
@@ -512,8 +509,7 @@ class ArchivedVideoTracking(dj.Imported):
     -> DataSet
     """
 
-    key_source = ((tracking.TrackingDevice & tracking.Tracking)
-                  * (experiment.Session & tracking.Tracking))
+    key_source = tracking.TrackingDevice * experiment.Session
 
     ingest = None  # ingest module reference
     gsm = None  # for GlobusStorageManager
@@ -521,7 +517,7 @@ class ArchivedVideoTracking(dj.Imported):
     class TrialVideo(dj.Part):
         definition = """
         -> master
-        -> tracking.Tracking
+        -> experiment.SessionTrial
         ---
         -> DataSet.PhysicalFile
         """
@@ -575,7 +571,8 @@ class ArchivedVideoTracking(dj.Imported):
 
         dev = (tracking.TrackingDevice & key).fetch1()
 
-        trks = (tracking.Tracking & key).fetch(order_by='trial', as_dict=True)
+        trls = (experiment.SessionTrial & key).fetch(
+            order_by='trial', as_dict=True)
 
         tracking_ingest = self.get_ingest()
 
@@ -623,7 +620,7 @@ class ArchivedVideoTracking(dj.Imported):
 
         filetype = 'tracking-video-trial'
 
-        for t in trks:
+        for t in trls:
             trial = t['trial']
             log.info('.. tracking trial {} ({})'.format(trial, t))
 
@@ -664,7 +661,7 @@ class ArchivedVideoTracking(dj.Imported):
             DataSet.PhysicalFile.insert1({**pf_rec}, allow_direct_insert=True)
                                           
             trk_key = {k: v for k, v in {**key, 'trial': trial}.items()
-                       if k in tracking.Tracking.primary_key}
+                       if k in experiment.SessionTrial.primary_key}
 
             tv_rec = {**vt_key, **trk_key, **pf_key}
-            ArchivedVideoTracking.TrialVideo.insert1({**tv_rec})
+            ArchivedTrackingVideo.TrialVideo.insert1({**tv_rec})
