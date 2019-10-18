@@ -17,6 +17,7 @@ from . import tracking
 from pipeline.globus import GlobusStorageManager
 from . import get_schema_name
 
+PUBLICATION_TRANSFER_TIMEOUT = 10000
 schema = dj.schema(get_schema_name('publication'))
 
 log = logging.getLogger(__name__)
@@ -102,73 +103,73 @@ class FileType(dj.Lookup):
         data = [('3a-ap-trial',
                  '*_g0_t[0-9]*.imec.ap.bin',
                  '''
-                 3A Probe per-trial AP channels high pass filtered at 
+                 3A Probe per-trial AP channels high pass filtered at
                  300Hz and sampled at 30kHz - recording file
                  '''),
                 ('3a-ap-trial-meta',
                  '*_g0_t[0-9]*.imec.ap.meta',
                  '''
-                 3A Probe per-trial AP channels high pass 
+                 3A Probe per-trial AP channels high pass
                  filtered at 300Hz and sampled at 30kHz - file metadata
                  '''),
                 ('3a-lf-trial',
                  '*_g0_t[0-9]*.imec.lf.bin',
                  '''
-                 3A Probe per-trial AP channels low pass filtered at 
+                 3A Probe per-trial AP channels low pass filtered at
                  300Hz and sampled at 2.5kHz - recording file
                  '''),
                 ('3a-lf-trial-meta',
                  '*_g0_t[0-9]*.imec.lf.meta',
                  '''
-                 3A Probe per-trial AP channels low pass filtered at 
+                 3A Probe per-trial AP channels low pass filtered at
                  300Hz and sampled at 2.5kHz - file metadata
                  '''),
                 ('3b-ap-trial',
                  '*_????????_g?_t[0-9]*.imec.ap.bin',
                  '''
-                 3B Probe per-trial AP channels high pass filtered at 
+                 3B Probe per-trial AP channels high pass filtered at
                  300Hz and sampled at 30kHz - recording file
                  '''),
                 ('3b-ap-trial-meta',
                  '*_????????_g?_t[0-9]*.imec.ap.meta',
                  '''
-                 3B Probe per-trial AP channels high pass 
+                 3B Probe per-trial AP channels high pass
                  filtered at 300Hz and sampled at 30kHz - file metadata
                  '''),
                 ('3b-lf-trial',
                  '*_????????_g?_t[0-9]*.imec.lf.bin',
                  '''
-                 3B Probe per-trial AP channels low pass filtered at 
+                 3B Probe per-trial AP channels low pass filtered at
                  300Hz and sampled at 2.5kHz - recording file
                  '''),
                 ('3b-lf-trial-meta',
                  '*_????????_g?_t[0-9]*.imec.lf.meta',
                  '''
-                 3B Probe per-trial AP channels low pass filtered at 
+                 3B Probe per-trial AP channels low pass filtered at
                  300Hz and sampled at 2.5kHz - file metadata
                  '''),
                 ('3b-ap-concat',
                  '*_????????_g?_tcat.imec.ap.bin',
                  '''
-                 3B Probe concatenated AP channels high pass filtered at 
+                 3B Probe concatenated AP channels high pass filtered at
                  300Hz and sampled at 30kHz - recording file
                  '''),
                 ('3b-ap-concat-meta',
                  '*_??????_g?_tcat.imec.ap.meta',
                  '''
-                 3B Probe concatenated AP channels high pass 
+                 3B Probe concatenated AP channels high pass
                  filtered at 300Hz and sampled at 30kHz - file metadata
                  '''),
                 ('3b-lf-concat',
                  '*_????????_g?_tcat.imec.lf.bin',
                  '''
-                 3B Probe concatenated AP channels low pass filtered at 
+                 3B Probe concatenated AP channels low pass filtered at
                  300Hz and sampled at 2.5kHz - recording file
                  '''),
                 ('3b-lf-concat-meta',
                  '*_????????_g?_tcat.imec.lf.meta',
                  '''
-                 3B Probe concatenated AP channels low pass filtered at 
+                 3B Probe concatenated AP channels low pass filtered at
                  300Hz and sampled at 2.5kHz - file metadata
                  '''),
                 ('tracking-video-trial',        # TODO: better tracking name
@@ -177,7 +178,8 @@ class FileType(dj.Lookup):
                  Video Tracking per-trial file at 300fps
                  ''')]                          # TODO: correct description
 
-        return [[dedent(i).lstrip('\n') for i in r] for r in data]
+        return [[dedent(i).replace('\n', ' ').strip(' ') for i in r]
+                for r in data]
 
 
 @schema
@@ -225,6 +227,7 @@ class ArchivedRawEphys(dj.Imported):
         log.debug('ArchivedRawEphysTrial.get_gsm()')
         if self.gsm is None:
             self.gsm = GlobusStorageManager()
+            self.gsm.wait_timeout = PUBLICATION_TRANSFER_TIMEOUT
 
         return self.gsm
 
@@ -243,14 +246,13 @@ class ArchivedRawEphys(dj.Imported):
         re, rep, rep_sub = (GlobusStorageLocation()
                             & {'globus_alias': globus_alias}).fetch1()
 
-
         log.info('local_endpoint: {}:{} -> {}'.format(lep, lep_sub, lep_dir))
 
         # Get session related information needed for filenames/records
 
         sinfo = (lab.WaterRestriction
-                  * lab.Subject.proj()
-                  * experiment.Session() & key).fetch1()
+                 * lab.Subject.proj()
+                 * experiment.Session() & key).fetch1()
 
         tinfo = ((lab.WaterRestriction
                   * lab.Subject.proj()
@@ -260,20 +262,13 @@ class ArchivedRawEphys(dj.Imported):
         h2o = sinfo['water_restriction_number']
         sdate = sinfo['session_date']
 
-        subdir = pathlib.Path(h2o, str(sdate).replace('-','')) # + probeno
+        subdir = pathlib.Path(h2o, str(sdate).replace('-', ''))  # + probeno
         lep_subdir = pathlib.Path(lep_dir, subdir)
-        
-        probechoice = [str(i) for i in range(1,10)]  # XXX: hardcoded 1-9 probe
+
+        probechoice = [str(i) for i in range(1, 10)]  # XXX: hardcoded
 
         file_globs = {i['file_glob']: i['file_type'] for
                       i in FileType.fetch(as_dict=True)}
-
-        archive = {} # N : dict(archive_probe)
-        archive_probe = {'dataset': None,
-                         'physical_files': [],
-                         'archived_session': None,
-                         'archived_ephys': None,
-                         'archived_trials': None}
 
         # Process each probe folder
 
@@ -304,19 +299,18 @@ class ArchivedRawEphys(dj.Imported):
                 log.warning('files matched multiple types'.format(
                     lep_matchfiles))
                 continue
-            
+
             type_to_file = {file_globs[lep_matchfiles[mf][0]]: mf
                             for mf in lep_matchfiles}
 
-            archive_n = dict(archive_probe)
-
-            ds_key, ds_name, ds_type, ds_files, ds_trials = (
+            ds_key, ds_name, ds_files, ds_trials = (
                 None, None, None, [], [])
 
             if all(['trial' in t for t in type_to_file]):
                 dataset_type = 'ephys-raw-trialized'
 
-                ds_name = '{}_{}_{}'.format(h2o, sdate.isoformat(), dataset_type)
+                ds_name = '{}_{}_{}'.format(h2o, sdate.isoformat(),
+                                            dataset_type)
 
                 ds_key = {'dataset_name': ds_name,
                           'globus_storage_location': globus_alias}
@@ -339,7 +333,8 @@ class ArchivedRawEphys(dj.Imported):
             elif all(['concat' in t for t in type_to_file]):
                 dataset_type = 'ephys-raw-continuous'
 
-                ds_name = '{}_{}_{}'.format(h2o, sdate.isoformat(), dataset_type)
+                ds_name = '{}_{}_{}'.format(h2o, sdate.isoformat(),
+                                            dataset_type)
 
                 ds_key = {'dataset_name': ds_name,
                           'globus_storage_location': globus_alias}
@@ -400,18 +395,17 @@ class ArchivedRawEphys(dj.Imported):
         for key in self:
             self.retrieve1(key)
 
-
     @classmethod
     def retrieve1(cls, key):
         '''
         retrieve related files for a given key
         '''
         self = cls()
-        
+
         raise NotImplementedError('retrieve not yet implemented')
 
         # Old / to be updated:
-    
+
         # >>> list(key.keys())
         # ['subject_id', 'session', 'trial', 'electrode_group', 'globus_alia
 
@@ -465,7 +459,6 @@ class ArchivedRawEphys(dj.Imported):
                     raise dj.DataJointError(emsg)
 
 
-
 @schema
 class ArchivedSortedEphys(dj.Imported):
     definition = """
@@ -483,7 +476,6 @@ class ArchivedSortedEphys(dj.Imported):
         discover files in local endpoint and transfer/register
         """
         raise NotImplementedError('ArchivedSortedEphys.make to be implemented')
-
 
 
 @schema
@@ -551,6 +543,7 @@ class ArchivedVideoTracking(dj.Imported):
         log.debug('ArchivedVideoFile.get_gsm()')
         if self.gsm is None:
             self.gsm = GlobusStorageManager()
+            self.gsm.wait_timeout = PUBLICATION_TRANSFER_TIMEOUT
 
         return self.gsm
 
