@@ -578,7 +578,6 @@ class ArchivedVideoTracking(dj.Imported):
 
         session = (experiment.Session & key).fetch1()
         sdate = session['session_date']
-        sdate_iso = sdate.isoformat()  # YYYY-MM-DD
         sdate_sml = "{}{:02d}{:02d}".format(sdate.year, sdate.month, sdate.day)
 
         dev = (tracking.TrackingDevice & key).fetch1()
@@ -587,18 +586,13 @@ class ArchivedVideoTracking(dj.Imported):
 
         tracking_ingest = self.get_ingest()
 
-        tpath = (tracking_ingest.TrackingDataPath()
-                 & (lab.Rig & session)).fetch1()
-
         tdev = dev['tracking_device']  # NOQA: notused
         tpos = dev['tracking_position']
 
         camtrial = '{}_{}_{}.txt'.format(h2o, sdate_sml, tpos)
 
-        tdat = tpath['tracking_data_path']
-
-        tbase = pathlib.Path(tdat, h2o, sdate_sml, 'tracking')
-        vbase = pathlib.Path(tdat, h2o, sdate_sml, 'video')
+        tbase = pathlib.Path(lep_dir, h2o, sdate_sml, 'tracking')
+        vbase = pathlib.Path(lep_dir, h2o, sdate_sml, 'video')
 
         campath = tbase / camtrial
 
