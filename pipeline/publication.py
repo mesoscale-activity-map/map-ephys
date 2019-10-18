@@ -41,7 +41,7 @@ class GlobusStorageLocation(dj.Lookup):
             return custom['globus.storage_locations']
 
         return (('raw-ephys', '5b875fda-4185-11e8-bb52-0ac6873fc732', '/'),
-                ('raw-tracking', '5b875fda-4185-11e8-bb52-0ac6873fc732', '/'),)
+                ('raw-video', '5b875fda-4185-11e8-bb52-0ac6873fc732', '/'),)
 
     @classmethod
     def local_endpoint(cls, globus_alias=None):
@@ -554,7 +554,6 @@ class ArchivedVideoTracking(dj.Imported):
 
         return self.gsm
 
-
     def make(self, key):
         """
         discover files in local endpoint and transfer/register
@@ -598,8 +597,8 @@ class ArchivedVideoTracking(dj.Imported):
 
         tdat = tpath['tracking_data_path']
 
-        tbase = pathlib.Path(tdat, h2o, sdate_iso, 'tracking')
-        vbase = pathlib.Path(tdat, h2o, sdate_iso, 'video')
+        tbase = pathlib.Path(tdat, h2o, sdate_sml, 'tracking')
+        vbase = pathlib.Path(tdat, h2o, sdate_sml, 'video')
 
         campath = tbase / camtrial
 
@@ -608,8 +607,9 @@ class ArchivedVideoTracking(dj.Imported):
             return
 
         log.info('loading trial map: {}'.format(campath))
-        tmap = tracking_ingest.TrackingIngest.load_campath(campath)
-        log.debug('loaded trial map: {}'.format(tmap))
+        vmap = {v: k for k, v in
+                tracking_ingest.TrackingIngest.load_campath(campath).items()}
+        log.debug('loaded video map: {}'.format(vmap))
 
         # add ArchivedSession
 
@@ -643,27 +643,30 @@ class ArchivedVideoTracking(dj.Imported):
             trial = t['trial']
             log.info('.. tracking trial {} ({})'.format(trial, t))
 
-            if t['trial'] not in tmap:
-                log.warning('trial {} not in trial map. skipping!'.format(t))
+            if t['trial'] not in vmap:
+                log.warning('trial {} not in video map. skipping!'.format(t))
                 continue
 
-            vmatch = '{}_{}_{}-*'.format(h2o, tpos, tmap[trial])
+            vmatch = '{}_{}_{}-*'.format(h2o, tpos, vmap[trial])
+            log.debug('vbase: {}, vmatch: {}'.format(vbase, vmatch))
             vglob = list(vbase.glob(vmatch))
 
-            if len(vglob) != 1:  # XXX: error instead of warning?
-                log.warning('incorrect videos found in {}: {}'.format(
-                    vbase, vglob))
-                continue
-    
+            if len(vglob) != 1:
+                emsg = 'incorrect videos found in {}: {}'.format(vbase, vglob)
+                log.warning(emsg)
+                raise dj.DataJointError(emsg)
+
             vfile = vglob[0].name
-            gfile = '{}/{}/{}/{}'.format(h2o, sdate_iso, 'video', vfile)  # subpath
+            gfile = '{}/{}/{}/{}'.format(
+                h2o, sdate_sml, 'video', vfile)  # subpath
+
             srcp = '{}:{}/{}'.format(lep, lep_sub, gfile)  # source path
             dstp = '{}:{}/{}'.format(rep, rep_sub, gfile)  # dest path
-    
+
             gsm = self.get_gsm()
             gsm.activate_endpoint(lep)  # XXX: cache / prevent duplicate RPC?
             gsm.activate_endpoint(rep)  # XXX: cache / prevent duplicate RPC?
-    
+
             log.info('transferring {} to {}'.format(srcp, dstp))
 
             if not gsm.cp(srcp, dstp):
