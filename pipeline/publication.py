@@ -590,11 +590,8 @@ class ArchivedVideoTracking(dj.Imported):
         tpos = dev['tracking_position']
 
         camtrial = '{}_{}_{}.txt'.format(h2o, sdate_sml, tpos)
-
-        tbase = pathlib.Path(lep_dir, h2o, sdate_sml, 'tracking')
         vbase = pathlib.Path(lep_dir, h2o, sdate_sml, 'video')
-
-        campath = tbase / camtrial
+        campath = vbase / camtrial
 
         if not campath.exists():  # XXX: uses 1st found
             log.warning('trial map {} n/a! skipping.'.format(campath))
