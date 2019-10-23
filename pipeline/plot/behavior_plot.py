@@ -43,6 +43,9 @@ def plot_correct_proportion(session_key, window_size=None, axs=None, plot=True):
         axs.plot(range(len(mv_outcomes)), mv_outcomes, 'k', linewidth=3)
         axs.set_xlabel('Trial')
         axs.set_ylabel('Proportion correct')
+        axs.spines['right'].set_visible(False)
+        axs.spines['top'].set_visible(False)
+        axs.set_title('Behavior Performance')
 
     return fig, mv_outcomes
 
@@ -290,12 +293,12 @@ def plot_windowed_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), w_size=0.01, bi
     windows = np.arange(xlim[0], xlim[1], w_size)
 
     # plot
-    col_counts = 8
+    col_counts = 7
     row_counts = int(np.ceil(len(windows) / col_counts))
     fig, axs = plt.subplots(row_counts, col_counts,
                             figsize=(16, 2.5*row_counts),
                             subplot_kw=dict(polar=True))
-    fig.subplots_adjust(wspace=0.6, hspace=0.3)
+    fig.subplots_adjust(wspace=0.8, hspace=0.5)
     [a.axis('off') for a in axs.flatten()]
 
     # non-overlapping windowed histogram

@@ -11,7 +11,8 @@ from pipeline import experiment, ephys, psth
 
 m_scale = 1200
 
-def plot_clustering_quality(probe_insertion):
+
+def plot_clustering_quality(probe_insertion, axs=None):
     probe_insertion = probe_insertion.proj()
     amp, snr, spk_rate, isi_violation = (ephys.Unit * ephys.UnitStat
                                          * ephys.ProbeInsertion.InsertionLocation & probe_insertion).fetch(
@@ -26,8 +27,12 @@ def plot_clustering_quality(probe_insertion):
                     'isi': 'ISI violation (%)',
                     'rate': 'Firing rate (spike/s)'}
 
-    fig, axs = plt.subplots(2, 3, figsize=(12, 8))
-    fig.subplots_adjust(wspace=0.4)
+    fig = None
+    if axs is None:
+        fig, axs = plt.subplots(2, 3, figsize = (12, 8))
+        fig.subplots_adjust(wspace=0.4)
+
+    assert axs.size == 6
 
     for (m1, m2), ax in zip(itertools.combinations(list(metrics.keys()), 2), axs.flatten()):
         ax.plot(metrics[m1], metrics[m2], '.k')
