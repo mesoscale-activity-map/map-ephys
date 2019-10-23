@@ -110,7 +110,8 @@ def nuke_all():
 
 
 def publish(*args):
-    publication.ArchivedRawEphysTrial.populate()
+    publication.ArchivedRawEphys.populate()
+    publication.ArchivedTrackingVideo.populate()
 
 
 def export_recording(*args):
