@@ -299,7 +299,11 @@ class UnitPsth(dj.Computed):
 
         trials = TrialCondition.get_func(condition_key)()
 
-        psth = (UnitPsth & {**condition_key, **unit_key}).fetch1()['unit_psth']
+        unit_psth = (UnitPsth & {**condition_key, **unit_key}).fetch1()['unit_psth']
+        if unit_psth is None:
+            raise Exception('No spikes found for this unit and trial-condition')
+
+        psth, edges = unit_psth
 
         spikes, trials = (ephys.Unit.TrialSpikes & trials & unit_key).fetch(
             'spike_times', 'trial', order_by='trial asc')
@@ -308,7 +312,7 @@ class UnitPsth(dj.Computed):
                   np.concatenate([[t] * len(s)
                                   for s, t in zip(spikes, trials)])]
 
-        return dict(trials=trials, spikes=spikes, psth=psth, raster=raster)
+        return dict(trials=trials, spikes=spikes, psth=(psth, edges[1:]), raster=raster)
 
 
 @schema

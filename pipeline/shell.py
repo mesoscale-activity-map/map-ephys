@@ -16,6 +16,7 @@ from pipeline import tracking
 from pipeline import psth
 from pipeline import publication
 from pipeline import export
+from pipeline import report
 
 
 pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth,
@@ -89,6 +90,18 @@ def populate_psth(*args):
     psth.UnitSelectivity.populate(reserve_jobs=True, display_progress=True)
 
 
+def generate_figure_report(*args):
+
+    log.info('report.SessionLevelReport.populate()')
+    report.SessionLevelReport.populate(reserve_jobs=True, display_progress=True)
+
+    log.info('report.ProbeLevelReport.populate()')
+    report.ProbeLevelReport.populate(reserve_jobs=True, display_progress=True)
+
+    log.info('report.UnitLevelReport.populate()')
+    report.UnitLevelReport.populate(reserve_jobs=True, display_progress=True)
+
+
 def nuke_all():
     if 'nuclear_option' not in dj.config:
         raise RuntimeError('nuke_all() function not enabled')
@@ -153,6 +166,7 @@ actions = {
     'populate-psth': populate_psth,
     'publish': publish,
     'export-recording': export_recording,
+    'generate-report': generate_figure_report,
     'shell': shell,
     'erd': erd,
     'ccfload': ccfload,

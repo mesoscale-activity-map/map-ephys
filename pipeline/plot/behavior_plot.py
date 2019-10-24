@@ -182,7 +182,7 @@ def plot_tracking(session_key, unit_key,
     return fig
 
 
-def plot_unit_jaw_phase_dist(session_key, unit_key, bin_counts=20):
+def plot_unit_jaw_phase_dist(session_key, unit_key, bin_counts=20, axs=None):
     trk = (tracking.Tracking.JawTracking * tracking.Tracking.TongueTracking
            * experiment.BehaviorTrial & _side_cam & session_key & experiment.ActionEvent & ephys.Unit.TrialSpikes)
     tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & session_key).fetch1('sampling_rate'))
@@ -213,8 +213,11 @@ def plot_unit_jaw_phase_dist(session_key, unit_key, bin_counts=20):
     l_insta_phase = np.hstack(list(get_trial_track(l_trial_trk)))
     r_insta_phase = np.hstack(list(get_trial_track(r_trial_trk)))
 
-    fig, axs = plt.subplots(1, 2, figsize=(12, 8), subplot_kw=dict(polar=True))
-    fig.subplots_adjust(wspace=0.6)
+    fig = None
+    if axs is None:
+        fig, axs = plt.subplots(1, 2, figsize=(12, 8), subplot_kw=dict(polar=True))
+        fig.subplots_adjust(wspace=0.6)
+    assert len(axs) == 2
 
     plot_polar_histogram(l_insta_phase, axs[0], bin_counts=bin_counts)
     axs[0].set_title('left lick trials', loc='left', fontweight='bold')
@@ -224,7 +227,7 @@ def plot_unit_jaw_phase_dist(session_key, unit_key, bin_counts=20):
     return fig
 
 
-def plot_trial_tracking(trial_key, tracking_feature='jaw_y', camera_key=_side_cam,):
+def plot_trial_tracking(trial_key, tracking_feature='jaw_y', camera_key=_side_cam):
     """
     Plot trial-specific Jaw Movement time-locked to "go" cue
     """
