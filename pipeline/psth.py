@@ -57,7 +57,7 @@ class TrialCondition(dj.Lookup):
 
     @property
     def contents(self):
-        contents_data = (
+        contents_data = [
             {
                 'trial_condition_name': 'good_noearlylick_hit',
                 'trial_condition_func': '_get_trials_exclude_stim',
@@ -108,17 +108,7 @@ class TrialCondition(dj.Lookup):
                     'trial_instruction': 'right'}
             },
             {
-                'trial_condition_name': 'all_noearlylick_both_alm_stim',
-                'trial_condition_func': '_get_trials_include_stim',
-                'trial_condition_arg': {
-                    '_outcome': 'ignore',
-                    'task': 'audio delay',
-                    'task_protocol': 1,
-                    'early_lick': 'no early',
-                    'brain_location_name': 'both_alm'}
-            },
-            {
-                'trial_condition_name': 'all_noearlylick_both_alm_nostim',
+                'trial_condition_name': 'all_noearlylick_nostim',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -127,18 +117,7 @@ class TrialCondition(dj.Lookup):
                     'early_lick': 'no early'}
             },
             {
-                'trial_condition_name': 'all_noearlylick_both_alm_stim_left',
-                'trial_condition_func': '_get_trials_include_stim',
-                'trial_condition_arg': {
-                    '_outcome': 'ignore',
-                    'task': 'audio delay',
-                    'task_protocol': 1,
-                    'early_lick': 'no early',
-                    'trial_instruction': 'left',
-                    'brain_location_name': 'both_alm'}
-            },
-            {
-                'trial_condition_name': 'all_noearlylick_both_alm_nostim_left',
+                'trial_condition_name': 'all_noearlylick_nostim_left',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -148,18 +127,7 @@ class TrialCondition(dj.Lookup):
                     'trial_instruction': 'left'}
             },
             {
-                'trial_condition_name': 'all_noearlylick_both_alm_stim_right',
-                'trial_condition_func': '_get_trials_include_stim',
-                'trial_condition_arg': {
-                    '_outcome': 'ignore',
-                    'task': 'audio delay',
-                    'task_protocol': 1,
-                    'early_lick': 'no early',
-                    'trial_instruction': 'right',
-                    'brain_location_name': 'both_alm'}
-            },
-            {
-                'trial_condition_name': 'all_noearlylick_both_alm_nostim_right',
+                'trial_condition_name': 'all_noearlylick_nostim_right',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -167,9 +135,26 @@ class TrialCondition(dj.Lookup):
                     'task_protocol': 1,
                     'early_lick': 'no early',
                     'trial_instruction': 'right'}
-            },
-        )
-        # generate key XXX: complicated why not just key from description?
+            }
+        ]
+
+        # PHOTOSTIM conditions
+        stim_locs = ['left_alm', 'right_alm', 'both_alm']
+        for loc in stim_locs:
+            for instruction in (None, 'left', 'right'):
+                condition = {'trial_condition_name': '_'.join(filter(None, ['all', 'noearlylick', loc, 'stim',
+                                                                            instruction])),
+                             'trial_condition_func': '_get_trials_include_stim',
+                             'trial_condition_arg': {
+                                 **{'_outcome': 'ignore',
+                                    'task': 'audio delay',
+                                    'task_protocol': 1,
+                                    'early_lick': 'no early',
+                                    'brain_location_name': loc},
+                                 **({'trial_instruction': instruction} if instruction else {})}
+                             }
+                contents_data.append(condition)
+
         return ({**d, 'trial_condition_hash':
                  key_hash({'trial_condition_func': d['trial_condition_func'],
                            **d['trial_condition_arg']})}
@@ -178,6 +163,22 @@ class TrialCondition(dj.Lookup):
     @classmethod
     def get_trials(cls, trial_condition_name):
         return cls.get_func({'trial_condition_name': trial_condition_name})()
+
+    @classmethod
+    def get_cond_name_from_keywords(cls, keywords):
+        matched_cond_names = []
+        for cond_name in cls.fetch('trial_condition_name'):
+            match = True
+            tmp_cond = cond_name
+            for k in keywords:
+                if k in tmp_cond:
+                    tmp_cond = tmp_cond.replace(k, '')
+                else:
+                    match = False
+                    break
+            if match:
+                matched_cond_names.append(cond_name)
+        return sorted(matched_cond_names)
 
     @classmethod
     def get_func(cls, key):

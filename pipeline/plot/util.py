@@ -234,8 +234,9 @@ def jointplot_w_hue(data, x, y, hue=None, colormap=None,
 
     # topright
     ax_legend = plt.subplot(grid[0, 1])  # , sharey=ax_main)
-    plt.setp(ax_legend.get_xticklabels(), visible = False)
-    plt.setp(ax_legend.get_yticklabels(), visible = False)
+    plt.setp(ax_legend.get_xticklabels(), visible=False)
+    plt.setp(ax_legend.get_yticklabels(), visible=False)
 
-    ax_legend.legend(handles = legend_mapping)
-    return dict(fig = fig, gridspec = grid)
+    ax_legend.legend(handles=legend_mapping)
+    ax_legend.axis('off')
+    return dict(fig=fig, gridspec=grid)

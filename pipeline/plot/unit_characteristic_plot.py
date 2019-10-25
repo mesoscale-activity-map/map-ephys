@@ -14,6 +14,8 @@ from pipeline.plot.util import (_plot_with_sem, _extract_one_stim_dur, _get_unit
                                 jointplot_w_hue)
 
 m_scale = 1200
+_plt_xmin = -3
+_plt_xmax = 2
 
 
 def plot_clustering_quality(probe_insertion, axs=None):
@@ -390,6 +392,77 @@ def plot_psth_bilateral_photostim_effect(units, axs=None):
     delay = (experiment.Period  # TODO: use from period_starts
              & 'period = "delay"').fetch1('period_start')
     axs[1].axvspan(delay, delay + stim_dur, alpha=0.3, color='royalblue')
+
+    return fig
+
+
+def plot_psth_photostim_effect(units, condition_name_kw=['both_alm'], axs=None):
+    """
+    For the specified `units`, plot PSTH comparison between stim vs. no-stim with left/right trial instruction
+    The stim location (or other appropriate search keywords) can be specified in `condition_name_kw` (default: bilateral ALM)
+    """
+    units = units.proj()
+
+    fig = None
+    if axs is None:
+        fig, axs = plt.subplots(1, 2, figsize=(16, 6))
+    assert axs.size == 2
+
+    hemi = _get_units_hemisphere(units)
+
+    period_starts = (experiment.Period
+                     & 'period in ("sample", "delay", "response")').fetch(
+                         'period_start')
+
+    # no photostim:
+    psth_n_l = psth.TrialCondition.get_cond_name_from_keywords(['_nostim', '_left'])[0]
+    psth_n_r = psth.TrialCondition.get_cond_name_from_keywords(['_nostim', '_right'])[0]
+
+    psth_n_l = (psth.UnitPsth * psth.TrialCondition & units
+                & {'trial_condition_name': psth_n_l} & 'unit_psth is not NULL').fetch('unit_psth')
+    psth_n_r = (psth.UnitPsth * psth.TrialCondition & units
+                & {'trial_condition_name': psth_n_r} & 'unit_psth is not NULL').fetch('unit_psth')
+
+    psth_s_l = psth.TrialCondition.get_cond_name_from_keywords(condition_name_kw + ['_stim_left'])[0]
+    psth_s_r = psth.TrialCondition.get_cond_name_from_keywords(condition_name_kw + ['_stim_right'])[0]
+
+    psth_s_l = (psth.UnitPsth * psth.TrialCondition & units
+                & {'trial_condition_name': psth_s_l} & 'unit_psth is not NULL').fetch('unit_psth')
+    psth_s_r = (psth.UnitPsth * psth.TrialCondition & units
+                & {'trial_condition_name': psth_s_r} & 'unit_psth is not NULL').fetch('unit_psth')
+
+    # get photostim duration
+    stim_trial_cond_name = psth.TrialCondition.get_cond_name_from_keywords(condition_name_kw + ['_stim'])[0]
+    stim_durs = np.unique((experiment.Photostim & experiment.PhotostimEvent
+                           * psth.TrialCondition().get_trials(stim_trial_cond_name)
+                           & units).fetch('duration'))
+    stim_dur = _extract_one_stim_dur(stim_durs)
+
+    if hemi == 'left':
+        psth_s_i = psth_s_l
+        psth_n_i = psth_n_l
+        psth_s_c = psth_s_r
+        psth_n_c = psth_n_r
+    else:
+        psth_s_i = psth_s_r
+        psth_n_i = psth_n_r
+        psth_s_c = psth_s_l
+        psth_n_c = psth_n_l
+
+    _plot_avg_psth(psth_n_i, psth_n_c, period_starts, axs[0],
+                   'Control')
+    _plot_avg_psth(psth_s_i, psth_s_c, period_starts, axs[1],
+                   'Photostim')
+
+    # cosmetic
+    ymax = max([ax.get_ylim()[1] for ax in axs])
+    for ax in axs:
+        ax.set_ylim((0, ymax))
+        ax.set_xlim([_plt_xmin, _plt_xmax])
+
+    # add shaded bar for photostim
+    stim_time = (experiment.Period & 'period = "delay"').fetch1('period_start')
+    axs[1].axvspan(stim_time, stim_time + stim_dur, alpha=0.3, color='royalblue')
 
     return fig
 
