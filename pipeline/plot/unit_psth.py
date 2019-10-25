@@ -8,7 +8,7 @@ from pipeline.plot.util import _get_trial_event_times
 # from pipeline.psth import TrialCondition
 # from pipeline.psth import UnitPsth
 
-_plt_xlim = [-3, 2]
+_plt_xlim = [-3, 3]
 
 
 def _plot_spike_raster(ipsi, contra, vlines=[], shade_bar=None, ax=None, title='', xlim=_plt_xlim):

@@ -1,17 +1,22 @@
 import datajoint as dj
 import numpy as np
-import json
 import pathlib
 from datetime import datetime
-
+import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
+import io
+from PIL import Image
+import itertools
 
 from pipeline import experiment, ephys, psth, tracking, lab
 from pipeline.plot import behavior_plot, unit_characteristic_plot, unit_psth
 from pipeline import get_schema_name
-from pipeline.plot.util import _plot_with_sem
+from pipeline.plot.util import _plot_with_sem, jointplot_w_hue
+
+import warnings
+warnings.filterwarnings('ignore')
 
 
 schema = dj.schema(get_schema_name('report'))
@@ -27,7 +32,6 @@ class SessionLevelReport(dj.Computed):
     -> experiment.Session
     ---
     behavior_performance: filepath@report_store
-    jaw_phase_dist: filepath@report_store
     """
 
     key_source = experiment.Session & experiment.BehaviorTrial & tracking.Tracking
@@ -58,14 +62,11 @@ class SessionLevelReport(dj.Computed):
                                                 title=stim_key['brain_location_name'].replace('_', ' ').upper())
             ax.axis('on')
 
-        # ---- Jaw movement phase distribution ----
-        fig2 = behavior_plot.plot_windowed_jaw_phase_dist(key, xlim=(-0.12, 0.3), w_size=0.01, bin_counts=20)
-
         # ---- Save fig and insert ----
         fn_prefix = f'{water_res_num}_{sess_date}_'
 
         fig_dict = {}
-        for fig, figname in zip((fig1, fig2), ('behavior_performance', 'jaw_phase_dist')):
+        for fig, figname in zip((fig1,), ('behavior_performance',)):
             fig_fp = sess_dir / (fn_prefix + figname + '.png')
             fig.tight_layout()
             fig.savefig(fig_fp)
@@ -174,10 +175,12 @@ class UnitLevelReport(dj.Computed):
         fig2 = plt.figure(figsize = (16, 16))
         gs = GridSpec(4, 2)
 
-        # FIXME: configurable 'trial_offset' and 'trial_limit'?
-        behavior_plot.plot_tracking(experiment.Session & key, key, tracking_feature='jaw_x', xlim=(-0.5, 1),
-                                    trial_offset=10, trial_limit=30, axs=np.array([fig2.add_subplot(gs[:3, col])
-                                                                                  for col in range(2)]))
+        # 15 trials roughly in the middle of the session
+        session = experiment.Session & key
+        behavior_plot.plot_tracking(session, key, tracking_feature='jaw_x', xlim=(-0.5, 1),
+                                    trial_offset=int(len(experiment.SessionTrial & sess_date)/2),
+                                    trial_limit=15, axs=np.array([fig2.add_subplot(gs[:3, col])
+                                                                  for col in range(2)]))
 
         axs = np.array([fig2.add_subplot(gs[-1, col], polar = True) for col in range(2)])
         behavior_plot.plot_unit_jaw_phase_dist(experiment.Session & key, key, axs=axs)
@@ -218,22 +221,104 @@ class SessionLevelCDReport(dj.Computed):
         return unit * sel_unit & 'unit_count = sel_unit_count'
 
     def make(self, key):
+        water_res_num, sess_date = get_wr_sessdate(key)
+        sess_dir = store_directory / water_res_num / sess_date
+        sess_dir.mkdir(parents=True, exist_ok=True)
+
+        # ---- Setup ----
         time_period = (-0.4, 0)
         probe_keys = (ephys.ProbeInsertion & key).fetch('KEY')
+        period_starts = (experiment.Period & 'period in ("sample", "delay", "response")').fetch('period_start')
 
-        for probe in probe_keys:
+        fig1, axs = plt.subplots(len(probe_keys), len(probe_keys), figsize=(16, 16))
+        [a.axis('off') for a in axs.flatten()]
+
+        # ---- Plot Coding Direction per probe ----
+        probe_proj = {}
+        for pid, probe in enumerate(probe_keys):
             units = ephys.Unit & probe
+            label = (ephys.ProbeInsertion.InsertionLocation & probe).fetch1(
+                'brain_location_name').replace('_', ' ').upper()
+
+            # ---- compute CD projected PSTH ----
             _, proj_contra_trial, proj_ipsi_trial, time_stamps = psth.compute_CD_projected_psth(
                 units.fetch('KEY'), time_period=time_period)
 
-            fig, ax = plt.subplots(1, 1, figsize=(4, 4))
+            # ---- save projection results ----
+            probe_proj[pid] = (proj_contra_trial, proj_ipsi_trial, time_stamps, label)
+
+            # ---- generate fig with CD plot for this probe ----
+            fig, ax = plt.subplots(1, 1, figsize=(6, 6))
             _plot_with_sem(proj_contra_trial, time_stamps, ax=ax, c='b')
             _plot_with_sem(proj_ipsi_trial, time_stamps, ax=ax, c='r')
+            # cosmetic
+            for x in period_starts:
+                ax.axvline(x=x, linestyle = '--', color = 'k')
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+            ax.set_ylabel('CD projection (a.u.)')
+            ax.set_xlabel('Time (s)')
+            ax.set_title(label)
+            fig.tight_layout()
 
-        pass
-        # fig1 = unit_characteristic_plot.plot_paired_coding_direction(units & 'brain_area = "thalamus"',
-        #                                                              units & 'brain_area = "alm"',
-        #                                                              labels = ('thalamus', 'alm'), time_period = (-0.4, 0))
+            # ---- plot this fig into the main figure ----
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png')
+            buf.seek(0)
+            axs[pid, pid].imshow(Image.open(buf))
+            buf.close()
+            plt.close(fig)
+
+        # ---- Plot probe-pair correlation ----
+        for p1, p2 in itertools.combinations(probe_proj.keys(), r=2):
+            proj_contra_trial_g1, proj_ipsi_trial_g1, time_stamps, label_g1 = probe_proj[p1]
+            proj_contra_trial_g2, proj_ipsi_trial_g2, time_stamps, label_g2 = probe_proj[p2]
+            labels = [label_g1, label_g2]
+
+            # plot trial CD-endpoint correlation
+            p_start, p_end = time_period
+            contra_cdend_1 = proj_contra_trial_g1[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(
+                axis=1)
+            contra_cdend_2 = proj_contra_trial_g2[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(
+                axis=1)
+            ipsi_cdend_1 = proj_ipsi_trial_g1[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(
+                axis=1)
+            ipsi_cdend_2 = proj_ipsi_trial_g2[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(
+                axis=1)
+
+            c_df = pd.DataFrame([contra_cdend_1, contra_cdend_2]).T
+            c_df.columns = labels
+            c_df['trial-type'] = 'contra'
+            i_df = pd.DataFrame([ipsi_cdend_1, ipsi_cdend_2]).T
+            i_df.columns = labels
+            i_df['trial-type'] = 'ipsi'
+            df = c_df.append(i_df)
+
+            fig = plt.figure(figsize=(6, 6))
+            jplot = jointplot_w_hue(data=df, x=labels[0], y=labels[1], hue='trial-type', colormap=['b', 'r'],
+                                    figsize=(8, 6), fig=fig, scatter_kws = None)
+
+            # ---- plot this fig into the main figure ----
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png')
+            buf.seek(0)
+            axs[p1, p2].imshow(Image.open(buf))
+            buf.close()
+            plt.close(fig)
+
+        # ---- Save fig and insert ----
+        fn_prefix = f'{water_res_num}_{sess_date}_'
+
+        fig_dict = {}
+        for fig, figname in zip((fig1,), ('coding_direction',)):
+            fig_fp = sess_dir / (fn_prefix + figname + '.png')
+            fig.tight_layout()
+            fig.savefig(fig_fp)
+            print(f'Generated {fig_fp}')
+            fig_dict[figname] = fig_fp.as_posix()
+
+        plt.close('all')
+        self.insert1({**key, **fig_dict})
 
 
 # ---------- HELPER FUNCTIONS --------------
