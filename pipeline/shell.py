@@ -95,6 +95,9 @@ def generate_figure_report(*args):
     log.info('report.SessionLevelReport.populate()')
     report.SessionLevelReport.populate(reserve_jobs=True, display_progress=True)
 
+    log.info('report.SessionLevelCDReport.populate()')
+    report.SessionLevelCDReport.populate(reserve_jobs=True, display_progress=True)
+
     log.info('report.ProbeLevelReport.populate()')
     report.ProbeLevelReport.populate(reserve_jobs=True, display_progress=True)
 
