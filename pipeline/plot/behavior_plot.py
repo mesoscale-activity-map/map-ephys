@@ -121,8 +121,8 @@ def plot_tracking(session_key, unit_key,
     :param unit_key: unit for spike times overlay
     :param tracking_feature: which tracking feature to plot (default to `jaw_y`)
     :param camera_key: tracking from which camera to plot (default to Camera 0, i.e. the side camera)
-    :param trial_offset: number of trial to plot from
-    :param trial_limit: number of trial to plot to
+    :param trial_offset: index of trial to plot from (if a decimal between 0 and 1, indicates the proportion of total trial to plot from)
+    :param trial_limit: number of trial to plot
     """
 
     if tracking_feature not in _tracked_nose_features + _tracked_tongue_features + _tracked_jaw_features:
@@ -131,13 +131,18 @@ def plot_tracking(session_key, unit_key,
 
     trk = (tracking.Tracking.JawTracking * tracking.Tracking.TongueTracking * tracking.Tracking.NoseTracking
            * experiment.BehaviorTrial & camera_key & session_key & experiment.ActionEvent & ephys.Unit.TrialSpikes)
-    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & session_key).fetch1('sampling_rate'))
+    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & camera_key & session_key).fetch1('sampling_rate'))
 
     l_trial_trk = trk & 'trial_instruction="left"' & 'early_lick="no early"' & 'outcome="hit"'
     r_trial_trk = trk & 'trial_instruction="right"' & 'early_lick="no early"' & 'outcome="hit"'
 
     def get_trial_track(trial_tracks):
-        for tr in trial_tracks.fetch(as_dict=True, offset=trial_offset, limit=trial_limit):
+        if trial_offset < 1 and isinstance(trial_offset, float):
+            offset = int(len(trial_tracks) * trial_offset)
+        else:
+            offset = trial_offset
+
+        for tr in trial_tracks.fetch(as_dict=True, offset=offset, limit=trial_limit, order_by='trial'):
             trk_feat = tr[tracking_feature]
             tongue_out_bool = tr['tongue_likelihood'] > 0.9
 
@@ -185,7 +190,7 @@ def plot_tracking(session_key, unit_key,
 def plot_unit_jaw_phase_dist(session_key, unit_key, bin_counts=20, axs=None):
     trk = (tracking.Tracking.JawTracking * tracking.Tracking.TongueTracking
            * experiment.BehaviorTrial & _side_cam & session_key & experiment.ActionEvent & ephys.Unit.TrialSpikes)
-    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & session_key).fetch1('sampling_rate'))
+    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & _side_cam & session_key).fetch1('sampling_rate'))
 
     l_trial_trk = trk & 'trial_instruction="left"' & 'early_lick="no early"' & 'outcome="hit"'
     r_trial_trk = trk & 'trial_instruction="right"' & 'early_lick="no early"' & 'outcome="hit"'
@@ -198,7 +203,7 @@ def plot_unit_jaw_phase_dist(session_key, unit_key, bin_counts=20, axs=None):
 
         flattened_jaws = np.hstack(jaws)
         jsize = np.cumsum([0] + [j.size for j in jaws])
-        _, phase = compute_insta_phase_amp(flattened_jaws, tracking_fs, freq_band = (5, 15))
+        _, phase = compute_insta_phase_amp(flattened_jaws, tracking_fs, freq_band=(5, 15))
         stacked_insta_phase = [phase[start: end] for start, end in zip(jsize[:-1], jsize[1:])]
 
         for spks, jphase in zip(spike_times, stacked_insta_phase):

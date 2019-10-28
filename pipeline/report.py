@@ -203,7 +203,8 @@ class UnitLevelReport(dj.Computed):
     unit_behavior: filepath@report_store
     """
 
-    key_source = ephys.Unit & psth.UnitSelectivity
+    # only units with ingested tracking and selectivity computed
+    key_source = ephys.Unit & psth.UnitSelectivity & tracking.Tracking
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
@@ -217,12 +218,11 @@ class UnitLevelReport(dj.Computed):
 
         # 15 trials roughly in the middle of the session
         session = experiment.Session & key
-        behavior_plot.plot_tracking(session, key, tracking_feature='jaw_x', xlim=(-0.5, 1),
-                                    trial_offset=int(len(experiment.SessionTrial & sess_date)/2),
-                                    trial_limit=15, axs=np.array([fig2.add_subplot(gs[:3, col])
-                                                                  for col in range(2)]))
+        behavior_plot.plot_tracking(session, key, tracking_feature='jaw_y', xlim=(-0.5, 1),
+                                    trial_offset=0.5, trial_limit=15, axs=np.array([fig2.add_subplot(gs[:3, col])
+                                                                                    for col in range(2)]))
 
-        axs = np.array([fig2.add_subplot(gs[-1, col], polar = True) for col in range(2)])
+        axs = np.array([fig2.add_subplot(gs[-1, col], polar=True) for col in range(2)])
         behavior_plot.plot_unit_jaw_phase_dist(experiment.Session & key, key, axs=axs)
         [a.set_title('') for a in axs]
 

@@ -109,6 +109,25 @@ def generate_report(populate_settings={'reserve_jobs': True, 'display_progress':
     report.SessionLevelCDReport.populate(**populate_settings)
 
 
+def sync_report():
+    stage = dj.config['stores']['report_store']['stage']
+
+    log.info(f'Sync report.SessionLevelReport from {stage}')
+    report.SessionLevelReport.fetch()
+
+    log.info(f'Sync report.ProbeLevelReport from {stage}')
+    report.ProbeLevelReport.fetch()
+
+    log.info(f'Sync report.ProbeLevelPhotostimEffectReport from {stage}')
+    report.ProbeLevelPhotostimEffectReport.fetch()
+
+    log.info(f'Sync report.UnitLevelReport from {stage}')
+    report.UnitLevelReport.fetch()
+
+    log.info(f'Sync report.SessionLevelCDReport from {stage}')
+    report.SessionLevelCDReport.fetch()
+
+
 def nuke_all():
     if 'nuclear_option' not in dj.config:
         raise RuntimeError('nuke_all() function not enabled')
@@ -183,6 +202,7 @@ actions = {
     'publish': publish,
     'export-recording': export_recording,
     'generate-report': generate_report,
+    'sync-report': sync_report,
     'shell': shell,
     'erd': erd,
     'ccfload': ccfload,
