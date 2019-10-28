@@ -85,7 +85,6 @@ class ProbeLevelReport(dj.Computed):
     clustering_quality: filepath@report_store
     unit_characteristic: filepath@report_store
     group_psth: filepath@report_store
-    group_photostim: filepath@report_store
     """
 
     @property
@@ -126,9 +125,50 @@ class ProbeLevelReport(dj.Computed):
         # ---- group_psth ----
         fig3 = unit_characteristic_plot.plot_stacked_contra_ipsi_psth(units)
 
+        # ---- Save fig and insert ----
+        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_'
+
+        fig_dict = {}
+        for fig, figname in zip((fig1, fig2, fig3),
+                                ('clustering_quality', 'unit_characteristic', 'group_psth')):
+            fig_fp = sess_dir / (fn_prefix + figname + '.png')
+            fig.tight_layout()
+            fig.savefig(fig_fp)
+            print(f'Generated {fig_fp}')
+            fig_dict[figname] = fig_fp.as_posix()
+
+        plt.close('all')
+        self.insert1({**key, **fig_dict})
+
+
+@schema
+class ProbeLevelPhotostimEffectReport(dj.Computed):
+    definition = """
+    -> ephys.ProbeInsertion
+    ---
+    group_photostim: filepath@report_store
+    """
+
+    @property
+    def key_source(self):
+        # Only process ProbeInsertion with UnitPSTH computation (for all TrialCondition) fully completed
+        probe_current_psth = ephys.ProbeInsertion.aggr(psth.UnitPsth, present_u_psth_count='count(*)')
+        probe_full_psth = (ephys.ProbeInsertion.aggr(
+            ephys.Unit.proj(), unit_count=f'count(*)') * dj.U().aggr(psth.TrialCondition, trial_cond_count='count(*)')).proj(
+            full_u_psth_count = 'unit_count * trial_cond_count')
+        return probe_current_psth * probe_full_psth & 'present_u_psth_count = full_u_psth_count'
+
+    def make(self, key):
+        water_res_num, sess_date = get_wr_sessdate(key)
+        sess_dir = store_directory / water_res_num / sess_date / str(key['insertion_number'])
+        sess_dir.mkdir(parents=True, exist_ok=True)
+
+        probe_insertion = ephys.ProbeInsertion & key
+        units = ephys.Unit & key
+
         # ---- group_photostim ----
         stim_locs = (experiment.Photostim & probe_insertion).fetch('brain_location_name')
-        fig4, axs = plt.subplots(1, 1 + len(stim_locs), figsize=(16, 6))
+        fig1, axs = plt.subplots(1, 1 + len(stim_locs), figsize=(16, 6))
         for pos, stim_loc in enumerate(stim_locs):
             unit_characteristic_plot.plot_psth_photostim_effect(units,
                                                                 condition_name_kw=[stim_loc],
@@ -142,8 +182,8 @@ class ProbeLevelReport(dj.Computed):
         fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_'
 
         fig_dict = {}
-        for fig, figname in zip((fig1, fig2, fig3, fig4),
-                                ('clustering_quality', 'unit_characteristic', 'group_psth', 'group_photostim')):
+        for fig, figname in zip((fig1,),
+                                ('group_photostim',)):
             fig_fp = sess_dir / (fn_prefix + figname + '.png')
             fig.tight_layout()
             fig.savefig(fig_fp)
