@@ -233,7 +233,26 @@ class ArchivedRawEphys(dj.Imported):
 
     @staticmethod
     def test_flist(fname='globus-index-full.txt'):
-        ''' spoof tester for discover '''
+        '''
+        spoof tester for discover
+
+        expects:
+
+        f: ep:/path/to/file
+        d: ep:/path/to/direct
+
+        etc. (aka: globus-shell 'find' output)
+
+        replace the line:
+
+          for ep, dirname, node in gsm.fts('{}:{}'.format(rep, rep_sub)):
+
+        with:
+
+          # for ep, dirname, node in self.test_flist('globus-list.txt'):
+
+        to test against the file 'globus-list.txt'
+        '''
 
         with open(fname, 'r') as infile:
             for l in infile:
@@ -256,16 +275,6 @@ class ArchivedRawEphys(dj.Imported):
         """
         Discover files on globus and attempt to register them.
         """
-        '''
-        # if we find a matching raw ephys file
-        # interpret session from folder
-        # if session is new:
-        #   commit old data if exisiting
-        #   set sessibon structure into context
-        # otherwise
-        # add to associated fileset records
-        # continue
-        '''
         globus_alias = 'raw-ephys'
 
         ra, rep, rep_sub = (GlobusStorageLocation()
@@ -355,12 +364,6 @@ class ArchivedRawEphys(dj.Imported):
                 log.info('skipping. mixed filetypes detected')
                 return
 
-            from code import interact
-            from collections import ChainMap
-            interact('discoverer', local=dict(
-                dict(ChainMap(locals(), globals())), smap=smap, ftmap=ftmap))
-
-        # for ep, dirname, node in self.test_flist('globus-list.txt'):
         gsm = self.get_gsm()
         gsm.activate_endpoint(rep)
         for ep, dirname, node in gsm.fts('{}:{}'.format(rep, rep_sub)):
