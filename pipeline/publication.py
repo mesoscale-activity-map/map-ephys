@@ -1,8 +1,12 @@
 
 import logging
 import pathlib
+import re
+import os
+from fnmatch import fnmatch
 
 from textwrap import dedent
+from collections import defaultdict
 
 import datajoint as dj
 
@@ -205,7 +209,7 @@ class ArchivedRawEphys(dj.Imported):
     -> DataSet
     probe_folder:               tinyint
     """
-    
+
     key_source = experiment.Session
 
     gsm = None  # for GlobusStorageManager
@@ -216,7 +220,6 @@ class ArchivedRawEphys(dj.Imported):
         definition = """
         -> master
         -> experiment.SessionTrial
-        ---
         -> DataSet.PhysicalFile
         """
 
@@ -227,6 +230,203 @@ class ArchivedRawEphys(dj.Imported):
             self.gsm.wait_timeout = PUBLICATION_TRANSFER_TIMEOUT
 
         return self.gsm
+
+    @staticmethod
+    def test_flist(fname='globus-index-full.txt'):
+        ''' spoof tester for discover '''
+
+        with open(fname, 'r') as infile:
+            for l in infile:
+                try:
+                    t, fp = l.split(' ')
+
+                    fp = fp.split(':')[1].lstrip('/').rstrip('\n')
+                    dn, bn = os.path.split(fp)
+
+                    if t == 'f:':
+                        yield ('ep', dn, {'DATA_TYPE': 'file', 'name': bn})
+                    else:
+                        yield ('ep', dn, {'DATA_TYPE': 'dunno', 'path': bn})
+
+                except ValueError as e:
+                    if 'too many values' in repr(e):
+                        pass
+
+    def discover(self):
+        """
+        Discover files on globus and attempt to register them.
+        """
+        '''
+        # if we find a matching raw ephys file
+        # interpret session from folder
+        # if session is new:
+        #   commit old data if exisiting
+        #   set sessibon structure into context
+        # otherwise
+        # add to associated fileset records
+        # continue
+        '''
+        globus_alias = 'raw-ephys'
+
+        ra, rep, rep_sub = (GlobusStorageLocation()
+                            & {'globus_alias': globus_alias}).fetch1().values()
+
+        smap = {'{}/{}'.format(s['water_restriction_number'],
+                               s['session_date']).replace('-', ''): s
+                for s in (experiment.Session()
+                          * (lab.WaterRestriction() * lab.Subject.proj()))}
+
+        ftmap = {t['file_type']: t for t in FileType()}
+
+        skey = None
+        sskip = set()
+        sfiles = []  # {file_subpath:, trial:, file_type:,}
+
+        def commit(skey, sfiles):
+            log.info('commit. skey: {}, sfiles: {}'.format(skey, sfiles))
+
+            if not sfiles:
+                log.info('skipping. no files in set')
+                return
+
+            h2o, sdate, ftypes = set(), set(), set()
+            ptmap = defaultdict(lambda: defaultdict(list))  # probe:trial:file
+
+            for s in sfiles:
+                ptmap[s['probe']][s['trial']].append(s)
+                h2o.add(s['water_restriction_number'])
+                sdate.add(s['session_date'])
+                ftypes.add(s['file_type'])
+
+            if len(h2o) != 1 or len(sdate) != 1:
+                log.info('skipping. bad h2o {} or session date {}'.format(
+                    h2o, sdate))
+                return
+
+            h2o, sdate = next(iter(h2o)), next(iter(sdate))
+
+            {k: {kk: vv for kk, vv in v.items()} for k, v in ptmap.items()}
+
+            if all('trial' in f for f in ftypes):
+
+                # DataSet
+                ds_type = 'ephys-raw-trialized'
+                ds_name = '{}_{}_{}'.format(h2o, sdate, ds_type)
+                ds_key = {'dataset_name': ds_name, 'globus_alias': globus_alias}
+
+                if (DataSet & ds_key):
+                    log.info('DataSet: {} already exists. Skipping.'.format(
+                        ds_key))
+                    return
+
+                DataSet.insert1({**ds_key, 'dataset_type': ds_type},
+                                allow_direct_insert=True)
+
+                # ArchivedSession
+                as_key = {k: v for k, v in smap[skey].items()
+                          if k in ArchivedSession.primary_key}
+
+                ArchivedSession.insert1(
+                    {**as_key, 'globus_alias': globus_alias},
+                    allow_direct_insert=True)
+
+                for p in ptmap:
+
+                    # ArchivedRawEphys
+                    ep_key = {**as_key, **ds_key, 'probe_folder': p}
+                    ArchivedRawEphys.insert1(ep_key, allow_direct_insert=True)
+
+                    for t in ptmap[p]:
+                        for f in ptmap[p][t]:
+
+                            DataSet.PhysicalFile.insert1(
+                                {**ds_key, **f}, allow_direct_insert=True,
+                                ignore_extra_fields=True)
+
+                            ArchivedRawEphys.RawEphysTrial.insert1(
+                                {**ep_key, **ds_key,
+                                 'trial': trial,
+                                 'file_subpath': f['file_subpath']},
+                                allow_direct_insert=True)
+
+            elif all('concat' in f for f in ftypes):
+                raise NotImplementedError('concatenated not yet implemented')
+            else:
+                log.info('skipping. mixed filetypes detected')
+                return
+
+            from code import interact
+            from collections import ChainMap
+            interact('discoverer', local=dict(
+                dict(ChainMap(locals(), globals())), smap=smap, ftmap=ftmap))
+
+        # for ep, dirname, node in self.test_flist('globus-list.txt'):
+        gsm = self.get_gsm()
+        gsm.activate_endpoint(rep)
+        for ep, dirname, node in gsm.fts('{}:{}'.format(rep, rep_sub)):
+
+            log.debug('checking: {}:{}/{}'.format(
+                ep, dirname, node.get('name', '')))
+
+            edir = re.match('([a-z]+[0-9]+)/([0-9]{8})/([0-9]+)', dirname)
+
+            if not edir or node['DATA_TYPE'] != 'file':
+                continue
+
+            log.debug('dir match: {}'.format(dirname))
+
+            h2o, sdate, probe = edir[1], edir[2], edir[3]
+
+            skey_i = '{}/{}'.format(h2o, sdate)
+
+            if skey_i != skey:
+                if skey:
+                    with dj.conn().transaction:
+                        commit(skey, sfiles)
+                skey, sfiles = skey_i, []
+
+            if skey not in smap:
+                if skey not in sskip:
+                    log.debug('session {} not known. skipping.'.format(skey))
+                    sskip.add(skey)
+                continue
+
+            fname = node['name']
+
+            log.debug('found file {}'.format(node['name']))
+
+            if '.' not in fname:
+                log.debug('skipping {} - no dot in fname'.format(fname))
+                continue
+
+            froot, fext = fname.split('.', 1)
+            ftype = {g['file_type']: g for g in ftmap.values()
+                     if fnmatch(fname, g['file_glob'])}
+
+            if len(ftype) != 1:
+                log.debug('skipping {} - incorrect type matches: {}'.format(
+                    fname, ftype))
+                continue
+
+            ftype = next(iter(ftype.values()))['file_type']
+
+            trial = None
+            if 'trial' in ftype:
+                trial = int(froot.split('_t')[1])
+
+            file_subpath = '{}/{}'.format(dirname, fname)
+
+            sfiles.append({'water_restriction_number': h2o,
+                           'session_date': '{}-{}-{}'.format(
+                               sdate[:4], sdate[4:6], sdate[6:]),
+                           'probe': int(probe),
+                           'trial': int(trial),
+                           'file_subpath': file_subpath,
+                           'file_type': ftype})
+
+        if skey:
+            with dj.conn().transaction:
+                commit(skey, sfiles)
 
     def make(self, key):
         """
@@ -241,7 +441,7 @@ class ArchivedRawEphys(dj.Imported):
                                  le['endpoint_path'])
 
         re, rep, rep_sub = (GlobusStorageLocation()
-                            & {'globus_alias': globus_alias}).fetch1()
+                            & {'globus_alias': globus_alias}).fetch1().values()
 
         log.info('local_endpoint: {}:{} -> {}'.format(lep, lep_sub, lep_dir))
 
@@ -659,7 +859,7 @@ class ArchivedTrackingVideo(dj.Imported):
             pf_rec = {**pf_key, 'file_type': filetype}
 
             DataSet.PhysicalFile.insert1({**pf_rec}, allow_direct_insert=True)
-                                          
+
             trk_key = {k: v for k, v in {**key, 'trial': trial}.items()
                        if k in experiment.SessionTrial.primary_key}
 
