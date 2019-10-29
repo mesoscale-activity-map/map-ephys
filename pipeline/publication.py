@@ -231,50 +231,13 @@ class ArchivedRawEphys(dj.Imported):
 
         return self.gsm
 
-    @staticmethod
-    def test_flist(fname='globus-index-full.txt'):
-        '''
-        spoof tester for discover
-
-        expects:
-
-        f: ep:/path/to/file
-        d: ep:/path/to/direct
-
-        etc. (aka: globus-shell 'find' output)
-
-        replace the line:
-
-          for ep, dirname, node in gsm.fts('{}:{}'.format(rep, rep_sub)):
-
-        with:
-
-          # for ep, dirname, node in self.test_flist('globus-list.txt'):
-
-        to test against the file 'globus-list.txt'
-        '''
-
-        with open(fname, 'r') as infile:
-            for l in infile:
-                try:
-                    t, fp = l.split(' ')
-
-                    fp = fp.split(':')[1].lstrip('/').rstrip('\n')
-                    dn, bn = os.path.split(fp)
-
-                    if t == 'f:':
-                        yield ('ep', dn, {'DATA_TYPE': 'file', 'name': bn})
-                    else:
-                        yield ('ep', dn, {'DATA_TYPE': 'dunno', 'path': bn})
-
-                except ValueError as e:
-                    if 'too many values' in repr(e):
-                        pass
-
-    def discover(self):
+    @classmethod
+    def discover(cls):
         """
         Discover files on globus and attempt to register them.
         """
+        self = cls()
+
         globus_alias = 'raw-ephys'
 
         ra, rep, rep_sub = (GlobusStorageLocation()
@@ -337,12 +300,14 @@ class ArchivedRawEphys(dj.Imported):
 
                 ArchivedSession.insert1(
                     {**as_key, 'globus_alias': globus_alias},
-                    allow_direct_insert=True)
+                    allow_direct_insert=True,
+                    skip_duplicates=True)
 
                 for p in ptmap:
 
                     # ArchivedRawEphys
                     ep_key = {**as_key, **ds_key, 'probe_folder': p}
+
                     ArchivedRawEphys.insert1(ep_key, allow_direct_insert=True)
 
                     for t in ptmap[p]:
@@ -354,7 +319,7 @@ class ArchivedRawEphys(dj.Imported):
 
                             ArchivedRawEphys.RawEphysTrial.insert1(
                                 {**ep_key, **ds_key,
-                                 'trial': trial,
+                                 'trial': t,
                                  'file_subpath': f['file_subpath']},
                                 allow_direct_insert=True)
 
@@ -383,20 +348,27 @@ class ArchivedRawEphys(dj.Imported):
             skey_i = '{}/{}'.format(h2o, sdate)
 
             if skey_i != skey:
-                if skey:
+                if skey and skey in smap:
                     with dj.conn().transaction:
-                        commit(skey, sfiles)
+                        try:
+                            commit(skey, sfiles)
+                        except Exception as e:
+                            log.error(
+                                'Exception {} committing {}. files: {}'.format(
+                                    repr(e), skey, sfiles))
+
                 skey, sfiles = skey_i, []
 
             if skey not in smap:
                 if skey not in sskip:
                     log.debug('session {} not known. skipping.'.format(skey))
                     sskip.add(skey)
+
                 continue
 
             fname = node['name']
 
-            log.debug('found file {}'.format(node['name']))
+            log.debug('found file {}'.format(fname))
 
             if '.' not in fname:
                 log.debug('skipping {} - no dot in fname'.format(fname))
@@ -746,6 +718,177 @@ class ArchivedTrackingVideo(dj.Imported):
 
         return self.gsm
 
+    @classmethod
+    def discover(cls):
+        """
+        discover files on globus and attempt to register them
+        """
+        self = cls()
+
+        globus_alias = 'raw-video'
+
+        ra, rep, rep_sub = (GlobusStorageLocation()
+                            & {'globus_alias': globus_alias}).fetch1().values()
+
+        smap = {'{}/{}'.format(s['water_restriction_number'],
+                               s['session_date']).replace('-', ''): s
+                for s in (experiment.Session()
+                          * (lab.WaterRestriction() * lab.Subject.proj()))}
+
+        tpos_dev = {s['tracking_position']: s['tracking_device']
+                    for s in tracking.TrackingDevice()}  # position:device
+
+        # TODO: support 'trial map file'
+        ftmap = {'avi': '*_*_[0-9]*-[0-9]*.avi',
+                 'mp4': '*_*_[0-9]*-[0-9]*.mp4'}
+
+        skey = None
+        sskip = set()
+        sfiles = []  # {file_subpath:, trial:, file_type:,}
+
+        def commit(skey, sfiles):
+            log.info('commit. skey: {}'.format(skey))
+
+            if not sfiles:
+                log.info('commit skipping {}. no files in set'.format(skey))
+
+            # log.debug('sfiles: {}'.format(sfiles))
+
+            h2o, sdate, ftypes = set(), set(), set()
+
+            ftmap = None  # file:trial map (via csv). TODO
+            dvmap = defaultdict(lambda: defaultdict(list))  # device:video:file
+            dtmap = defaultdict(lambda: defaultdict(list))  # device:trial:file
+
+            for s in sfiles:
+
+                if s['file_type'] in {'avi', 'mp4'}:
+                    dvmap[s['position']][s['video']].append(s)
+                    h2o.add(s['water_restriction_number'])
+                    sdate.add(s['session_date'])
+                    ftypes.add(s['file_type'])
+
+                if s['file_type'] == 'tracking-map':   # TODO
+                    ftmap = None  # xfer to tmp, load
+
+            if len(h2o) != 1 or len(sdate) != 1:
+                log.info('skipping. bad h2o {} or session date {}'.format(
+                    h2o, sdate))
+                return
+
+            h2o, sdate = next(iter(h2o)), next(iter(sdate))
+
+            dtmap = dvmap if not ftmap else dvmap  # TODO: remap trials
+
+            # DataSet
+            ds_type = 'tracking-video'
+            ds_name = '{}_{}_{}'.format(h2o, sdate, ds_type)
+            ds_key = {'dataset_name': ds_name, 'globus_alias': globus_alias}
+
+            if (DataSet & ds_key):
+                log.info('DataSet: {} already exists. Skipping.'.format(
+                    ds_key))
+                return
+
+            DataSet.insert1({**ds_key, 'dataset_type': ds_type},
+                            allow_direct_insert=True)
+
+            # ArchivedSession
+            as_key = {k: v for k, v in smap[skey].items()
+                      if k in ArchivedSession.primary_key}
+
+            ArchivedSession.insert1(
+                {**as_key, 'globus_alias': globus_alias},
+                allow_direct_insert=True,
+                skip_duplicates=True)
+
+            for d in dtmap:
+
+                # ArchivedTrackingVideo
+                atv_key = {**as_key, **ds_key, 'tracking_device': tpos_dev[d]}
+
+                ArchivedTrackingVideo.insert1(
+                    atv_key, allow_direct_insert=True)
+
+                for t in dtmap[d]:
+                    for f in dtmap[d][t]:
+
+                        DataSet.PhysicalFile.insert1(
+                            {**ds_key, **f}, allow_direct_insert=True,
+                            ignore_extra_fields=True)
+
+                        ArchivedTrackingVideo.TrialVideo.insert1(
+                            {**atv_key, **ds_key,
+                             'trial': t,
+                             'file_subpath': f['file_subpath']},
+                            allow_direct_insert=True)
+
+        flist_file='globus-cleaning/map-globus-index-full.txt'
+
+        # gsm = self.get_gsm()
+        # gsm.activate_endpoint(rep)
+        for ep, dirname, node in test_flist(flist_file):
+
+            vdir = re.match('([a-z]+[0-9]+)/([0-9]{8})/video', dirname)
+
+            if not vdir or node['DATA_TYPE'] != 'file':
+                continue
+
+            h2o, sdate = vdir[1], vdir[2]
+
+            skey_i = '{}/{}'.format(h2o, sdate)
+
+            if skey_i != skey:
+                if skey and skey in smap:
+                    with dj.conn().transaction:
+                        try:
+                            commit(skey, sfiles)
+                        except Exception as e:
+                            log.error(
+                                'Exception {} committing {}. files: {}'.format(
+                                    repr(e), skey, sfiles))
+
+                skey, sfiles = skey_i, []
+
+            if skey not in smap:
+                if skey not in sskip:
+                    log.debug('session {} not known. skipping'.format(skey))
+                    sskip.add(skey)
+
+                continue
+
+            fname = node['name']
+
+            log.debug('checking {}/{}'.format(dirname, fname))
+
+            if '.' not in fname:
+                log.debug('skipping {} - no dot in fname'.format(fname))
+                continue
+
+            froot, fext = fname.split('.', 1)
+            ftype = {k: v for k, v in ftmap.items()
+                     if fnmatch(fname, v)}
+
+            if len(ftype) != 1:
+                log.debug('skipping {} - incorrect type matches: {}'.format(
+                    fname, ftype))
+                continue
+
+            ftype = next(iter(ftype.keys()))
+
+            # dl41_side_998-0000.avi
+            h2o_f, position, video, extra = froot.replace('-', '_').split('_')
+
+            file_subpath = '{}/{}'.format(dirname, fname)
+
+            sfiles.append({'water_restriction_number': h2o,
+                           'session_date': '{}-{}-{}'.format(
+                               sdate[:4], sdate[4:6], sdate[6:]),
+                           'position': position,
+                           'video': int(video),
+                           'file_subpath': file_subpath,
+                           'file_type': ftype})
+
     def make(self, key):
         """
         discover files in local endpoint and transfer/register
@@ -868,3 +1011,42 @@ class ArchivedTrackingVideo(dj.Imported):
 
             tv_rec = {**vt_key, **trk_key, **pf_key}
             ArchivedTrackingVideo.TrialVideo.insert1({**tv_rec})
+
+
+def test_flist(fname='globus-index-full.txt'):
+    '''
+    spoof tester for discover methods
+
+    expects:
+
+    f: ep:/path/to/file
+    d: ep:/path/to/direct
+
+    etc. (aka: globus-shell 'find' output)
+
+    replace the line:
+
+      for ep, dirname, node in gsm.fts('{}:{}'.format(rep, rep_sub)):
+
+    with:
+
+      for ep, dirname, node in test_flist('globus-list.txt'):
+
+    to test against the file 'globus-list.txt'
+    '''
+    with open(fname, 'r') as infile:
+        for l in infile:
+            try:
+                t, fp = l.split(' ')
+
+                fp = fp.split(':')[1].lstrip('/').rstrip('\n')
+                dn, bn = os.path.split(fp)
+
+                if t == 'f:':
+                    yield ('ep', dn, {'DATA_TYPE': 'file', 'name': bn})
+                else:
+                    yield ('ep', dn, {'DATA_TYPE': 'dunno', 'path': bn})
+
+            except ValueError as e:
+                if 'too many values' in repr(e):
+                    pass
