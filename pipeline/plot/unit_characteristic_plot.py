@@ -468,7 +468,7 @@ def plot_psth_photostim_effect(units, condition_name_kw=['both_alm'], axs=None):
 
 
 def plot_coding_direction(units, time_period=None, axs=None):
-    _, proj_contra_trial, proj_ipsi_trial, time_stamps = psth.compute_CD_projected_psth(
+    _, proj_contra_trial, proj_ipsi_trial, time_stamps, _ = psth.compute_CD_projected_psth(
         units.fetch('KEY'), time_period=time_period)
 
     period_starts = (experiment.Period & 'period in ("sample", "delay", "response")').fetch('period_start')
@@ -497,9 +497,9 @@ def plot_paired_coding_direction(unit_g1, unit_g2, labels=None, time_period=None
     Plot trial-to-trial CD-endpoint correlation between CD-projected trial-psth from two unit-groups (e.g. two brain regions)
     Note: coding direction is calculated on selective units, contra vs. ipsi, within the specified time_period
     """
-    _, proj_contra_trial_g1, proj_ipsi_trial_g1, time_stamps = psth.compute_CD_projected_psth(
+    _, proj_contra_trial_g1, proj_ipsi_trial_g1, time_stamps, unit_g1_hemi = psth.compute_CD_projected_psth(
         unit_g1.fetch('KEY'), time_period=time_period)
-    _, proj_contra_trial_g2, proj_ipsi_trial_g2, time_stamps = psth.compute_CD_projected_psth(
+    _, proj_contra_trial_g2, proj_ipsi_trial_g2, time_stamps, unit_g2_hemi = psth.compute_CD_projected_psth(
         unit_g2.fetch('KEY'), time_period=time_period)
 
     period_starts = (experiment.Period & 'period in ("sample", "delay", "response")').fetch('period_start')
@@ -527,12 +527,17 @@ def plot_paired_coding_direction(unit_g1, unit_g2, labels=None, time_period=None
         ax.set_xlabel('Time (s)')
         ax.set_title(label)
 
-    # plot trial CD-endpoint correlation
+    # plot trial CD-endpoint correlation - if 2 unit-groups are from 2 hemispheres,
+    #   then contra-ipsi definition is based on the first group
     p_start, p_end = time_period
     contra_cdend_1 = proj_contra_trial_g1[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
-    contra_cdend_2 = proj_contra_trial_g2[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
     ipsi_cdend_1 = proj_ipsi_trial_g1[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
-    ipsi_cdend_2 = proj_ipsi_trial_g2[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+    if unit_g1_hemi == unit_g1_hemi:
+        contra_cdend_2 = proj_contra_trial_g2[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+        ipsi_cdend_2 = proj_ipsi_trial_g2[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+    else:
+        contra_cdend_2 = proj_ipsi_trial_g2[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+        ipsi_cdend_2 = proj_contra_trial_g2[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
 
     c_df = pd.DataFrame([contra_cdend_1, contra_cdend_2]).T
     c_df.columns = labels

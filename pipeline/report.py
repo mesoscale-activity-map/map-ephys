@@ -267,7 +267,7 @@ class SessionLevelCDReport(dj.Computed):
 
         # ---- Setup ----
         time_period = (-0.4, 0)
-        probe_keys = (ephys.ProbeInsertion & key).fetch('KEY')
+        probe_keys = (ephys.ProbeInsertion & key).fetch('KEY', order_by='insertion_number')
         period_starts = (experiment.Period & 'period in ("sample", "delay", "response")').fetch('period_start')
 
         fig1, axs = plt.subplots(len(probe_keys), len(probe_keys), figsize=(16, 16))
@@ -281,11 +281,11 @@ class SessionLevelCDReport(dj.Computed):
                 'brain_location_name').replace('_', ' ').upper()
 
             # ---- compute CD projected PSTH ----
-            _, proj_contra_trial, proj_ipsi_trial, time_stamps = psth.compute_CD_projected_psth(
+            _, proj_contra_trial, proj_ipsi_trial, time_stamps, hemi = psth.compute_CD_projected_psth(
                 units.fetch('KEY'), time_period=time_period)
 
             # ---- save projection results ----
-            probe_proj[pid] = (proj_contra_trial, proj_ipsi_trial, time_stamps, label)
+            probe_proj[pid] = (proj_contra_trial, proj_ipsi_trial, time_stamps, label, hemi)
 
             # ---- generate fig with CD plot for this probe ----
             fig, ax = plt.subplots(1, 1, figsize=(6, 6))
@@ -311,20 +311,26 @@ class SessionLevelCDReport(dj.Computed):
 
         # ---- Plot probe-pair correlation ----
         for p1, p2 in itertools.combinations(probe_proj.keys(), r=2):
-            proj_contra_trial_g1, proj_ipsi_trial_g1, time_stamps, label_g1 = probe_proj[p1]
-            proj_contra_trial_g2, proj_ipsi_trial_g2, time_stamps, label_g2 = probe_proj[p2]
+            proj_contra_trial_g1, proj_ipsi_trial_g1, time_stamps, label_g1, p1_hemi = probe_proj[p1]
+            proj_contra_trial_g2, proj_ipsi_trial_g2, time_stamps, label_g2, p2_hemi = probe_proj[p2]
             labels = [label_g1, label_g2]
 
             # plot trial CD-endpoint correlation
             p_start, p_end = time_period
-            contra_cdend_1 = proj_contra_trial_g1[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(
-                axis=1)
-            contra_cdend_2 = proj_contra_trial_g2[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(
-                axis=1)
-            ipsi_cdend_1 = proj_ipsi_trial_g1[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(
-                axis=1)
-            ipsi_cdend_2 = proj_ipsi_trial_g2[:, np.logical_and(time_stamps >= p_start, time_stamps < p_end)].mean(
-                axis=1)
+            contra_cdend_1 = proj_contra_trial_g1[:, np.logical_and(
+                time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+            ipsi_cdend_1 = proj_ipsi_trial_g1[:, np.logical_and(
+                time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+            if p1_hemi == p2_hemi:
+                contra_cdend_2 = proj_contra_trial_g2[:, np.logical_and(
+                    time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+                ipsi_cdend_2 = proj_ipsi_trial_g2[:, np.logical_and(
+                    time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+            else:
+                contra_cdend_2 = proj_ipsi_trial_g2[:, np.logical_and(
+                    time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+                ipsi_cdend_2 = proj_contra_trial_g2[:, np.logical_and(
+                    time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
 
             c_df = pd.DataFrame([contra_cdend_1, contra_cdend_2]).T
             c_df.columns = labels
@@ -334,9 +340,13 @@ class SessionLevelCDReport(dj.Computed):
             i_df['trial-type'] = 'ipsi'
             df = c_df.append(i_df)
 
+            # remove NaN trial - could be due to some trials having no spikes
+            non_nan = ~np.logical_or(np.isnan(df[labels[0]]).values, np.isnan(df[labels[1]]).values)
+            df = df[non_nan]
+
             fig = plt.figure(figsize=(6, 6))
             jplot = jointplot_w_hue(data=df, x=labels[0], y=labels[1], hue='trial-type', colormap=['b', 'r'],
-                                    figsize=(8, 6), fig=fig, scatter_kws = None)
+                                    figsize=(8, 6), fig=fig, scatter_kws=None)
 
             # ---- plot this fig into the main figure ----
             buf = io.BytesIO()

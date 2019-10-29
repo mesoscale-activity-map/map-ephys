@@ -578,6 +578,6 @@ def compute_CD_projected_psth(units, time_period=None):
     proj_contra_trial = np.vstack(np.dot(tr_u, cd_vec) for tr_u in contra_psth_per_trial)  # trial# x time
     proj_ipsi_trial = np.vstack(np.dot(tr_u, cd_vec) for tr_u in ipsi_psth_per_trial)    # trial# x time
 
-    return cd_vec, proj_contra_trial, proj_ipsi_trial, time_stamps
+    return cd_vec, proj_contra_trial, proj_ipsi_trial, time_stamps, unit_hemi
 
 
