@@ -43,6 +43,9 @@ def plot_correct_proportion(session_key, window_size=None, axs=None, plot=True):
         axs.plot(range(len(mv_outcomes)), mv_outcomes, 'k', linewidth=3)
         axs.set_xlabel('Trial')
         axs.set_ylabel('Proportion correct')
+        axs.spines['right'].set_visible(False)
+        axs.spines['top'].set_visible(False)
+        axs.set_title('Behavior Performance')
 
     return fig, mv_outcomes
 
@@ -118,8 +121,8 @@ def plot_tracking(session_key, unit_key,
     :param unit_key: unit for spike times overlay
     :param tracking_feature: which tracking feature to plot (default to `jaw_y`)
     :param camera_key: tracking from which camera to plot (default to Camera 0, i.e. the side camera)
-    :param trial_offset: number of trial to plot from
-    :param trial_limit: number of trial to plot to
+    :param trial_offset: index of trial to plot from (if a decimal between 0 and 1, indicates the proportion of total trial to plot from)
+    :param trial_limit: number of trial to plot
     """
 
     if tracking_feature not in _tracked_nose_features + _tracked_tongue_features + _tracked_jaw_features:
@@ -128,13 +131,18 @@ def plot_tracking(session_key, unit_key,
 
     trk = (tracking.Tracking.JawTracking * tracking.Tracking.TongueTracking * tracking.Tracking.NoseTracking
            * experiment.BehaviorTrial & camera_key & session_key & experiment.ActionEvent & ephys.Unit.TrialSpikes)
-    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & session_key).fetch1('sampling_rate'))
+    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & camera_key & session_key).fetch1('sampling_rate'))
 
     l_trial_trk = trk & 'trial_instruction="left"' & 'early_lick="no early"' & 'outcome="hit"'
     r_trial_trk = trk & 'trial_instruction="right"' & 'early_lick="no early"' & 'outcome="hit"'
 
     def get_trial_track(trial_tracks):
-        for tr in trial_tracks.fetch(as_dict=True, offset=trial_offset, limit=trial_limit):
+        if trial_offset < 1 and isinstance(trial_offset, float):
+            offset = int(len(trial_tracks) * trial_offset)
+        else:
+            offset = trial_offset
+
+        for tr in trial_tracks.fetch(as_dict=True, offset=offset, limit=trial_limit, order_by='trial'):
             trk_feat = tr[tracking_feature]
             tongue_out_bool = tr['tongue_likelihood'] > 0.9
 
@@ -179,10 +187,10 @@ def plot_tracking(session_key, unit_key,
     return fig
 
 
-def plot_unit_jaw_phase_dist(session_key, unit_key, bin_counts=20):
+def plot_unit_jaw_phase_dist(session_key, unit_key, bin_counts=20, axs=None):
     trk = (tracking.Tracking.JawTracking * tracking.Tracking.TongueTracking
            * experiment.BehaviorTrial & _side_cam & session_key & experiment.ActionEvent & ephys.Unit.TrialSpikes)
-    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & session_key).fetch1('sampling_rate'))
+    tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & _side_cam & session_key).fetch1('sampling_rate'))
 
     l_trial_trk = trk & 'trial_instruction="left"' & 'early_lick="no early"' & 'outcome="hit"'
     r_trial_trk = trk & 'trial_instruction="right"' & 'early_lick="no early"' & 'outcome="hit"'
@@ -195,7 +203,7 @@ def plot_unit_jaw_phase_dist(session_key, unit_key, bin_counts=20):
 
         flattened_jaws = np.hstack(jaws)
         jsize = np.cumsum([0] + [j.size for j in jaws])
-        _, phase = compute_insta_phase_amp(flattened_jaws, tracking_fs, freq_band = (5, 15))
+        _, phase = compute_insta_phase_amp(flattened_jaws, tracking_fs, freq_band=(5, 15))
         stacked_insta_phase = [phase[start: end] for start, end in zip(jsize[:-1], jsize[1:])]
 
         for spks, jphase in zip(spike_times, stacked_insta_phase):
@@ -210,8 +218,11 @@ def plot_unit_jaw_phase_dist(session_key, unit_key, bin_counts=20):
     l_insta_phase = np.hstack(list(get_trial_track(l_trial_trk)))
     r_insta_phase = np.hstack(list(get_trial_track(r_trial_trk)))
 
-    fig, axs = plt.subplots(1, 2, figsize=(12, 8), subplot_kw=dict(polar=True))
-    fig.subplots_adjust(wspace=0.6)
+    fig = None
+    if axs is None:
+        fig, axs = plt.subplots(1, 2, figsize=(12, 8), subplot_kw=dict(polar=True))
+        fig.subplots_adjust(wspace=0.6)
+    assert len(axs) == 2
 
     plot_polar_histogram(l_insta_phase, axs[0], bin_counts=bin_counts)
     axs[0].set_title('left lick trials', loc='left', fontweight='bold')
@@ -221,7 +232,7 @@ def plot_unit_jaw_phase_dist(session_key, unit_key, bin_counts=20):
     return fig
 
 
-def plot_trial_tracking(trial_key, tracking_feature='jaw_y', camera_key=_side_cam,):
+def plot_trial_tracking(trial_key, tracking_feature='jaw_y', camera_key=_side_cam):
     """
     Plot trial-specific Jaw Movement time-locked to "go" cue
     """
@@ -290,12 +301,12 @@ def plot_windowed_jaw_phase_dist(session_key, xlim=(-0.12, 0.3), w_size=0.01, bi
     windows = np.arange(xlim[0], xlim[1], w_size)
 
     # plot
-    col_counts = 8
+    col_counts = 7
     row_counts = int(np.ceil(len(windows) / col_counts))
     fig, axs = plt.subplots(row_counts, col_counts,
                             figsize=(16, 2.5*row_counts),
                             subplot_kw=dict(polar=True))
-    fig.subplots_adjust(wspace=0.6, hspace=0.3)
+    fig.subplots_adjust(wspace=0.8, hspace=0.5)
     [a.axis('off') for a in axs.flatten()]
 
     # non-overlapping windowed histogram
