@@ -743,8 +743,6 @@ class ArchivedTrackingVideo(dj.Imported):
         tpos_dev = {s['tracking_position']: s['tracking_device']
                     for s in tracking.TrackingDevice()}  # position:device
 
-        # TODO: support 'trial map file'
-
         ftmap = {'avi': '*_*_[0-9]*-[0-9]*.avi',
                  'mp4': '*_*_[0-9]*-[0-9]*.mp4',
                  'txt': '*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_*.txt'}
@@ -861,9 +859,7 @@ class ArchivedTrackingVideo(dj.Imported):
                              'file_subpath': f['file_subpath']},
                             allow_direct_insert=True)
 
-        flist_file='globus-cleaning/map-globus-index-full.txt'
-
-        for ep, dirname, node in test_flist(flist_file):
+        for ep, dirname, node in gsm.fts('{}:{}'.format(rep, rep_sub)):
 
             vdir = re.match('([a-z]+[0-9]+)/([0-9]{8})/video', dirname)
 
