@@ -14,6 +14,7 @@ from . import lab
 from . import experiment
 from . import ephys
 from . import tracking
+from .ingest.tracking import TrackingIngest
 
 
 from pipeline.globus import GlobusStorageManager
@@ -284,7 +285,8 @@ class ArchivedRawEphys(dj.Imported):
                 # DataSet
                 ds_type = 'ephys-raw-trialized'
                 ds_name = '{}_{}_{}'.format(h2o, sdate, ds_type)
-                ds_key = {'dataset_name': ds_name, 'globus_alias': globus_alias}
+                ds_key = {'dataset_name': ds_name,
+                          'globus_alias': globus_alias}
 
                 if (DataSet & ds_key):
                     log.info('DataSet: {} already exists. Skipping.'.format(
@@ -797,7 +799,6 @@ class ArchivedTrackingVideo(dj.Imported):
 
                     lfname = lep_dir + lsp  # local filesysem copy location
 
-                    from pipeline.ingest.tracking import TrackingIngest
                     ftmap[s['position']] = TrackingIngest.load_campath(lfname)
 
             if len(h2o) != 1 or len(sdate) != 1:
