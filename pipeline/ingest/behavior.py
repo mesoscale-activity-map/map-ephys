@@ -610,6 +610,7 @@ class BehaviorIngest(dj.Imported):
             last_dur = None
             trialendindex = np.where(t.state_data == states['TrialEnd'])[0]
 
+            ekey = dict(tkey)
             ekey['trial_event_id'] = len(rows['trial_event'])
             ekey['trial_event_type'] = 'trialend'
             ekey['trial_event_time'] = t.state_times[trialendindex][0]
