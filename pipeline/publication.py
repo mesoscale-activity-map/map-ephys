@@ -3,8 +3,8 @@ import logging
 import pathlib
 import re
 import os
-from fnmatch import fnmatch
 
+from fnmatch import fnmatch
 from textwrap import dedent
 from collections import defaultdict
 
@@ -727,6 +727,11 @@ class ArchivedTrackingVideo(dj.Imported):
 
         globus_alias = 'raw-video'
 
+        le = GlobusStorageLocation.local_endpoint(globus_alias)
+        lep, lep_sub, lep_dir = (le['endpoint'],
+                                 le['endpoint_subdir'],
+                                 le['endpoint_path'])
+
         ra, rep, rep_sub = (GlobusStorageLocation()
                             & {'globus_alias': globus_alias}).fetch1().values()
 
@@ -739,12 +744,18 @@ class ArchivedTrackingVideo(dj.Imported):
                     for s in tracking.TrackingDevice()}  # position:device
 
         # TODO: support 'trial map file'
+
         ftmap = {'avi': '*_*_[0-9]*-[0-9]*.avi',
-                 'mp4': '*_*_[0-9]*-[0-9]*.mp4'}
+                 'mp4': '*_*_[0-9]*-[0-9]*.mp4',
+                 'txt': '*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_*.txt'}
 
         skey = None
         sskip = set()
         sfiles = []  # {file_subpath:, trial:, file_type:,}
+
+        gsm = self.get_gsm()
+        gsm.activate_endpoint(lep)
+        gsm.activate_endpoint(rep)
 
         def commit(skey, sfiles):
             log.info('commit. skey: {}'.format(skey))
@@ -756,7 +767,7 @@ class ArchivedTrackingVideo(dj.Imported):
 
             h2o, sdate, ftypes = set(), set(), set()
 
-            ftmap = None  # file:trial map (via csv). TODO
+            ftmap = {}  # device:file:trial via load_campath mapping files
             dvmap = defaultdict(lambda: defaultdict(list))  # device:video:file
             dtmap = defaultdict(lambda: defaultdict(list))  # device:trial:file
 
@@ -768,8 +779,28 @@ class ArchivedTrackingVideo(dj.Imported):
                     sdate.add(s['session_date'])
                     ftypes.add(s['file_type'])
 
-                if s['file_type'] == 'tracking-map':   # TODO
-                    ftmap = None  # xfer to tmp, load
+                if s['file_type'] == 'txt':   # TODO
+                    # xfer camera:trial map to tmp, load
+
+                    # dl55_20190108_side.txt
+                    fsp = s['file_subpath']
+                    lsp = '/tmp/' + s['file_subpath'].split('/')[-1]
+
+                    srcp = '{}:{}/{}'.format(rep, rep_sub, fsp)
+                    dstp = '{}:{}/{}'.format(lep, lep_sub, lsp)
+
+                    log.info('transferring {} to {}'.format(srcp, dstp))
+
+                    # XXX: check if exists 1st?
+                    if not gsm.cp(srcp, dstp):
+                        emsg = "couldn't transfer {} to {}".format(srcp, dstp)
+                        log.error(emsg)
+                        raise dj.DataJointError(emsg)
+
+                    lfname = lep_dir + lsp  # local filesysem copy location
+
+                    from pipeline.ingest.tracking import TrackingIngest
+                    ftmap[s['position']] = TrackingIngest.load_campath(lfname)
 
             if len(h2o) != 1 or len(sdate) != 1:
                 log.info('skipping. bad h2o {} or session date {}'.format(
@@ -778,7 +809,14 @@ class ArchivedTrackingVideo(dj.Imported):
 
             h2o, sdate = next(iter(h2o)), next(iter(sdate))
 
-            dtmap = dvmap if not ftmap else dvmap  # TODO: remap trials
+            for d in dvmap:
+                if d in ftmap:  # remap video no -> trial
+                    dtmap[d] = {ftmap[d][v]:
+                                dict(dvmap[d][v], trial=ftmap[d][v])
+                                for v in dvmap[d]}
+                else:  # assign video no -> trial
+                    dtmap[d] = {k: dict(v, trial=v['video'])
+                                for k, v in dvmap[d].items()}
 
             # DataSet
             ds_type = 'tracking-video'
@@ -825,8 +863,6 @@ class ArchivedTrackingVideo(dj.Imported):
 
         flist_file='globus-cleaning/map-globus-index-full.txt'
 
-        # gsm = self.get_gsm()
-        # gsm.activate_endpoint(rep)
         for ep, dirname, node in test_flist(flist_file):
 
             vdir = re.match('([a-z]+[0-9]+)/([0-9]{8})/video', dirname)
@@ -876,18 +912,27 @@ class ArchivedTrackingVideo(dj.Imported):
 
             ftype = next(iter(ftype.keys()))
 
-            # dl41_side_998-0000.avi
-            h2o_f, position, video, extra = froot.replace('-', '_').split('_')
-
             file_subpath = '{}/{}'.format(dirname, fname)
 
-            sfiles.append({'water_restriction_number': h2o,
-                           'session_date': '{}-{}-{}'.format(
-                               sdate[:4], sdate[4:6], sdate[6:]),
-                           'position': position,
-                           'video': int(video),
-                           'file_subpath': file_subpath,
-                           'file_type': ftype})
+            if ftype == 'txt':
+                # dl55_20190108_side.txt
+                h2o_f, fdate, pos = froot.split('_')
+                sfiles.append({'water_restriction_number': h2o,
+                               'session_date': '{}-{}-{}'.format(
+                                   sdate[:4], sdate[4:6], sdate[6:]),
+                               'position': pos,
+                               'file_subpath': file_subpath,
+                               'file_type': ftype})
+            else:
+                # dl41_side_998-0000.avi
+                h2o_f, pos, video, extra = froot.replace('-', '_').split('_')
+                sfiles.append({'water_restriction_number': h2o,
+                               'session_date': '{}-{}-{}'.format(
+                                   sdate[:4], sdate[4:6], sdate[6:]),
+                               'position': pos,
+                               'video': int(video),
+                               'file_subpath': file_subpath,
+                               'file_type': ftype})
 
     def make(self, key):
         """
