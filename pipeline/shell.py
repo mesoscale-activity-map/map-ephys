@@ -4,6 +4,7 @@ import os
 import sys
 import logging
 from code import interact
+import time
 
 import datajoint as dj
 
@@ -16,6 +17,7 @@ from pipeline import tracking
 from pipeline import psth
 from pipeline import publication
 from pipeline import export
+from pipeline import report
 
 
 pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth,
@@ -71,22 +73,59 @@ def ingest_histology(*args):
     histology_ingest.HistologyIngest().populate(display_progress=True)
 
 
-def populate_psth(*args):
+def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': True}):
 
     log.info('ephys.UnitStat.populate()')
-    ephys.UnitStat.populate(reserve_jobs=True, display_progress=True)
+    ephys.UnitStat.populate(**populate_settings)
 
     log.info('ephys.UnitCellType.populate()')
-    ephys.UnitCellType.populate(reserve_jobs=True, display_progress=True)
+    ephys.UnitCellType.populate(**populate_settings)
 
     log.info('psth.UnitPsth.populate()')
-    psth.UnitPsth.populate(reserve_jobs=True, display_progress=True)
+    psth.UnitPsth.populate(**populate_settings)
 
     log.info('psth.PeriodSelectivity.populate()')
-    psth.PeriodSelectivity.populate(reserve_jobs=True, display_progress=True)
+    psth.PeriodSelectivity.populate(**populate_settings)
 
     log.info('psth.UnitSelectivity.populate()')
-    psth.UnitSelectivity.populate(reserve_jobs=True, display_progress=True)
+    psth.UnitSelectivity.populate(**populate_settings)
+
+
+def generate_report(populate_settings={'reserve_jobs': True, 'display_progress': True}):
+
+    log.info('report.SessionLevelReport.populate()')
+    report.SessionLevelReport.populate(**populate_settings)
+
+    log.info('report.ProbeLevelReport.populate()')
+    report.ProbeLevelReport.populate(**populate_settings)
+
+    log.info('report.ProbeLevelPhotostimEffectReport.populate()')
+    report.ProbeLevelPhotostimEffectReport.populate(**populate_settings)
+
+    log.info('report.UnitLevelReport.populate()')
+    report.UnitLevelReport.populate(**populate_settings)
+
+    log.info('report.SessionLevelCDReport.populate()')
+    report.SessionLevelCDReport.populate(**populate_settings)
+
+
+def sync_report():
+    stage = dj.config['stores']['report_store']['stage']
+
+    log.info(f'Sync report.SessionLevelReport from {stage}')
+    report.SessionLevelReport.fetch()
+
+    log.info(f'Sync report.ProbeLevelReport from {stage}')
+    report.ProbeLevelReport.fetch()
+
+    log.info(f'Sync report.ProbeLevelPhotostimEffectReport from {stage}')
+    report.ProbeLevelPhotostimEffectReport.fetch()
+
+    log.info(f'Sync report.UnitLevelReport from {stage}')
+    report.UnitLevelReport.fetch()
+
+    log.info(f'Sync report.SessionLevelCDReport from {stage}')
+    report.SessionLevelCDReport.fetch()
 
 
 def nuke_all():
@@ -145,6 +184,15 @@ def erd(*args):
         dj.ERD(mod, context={modname: mod}).save(fname)
 
 
+def automate_computation():
+    populate_settings = {'reserve_jobs': True, 'suppress_errors': True, 'display_progress': True}
+    while True:
+        populate_psth(**populate_settings)
+        generate_report(**populate_settings)
+
+        time.sleep(1)
+
+
 actions = {
     'ingest-behavior': ingest_behavior,
     'ingest-ephys': ingest_ephys,
@@ -153,7 +201,10 @@ actions = {
     'populate-psth': populate_psth,
     'publish': publish,
     'export-recording': export_recording,
+    'generate-report': generate_report,
+    'sync-report': sync_report,
     'shell': shell,
     'erd': erd,
     'ccfload': ccfload,
+    'automate-computation': automate_computation
 }
