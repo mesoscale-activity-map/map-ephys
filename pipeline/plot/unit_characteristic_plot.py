@@ -71,6 +71,8 @@ def plot_unit_characteristic(probe_insertion, axs=None):
 
     assert axs.size == 3
 
+    ymin = metrics.y.min() - 100
+    ymax = metrics.y.max() + 200
     cosmetic = {'legend': None,
                 'linewidth': 1.75,
                 'alpha': 0.9,
@@ -80,12 +82,22 @@ def plot_unit_characteristic(probe_insertion, axs=None):
     sns.scatterplot(data=metrics, x='x', y='y', s=metrics.snr*m_scale, ax=axs[1], **cosmetic)
     sns.scatterplot(data=metrics, x='x', y='y', s=metrics.rate*m_scale, ax=axs[2], **cosmetic)
 
+    # manually draw the legend
+    lg_ypos = ymax
+    data = pd.DataFrame({'x': [3, 20, 40], 'y': [lg_ypos, lg_ypos, lg_ypos], 'size_ratio': np.array([0.2, 0.5, 0.8])})
+    for ax, ax_maxval in zip(axs.flatten(), (amp.max(), snr.max(), spk_rate.max())):
+        sns.scatterplot(data=data, x='x', y='y', s=data.size_ratio*m_scale, ax=ax, **dict(cosmetic, facecolor='k'))
+        for _, r in data.iterrows():
+            ax.text(r['x']-4, r['y']+70, (r['size_ratio']*ax_maxval).astype(int))
+
     # cosmetic
     for title, ax in zip(('Amplitude', 'SNR', 'Firing rate'), axs.flatten()):
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
         ax.set_title(title)
         ax.set_xlim((-10, 60))
+        ax.add_patch(mpl.patches.Rectangle((-7, lg_ypos-80), 62, 210, fill=False))
+        ax.set_ylim((ymin, ymax + 150))
 
     return fig
 
@@ -112,9 +124,10 @@ def plot_unit_selectivity(probe_insertion, axs=None):
     # --- prepare for plotting
     cosmetic = {'legend': None,
                 'linewidth': 0.0001}
+    ymin = selective_units.unit_posy.min() - 100
     ymax = selective_units.unit_posy.max() + 100
 
-    # a bit of hack to get 'open circle'
+    # a bit of hack to get the 'open circle'
     pts = np.linspace(0, np.pi * 2, 24)
     circ = np.c_[np.sin(pts) / 2, -np.cos(pts) / 2]
     vert = np.r_[circ, circ[::-1] * .7]
@@ -144,7 +157,7 @@ def plot_unit_selectivity(probe_insertion, axs=None):
         ax.set_xlim((-10, 60))
         ax.set_xlabel('x')
         ax.set_ylabel('y')
-        # ax.set_ylim((0, ymax))
+        ax.set_ylim((ymin, ymax))
 
     return fig
 
