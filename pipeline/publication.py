@@ -103,83 +103,88 @@ class FileType(dj.Lookup):
     @property
     def contents(self):
 
-        data = [('3a-ap-trial',
+        data = [('ephys-raw-3a-ap-trial',
                  '*_g0_t[0-9]*.imec.ap.bin',
                  '''
                  3A Probe per-trial AP channels high pass filtered at
                  300Hz and sampled at 30kHz - recording file
                  '''),
-                ('3a-ap-trial-meta',
+                ('ephys-raw-3a-ap-trial-meta',
                  '*_g0_t[0-9]*.imec.ap.meta',
                  '''
                  3A Probe per-trial AP channels high pass
                  filtered at 300Hz and sampled at 30kHz - file metadata
                  '''),
-                ('3a-lf-trial',
+                ('ephys-raw-3a-lf-trial',
                  '*_g0_t[0-9]*.imec.lf.bin',
                  '''
                  3A Probe per-trial AP channels low pass filtered at
                  300Hz and sampled at 2.5kHz - recording file
                  '''),
-                ('3a-lf-trial-meta',
+                ('ephys-raw-3a-lf-trial-meta',
                  '*_g0_t[0-9]*.imec.lf.meta',
                  '''
                  3A Probe per-trial AP channels low pass filtered at
                  300Hz and sampled at 2.5kHz - file metadata
                  '''),
-                ('3b-ap-trial',
+                ('ephys-raw-3b-ap-trial',
                  '*_????????_g?_t[0-9]*.imec.ap.bin',
                  '''
                  3B Probe per-trial AP channels high pass filtered at
                  300Hz and sampled at 30kHz - recording file
                  '''),
-                ('3b-ap-trial-meta',
+                ('ephys-raw-3b-ap-trial-meta',
                  '*_????????_g?_t[0-9]*.imec.ap.meta',
                  '''
                  3B Probe per-trial AP channels high pass
                  filtered at 300Hz and sampled at 30kHz - file metadata
                  '''),
-                ('3b-lf-trial',
+                ('ephys-raw-3b-lf-trial',
                  '*_????????_g?_t[0-9]*.imec.lf.bin',
                  '''
                  3B Probe per-trial AP channels low pass filtered at
                  300Hz and sampled at 2.5kHz - recording file
                  '''),
-                ('3b-lf-trial-meta',
+                ('ephys-raw-3b-lf-trial-meta',
                  '*_????????_g?_t[0-9]*.imec.lf.meta',
                  '''
                  3B Probe per-trial AP channels low pass filtered at
                  300Hz and sampled at 2.5kHz - file metadata
                  '''),
-                ('3b-ap-concat',
+                ('ephys-raw-3b-ap-concat',
                  '*_????????_g?_tcat.imec.ap.bin',
                  '''
                  3B Probe concatenated AP channels high pass filtered at
                  300Hz and sampled at 30kHz - recording file
                  '''),
-                ('3b-ap-concat-meta',
+                ('ephys-raw-3b-ap-concat-meta',
                  '*_??????_g?_tcat.imec.ap.meta',
                  '''
                  3B Probe concatenated AP channels high pass
                  filtered at 300Hz and sampled at 30kHz - file metadata
                  '''),
-                ('3b-lf-concat',
+                ('ephys-raw-3b-lf-concat',
                  '*_????????_g?_tcat.imec.lf.bin',
                  '''
                  3B Probe concatenated AP channels low pass filtered at
                  300Hz and sampled at 2.5kHz - recording file
                  '''),
-                ('3b-lf-concat-meta',
+                ('ephys-raw-3b-lf-concat-meta',
                  '*_????????_g?_tcat.imec.lf.meta',
                  '''
                  3B Probe concatenated AP channels low pass filtered at
                  300Hz and sampled at 2.5kHz - file metadata
                  '''),
-                ('tracking-video-trial',        # TODO: better tracking name
-                 '*.avi',                       # TODO: correct glob
+                ('tracking-video-trial',
+                 '*_*_[0-9]*-[0-9]*.[am][vp][i4]',
                  '''
                  Video Tracking per-trial file at 300fps
-                 ''')]                          # TODO: correct description
+                 '''),
+                ('tracking-video-map',
+                 '*_???????_*.txt',
+                 '''
+                 Video Tracking file-to-trial mapping
+                 ''')]
 
         return [[dedent(i).replace('\n', ' ').strip(' ') for i in r]
                 for r in data]
@@ -249,7 +254,8 @@ class ArchivedRawEphys(dj.Imported):
                 for s in (experiment.Session()
                           * (lab.WaterRestriction() * lab.Subject.proj()))}
 
-        ftmap = {t['file_type']: t for t in FileType()}
+        ftmap = {t['file_type']: t for t
+                 in (FileType() & "file_type like 'ephys%%'")}
 
         skey = None
         sskip = set()
@@ -441,8 +447,8 @@ class ArchivedRawEphys(dj.Imported):
 
         probechoice = [str(i) for i in range(1, 10)]  # XXX: hardcoded
 
-        file_globs = {i['file_glob']: i['file_type'] for
-                      i in FileType.fetch(as_dict=True)}
+        file_globs = {i['file_glob']: i['file_type']
+                      for i in FileType & "file_type like 'ephys%%'"}
 
         # Process each probe folder
 
@@ -745,9 +751,8 @@ class ArchivedTrackingVideo(dj.Imported):
         tpos_dev = {s['tracking_position']: s['tracking_device']
                     for s in tracking.TrackingDevice()}  # position:device
 
-        ftmap = {'avi': '*_*_[0-9]*-[0-9]*.avi',
-                 'mp4': '*_*_[0-9]*-[0-9]*.mp4',
-                 'txt': '*_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_*.txt'}
+        ftmap = {t['file_type']: t for t
+                 in (FileType() & "file_type like 'tracking%%'")}
 
         skey = None
         sskip = set()
@@ -767,22 +772,20 @@ class ArchivedTrackingVideo(dj.Imported):
 
             h2o, sdate, ftypes = set(), set(), set()
 
-            ftmap = {}  # device:file:trial via load_campath mapping files
-            dvmap = defaultdict(lambda: defaultdict(list))  # device:video:file
-            dtmap = defaultdict(lambda: defaultdict(list))  # device:trial:file
+            dftmap = {}  # device:file:trial via load_campath mapping files
+            dvfmap = defaultdict(lambda: defaultdict(list))  # device:video:file
+            dtfmap = defaultdict(lambda: defaultdict(list))  # device:trial:file
 
             for s in sfiles:
 
-                if s['file_type'] in {'avi', 'mp4'}:
-                    dvmap[s['position']][s['video']].append(s)
+                if s['file_type'] == 'tracking-video-trial':
+                    dvfmap[s['position']][s['video']].append(s)
                     h2o.add(s['water_restriction_number'])
                     sdate.add(s['session_date'])
                     ftypes.add(s['file_type'])
 
-                if s['file_type'] == 'txt':   # TODO
-                    # xfer camera:trial map to tmp, load
-
-                    # dl55_20190108_side.txt
+                if s['file_type'] == 'tracking-video-map':
+                    # xfer & load camera:trial map ex: dl55_20190108_side.txtb
                     fsp = s['file_subpath']
                     lsp = '/tmp/' + s['file_subpath'].split('/')[-1]
 
@@ -791,15 +794,14 @@ class ArchivedTrackingVideo(dj.Imported):
 
                     log.info('transferring {} to {}'.format(srcp, dstp))
 
-                    # XXX: check if exists 1st?
-                    if not gsm.cp(srcp, dstp):
+                    if not gsm.cp(srcp, dstp):  # XXX: check if exists 1st?
                         emsg = "couldn't transfer {} to {}".format(srcp, dstp)
                         log.error(emsg)
                         raise dj.DataJointError(emsg)
 
                     lfname = lep_dir + lsp  # local filesysem copy location
 
-                    ftmap[s['position']] = TrackingIngest.load_campath(lfname)
+                    dftmap[s['position']] = TrackingIngest.load_campath(lfname)
 
             if len(h2o) != 1 or len(sdate) != 1:
                 log.info('skipping. bad h2o {} or session date {}'.format(
@@ -808,14 +810,14 @@ class ArchivedTrackingVideo(dj.Imported):
 
             h2o, sdate = next(iter(h2o)), next(iter(sdate))
 
-            for d in dvmap:
-                if d in ftmap:  # remap video no -> trial
-                    dtmap[d] = {ftmap[d][v]:
-                                dict(dvmap[d][v], trial=ftmap[d][v])
-                                for v in dvmap[d]}
+            for d in dvfmap:
+                if d in dftmap:  # remap video no -> trial
+                    dtfmap[d] = {dftmap[d][v]:
+                                 dict(dvfmap[d][v], trial=dftmap[d][v])
+                                 for v in dvfmap[d]}
                 else:  # assign video no -> trial
-                    dtmap[d] = {k: dict(v, trial=v['video'])
-                                for k, v in dvmap[d].items()}
+                    dtfmap[d] = {k: dict(v, trial=v['video'])
+                                 for k, v in dvfmap[d].items()}
 
             # DataSet
             ds_type = 'tracking-video'
@@ -839,7 +841,7 @@ class ArchivedTrackingVideo(dj.Imported):
                 allow_direct_insert=True,
                 skip_duplicates=True)
 
-            for d in dtmap:
+            for d in dtfmap:
 
                 # ArchivedTrackingVideo
                 atv_key = {**as_key, **ds_key, 'tracking_device': tpos_dev[d]}
@@ -847,8 +849,8 @@ class ArchivedTrackingVideo(dj.Imported):
                 ArchivedTrackingVideo.insert1(
                     atv_key, allow_direct_insert=True)
 
-                for t in dtmap[d]:
-                    for f in dtmap[d][t]:
+                for t in dtfmap[d]:
+                    for f in dtfmap[d][t]:
 
                         DataSet.PhysicalFile.insert1(
                             {**ds_key, **f}, allow_direct_insert=True,
@@ -859,6 +861,8 @@ class ArchivedTrackingVideo(dj.Imported):
                              'trial': t,
                              'file_subpath': f['file_subpath']},
                             allow_direct_insert=True)
+
+            # end commit()
 
         for ep, dirname, node in gsm.fts('{}:{}'.format(rep, rep_sub)):
 
@@ -899,20 +903,19 @@ class ArchivedTrackingVideo(dj.Imported):
                 continue
 
             froot, fext = fname.split('.', 1)
-            ftype = {k: v for k, v in ftmap.items()
-                     if fnmatch(fname, v)}
+            ftype = {g['file_type']: g for g in ftmap.values()
+                     if fnmatch(fname, g['file_glob'])}
 
             if len(ftype) != 1:
                 log.debug('skipping {} - incorrect type matches: {}'.format(
                     fname, ftype))
                 continue
 
-            ftype = next(iter(ftype.keys()))
+            ftype = next(iter(ftype.values()))['file_type']
 
             file_subpath = '{}/{}'.format(dirname, fname)
 
-            if ftype == 'txt':
-                # dl55_20190108_side.txt
+            if ftype == 'tracking-video-trial':  # e.g. dl55_20190108_side.txt
                 h2o_f, fdate, pos = froot.split('_')
                 sfiles.append({'water_restriction_number': h2o,
                                'session_date': '{}-{}-{}'.format(
@@ -920,8 +923,7 @@ class ArchivedTrackingVideo(dj.Imported):
                                'position': pos,
                                'file_subpath': file_subpath,
                                'file_type': ftype})
-            else:
-                # dl41_side_998-0000.avi
+            else:  # tracking-video-map e.g. dl41_side_998-0000.avi
                 h2o_f, pos, video, extra = froot.replace('-', '_').split('_')
                 sfiles.append({'water_restriction_number': h2o,
                                'session_date': '{}-{}-{}'.format(
