@@ -14,3 +14,4 @@ services:
       "cd /dj_map
       && python scripts/mapshell.py automate-computation
       & tail -f /dev/null"
+    scale: $worker_count
