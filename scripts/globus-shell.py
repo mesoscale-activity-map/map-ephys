@@ -64,7 +64,14 @@ class GlobusShell:
         path = path if path else self._cwd
         path = '/' if path is None else path
 
-        return self._gsm.fts('{}:/{}'.format(ep, path))
+        for ep, dirname, node in self._gsm.fts('{}:/{}'.format(ep, path)):
+
+            if node['DATA_TYPE'] == 'file':
+                t, basename = 'f', node['name']
+            else:
+                t, basename = 'd', node['path']
+
+            print('{}: {}:{}/{}'.format(t, ep, dirname, basename))
 
     def mv(self, ep1, path1, ep2, path2):
 

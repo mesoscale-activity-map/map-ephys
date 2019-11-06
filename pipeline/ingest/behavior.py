@@ -515,26 +515,6 @@ class BehaviorIngest(dj.Imported):
             rows['trial_event'].append(ekey)
 
             #
-            # Add 'go' event
-            #
-            log.debug('BehaviorIngest.make(): go')
-
-            ekey = dict(tkey)
-            responseindex = np.where(t.state_data == states['ResponseCue'])[0]
-
-            ekey['trial_event_id'] = len(rows['trial_event'])
-            ekey['trial_event_type'] = 'go'
-            ekey['trial_event_time'] = t.state_times[responseindex][0]
-            ekey['duration'] = gui['AnswerPeriod'][0]
-
-            if math.isnan(ekey['duration']):
-                log.debug('BehaviorIngest.make(): fixing go duration')
-                ekey['duration'] = 0.0  # FIXDUR: lookup from previous trials
-                rows['corrected_trial_event'].append(ekey)
-
-            rows['trial_event'].append(ekey)
-
-            #
             # Add other 'sample' events
             #
 
@@ -602,6 +582,26 @@ class BehaviorIngest(dj.Imported):
                 rows['trial_event'].append(ekey)
 
             #
+            # Add 'go' event
+            #
+            log.debug('BehaviorIngest.make(): go')
+
+            ekey = dict(tkey)
+            responseindex = np.where(t.state_data == states['ResponseCue'])[0]
+
+            ekey['trial_event_id'] = len(rows['trial_event'])
+            ekey['trial_event_type'] = 'go'
+            ekey['trial_event_time'] = t.state_times[responseindex][0]
+            ekey['duration'] = gui['AnswerPeriod'][0]
+
+            if math.isnan(ekey['duration']):
+                log.debug('BehaviorIngest.make(): fixing go duration')
+                ekey['duration'] = 0.0  # FIXDUR: lookup from previous trials
+                rows['corrected_trial_event'].append(ekey)
+
+            rows['trial_event'].append(ekey)
+
+            #
             # Add 'trialEnd' events
             #
 
@@ -610,6 +610,7 @@ class BehaviorIngest(dj.Imported):
             last_dur = None
             trialendindex = np.where(t.state_data == states['TrialEnd'])[0]
 
+            ekey = dict(tkey)
             ekey['trial_event_id'] = len(rows['trial_event'])
             ekey['trial_event_type'] = 'trialend'
             ekey['trial_event_time'] = t.state_times[trialendindex][0]

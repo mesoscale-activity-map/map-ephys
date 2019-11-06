@@ -1,0 +1,18 @@
+{
+    "database.host": "mesoscale-activity.datajoint.io",
+    "database.user": "username",
+    "database.password": "password",
+    "database.port": 3306,
+    "connection.init_function": null,
+    "database.reconnect": true,
+    "enable_python_native_blobs": true,
+    "loglevel": "INFO",
+    "safemode": true,
+    "display.limit": 7,
+    "display.width": 14,
+    "display.show_tuple_count": true,
+    "stores": {"report_store":  {"protocol": "file",
+        "stage": "/data/report",
+        "location": "/data/report"}
+    }
+}

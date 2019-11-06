@@ -10,3 +10,5 @@ WORKDIR /dj_map
 RUN git clone https://github.com/mesoscale-activity-map/map-ephys /dj_map
 
 RUN pip install .
+
+COPY ./dj_local_conf_workers.json /dj_map/dj_local_conf.json
