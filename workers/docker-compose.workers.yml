@@ -3,10 +3,9 @@ version: '2.4'
 services:
   map_workers:
     build: .
-    env_file:
-      - workers-env.env
     environment:
       - report_store_stage
+      - worker_count
     volumes:
       - $report_store_stage:/data/report
     command: >
