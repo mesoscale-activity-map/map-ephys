@@ -6,3 +6,4 @@ tifffile
 pandas
 seaborn
 matplotlib
+pillow
