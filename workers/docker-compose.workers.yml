@@ -5,12 +5,12 @@ services:
     build: .
     environment:
       - report_store_stage
+      - worker_count
     volumes:
       - $report_store_stage:/data/report
     command: >
       /bin/sh -c
       "cd /dj_map
       && python scripts/mapshell.py automate-computation
-      & python scripts/mapshell.py automate-computation
-      & python scripts/mapshell.py automate-computation
       & tail -f /dev/null"
+    scale: $worker_count

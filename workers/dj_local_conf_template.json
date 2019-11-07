@@ -1,7 +1,7 @@
 {
-    "database.host": "mesoscale-activity.datajoint.io",
-    "database.user": "username",
-    "database.password": "password",
+    "database.host": "db_host",
+    "database.user": "fake_user_name",
+    "database.password": "not_real_password",
     "database.port": 3306,
     "connection.init_function": null,
     "database.reconnect": true,

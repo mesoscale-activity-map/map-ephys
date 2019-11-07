@@ -1,12 +1,11 @@
-FROM datajoint/pydev:python3.6
+FROM datajoint/jupyter:latest
+
+RUN pip install datajoint==0.12.dev4
 
 RUN apt update && apt -y install mysql-client-5.7 netcat
 
-#RUN pip install globus_sdk
+RUN pip install globus_sdk
 
-RUN mkdir /dj_map
-WORKDIR /dj_map
+ADD . /src/map-ephys
 
-RUN git clone https://github.com/mesoscale-activity-map/map-ephys /dj_map
-
-RUN pip install .
+RUN pip install -e /src/map-ephys
