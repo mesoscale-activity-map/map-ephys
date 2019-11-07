@@ -186,8 +186,8 @@ def erd(*args):
 def automate_computation():
     populate_settings = {'reserve_jobs': True, 'suppress_errors': True, 'display_progress': True}
     while True:
-        populate_psth(**populate_settings)
-        generate_report(**populate_settings)
+        populate_psth(populate_settings)
+        generate_report(populate_settings)
 
         time.sleep(1)
 
