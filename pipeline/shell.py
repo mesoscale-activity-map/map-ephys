@@ -15,13 +15,11 @@ from pipeline import ephys
 from pipeline import histology
 from pipeline import tracking
 from pipeline import psth
-from pipeline import publication
 from pipeline import export
 from pipeline import report
 
 
-pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth,
-                    publication]
+pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth]
 
 log = logging.getLogger(__name__)
 
@@ -149,6 +147,7 @@ def nuke_all():
 
 
 def publish(*args):
+    from pipeline import publication  # triggers ingest, so skipped
     publication.ArchivedRawEphys.populate()
     publication.ArchivedTrackingVideo.populate()
 
