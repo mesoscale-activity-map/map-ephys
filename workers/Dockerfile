@@ -12,3 +12,5 @@ RUN git clone https://github.com/mesoscale-activity-map/map-ephys /dj_map
 RUN pip install .
 
 COPY ./dj_local_conf.json /dj_map/dj_local_conf.json
+
+ENV DJ_SUPPORT_FILEPATH_MANAGEMENT TRUE
