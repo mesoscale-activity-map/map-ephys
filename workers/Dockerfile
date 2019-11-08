@@ -9,6 +9,8 @@ WORKDIR /dj_map
 
 RUN git clone https://github.com/mesoscale-activity-map/map-ephys /dj_map
 
-RUN pip install .
+RUN pip install . && pip install --upgrade scipy matplotlib
 
 COPY ./dj_local_conf.json /dj_map/dj_local_conf.json
+
+ENV DJ_SUPPORT_FILEPATH_MANAGEMENT TRUE
