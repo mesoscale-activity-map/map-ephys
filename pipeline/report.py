@@ -23,7 +23,7 @@ schema = dj.schema(get_schema_name('report'))
 mpl.rcParams['font.size'] = 16
 
 
-store_directory = pathlib.Path(dj.config['stores']['report_store']['location'])
+store_directory = pathlib.Path(dj.config['stores']['report_store']['stage'])
 
 
 @schema
