@@ -191,8 +191,8 @@ def automate_computation():
         populate_psth(populate_settings)
         generate_report(populate_settings)
 
-        # random sleep time between 5 to 10 seconds
-        time.sleep(np.random.randint(5, 10))
+        # random sleep time between 5 to 10 minutes
+        time.sleep(np.random.randint(300, 600))
 
 
 actions = {
