@@ -5,6 +5,7 @@ import sys
 import logging
 from code import interact
 import time
+import numpy as np
 
 import datajoint as dj
 
@@ -17,6 +18,7 @@ from pipeline import tracking
 from pipeline import psth
 from pipeline import export
 from pipeline import report
+from pipeline import publication
 
 
 pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth]
@@ -189,7 +191,8 @@ def automate_computation():
         populate_psth(populate_settings)
         generate_report(populate_settings)
 
-        time.sleep(1)
+        # random sleep time between 5 to 10 minutes
+        time.sleep(np.random.randint(300, 600))
 
 
 actions = {
