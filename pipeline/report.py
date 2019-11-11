@@ -26,11 +26,12 @@ warnings.filterwarnings('ignore')
 
 schema = dj.schema(get_schema_name('report'))
 
-mpl.rcParams['font.size'] = 16
 os.environ['DJ_SUPPORT_FILEPATH_MANAGEMENT'] = "TRUE"
+dj.config['safemode'] = False
 
 store_directory = pathlib.Path(dj.config['stores']['report_store']['stage'])
 
+mpl.rcParams['font.size'] = 16
 
 # ============================= SESSION LEVEL ====================================
 
@@ -233,7 +234,7 @@ class SessionLevelProbeTrack(dj.Computed):
         sess_dir = store_directory / water_res_num / sess_date
         sess_dir.mkdir(parents=True, exist_ok=True)
 
-        fig1 = plt.figure(figsize=(16, 16))
+        fig1 = plt.figure(figsize=(16, 12))
 
         for axloc, elev, azim in zip((221, 222, 223, 224), (65, 0, 90, 0), (-15, 0, 0, 90)):
             ax = fig1.add_subplot(axloc, projection='3d')
@@ -459,7 +460,7 @@ class ProjectLevelProbeTrack(dj.Computed):
             'vertices', 'faces')
         vertices = vertices * um_per_px
 
-        fig1 = plt.figure(figsize=(16, 16))
+        fig1 = plt.figure(figsize=(16, 12))
 
         for axloc, elev, azim in zip((221, 222, 223, 224), (65, 0, 90, 0), (-15, 0, 0, 90)):
             ax = fig1.add_subplot(axloc, projection='3d')
@@ -512,7 +513,6 @@ def delete_outdated_probe_tracks(project_name='MAP'):
         ext_key = {'hash': uuid.UUID(bytes=uuid_byte)}
 
         with ProjectLevelProbeTrack.connection.transaction:
-
             # delete the outdated Probe Tracks
             (ProjectLevelProbeTrack & {'project_name': project_name}).delete()
             # delete from external store
