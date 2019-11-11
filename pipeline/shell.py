@@ -26,6 +26,18 @@ pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth]
 log = logging.getLogger(__name__)
 
 
+# ---- Some constants ----
+report_tbls = [report.SessionLevelReport,
+               report.ProbeLevelReport,
+               report.ProbeLevelPhotostimEffectReport,
+               report.UnitLevelReport,
+               report.SessionLevelCDReport,
+               report.SessionLevelProbeTrack,
+               report.ProjectLevelProbeTrack]
+
+stage = dj.config['stores']['report_store']['stage']
+
+
 def usage_exit():
     print("usage: {p} [{c}] <args>"
           .format(p=os.path.basename(sys.argv[0]),
@@ -93,39 +105,16 @@ def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': T
 
 def generate_report(populate_settings={'reserve_jobs': True, 'display_progress': True}):
 
-    log.info('report.SessionLevelReport.populate()')
-    report.SessionLevelReport.populate(**populate_settings)
-
-    log.info('report.ProbeLevelReport.populate()')
-    report.ProbeLevelReport.populate(**populate_settings)
-
-    log.info('report.ProbeLevelPhotostimEffectReport.populate()')
-    report.ProbeLevelPhotostimEffectReport.populate(**populate_settings)
-
-    log.info('report.UnitLevelReport.populate()')
-    report.UnitLevelReport.populate(**populate_settings)
-
-    log.info('report.SessionLevelCDReport.populate()')
-    report.SessionLevelCDReport.populate(**populate_settings)
+    for report_tbl in report_tbls:
+        log.info(f'Populate: {report_tbl.full_table_name}')
+        report_tbl.populate(**populate_settings)
 
 
 def sync_report():
-    stage = dj.config['stores']['report_store']['stage']
 
-    log.info(f'Sync report.SessionLevelReport from {stage}')
-    report.SessionLevelReport.fetch()
-
-    log.info(f'Sync report.ProbeLevelReport from {stage}')
-    report.ProbeLevelReport.fetch()
-
-    log.info(f'Sync report.ProbeLevelPhotostimEffectReport from {stage}')
-    report.ProbeLevelPhotostimEffectReport.fetch()
-
-    log.info(f'Sync report.UnitLevelReport from {stage}')
-    report.UnitLevelReport.fetch()
-
-    log.info(f'Sync report.SessionLevelCDReport from {stage}')
-    report.SessionLevelCDReport.fetch()
+    for report_tbl in report_tbls:
+        log.info(f'Sync: {report_tbl.full_table_name} - From {stage}')
+        report_tbl.fetch()
 
 
 def nuke_all():
@@ -190,6 +179,8 @@ def automate_computation():
     while True:
         populate_psth(populate_settings)
         generate_report(populate_settings)
+
+        report.delete_outdated_probe_tracks()
 
         # random sleep time between 5 to 10 minutes
         time.sleep(np.random.randint(300, 600))

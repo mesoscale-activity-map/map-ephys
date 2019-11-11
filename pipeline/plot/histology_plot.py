@@ -31,10 +31,10 @@ def plot_probe_tracks(session_key, ax=None):
     assert isinstance(ax, Axes3D)
 
     # cosmetic
-    plt.gca().patch.set_facecolor('white')
-    ax.w_xaxis.set_pane_color((0, 0, 0, 1.0))
-    ax.w_yaxis.set_pane_color((0, 0, 0, 1.0))
-    ax.w_zaxis.set_pane_color((0, 0, 0, 1.0))
+    # plt.gca().patch.set_facecolor('white')
+    # ax.w_xaxis.set_pane_color((0, 0, 0, 1.0))
+    # ax.w_yaxis.set_pane_color((0, 0, 0, 1.0))
+    # ax.w_zaxis.set_pane_color((0, 0, 0, 1.0))
     ax.grid(False)
     ax.invert_zaxis()
 
@@ -46,3 +46,5 @@ def plot_probe_tracks(session_key, ax=None):
         ax.plot(v[:, 0], v[:, 2], v[:, 1], c, label=f'probe {k}')
 
     ax.set_title('Probe Track in CCF (um)')
+
+    return probe_tracks

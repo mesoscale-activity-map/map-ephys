@@ -288,7 +288,6 @@ class PassivePhotostimTrial(dj.Computed):
     def make(self, key):
         self.insert1(key)
 
-
 # ----
 
 
@@ -306,3 +305,17 @@ class Period(dj.Lookup):
     contents = [('sample', 'sample', 0, 'delay', 0),
                 ('delay', 'delay', 0, 'go', 0),
                 ('response', 'go', 0, 'go', 1.2)]
+
+# ============================= PROJECTS ==================================================
+
+
+@schema
+class Project(dj.Lookup):
+    definition = """
+    project_name: varchar(128)
+    ---
+    project_desc='': varchar(1000) 
+    publication='': varchar(256)  # e.g. publication doi    
+    """
+
+    contents = [('MAP', 'The Mesoscale Activity Map project', '')]
