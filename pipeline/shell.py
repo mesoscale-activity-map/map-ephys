@@ -17,25 +17,12 @@ from pipeline import histology
 from pipeline import tracking
 from pipeline import psth
 from pipeline import export
-from pipeline import report
 from pipeline import publication
 
 
 pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth]
 
 log = logging.getLogger(__name__)
-
-
-# ---- Some constants ----
-report_tbls = [report.SessionLevelReport,
-               report.ProbeLevelReport,
-               report.ProbeLevelPhotostimEffectReport,
-               report.UnitLevelReport,
-               report.SessionLevelCDReport,
-               report.SessionLevelProbeTrack,
-               report.ProjectLevelProbeTrack]
-
-stage = dj.config['stores']['report_store']['stage']
 
 
 def usage_exit():
@@ -104,16 +91,16 @@ def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': T
 
 
 def generate_report(populate_settings={'reserve_jobs': True, 'display_progress': True}):
-
-    for report_tbl in report_tbls:
+    from pipeline import report
+    for report_tbl in report.report_tables:
         log.info(f'Populate: {report_tbl.full_table_name}')
         report_tbl.populate(**populate_settings)
 
 
 def sync_report():
-
-    for report_tbl in report_tbls:
-        log.info(f'Sync: {report_tbl.full_table_name} - From {stage}')
+    from pipeline import report
+    for report_tbl in report.report_tables:
+        log.info(f'Sync: {report_tbl.full_table_name} - From {report.store_directory}')
         report_tbl.fetch()
 
 

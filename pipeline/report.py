@@ -33,7 +33,9 @@ store_directory = pathlib.Path(dj.config['stores']['report_store']['stage'])
 
 mpl.rcParams['font.size'] = 16
 
+
 # ============================= SESSION LEVEL ====================================
+
 
 @schema
 class SessionLevelReport(dj.Computed):
@@ -493,6 +495,14 @@ class ProjectLevelProbeTrack(dj.Computed):
 
 
 # ---------- HELPER FUNCTIONS --------------
+
+report_tables = [SessionLevelReport,
+                 ProbeLevelReport,
+                 ProbeLevelPhotostimEffectReport,
+                 UnitLevelReport,
+                 SessionLevelCDReport,
+                 SessionLevelProbeTrack,
+                 ProjectLevelProbeTrack]
 
 
 def get_wr_sessdate(key):
