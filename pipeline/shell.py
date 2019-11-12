@@ -34,22 +34,35 @@ def usage_exit():
 
 def logsetup(*args):
     level_map = {
-        'INFO': logging.INFO,
-        'WARNING': logging.WARNING,
+        'CRITICAL': logging.CRITICAL,
         'ERROR': logging.ERROR,
+        'WARNING': logging.WARNING,
+        'INFO': logging.INFO,
         'DEBUG': logging.DEBUG,
+        'NOTSET': logging.NOTSET,
     }
     level = level_map[args[0]] if args else logging.INFO
 
-    logging.basicConfig(level=logging.ERROR)
+    logfile = dj.config.get('custom', {'logfile': None})['logfile']
+
+    if logfile:
+        handlers = [logging.StreamHandler(), logging.FileHandler(logfile)]
+    else:
+        handlers = [logging.StreamHandler()]
+
+    logging.basicConfig(level=logging.ERROR, handlers=handlers)
+
     log.setLevel(level)
+
+    logging.getLogger('pipeline').setLevel(level)
+    logging.getLogger('pipeline.psth').setLevel(level)
+    logging.getLogger('pipeline.ccf').setLevel(level)
+    logging.getLogger('pipeline.report').setLevel(level)
+    logging.getLogger('pipeline.publication').setLevel(level)
     logging.getLogger('pipeline.ingest.behavior').setLevel(level)
     logging.getLogger('pipeline.ingest.ephys').setLevel(level)
     logging.getLogger('pipeline.ingest.tracking').setLevel(level)
     logging.getLogger('pipeline.ingest.histology').setLevel(level)
-    logging.getLogger('pipeline.psth').setLevel(level)
-    logging.getLogger('pipeline.ccf').setLevel(level)
-    logging.getLogger('pipeline.publication').setLevel(level)
 
 
 def ingest_behavior(*args):
