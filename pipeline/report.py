@@ -1,17 +1,22 @@
+import os
 import datajoint as dj
 import numpy as np
 import pathlib
 from datetime import datetime
 import pandas as pd
+import uuid
+
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
+from mpl_toolkits.mplot3d import Axes3D
+
 import io
 from PIL import Image
 import itertools
 
-from pipeline import experiment, ephys, psth, tracking, lab
-from pipeline.plot import behavior_plot, unit_characteristic_plot, unit_psth
+from pipeline import experiment, ephys, psth, tracking, lab, histology, ccf
+from pipeline.plot import behavior_plot, unit_characteristic_plot, unit_psth, histology_plot
 from pipeline import get_schema_name
 from pipeline.plot.util import _plot_with_sem, jointplot_w_hue
 
@@ -20,10 +25,16 @@ warnings.filterwarnings('ignore')
 
 
 schema = dj.schema(get_schema_name('report'))
+
+os.environ['DJ_SUPPORT_FILEPATH_MANAGEMENT'] = "TRUE"
+dj.config['safemode'] = False
+
+store_directory = pathlib.Path(dj.config['stores']['report_store']['stage'])
+
 mpl.rcParams['font.size'] = 16
 
 
-store_directory = pathlib.Path(dj.config['stores']['report_store']['stage'])
+# ============================= SESSION LEVEL ====================================
 
 
 @schema
@@ -67,173 +78,6 @@ class SessionLevelReport(dj.Computed):
 
         fig_dict = {}
         for fig, figname in zip((fig1,), ('behavior_performance',)):
-            fig_fp = sess_dir / (fn_prefix + figname + '.png')
-            fig.tight_layout()
-            fig.savefig(fig_fp)
-            print(f'Generated {fig_fp}')
-            fig_dict[figname] = fig_fp.as_posix()
-
-        plt.close('all')
-        self.insert1({**key, **fig_dict})
-
-
-@schema
-class ProbeLevelReport(dj.Computed):
-    definition = """
-    -> ephys.ProbeInsertion
-    ---
-    clustering_quality: filepath@report_store
-    unit_characteristic: filepath@report_store
-    group_psth: filepath@report_store
-    """
-
-    @property
-    def key_source(self):
-        # Only process ProbeInsertion with UnitSelectivity computation fully completed
-        ks = (ephys.ProbeInsertion & ephys.UnitStat).proj()
-        unit = ks.aggr(ephys.Unit & 'unit_quality != "all"', unit_count='count(*)')
-        sel_unit = ks.aggr(psth.UnitSelectivity, sel_unit_count='count(*)')
-        return unit * sel_unit & 'unit_count = sel_unit_count'
-
-    def make(self, key):
-        water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_directory / water_res_num / sess_date / str(key['insertion_number'])
-        sess_dir.mkdir(parents=True, exist_ok=True)
-
-        probe_insertion = ephys.ProbeInsertion & key
-        units = ephys.Unit & key
-
-        # ---- clustering_quality ----
-        fig1, axs = plt.subplots(4, 3, figsize=(16, 16))
-        fig1.subplots_adjust(wspace=0.5)
-        fig1.subplots_adjust(hspace=0.5)
-
-        gs = axs[0, 0].get_gridspec()
-        [a.remove() for a in axs[2:, :].flatten()]
-
-        unit_characteristic_plot.plot_clustering_quality(probe_insertion, axs=axs[:2, :])
-        unit_characteristic_plot.plot_unit_characteristic(probe_insertion, axs=np.array([fig1.add_subplot(gs[2:, col])
-                                                                                         for col in range(3)]))
-
-        # ---- unit_characteristic ----
-        fig2, axs = plt.subplots(1, 4, figsize=(16, 16))
-        fig2.subplots_adjust(wspace=0.8)
-
-        unit_characteristic_plot.plot_unit_selectivity(probe_insertion, axs=axs[:3])
-        unit_characteristic_plot.plot_unit_bilateral_photostim_effect(probe_insertion, axs=axs[-1])
-
-        # ---- group_psth ----
-        fig3 = unit_characteristic_plot.plot_stacked_contra_ipsi_psth(units)
-
-        # ---- Save fig and insert ----
-        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_'
-
-        fig_dict = {}
-        for fig, figname in zip((fig1, fig2, fig3),
-                                ('clustering_quality', 'unit_characteristic', 'group_psth')):
-            fig_fp = sess_dir / (fn_prefix + figname + '.png')
-            fig.tight_layout()
-            fig.savefig(fig_fp)
-            print(f'Generated {fig_fp}')
-            fig_dict[figname] = fig_fp.as_posix()
-
-        plt.close('all')
-        self.insert1({**key, **fig_dict})
-
-
-@schema
-class ProbeLevelPhotostimEffectReport(dj.Computed):
-    definition = """
-    -> ephys.ProbeInsertion
-    ---
-    group_photostim: filepath@report_store
-    """
-
-    @property
-    def key_source(self):
-        # Only process ProbeInsertion with UnitPSTH computation (for all TrialCondition) fully completed
-        probe_current_psth = ephys.ProbeInsertion.aggr(psth.UnitPsth, present_u_psth_count='count(*)')
-        probe_full_psth = (ephys.ProbeInsertion.aggr(
-            ephys.Unit.proj(), unit_count=f'count(*)') * dj.U().aggr(psth.TrialCondition, trial_cond_count='count(*)')).proj(
-            full_u_psth_count = 'unit_count * trial_cond_count')
-        return probe_current_psth * probe_full_psth & 'present_u_psth_count = full_u_psth_count'
-
-    def make(self, key):
-        water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_directory / water_res_num / sess_date / str(key['insertion_number'])
-        sess_dir.mkdir(parents=True, exist_ok=True)
-
-        probe_insertion = ephys.ProbeInsertion & key
-        units = ephys.Unit & key
-
-        # ---- group_photostim ----
-        stim_locs = (experiment.Photostim & probe_insertion).fetch('brain_location_name')
-        fig1, axs = plt.subplots(1, 1 + len(stim_locs), figsize=(16, 6))
-        for pos, stim_loc in enumerate(stim_locs):
-            unit_characteristic_plot.plot_psth_photostim_effect(units,
-                                                                condition_name_kw=[stim_loc],
-                                                                axs=np.array([axs[0], axs[pos + 1]]))
-            if pos < len(stim_locs) - 1:
-                axs[0].clear()
-
-        [a.set_title(title.replace('_', ' ').upper()) for a, title in zip(axs, ['control'] + list(stim_locs))]
-
-        # ---- Save fig and insert ----
-        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_'
-
-        fig_dict = {}
-        for fig, figname in zip((fig1,),
-                                ('group_photostim',)):
-            fig_fp = sess_dir / (fn_prefix + figname + '.png')
-            fig.tight_layout()
-            fig.savefig(fig_fp)
-            print(f'Generated {fig_fp}')
-            fig_dict[figname] = fig_fp.as_posix()
-
-        plt.close('all')
-        self.insert1({**key, **fig_dict})
-
-
-@schema
-class UnitLevelReport(dj.Computed):
-    definition = """
-    -> ephys.Unit
-    ---
-    unit_psth: filepath@report_store
-    unit_behavior: filepath@report_store
-    """
-
-    # only units with ingested tracking and selectivity computed
-    key_source = ephys.Unit & psth.UnitSelectivity & tracking.Tracking
-
-    def make(self, key):
-        water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_directory / water_res_num / sess_date / str(key['insertion_number']) / 'units'
-        sess_dir.mkdir(parents=True, exist_ok=True)
-
-        fig1 = unit_psth.plot_unit_psth(key)
-
-        fig2 = plt.figure(figsize = (16, 16))
-        gs = GridSpec(4, 2)
-
-        # 15 trials roughly in the middle of the session
-        session = experiment.Session & key
-        behavior_plot.plot_tracking(session, key, tracking_feature='jaw_y', xlim=(-0.5, 1),
-                                    trial_offset=0.5, trial_limit=15, axs=np.array([fig2.add_subplot(gs[:3, col])
-                                                                                    for col in range(2)]))
-
-        axs = np.array([fig2.add_subplot(gs[-1, col], polar=True) for col in range(2)])
-        behavior_plot.plot_unit_jaw_phase_dist(experiment.Session & key, key, axs=axs)
-        [a.set_title('') for a in axs]
-
-        fig2.subplots_adjust(wspace=0.4)
-        fig2.subplots_adjust(hspace=0.6)
-
-        # ---- Save fig and insert ----
-        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_u{key["unit"]:03}_'
-
-        fig_dict = {}
-        for fig, figname in zip((fig1, fig2), ('unit_psth', 'unit_behavior')):
             fig_fp = sess_dir / (fn_prefix + figname + '.png')
             fig.tight_layout()
             fig.savefig(fig_fp)
@@ -371,9 +215,315 @@ class SessionLevelCDReport(dj.Computed):
         self.insert1({**key, **fig_dict})
 
 
+@schema
+class SessionLevelProbeTrack(dj.Computed):
+    definition = """
+    -> experiment.Session
+    ---
+    session_tracks_plot: filepath@report_store
+    probe_tracks: longblob
+    """
+
+    @property
+    def key_source(self):
+        # Only process Session with ProbeTrack histology available
+        sess_probes = experiment.Session.aggr(ephys.ProbeInsertion, probe_count='count(*)')
+        sess_probe_hist = experiment.Session.aggr(histology.LabeledProbeTrack, probe_hist_count='count(*)')
+        return sess_probes * sess_probe_hist & 'probe_count = probe_hist_count'
+
+    def make(self, key):
+        water_res_num, sess_date = get_wr_sessdate(key)
+        sess_dir = store_directory / water_res_num / sess_date
+        sess_dir.mkdir(parents=True, exist_ok=True)
+
+        fig1 = plt.figure(figsize=(16, 12))
+
+        for axloc, elev, azim in zip((221, 222, 223, 224), (65, 0, 90, 0), (-15, 0, 0, 90)):
+            ax = fig1.add_subplot(axloc, projection='3d')
+            ax.view_init(elev, azim)
+            probe_tracks = histology_plot.plot_probe_tracks(key, ax=ax)
+
+        # ---- Save fig and insert ----
+        fn_prefix = f'{water_res_num}_{sess_date}_'
+
+        fig_dict = {}
+        for fig, figname in zip((fig1,), ('session_tracks_plot',)):
+            fig_fp = sess_dir / (fn_prefix + figname + '.png')
+            fig.tight_layout()
+            fig.savefig(fig_fp)
+            print(f'Generated {fig_fp}')
+            fig_dict[figname] = fig_fp.as_posix()
+
+        plt.close('all')
+        self.insert1({**key, **fig_dict, 'probe_tracks': probe_tracks})
+
+
+# ============================= PROBE LEVEL ====================================
+
+
+@schema
+class ProbeLevelReport(dj.Computed):
+    definition = """
+    -> ephys.ProbeInsertion
+    ---
+    clustering_quality: filepath@report_store
+    unit_characteristic: filepath@report_store
+    group_psth: filepath@report_store
+    """
+
+    @property
+    def key_source(self):
+        # Only process ProbeInsertion with UnitSelectivity computation fully completed
+        ks = (ephys.ProbeInsertion & ephys.UnitStat).proj()
+        unit = ks.aggr(ephys.Unit & 'unit_quality != "all"', unit_count='count(*)')
+        sel_unit = ks.aggr(psth.UnitSelectivity, sel_unit_count='count(*)')
+        return unit * sel_unit & 'unit_count = sel_unit_count'
+
+    def make(self, key):
+        water_res_num, sess_date = get_wr_sessdate(key)
+        sess_dir = store_directory / water_res_num / sess_date / str(key['insertion_number'])
+        sess_dir.mkdir(parents=True, exist_ok=True)
+
+        probe_insertion = ephys.ProbeInsertion & key
+        units = ephys.Unit & key
+
+        # ---- clustering_quality ----
+        fig1, axs = plt.subplots(4, 3, figsize=(16, 16))
+        fig1.subplots_adjust(wspace=0.5)
+        fig1.subplots_adjust(hspace=0.5)
+
+        gs = axs[0, 0].get_gridspec()
+        [a.remove() for a in axs[2:, :].flatten()]
+
+        unit_characteristic_plot.plot_clustering_quality(probe_insertion, axs=axs[:2, :])
+        unit_characteristic_plot.plot_unit_characteristic(probe_insertion, axs=np.array([fig1.add_subplot(gs[2:, col])
+                                                                                         for col in range(3)]))
+
+        # ---- unit_characteristic ----
+        fig2, axs = plt.subplots(1, 4, figsize=(16, 16))
+        fig2.subplots_adjust(wspace=0.8)
+
+        unit_characteristic_plot.plot_unit_selectivity(probe_insertion, axs=axs[:3])
+        unit_characteristic_plot.plot_unit_bilateral_photostim_effect(probe_insertion, axs=axs[-1])
+
+        # ---- group_psth ----
+        fig3 = unit_characteristic_plot.plot_stacked_contra_ipsi_psth(units)
+
+        # ---- Save fig and insert ----
+        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_'
+
+        fig_dict = {}
+        for fig, figname in zip((fig1, fig2, fig3),
+                                ('clustering_quality', 'unit_characteristic', 'group_psth')):
+            fig_fp = sess_dir / (fn_prefix + figname + '.png')
+            fig.tight_layout()
+            fig.savefig(fig_fp)
+            print(f'Generated {fig_fp}')
+            fig_dict[figname] = fig_fp.as_posix()
+
+        plt.close('all')
+        self.insert1({**key, **fig_dict})
+
+
+@schema
+class ProbeLevelPhotostimEffectReport(dj.Computed):
+    definition = """
+    -> ephys.ProbeInsertion
+    ---
+    group_photostim: filepath@report_store
+    """
+
+    @property
+    def key_source(self):
+        # Only process ProbeInsertion with UnitPSTH computation (for all TrialCondition) fully completed
+        probe_current_psth = ephys.ProbeInsertion.aggr(psth.UnitPsth, present_u_psth_count='count(*)')
+        probe_full_psth = (ephys.ProbeInsertion.aggr(
+            ephys.Unit.proj(), unit_count=f'count(*)') * dj.U().aggr(psth.TrialCondition, trial_cond_count='count(*)')).proj(
+            full_u_psth_count = 'unit_count * trial_cond_count')
+        return probe_current_psth * probe_full_psth & 'present_u_psth_count = full_u_psth_count'
+
+    def make(self, key):
+        water_res_num, sess_date = get_wr_sessdate(key)
+        sess_dir = store_directory / water_res_num / sess_date / str(key['insertion_number'])
+        sess_dir.mkdir(parents=True, exist_ok=True)
+
+        probe_insertion = ephys.ProbeInsertion & key
+        units = ephys.Unit & key
+
+        # ---- group_photostim ----
+        stim_locs = (experiment.Photostim & probe_insertion).fetch('brain_location_name')
+        fig1, axs = plt.subplots(1, 1 + len(stim_locs), figsize=(16, 6))
+        for pos, stim_loc in enumerate(stim_locs):
+            unit_characteristic_plot.plot_psth_photostim_effect(units,
+                                                                condition_name_kw=[stim_loc],
+                                                                axs=np.array([axs[0], axs[pos + 1]]))
+            if pos < len(stim_locs) - 1:
+                axs[0].clear()
+
+        [a.set_title(title.replace('_', ' ').upper()) for a, title in zip(axs, ['control'] + list(stim_locs))]
+
+        # ---- Save fig and insert ----
+        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_'
+
+        fig_dict = {}
+        for fig, figname in zip((fig1,),
+                                ('group_photostim',)):
+            fig_fp = sess_dir / (fn_prefix + figname + '.png')
+            fig.tight_layout()
+            fig.savefig(fig_fp)
+            print(f'Generated {fig_fp}')
+            fig_dict[figname] = fig_fp.as_posix()
+
+        plt.close('all')
+        self.insert1({**key, **fig_dict})
+
+
+# ============================= UNIT LEVEL ====================================
+
+
+@schema
+class UnitLevelReport(dj.Computed):
+    definition = """
+    -> ephys.Unit
+    ---
+    unit_psth: filepath@report_store
+    unit_behavior: filepath@report_store
+    """
+
+    # only units with ingested tracking and selectivity computed
+    key_source = ephys.Unit & psth.UnitSelectivity & tracking.Tracking
+
+    def make(self, key):
+        water_res_num, sess_date = get_wr_sessdate(key)
+        sess_dir = store_directory / water_res_num / sess_date / str(key['insertion_number']) / 'units'
+        sess_dir.mkdir(parents=True, exist_ok=True)
+
+        fig1 = unit_psth.plot_unit_psth(key)
+
+        fig2 = plt.figure(figsize = (16, 16))
+        gs = GridSpec(4, 2)
+
+        # 15 trials roughly in the middle of the session
+        session = experiment.Session & key
+        behavior_plot.plot_tracking(session, key, tracking_feature='jaw_y', xlim=(-0.5, 1),
+                                    trial_offset=0.5, trial_limit=15, axs=np.array([fig2.add_subplot(gs[:3, col])
+                                                                                    for col in range(2)]))
+
+        axs = np.array([fig2.add_subplot(gs[-1, col], polar=True) for col in range(2)])
+        behavior_plot.plot_unit_jaw_phase_dist(experiment.Session & key, key, axs=axs)
+        [a.set_title('') for a in axs]
+
+        fig2.subplots_adjust(wspace=0.4)
+        fig2.subplots_adjust(hspace=0.6)
+
+        # ---- Save fig and insert ----
+        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_u{key["unit"]:03}_'
+
+        fig_dict = {}
+        for fig, figname in zip((fig1, fig2), ('unit_psth', 'unit_behavior')):
+            fig_fp = sess_dir / (fn_prefix + figname + '.png')
+            fig.tight_layout()
+            fig.savefig(fig_fp)
+            print(f'Generated {fig_fp}')
+            fig_dict[figname] = fig_fp.as_posix()
+
+        plt.close('all')
+        self.insert1({**key, **fig_dict})
+
+
+# ============================= PROJECT LEVEL ====================================
+
+@schema
+class ProjectLevelProbeTrack(dj.Computed):
+    definition = """
+    -> experiment.Project
+    ---
+    tracks_plot: filepath@report_store
+    session_count: int
+    """
+
+    key_source = experiment.Project & 'project_name = "MAP"'
+
+    def make(self, key):
+        proj_dir = store_directory
+
+        session_count = len(SessionLevelProbeTrack())
+
+        sessions_probe_tracks = SessionLevelProbeTrack.fetch('probe_tracks')
+
+        probe_tracks_list = list(itertools.chain(*[[v for v in probe_tracks.values()]
+                                                   for probe_tracks in sessions_probe_tracks]))
+
+        # ---- plot ----
+        um_per_px = 20
+        # fetch mesh
+        vertices, faces = (ccf.AnnotatedBrainSurface
+                           & 'annotated_brain_name = "Annotation_new_10_ds222_16bit_isosurf"').fetch1(
+            'vertices', 'faces')
+        vertices = vertices * um_per_px
+
+        fig1 = plt.figure(figsize=(16, 12))
+
+        for axloc, elev, azim in zip((221, 222, 223, 224), (65, 0, 90, 0), (-15, 0, 0, 90)):
+            ax = fig1.add_subplot(axloc, projection='3d')
+            ax.view_init(elev, azim)
+
+            ax.grid(False)
+            ax.invert_zaxis()
+
+            ax.plot_trisurf(vertices[:, 0], vertices[:, 1], faces, vertices[:, 2],
+                            alpha = 0.25, lw = 0)
+
+            for v in probe_tracks_list:
+                ax.plot(v[:, 0], v[:, 2], v[:, 1], 'r')
+
+            ax.set_title('Probe Track in CCF (um)')
+
+        # ---- Save fig and insert ----
+        fn_prefix = (experiment.Project & key).fetch1('project_name') + '_'
+
+        fig_dict = {}
+        for fig, figname in zip((fig1,), ('tracks_plot',)):
+            fig_fp = proj_dir / (fn_prefix + figname + '.png')
+            fig.tight_layout()
+            fig.savefig(fig_fp)
+            print(f'Generated {fig_fp}')
+            fig_dict[figname] = fig_fp.as_posix()
+
+        plt.close('all')
+        self.insert1({**key, **fig_dict, 'session_count': session_count})
+
+
 # ---------- HELPER FUNCTIONS --------------
+
+report_tables = [SessionLevelReport,
+                 ProbeLevelReport,
+                 ProbeLevelPhotostimEffectReport,
+                 UnitLevelReport,
+                 SessionLevelCDReport,
+                 SessionLevelProbeTrack,
+                 ProjectLevelProbeTrack]
+
+
 def get_wr_sessdate(key):
     water_res_num, sess_date = (lab.WaterRestriction * experiment.Session & key).fetch1(
         'water_restriction_number', 'session_date')
     return water_res_num, datetime.strftime(sess_date, '%Y%m%d')
 
+
+def delete_outdated_probe_tracks(project_name='MAP'):
+    if {'project_name': project_name} not in ProjectLevelProbeTrack:
+        return
+
+    sess_count = (ProjectLevelProbeTrack & {'project_name': project_name}).fetch1('session_count')
+    latest_sess_count = len(SessionLevelProbeTrack())
+
+    if sess_count != latest_sess_count:
+        uuid_byte = (ProjectLevelProbeTrack & {'project_name': project_name}).proj(ub='(tracks_plot)').fetch1('ub')
+        ext_key = {'hash': uuid.UUID(bytes=uuid_byte)}
+
+        with ProjectLevelProbeTrack.connection.transaction:
+            # delete the outdated Probe Tracks
+            (ProjectLevelProbeTrack & {'project_name': project_name}).delete()
+            # delete from external store
+            (schema.external['report_store'] & ext_key).delete(delete_external_files=True)

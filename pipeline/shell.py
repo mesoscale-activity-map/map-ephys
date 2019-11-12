@@ -17,7 +17,6 @@ from pipeline import histology
 from pipeline import tracking
 from pipeline import psth
 from pipeline import export
-from pipeline import report
 from pipeline import publication
 
 
@@ -92,40 +91,17 @@ def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': T
 
 
 def generate_report(populate_settings={'reserve_jobs': True, 'display_progress': True}):
-
-    log.info('report.SessionLevelReport.populate()')
-    report.SessionLevelReport.populate(**populate_settings)
-
-    log.info('report.ProbeLevelReport.populate()')
-    report.ProbeLevelReport.populate(**populate_settings)
-
-    log.info('report.ProbeLevelPhotostimEffectReport.populate()')
-    report.ProbeLevelPhotostimEffectReport.populate(**populate_settings)
-
-    log.info('report.UnitLevelReport.populate()')
-    report.UnitLevelReport.populate(**populate_settings)
-
-    log.info('report.SessionLevelCDReport.populate()')
-    report.SessionLevelCDReport.populate(**populate_settings)
+    from pipeline import report
+    for report_tbl in report.report_tables:
+        log.info(f'Populate: {report_tbl.full_table_name}')
+        report_tbl.populate(**populate_settings)
 
 
 def sync_report():
-    stage = dj.config['stores']['report_store']['stage']
-
-    log.info(f'Sync report.SessionLevelReport from {stage}')
-    report.SessionLevelReport.fetch()
-
-    log.info(f'Sync report.ProbeLevelReport from {stage}')
-    report.ProbeLevelReport.fetch()
-
-    log.info(f'Sync report.ProbeLevelPhotostimEffectReport from {stage}')
-    report.ProbeLevelPhotostimEffectReport.fetch()
-
-    log.info(f'Sync report.UnitLevelReport from {stage}')
-    report.UnitLevelReport.fetch()
-
-    log.info(f'Sync report.SessionLevelCDReport from {stage}')
-    report.SessionLevelCDReport.fetch()
+    from pipeline import report
+    for report_tbl in report.report_tables:
+        log.info(f'Sync: {report_tbl.full_table_name} - From {report.store_directory}')
+        report_tbl.fetch()
 
 
 def nuke_all():
@@ -190,6 +166,8 @@ def automate_computation():
     while True:
         populate_psth(populate_settings)
         generate_report(populate_settings)
+
+        report.delete_outdated_probe_tracks()
 
         # random sleep time between 5 to 10 minutes
         time.sleep(np.random.randint(300, 600))
