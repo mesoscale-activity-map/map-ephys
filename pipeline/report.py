@@ -417,7 +417,7 @@ class UnitLevelReport(dj.Computed):
         fig2.subplots_adjust(hspace=0.6)
 
         # ---- Save fig and insert ----
-        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_u{key["unit"]:03}_'
+        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_u{key["unit"]:03}_'
 
         fig_dict = {}
         for fig, figname in zip((fig1, fig2), ('unit_psth', 'unit_behavior')):
