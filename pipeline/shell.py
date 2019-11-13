@@ -43,7 +43,7 @@ def logsetup(*args):
     }
     level = level_map[args[0]] if args else logging.INFO
 
-    logfile = dj.config.get('custom', {'logfile': None})['logfile']
+    logfile = dj.config.get('custom', {'logfile': None}).get('logfile', None)
 
     if logfile:
         handlers = [logging.StreamHandler(), logging.FileHandler(logfile)]
