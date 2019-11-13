@@ -587,6 +587,7 @@ def verify_session(s):
     else:
         log.warning('session {} had {} verification errors.'.format(s, nerr))
 
+
 def fix_0002_delay_events():
     with dj.conn().transaction:
 
