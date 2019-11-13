@@ -5,6 +5,7 @@ import sys
 import logging
 from code import interact
 import time
+import numpy as np
 
 import datajoint as dj
 
@@ -15,13 +16,11 @@ from pipeline import ephys
 from pipeline import histology
 from pipeline import tracking
 from pipeline import psth
-from pipeline import publication
 from pipeline import export
-from pipeline import report
+from pipeline import publication
 
 
-pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth,
-                    publication]
+pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth]
 
 log = logging.getLogger(__name__)
 
@@ -35,22 +34,35 @@ def usage_exit():
 
 def logsetup(*args):
     level_map = {
-        'INFO': logging.INFO,
-        'WARNING': logging.WARNING,
+        'CRITICAL': logging.CRITICAL,
         'ERROR': logging.ERROR,
+        'WARNING': logging.WARNING,
+        'INFO': logging.INFO,
         'DEBUG': logging.DEBUG,
+        'NOTSET': logging.NOTSET,
     }
     level = level_map[args[0]] if args else logging.INFO
 
-    logging.basicConfig(level=logging.ERROR)
+    logfile = dj.config.get('custom', {'logfile': None})['logfile']
+
+    if logfile:
+        handlers = [logging.StreamHandler(), logging.FileHandler(logfile)]
+    else:
+        handlers = [logging.StreamHandler()]
+
+    logging.basicConfig(level=logging.ERROR, handlers=handlers)
+
     log.setLevel(level)
+
+    logging.getLogger('pipeline').setLevel(level)
+    logging.getLogger('pipeline.psth').setLevel(level)
+    logging.getLogger('pipeline.ccf').setLevel(level)
+    logging.getLogger('pipeline.report').setLevel(level)
+    logging.getLogger('pipeline.publication').setLevel(level)
     logging.getLogger('pipeline.ingest.behavior').setLevel(level)
     logging.getLogger('pipeline.ingest.ephys').setLevel(level)
     logging.getLogger('pipeline.ingest.tracking').setLevel(level)
     logging.getLogger('pipeline.ingest.histology').setLevel(level)
-    logging.getLogger('pipeline.psth').setLevel(level)
-    logging.getLogger('pipeline.ccf').setLevel(level)
-    logging.getLogger('pipeline.publication').setLevel(level)
 
 
 def ingest_behavior(*args):
@@ -92,40 +104,17 @@ def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': T
 
 
 def generate_report(populate_settings={'reserve_jobs': True, 'display_progress': True}):
-
-    log.info('report.SessionLevelReport.populate()')
-    report.SessionLevelReport.populate(**populate_settings)
-
-    log.info('report.ProbeLevelReport.populate()')
-    report.ProbeLevelReport.populate(**populate_settings)
-
-    log.info('report.ProbeLevelPhotostimEffectReport.populate()')
-    report.ProbeLevelPhotostimEffectReport.populate(**populate_settings)
-
-    log.info('report.UnitLevelReport.populate()')
-    report.UnitLevelReport.populate(**populate_settings)
-
-    log.info('report.SessionLevelCDReport.populate()')
-    report.SessionLevelCDReport.populate(**populate_settings)
+    from pipeline import report
+    for report_tbl in report.report_tables:
+        log.info(f'Populate: {report_tbl.full_table_name}')
+        report_tbl.populate(**populate_settings)
 
 
 def sync_report():
-    stage = dj.config['stores']['report_store']['stage']
-
-    log.info(f'Sync report.SessionLevelReport from {stage}')
-    report.SessionLevelReport.fetch()
-
-    log.info(f'Sync report.ProbeLevelReport from {stage}')
-    report.ProbeLevelReport.fetch()
-
-    log.info(f'Sync report.ProbeLevelPhotostimEffectReport from {stage}')
-    report.ProbeLevelPhotostimEffectReport.fetch()
-
-    log.info(f'Sync report.UnitLevelReport from {stage}')
-    report.UnitLevelReport.fetch()
-
-    log.info(f'Sync report.SessionLevelCDReport from {stage}')
-    report.SessionLevelCDReport.fetch()
+    from pipeline import report
+    for report_tbl in report.report_tables:
+        log.info(f'Sync: {report_tbl.full_table_name} - From {report.store_directory}')
+        report_tbl.fetch()
 
 
 def nuke_all():
@@ -149,6 +138,7 @@ def nuke_all():
 
 
 def publish(*args):
+    from pipeline import publication  # triggers ingest, so skipped
     publication.ArchivedRawEphys.populate()
     publication.ArchivedTrackingVideo.populate()
 
@@ -187,10 +177,13 @@ def erd(*args):
 def automate_computation():
     populate_settings = {'reserve_jobs': True, 'suppress_errors': True, 'display_progress': True}
     while True:
-        populate_psth(**populate_settings)
-        generate_report(**populate_settings)
+        populate_psth(populate_settings)
+        generate_report(populate_settings)
 
-        time.sleep(1)
+        report.delete_outdated_probe_tracks()
+
+        # random sleep time between 5 to 10 minutes
+        time.sleep(np.random.randint(300, 600))
 
 
 actions = {

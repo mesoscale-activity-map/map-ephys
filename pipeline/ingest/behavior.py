@@ -51,7 +51,7 @@ class RigDataPath(dj.Lookup):
         return (('TRig1', r'\\MOHARB-NUC1\Documents\Arduino\Bpod_Train1\Bpod Local\Data', 0), # Hardcode the rig path
                 ('TRig2', r'\\MOHARB-WW2\C\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
                 ('TRig3', r'\\WANGT-NUC\Documents\MATLAB\Bpod Local\Data', 2),
-                ('RRig', r'\\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3)
+                ('RRig', r'\\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3),
                 ('RRig2', r'\\Yuj10-ww3\C\Bpod Local\Data', 4)
                 ) # A table with the data path
 

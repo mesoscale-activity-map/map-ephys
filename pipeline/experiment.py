@@ -171,20 +171,6 @@ class SessionComment(dj.Manual):
     """
 
 
-@schema
-class Period(dj.Lookup):
-    definition = """
-    period: varchar(12)
-    ---
-    period_start: float  # (s) start of this period relative to GO CUE
-    period_end: float    # (s) end of this period relative to GO CUE
-    """
-
-    contents = [('sample', -2.4, -1.2),
-                ('delay', -1.2, 0.0),
-                ('response', 0.0, 1.2)]
-
-
 # ---- behavioral trials ----
 
 @schema
@@ -301,3 +287,35 @@ class PassivePhotostimTrial(dj.Computed):
 
     def make(self, key):
         self.insert1(key)
+
+# ----
+
+
+@schema
+class Period(dj.Lookup):
+    definition = """  # time period between any two TrialEvent (eg the delay period is between delay and go)
+    period: varchar(12)
+    ---
+    -> TrialEventType.proj(start_event_type='trial_event_type')
+    start_time_shift: float  # (s) any time-shift amount with respect to the start_event_type
+    -> TrialEventType.proj(end_event_type='trial_event_type')
+    end_time_shift: float    # (s) any time-shift amount with respect to the end_event_type
+    """
+
+    contents = [('sample', 'sample', 0, 'delay', 0),
+                ('delay', 'delay', 0, 'go', 0),
+                ('response', 'go', 0, 'go', 1.2)]
+
+# ============================= PROJECTS ==================================================
+
+
+@schema
+class Project(dj.Lookup):
+    definition = """
+    project_name: varchar(128)
+    ---
+    project_desc='': varchar(1000) 
+    publication='': varchar(256)  # e.g. publication doi    
+    """
+
+    contents = [('MAP', 'The Mesoscale Activity Map project', '')]
