@@ -53,7 +53,7 @@ def fix_session(session_key):
     if len(filelist) != len(files):
         log.warning("behavior files missing in {} ({}/{}). skipping".format(
             session_key, len(filelist), len(files)))
-        return
+        return False
 
     log.info('filelist: {}'.format(filelist))
 
@@ -126,7 +126,7 @@ def fix_session(session_key):
     # all files were internally invalid or size < 100k
     if not trials:
         log.warning('skipping ., no valid files')
-        return
+        return False
 
     key = session_key
     skey = (experiment.Session & key).fetch1()
@@ -538,6 +538,8 @@ def fix_session(session_key):
         rows['corrected_trial_event'], ignore_extra_fields=True,
         allow_direct_insert=True)
 
+    return True
+
 
 def verify_session(s):
     log.info('verifying_session {}'.format(s))
@@ -559,23 +561,23 @@ def verify_session(s):
 
         if newstate == 'presample':
             if state and state not in {'presample', 'trialend'}:
-                note_prob(s, e)
+                note_prob(s, e, 'trialend !-> presample')
                 nerr += 1
         if newstate == 'sample':
             if state and state not in {'presample', 'sample'}:
-                note_prob(s, e)
+                note_prob(s, e, 'presaple !-> sample')
                 nerr += 1
         if newstate == 'delay':
             if state and state not in {'sample', 'delay'}:
-                note_prob(s, e)
+                note_prob(s, e, 'sample !-> delay')
                 nerr += 1
         if newstate == 'go':
             if state and state not in {'delay', 'go'}:
-                note_prob(s, e)
+                note_prob(s, e, 'delay !-> go')
                 nerr += 1
         if newstate == 'trialend':
             if state and state not in {'go', 'trialend'}:
-                note_prob(s, e)
+                note_prob(s, e, 'go !-> trialend')
                 nerr += 1
 
         eid, state = neweid, newstate
@@ -596,8 +598,10 @@ def fix_0002_delay_events():
         q = (experiment.Session & behavior_ingest.BehaviorIngest)
 
         for s in q.fetch('KEY'):
-            fix_session(s)
-            verify_session(s)
+            if fix_session(s):
+                verify_session(s)
+            else:
+                log.warning('session {} verify skipped - not fixed'.format(s))
 
 
 if __name__ == '__main__':
