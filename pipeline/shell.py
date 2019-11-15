@@ -162,6 +162,7 @@ def erd(*args):
 
 
 def automate_computation():
+    from pipeline import report
     populate_settings = {'reserve_jobs': True, 'suppress_errors': True, 'display_progress': True}
     while True:
         populate_psth(populate_settings)
