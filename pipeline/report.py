@@ -29,7 +29,14 @@ schema = dj.schema(get_schema_name('report'))
 os.environ['DJ_SUPPORT_FILEPATH_MANAGEMENT'] = "TRUE"
 dj.config['safemode'] = False
 
-store_directory = pathlib.Path(dj.config['stores']['report_store']['stage'])
+store_stage = pathlib.Path(dj.config['stores']['report_store']['stage'])
+
+if dj.config['stores']['report_store']['protocol'] == 's3':
+    store_location = (pathlib.Path(dj.config['stores']['report_store']['bucket'])
+                      / pathlib.Path(dj.config['stores']['report_store']['location']))
+    store_location = 'S3: ' + str(store_location)
+else:
+    store_location = pathlib.Path(dj.config['stores']['report_store']['location'])
 
 mpl.rcParams['font.size'] = 16
 
@@ -49,7 +56,7 @@ class SessionLevelReport(dj.Computed):
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_directory / water_res_num / sess_date
+        sess_dir = store_stage / water_res_num / sess_date
         sess_dir.mkdir(parents=True, exist_ok=True)
 
         # ---- behavior_performance ----
@@ -106,7 +113,7 @@ class SessionLevelCDReport(dj.Computed):
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_directory / water_res_num / sess_date
+        sess_dir = store_stage / water_res_num / sess_date
         sess_dir.mkdir(parents=True, exist_ok=True)
 
         # ---- Setup ----
@@ -233,7 +240,7 @@ class SessionLevelProbeTrack(dj.Computed):
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_directory / water_res_num / sess_date
+        sess_dir = store_stage / water_res_num / sess_date
         sess_dir.mkdir(parents=True, exist_ok=True)
 
         fig1 = plt.figure(figsize=(16, 12))
@@ -282,7 +289,7 @@ class ProbeLevelReport(dj.Computed):
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_directory / water_res_num / sess_date / str(key['insertion_number'])
+        sess_dir = store_stage / water_res_num / sess_date / str(key['insertion_number'])
         sess_dir.mkdir(parents=True, exist_ok=True)
 
         probe_insertion = ephys.ProbeInsertion & key
@@ -351,7 +358,7 @@ class ProbeLevelPhotostimEffectReport(dj.Computed):
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_directory / water_res_num / sess_date / str(key['insertion_number'])
+        sess_dir = store_stage / water_res_num / sess_date / str(key['insertion_number'])
         sess_dir.mkdir(parents=True, exist_ok=True)
 
         probe_insertion = ephys.ProbeInsertion & key
@@ -402,7 +409,7 @@ class UnitLevelReport(dj.Computed):
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_directory / water_res_num / sess_date / str(key['insertion_number']) / 'units'
+        sess_dir = store_stage / water_res_num / sess_date / str(key['insertion_number']) / 'units'
         sess_dir.mkdir(parents=True, exist_ok=True)
 
         fig1 = unit_psth.plot_unit_psth(key)
@@ -452,7 +459,7 @@ class ProjectLevelProbeTrack(dj.Computed):
     key_source = experiment.Project & 'project_name = "MAP"'
 
     def make(self, key):
-        proj_dir = store_directory
+        proj_dir = store_stage
 
         session_count = len(SessionLevelProbeTrack())
 
