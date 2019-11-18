@@ -95,52 +95,6 @@ def _plot_with_sem(data, t_vec, ax, c='k'):
     ax.spines['top'].set_visible(False)
 
 
-def _movmean(data, nsamp=5):
-    ret = np.cumsum(data, dtype=float)
-    ret[nsamp:] = ret[nsamp:] - ret[:-nsamp]
-    return ret[nsamp - 1:] / nsamp
-
-
-def _extract_one_stim_dur(stim_durs):
-    """
-    In case of multiple photostim durations - pick the shortest duration
-    In case of no photostim durations - return the default of 0.5s
-    """
-    default_stim_dur = 0.5
-    if len(stim_durs) == 0:
-        return default_stim_dur
-    elif len(stim_durs) > 1:
-        print(f'Found multiple stim durations: {stim_durs} - select {min(stim_durs)}')
-        return float(min(stim_durs))
-    else:
-        return float(stim_durs[0]) if len(stim_durs) == 1 and stim_durs[0] else default_stim_dur
-
-
-def _get_trial_event_times(events, units, trial_cond_name):
-    """
-    Get median event start times from all unit-trials from the specified "trial_cond_name" and "units" - aligned to GO CUE
-    :param events: list of events
-    """
-    events = list(events) + ['go']
-
-    event_types, event_times = (psth.TrialCondition().get_trials(trial_cond_name)
-                                * (experiment.TrialEvent & [{'trial_event_type': eve} for eve in events])
-                                & units).fetch('trial_event_type', 'trial_event_time')
-    period_starts = [(event_type, np.nanmedian((event_times[event_types == event_type]
-                                                - event_times[event_types == 'go']).astype(float)))
-                     for event_type in events[:-1] if len(event_times[event_types == event_type])]
-    present_events, event_starts = list(zip(*period_starts))
-    return present_events, event_starts
-
-
-def _get_units_hemisphere(units):
-    hemispheres = np.unique((ephys.ProbeInsertion.InsertionLocation
-                             * experiment.BrainLocation & units).fetch('hemisphere'))
-    if len(hemispheres) > 1:
-        raise Exception('Error! The specified units belongs to both hemispheres...')
-    return hemispheres[0]
-
-
 def jointplot_w_hue(data, x, y, hue=None, colormap=None,
                     figsize=None, fig=None, scatter_kws=None):
     """
@@ -236,3 +190,60 @@ def jointplot_w_hue(data, x, y, hue=None, colormap=None,
     ax_legend.legend(handles=legend_mapping)
     ax_legend.axis('off')
     return dict(fig=fig, gridspec=grid)
+
+
+# ---------- MISCELLANEOUS PROCESSING HELPER FUNCTIONS --------------
+
+
+def _movmean(data, nsamp=5):
+    ret = np.cumsum(data, dtype=float)
+    ret[nsamp:] = ret[nsamp:] - ret[:-nsamp]
+    return ret[nsamp - 1:] / nsamp
+
+
+def _extract_one_stim_dur(stim_durs):
+    """
+    In case of multiple photostim durations - pick the shortest duration
+    In case of no photostim durations - return the default of 0.5s
+    """
+    default_stim_dur = 0.5
+    if len(stim_durs) == 0:
+        return default_stim_dur
+    elif len(stim_durs) > 1:
+        print(f'Found multiple stim durations: {stim_durs} - select {min(stim_durs)}')
+        return float(min(stim_durs))
+    else:
+        return float(stim_durs[0]) if len(stim_durs) == 1 and stim_durs[0] else default_stim_dur
+
+
+def _get_trial_event_times(events, units, trial_cond_name):
+    """
+    Get median event start times from all unit-trials from the specified "trial_cond_name" and "units" - aligned to GO CUE
+    :param events: list of events
+    """
+    events = list(events) + ['go']
+
+    event_types, event_times = (psth.TrialCondition().get_trials(trial_cond_name)
+                                * (experiment.TrialEvent & [{'trial_event_type': eve} for eve in events])
+                                & units).fetch('trial_event_type', 'trial_event_time')
+    period_starts = [(event_type, np.nanmedian((event_times[event_types == event_type]
+                                                - event_times[event_types == 'go']).astype(float)))
+                     for event_type in events[:-1] if len(event_times[event_types == event_type])]
+    present_events, event_starts = list(zip(*period_starts))
+    return np.array(present_events), np.array(event_starts)
+
+
+def _get_units_hemisphere(units):
+    hemispheres = np.unique((ephys.ProbeInsertion.InsertionLocation
+                             * experiment.BrainLocation & units).fetch('hemisphere'))
+    if len(hemispheres) > 1:
+        raise Exception('Error! The specified units belongs to both hemispheres...')
+    return hemispheres[0]
+
+
+def _get_clustering_method(probe_insertion):
+    clustering_methods = (ephys.ClusteringMethod & (ephys.Unit & probe_insertion)).fetch('clustering_method')
+    if len(clustering_methods) == 1:
+        return clustering_methods[0]
+    else:
+        raise ValueError(f'Found multiple clustering methods: {clustering_methods}')
