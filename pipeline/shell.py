@@ -113,7 +113,7 @@ def generate_report(populate_settings={'reserve_jobs': True, 'display_progress':
 def sync_report():
     from pipeline import report
     for report_tbl in report.report_tables:
-        log.info(f'Sync: {report_tbl.full_table_name} - From {report.store_directory}')
+        log.info(f'Sync: {report_tbl.full_table_name} - From {report.store_location} - To {report.store_stage}')
         report_tbl.fetch()
 
 
