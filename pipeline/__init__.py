@@ -7,6 +7,11 @@ import hashlib
 log = logging.getLogger(__name__)
 
 
+# safe-guard in case `custom` is not provided
+if 'custom' not in dj.config:
+    dj.config['custom'] = {}
+
+
 def get_schema_name(name):
     try:
         return dj.config['custom']['{}.database'.format(name)]

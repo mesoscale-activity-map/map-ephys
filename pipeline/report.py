@@ -29,7 +29,14 @@ schema = dj.schema(get_schema_name('report'))
 os.environ['DJ_SUPPORT_FILEPATH_MANAGEMENT'] = "TRUE"
 dj.config['safemode'] = False
 
-store_directory = pathlib.Path(dj.config['stores']['report_store']['stage'])
+store_stage = pathlib.Path(dj.config['stores']['report_store']['stage'])
+
+if dj.config['stores']['report_store']['protocol'] == 's3':
+    store_location = (pathlib.Path(dj.config['stores']['report_store']['bucket'])
+                      / pathlib.Path(dj.config['stores']['report_store']['location']))
+    store_location = 'S3: ' + str(store_location)
+else:
+    store_location = pathlib.Path(dj.config['stores']['report_store']['location'])
 
 mpl.rcParams['font.size'] = 16
 
@@ -49,7 +56,7 @@ class SessionLevelReport(dj.Computed):
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_directory / water_res_num / sess_date
+        sess_dir = store_stage / water_res_num / sess_date
         sess_dir.mkdir(parents=True, exist_ok=True)
 
         # ---- behavior_performance ----
@@ -106,7 +113,7 @@ class SessionLevelCDReport(dj.Computed):
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_directory / water_res_num / sess_date
+        sess_dir = store_stage / water_res_num / sess_date
         sess_dir.mkdir(parents=True, exist_ok=True)
 
         # ---- Setup ----
@@ -233,7 +240,7 @@ class SessionLevelProbeTrack(dj.Computed):
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_directory / water_res_num / sess_date
+        sess_dir = store_stage / water_res_num / sess_date
         sess_dir.mkdir(parents=True, exist_ok=True)
 
         fig1 = plt.figure(figsize=(16, 12))
@@ -265,6 +272,7 @@ class SessionLevelProbeTrack(dj.Computed):
 class ProbeLevelReport(dj.Computed):
     definition = """
     -> ephys.ProbeInsertion
+    -> ephys.ClusteringMethod
     ---
     clustering_quality: filepath@report_store
     unit_characteristic: filepath@report_store
@@ -274,14 +282,14 @@ class ProbeLevelReport(dj.Computed):
     @property
     def key_source(self):
         # Only process ProbeInsertion with UnitSelectivity computation fully completed
-        ks = (ephys.ProbeInsertion & ephys.UnitStat).proj()
+        ks = (ephys.ProbeInsertion * ephys.ClusteringMethod & ephys.UnitStat).proj()
         unit = ks.aggr(ephys.Unit & 'unit_quality != "all"', unit_count='count(*)')
         sel_unit = ks.aggr(psth.UnitSelectivity, sel_unit_count='count(*)')
         return unit * sel_unit & 'unit_count = sel_unit_count'
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_directory / water_res_num / sess_date / str(key['insertion_number'])
+        sess_dir = store_stage / water_res_num / sess_date / str(key['insertion_number'])
         sess_dir.mkdir(parents=True, exist_ok=True)
 
         probe_insertion = ephys.ProbeInsertion & key
@@ -295,22 +303,26 @@ class ProbeLevelReport(dj.Computed):
         gs = axs[0, 0].get_gridspec()
         [a.remove() for a in axs[2:, :].flatten()]
 
-        unit_characteristic_plot.plot_clustering_quality(probe_insertion, axs=axs[:2, :])
-        unit_characteristic_plot.plot_unit_characteristic(probe_insertion, axs=np.array([fig1.add_subplot(gs[2:, col])
-                                                                                         for col in range(3)]))
+        unit_characteristic_plot.plot_clustering_quality(
+            probe_insertion, clustering_method=key['clustering_method'], axs=axs[:2, :])
+        unit_characteristic_plot.plot_unit_characteristic(
+            probe_insertion, clustering_method=key['clustering_method'], axs=np.array([fig1.add_subplot(gs[2:, col])
+                                                                                       for col in range(3)]))
 
         # ---- unit_characteristic ----
         fig2, axs = plt.subplots(1, 4, figsize=(16, 16))
         fig2.subplots_adjust(wspace=0.8)
 
-        unit_characteristic_plot.plot_unit_selectivity(probe_insertion, axs=axs[:3])
-        unit_characteristic_plot.plot_unit_bilateral_photostim_effect(probe_insertion, axs=axs[-1])
+        unit_characteristic_plot.plot_unit_selectivity(
+            probe_insertion, clustering_method=key['clustering_method'], axs=axs[:3])
+        unit_characteristic_plot.plot_unit_bilateral_photostim_effect(
+            probe_insertion, clustering_method=key['clustering_method'], axs=axs[-1])
 
         # ---- group_psth ----
         fig3 = unit_characteristic_plot.plot_stacked_contra_ipsi_psth(units)
 
         # ---- Save fig and insert ----
-        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_'
+        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_'
 
         fig_dict = {}
         for fig, figname in zip((fig1, fig2, fig3),
@@ -329,6 +341,7 @@ class ProbeLevelReport(dj.Computed):
 class ProbeLevelPhotostimEffectReport(dj.Computed):
     definition = """
     -> ephys.ProbeInsertion
+    -> ephys.ClusteringMethod
     ---
     group_photostim: filepath@report_store
     """
@@ -336,15 +349,16 @@ class ProbeLevelPhotostimEffectReport(dj.Computed):
     @property
     def key_source(self):
         # Only process ProbeInsertion with UnitPSTH computation (for all TrialCondition) fully completed
-        probe_current_psth = ephys.ProbeInsertion.aggr(psth.UnitPsth, present_u_psth_count='count(*)')
-        probe_full_psth = (ephys.ProbeInsertion.aggr(
+        ks = ephys.ProbeInsertion * ephys.ClusteringMethod
+        probe_current_psth = ks.aggr(psth.UnitPsth, present_u_psth_count='count(*)')
+        probe_full_psth = (ks.aggr(
             ephys.Unit.proj(), unit_count=f'count(*)') * dj.U().aggr(psth.TrialCondition, trial_cond_count='count(*)')).proj(
             full_u_psth_count = 'unit_count * trial_cond_count')
         return probe_current_psth * probe_full_psth & 'present_u_psth_count = full_u_psth_count'
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_directory / water_res_num / sess_date / str(key['insertion_number'])
+        sess_dir = store_stage / water_res_num / sess_date / str(key['insertion_number'])
         sess_dir.mkdir(parents=True, exist_ok=True)
 
         probe_insertion = ephys.ProbeInsertion & key
@@ -363,7 +377,7 @@ class ProbeLevelPhotostimEffectReport(dj.Computed):
         [a.set_title(title.replace('_', ' ').upper()) for a, title in zip(axs, ['control'] + list(stim_locs))]
 
         # ---- Save fig and insert ----
-        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_'
+        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_'
 
         fig_dict = {}
         for fig, figname in zip((fig1,),
@@ -395,7 +409,7 @@ class UnitLevelReport(dj.Computed):
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_directory / water_res_num / sess_date / str(key['insertion_number']) / 'units'
+        sess_dir = store_stage / water_res_num / sess_date / str(key['insertion_number']) / 'units'
         sess_dir.mkdir(parents=True, exist_ok=True)
 
         fig1 = unit_psth.plot_unit_psth(key)
@@ -417,7 +431,7 @@ class UnitLevelReport(dj.Computed):
         fig2.subplots_adjust(hspace=0.6)
 
         # ---- Save fig and insert ----
-        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_u{key["unit"]:03}_'
+        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_u{key["unit"]:03}_'
 
         fig_dict = {}
         for fig, figname in zip((fig1, fig2), ('unit_psth', 'unit_behavior')):
@@ -445,7 +459,7 @@ class ProjectLevelProbeTrack(dj.Computed):
     key_source = experiment.Project & 'project_name = "MAP"'
 
     def make(self, key):
-        proj_dir = store_directory
+        proj_dir = store_stage
 
         session_count = len(SessionLevelProbeTrack())
 

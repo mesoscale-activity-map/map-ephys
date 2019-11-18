@@ -43,7 +43,7 @@ def logsetup(*args):
     }
     level = level_map[args[0]] if args else logging.INFO
 
-    logfile = dj.config.get('custom', {'logfile': None})['logfile']
+    logfile = dj.config.get('custom', {'logfile': None}).get('logfile', None)
 
     if logfile:
         handlers = [logging.StreamHandler(), logging.FileHandler(logfile)]
@@ -113,7 +113,7 @@ def generate_report(populate_settings={'reserve_jobs': True, 'display_progress':
 def sync_report():
     from pipeline import report
     for report_tbl in report.report_tables:
-        log.info(f'Sync: {report_tbl.full_table_name} - From {report.store_directory}')
+        log.info(f'Sync: {report_tbl.full_table_name} - From {report.store_location} - To {report.store_stage}')
         report_tbl.fetch()
 
 
@@ -175,6 +175,7 @@ def erd(*args):
 
 
 def automate_computation():
+    from pipeline import report
     populate_settings = {'reserve_jobs': True, 'suppress_errors': True, 'display_progress': True}
     while True:
         populate_psth(populate_settings)

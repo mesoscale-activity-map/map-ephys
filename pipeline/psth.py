@@ -464,7 +464,7 @@ class UnitSelectivity(dj.Computed):
 def compute_unit_psth(unit_key, trial_keys, per_trial=False):
     """
     Compute unit-level psth for the specified unit and trial-set - return (time,)
-    If per_trial == True, compute trial-level psth - return (trial#, time)
+    If per_trial == True, compute trial-level psth - return ((trial x time), time_vec)
     """
     q = (ephys.Unit.TrialSpikes & unit_key & trial_keys)
     if not q:
