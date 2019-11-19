@@ -168,10 +168,13 @@ def automate_computation():
         populate_psth(populate_settings)
         generate_report(populate_settings)
 
+        log.info('report.delete_outdated_probe_tracks()')
         report.delete_outdated_probe_tracks()
 
         # random sleep time between 5 to 10 minutes
-        time.sleep(np.random.randint(300, 600))
+        sleep_time = np.random.randint(300, 600)
+        log.info('Sleep: {} minutes'.format(sleep_time))
+        time.sleep(sleep_time)
 
 
 actions = {
