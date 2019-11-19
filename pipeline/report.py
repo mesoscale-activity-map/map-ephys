@@ -18,7 +18,7 @@ import itertools
 from pipeline import experiment, ephys, psth, tracking, lab, histology, ccf
 from pipeline.plot import behavior_plot, unit_characteristic_plot, unit_psth, histology_plot
 from pipeline import get_schema_name
-from pipeline.plot.util import _plot_with_sem, jointplot_w_hue
+from pipeline.plot.util import _plot_with_sem, jointplot_w_hue, _get_trial_event_times
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -119,7 +119,6 @@ class SessionLevelCDReport(dj.Computed):
         # ---- Setup ----
         time_period = (-0.4, 0)
         probe_keys = (ephys.ProbeInsertion & key).fetch('KEY', order_by='insertion_number')
-        period_starts = (experiment.Period & 'period in ("sample", "delay", "response")').fetch('period_start')
 
         fig1, axs = plt.subplots(len(probe_keys), len(probe_keys), figsize=(16, 16))
         [a.axis('off') for a in axs.flatten()]
@@ -130,6 +129,8 @@ class SessionLevelCDReport(dj.Computed):
             units = ephys.Unit & probe
             label = (ephys.ProbeInsertion.InsertionLocation & probe).fetch1(
                 'brain_location_name').replace('_', ' ').upper()
+
+            _, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], units, 'good_noearlylick')
 
             # ---- compute CD projected PSTH ----
             _, proj_contra_trial, proj_ipsi_trial, time_stamps, hemi = psth.compute_CD_projected_psth(
