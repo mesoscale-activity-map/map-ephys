@@ -130,7 +130,7 @@ class SessionLevelCDReport(dj.Computed):
             label = (ephys.ProbeInsertion.InsertionLocation & probe).fetch1(
                 'brain_location_name').replace('_', ' ').upper()
 
-            _, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], units, 'good_noearlylick')
+            _, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], units, 'good_noearlylick_hit')
 
             # ---- compute CD projected PSTH ----
             _, proj_contra_trial, proj_ipsi_trial, time_stamps, hemi = psth.compute_CD_projected_psth(
