@@ -82,14 +82,7 @@ class SessionLevelReport(dj.Computed):
 
         # ---- Save fig and insert ----
         fn_prefix = f'{water_res_num}_{sess_date}_'
-
-        fig_dict = {}
-        for fig, figname in zip((fig1,), ('behavior_performance',)):
-            fig_fp = sess_dir / (fn_prefix + figname + '.png')
-            fig.tight_layout()
-            fig.savefig(fig_fp)
-            print(f'Generated {fig_fp}')
-            fig_dict[figname] = fig_fp.as_posix()
+        fig_dict = save_figs((fig1,), ('behavior_performance',), sess_dir, fn_prefix)
 
         plt.close('all')
         self.insert1({**key, **fig_dict})
@@ -210,14 +203,7 @@ class SessionLevelCDReport(dj.Computed):
 
         # ---- Save fig and insert ----
         fn_prefix = f'{water_res_num}_{sess_date}_'
-
-        fig_dict = {}
-        for fig, figname in zip((fig1,), ('coding_direction',)):
-            fig_fp = sess_dir / (fn_prefix + figname + '.png')
-            fig.tight_layout()
-            fig.savefig(fig_fp)
-            print(f'Generated {fig_fp}')
-            fig_dict[figname] = fig_fp.as_posix()
+        fig_dict = save_figs((fig1,), ('coding_direction',), sess_dir, fn_prefix)
 
         plt.close('all')
         self.insert1({**key, **fig_dict})
@@ -253,14 +239,7 @@ class SessionLevelProbeTrack(dj.Computed):
 
         # ---- Save fig and insert ----
         fn_prefix = f'{water_res_num}_{sess_date}_'
-
-        fig_dict = {}
-        for fig, figname in zip((fig1,), ('session_tracks_plot',)):
-            fig_fp = sess_dir / (fn_prefix + figname + '.png')
-            fig.tight_layout()
-            fig.savefig(fig_fp)
-            print(f'Generated {fig_fp}')
-            fig_dict[figname] = fig_fp.as_posix()
+        fig_dict = save_figs((fig1,), ('session_tracks_plot',), sess_dir, fn_prefix)
 
         plt.close('all')
         self.insert1({**key, **fig_dict, 'probe_tracks': probe_tracks})
@@ -290,8 +269,8 @@ class ProbeLevelReport(dj.Computed):
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_stage / water_res_num / sess_date / str(key['insertion_number'])
-        sess_dir.mkdir(parents=True, exist_ok=True)
+        probe_dir = store_stage / water_res_num / sess_date / str(key['insertion_number'])
+        probe_dir.mkdir(parents=True, exist_ok=True)
 
         probe_insertion = ephys.ProbeInsertion & key
         units = ephys.Unit & key
@@ -324,15 +303,8 @@ class ProbeLevelReport(dj.Computed):
 
         # ---- Save fig and insert ----
         fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_'
-
-        fig_dict = {}
-        for fig, figname in zip((fig1, fig2, fig3),
-                                ('clustering_quality', 'unit_characteristic', 'group_psth')):
-            fig_fp = sess_dir / (fn_prefix + figname + '.png')
-            fig.tight_layout()
-            fig.savefig(fig_fp)
-            print(f'Generated {fig_fp}')
-            fig_dict[figname] = fig_fp.as_posix()
+        fig_dict = save_figs((fig1, fig2, fig3), ('clustering_quality', 'unit_characteristic', 'group_psth'),
+                             probe_dir, fn_prefix)
 
         plt.close('all')
         self.insert1({**key, **fig_dict})
@@ -359,8 +331,8 @@ class ProbeLevelPhotostimEffectReport(dj.Computed):
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_stage / water_res_num / sess_date / str(key['insertion_number'])
-        sess_dir.mkdir(parents=True, exist_ok=True)
+        probe_dir = store_stage / water_res_num / sess_date / str(key['insertion_number'])
+        probe_dir.mkdir(parents=True, exist_ok=True)
 
         probe_insertion = ephys.ProbeInsertion & key
         units = ephys.Unit & key
@@ -379,72 +351,78 @@ class ProbeLevelPhotostimEffectReport(dj.Computed):
 
         # ---- Save fig and insert ----
         fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_'
-
-        fig_dict = {}
-        for fig, figname in zip((fig1,),
-                                ('group_photostim',)):
-            fig_fp = sess_dir / (fn_prefix + figname + '.png')
-            fig.tight_layout()
-            fig.savefig(fig_fp)
-            print(f'Generated {fig_fp}')
-            fig_dict[figname] = fig_fp.as_posix()
+        fig_dict = save_figs((fig1,), ('group_photostim',), probe_dir, fn_prefix)
 
         plt.close('all')
         self.insert1({**key, **fig_dict})
-
 
 # ============================= UNIT LEVEL ====================================
 
 
 @schema
-class UnitLevelReport(dj.Computed):
+class UnitLevelEphysReport(dj.Computed):
     definition = """
     -> ephys.Unit
     ---
     unit_psth: filepath@report_store
-    unit_behavior: filepath@report_store
     """
 
-    # only units with ingested tracking and selectivity computed
-    key_source = ephys.Unit & psth.UnitSelectivity & tracking.Tracking
+    # only units with selectivity computed (in fact only need all the UnitPSTH computed, but keeping this to be safe)
+    key_source = ephys.Unit & psth.UnitPsth
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
-        sess_dir = store_stage / water_res_num / sess_date / str(key['insertion_number']) / 'units'
-        sess_dir.mkdir(parents=True, exist_ok=True)
+        units_dir = store_stage / water_res_num / sess_date / str(key['insertion_number']) / 'units'
+        units_dir.mkdir(parents=True, exist_ok=True)
 
         fig1 = unit_psth.plot_unit_psth(key)
 
-        fig2 = plt.figure(figsize = (16, 16))
+        # ---- Save fig and insert ----
+        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_u{key["unit"]:03}_'
+        fig_dict = save_figs((fig1,), ('unit_psth',), units_dir, fn_prefix)
+
+        plt.close('all')
+        self.insert1({**key, **fig_dict})
+
+
+@schema
+class UnitLevelTrackingReport(dj.Computed):
+    definition = """
+    -> ephys.Unit
+    ---
+    unit_behavior: filepath@report_store
+    """
+
+    # only units with ingested tracking
+    key_source = ephys.Unit & tracking.Tracking
+
+    def make(self, key):
+        water_res_num, sess_date = get_wr_sessdate(key)
+        units_dir = store_stage / water_res_num / sess_date / str(key['insertion_number']) / 'units'
+        units_dir.mkdir(parents=True, exist_ok=True)
+
+        fig1 = plt.figure(figsize = (16, 16))
         gs = GridSpec(4, 2)
 
         # 15 trials roughly in the middle of the session
         session = experiment.Session & key
         behavior_plot.plot_tracking(session, key, tracking_feature='jaw_y', xlim=(-0.5, 1),
-                                    trial_offset=0.5, trial_limit=15, axs=np.array([fig2.add_subplot(gs[:3, col])
+                                    trial_offset=0.5, trial_limit=15, axs=np.array([fig1.add_subplot(gs[:3, col])
                                                                                     for col in range(2)]))
 
-        axs = np.array([fig2.add_subplot(gs[-1, col], polar=True) for col in range(2)])
+        axs = np.array([fig1.add_subplot(gs[-1, col], polar=True) for col in range(2)])
         behavior_plot.plot_unit_jaw_phase_dist(experiment.Session & key, key, axs=axs)
         [a.set_title('') for a in axs]
 
-        fig2.subplots_adjust(wspace=0.4)
-        fig2.subplots_adjust(hspace=0.6)
+        fig1.subplots_adjust(wspace=0.4)
+        fig1.subplots_adjust(hspace=0.6)
 
         # ---- Save fig and insert ----
         fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_u{key["unit"]:03}_'
-
-        fig_dict = {}
-        for fig, figname in zip((fig1, fig2), ('unit_psth', 'unit_behavior')):
-            fig_fp = sess_dir / (fn_prefix + figname + '.png')
-            fig.tight_layout()
-            fig.savefig(fig_fp)
-            print(f'Generated {fig_fp}')
-            fig_dict[figname] = fig_fp.as_posix()
+        fig_dict = save_figs((fig1,), ('unit_behavior',), units_dir, fn_prefix)
 
         plt.close('all')
         self.insert1({**key, **fig_dict})
-
 
 # ============================= PROJECT LEVEL ====================================
 
@@ -496,14 +474,7 @@ class ProjectLevelProbeTrack(dj.Computed):
 
         # ---- Save fig and insert ----
         fn_prefix = (experiment.Project & key).fetch1('project_name') + '_'
-
-        fig_dict = {}
-        for fig, figname in zip((fig1,), ('tracks_plot',)):
-            fig_fp = proj_dir / (fn_prefix + figname + '.png')
-            fig.tight_layout()
-            fig.savefig(fig_fp)
-            print(f'Generated {fig_fp}')
-            fig_dict[figname] = fig_fp.as_posix()
+        fig_dict = save_figs((fig1,), ('tracks_plot',), proj_dir, fn_prefix)
 
         plt.close('all')
         self.insert1({**key, **fig_dict, 'session_count': session_count})
@@ -514,7 +485,8 @@ class ProjectLevelProbeTrack(dj.Computed):
 report_tables = [SessionLevelReport,
                  ProbeLevelReport,
                  ProbeLevelPhotostimEffectReport,
-                 UnitLevelReport,
+                 UnitLevelEphysReport,
+                 UnitLevelTrackingReport,
                  SessionLevelCDReport,
                  SessionLevelProbeTrack,
                  ProjectLevelProbeTrack]
@@ -524,6 +496,18 @@ def get_wr_sessdate(key):
     water_res_num, sess_date = (lab.WaterRestriction * experiment.Session & key).fetch1(
         'water_restriction_number', 'session_date')
     return water_res_num, datetime.strftime(sess_date, '%Y%m%d')
+
+
+def save_figs(figs, fig_names, dir2save, prefix):
+    fig_dict = {}
+    for fig, figname in zip(figs, fig_names):
+        fig_fp = dir2save / (prefix + figname + '.png')
+        fig.tight_layout()
+        fig.savefig(fig_fp)
+        print(f'Generated {fig_fp}')
+        fig_dict[figname] = fig_fp.as_posix()
+
+    return fig_dict
 
 
 def delete_outdated_probe_tracks(project_name='MAP'):
