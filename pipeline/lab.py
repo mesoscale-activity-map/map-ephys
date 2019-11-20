@@ -62,6 +62,13 @@ class Subject(dj.Manual):
         type = 'Unknown'     : enum('Knock-in', 'Transgene', 'Unknown')
         """
 
+@schema
+class AnimalStrain(dj.Manual):
+    definition = """
+    -> Subject
+    ---
+    animal_strain       : varchar(60)
+    """
 
 @schema
 class CompleteGenotype(dj.Computed):
