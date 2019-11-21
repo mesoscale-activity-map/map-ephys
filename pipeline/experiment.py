@@ -7,16 +7,6 @@ from . import get_schema_name
 
 schema = dj.schema(get_schema_name('experiment'))
 
-@schema
-class BrainLocation(dj.Manual):
-    definition = """
-    brain_location_name: varchar(32)  # unique name of this brain location (could be hash of the non-primary attr)
-    ---
-    -> lab.BrainArea
-    -> lab.Hemisphere
-    -> lab.SkullReference
-    """
-
 
 @schema
 class Session(dj.Manual):
@@ -24,7 +14,7 @@ class Session(dj.Manual):
     -> lab.Subject
     session : smallint 		# session number
     ---
-    session_date  : date
+    session_time  : datetime
     -> lab.Person
     -> lab.Rig
     """
@@ -69,20 +59,28 @@ class TaskProtocol(dj.Lookup):
 
 @schema
 class Photostim(dj.Manual):
-    definition = """
+    definition = """  # Photostim protocol
     -> Session
     photo_stim :  smallint 
     ---
     -> lab.PhotostimDevice
-    -> BrainLocation
-    ml_location=null: float # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
-    ap_location=null: float # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
-    dv_location=null: float # um from dura; ventral is positive; based on manipulator coordinates/reconstructed track
-    ml_angle=null: float # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
-    ap_angle=null: float # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive.
+    -> lab.BrainArea
+    -> lab.Hemisphere
     duration=null:  decimal(8,4)   # (s)
     waveform=null:  longblob       # normalized to maximal power. The value of the maximal power is specified for each PhotostimTrialEvent individually
     """
+
+    class PhotostimLocation(dj.Part):
+        definition = """
+        -> master
+        -> lab.SkullReference
+        ap_location: decimal(6, 2) # (um) from ref; anterior is positive; based on manipulator coordinates/reconstructed track
+        ml_location: decimal(6, 2) # (um) from ref ; right is positive; based on manipulator coordinates/reconstructed track
+        dv_location: decimal(6, 2) # (um) from dura to first site of the probe; ventral is negative; based on manipulator coordinates/reconstructed track
+        theta:       decimal(5, 2) # (degree)  rotation about the ml-axis 
+        phi:         decimal(5, 2) # (degree)  rotation about the dv-axis
+        beta:        decimal(5, 2) # (degree)  rotation about the shank of the probe
+        """
 
     class Profile(dj.Part):
         # NOT USED CURRENT

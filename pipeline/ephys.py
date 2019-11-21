@@ -24,12 +24,20 @@ class ProbeInsertion(dj.Manual):
         definition = """
         -> master
         ---
-        -> experiment.BrainLocation
-        ml_location=null: float # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
-        ap_location=null: float # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
-        dv_location=null: float # um from dura to first site of the probe; ventral is positive; based on manipulator coordinates/reconstructed track
-        ml_angle=null: float # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
-        ap_angle=null: float # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive. 
+        -> lab.SkullReference
+        ap_location: decimal(6, 2) # (um) from ref; anterior is positive; based on manipulator coordinates/reconstructed track
+        ml_location: decimal(6, 2) # (um) from ref ; right is positive; based on manipulator coordinates/reconstructed track
+        dv_location: decimal(6, 2) # (um) from dura to first site of the probe; ventral is negative; based on manipulator coordinates/reconstructed track
+        theta:       decimal(5, 2) # (degree)  rotation about the ml-axis 
+        phi:         decimal(5, 2) # (degree)  rotation about the dv-axis
+        beta:        decimal(5, 2) # (degree)  rotation about the shank of the probe
+        """
+
+    class NotedBrainLocation(dj.Part):
+        definition = """
+        -> master
+        -> lab.BrainArea
+        -> lab.Hemisphere
         """
 
     class RecordingSystemSetup(dj.Part):
@@ -96,10 +104,10 @@ class ClusteringMethod(dj.Lookup):
     definition = """
     clustering_method: varchar(16)
     """
-    # jrclust is the version Dave uses (it's actually jrclust_v3)
+    # jrclust_v3 is the version Dave uses 
     # jrclust_v4 is the version Susu uses
 
-    contents = zip(['jrclust', 'kilosort', 'jrclust_v4'])
+    contents = zip(['jrclust_v3', 'kilosort', 'jrclust_v4'])
 
 
 @schema

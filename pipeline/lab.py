@@ -24,6 +24,14 @@ class Rig(dj.Manual):
 
 
 @schema
+class AnimalStrain(dj.Lookup):
+    definition = """
+    animal_strain       : varchar(30)
+    """
+    contents = zip(['pl56', 'kj18'])
+
+
+@schema
 class AnimalSource(dj.Lookup):
     definition = """
     animal_source       : varchar(30)
@@ -51,6 +59,13 @@ class Subject(dj.Manual):
     sex                 : enum('M','F','Unknown')
     -> [nullable] AnimalSource  # where was the animal ordered from
     """
+
+    class Strain(dj.Part):
+        definition = """
+        # Subject strains
+        -> master
+        -> AnimalStrain
+        """
 
     class GeneModification(dj.Part):
         definition = """
@@ -140,7 +155,7 @@ class BrainArea(dj.Lookup):
     definition = """
     brain_area: varchar(32)
     ---
-    description = null : varchar (4000) # name of the brain area
+    description = null : varchar (4000) # name of the brain area (lab terms, not necessarily in AIBS)
     """
     contents = [('ALM', 'anterior lateral motor cortex'), ('vS1', 'vibrissal primary somatosensory cortex ("barrel cortex")'), ('Thalamus', 'Thalamus'), ('Medulla', 'Medulla'), ('Striatum', 'Striatum')]
     
