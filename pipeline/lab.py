@@ -179,7 +179,7 @@ class Surgery(dj.Manual):
     end_time            : datetime # end time
     surgery_description : varchar(256)
     """
-    # TODO: confirm location pos/neg convention (contradict with 'BrainLocation' used photostim and ephys)
+
     class VirusInjection(dj.Part):
         definition = """
         # Virus injections
@@ -188,8 +188,8 @@ class Surgery(dj.Manual):
         ---
         -> Virus
         -> SkullReference
-        ml_location     : Decimal(8,3) # um from ref left is positive 
         ap_location     : Decimal(8,3) # um from ref anterior is positive
+        ml_location     : Decimal(8,3) # um from ref right is positive 
         dv_location     : Decimal(8,3) # um from dura dorsal is positive 
         volume          : Decimal(10,3) # in nl
         dilution        : Decimal (10, 2) # 1 to how much
@@ -203,8 +203,8 @@ class Surgery(dj.Manual):
         procedure_id : int
         ---
         -> SkullReference
-        ml_location=null     : Decimal(8,3) # um from ref left is positive
         ap_location=null     : Decimal(8,3) # um from ref anterior is positive
+        ml_location=null     : Decimal(8,3) # um from ref right is positive
         dv_location=null     : Decimal(8,3) # um from dura dorsal is positive 
         surgery_procedure_description     : varchar(1000)
         """
