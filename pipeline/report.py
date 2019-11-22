@@ -98,7 +98,7 @@ class SessionLevelCDReport(dj.Computed):
 
     @property
     def key_source(self):
-        # Only process Session with UnitSelectivity computation fully completed
+        # Only process Session with UnitSelectivity computation fully completed - only for session with multiple probes
         ks = experiment.Session.aggr(ephys.ProbeInsertion, probe_count='count(*)') & 'probe_count > 1'
         unit = ks.aggr(ephys.Unit & 'unit_quality != "all"', unit_count='count(*)')
         sel_unit = ks.aggr(psth.UnitSelectivity, sel_unit_count='count(*)')

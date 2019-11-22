@@ -77,9 +77,9 @@ class Photostim(dj.Manual):
         ap_location: decimal(6, 2) # (um) from ref; anterior is positive; based on manipulator coordinates/reconstructed track
         ml_location: decimal(6, 2) # (um) from ref ; right is positive; based on manipulator coordinates/reconstructed track
         dv_location: decimal(6, 2) # (um) from dura to first site of the probe; ventral is negative; based on manipulator coordinates/reconstructed track
-        theta:       decimal(5, 2) # (degree)  rotation about the ml-axis 
-        phi:         decimal(5, 2) # (degree)  rotation about the dv-axis
-        beta:        decimal(5, 2) # (degree)  rotation about the shank of the probe
+        theta:       decimal(5, 2) # (deg) - elevation - rotation about the ml-axis [0, 180] - w.r.t the z+ axis
+        phi:         decimal(5, 2) # (deg) - azimuth - rotation about the dv-axis [0, 360] - w.r.t the x+ axis
+        beta:        decimal(5, 2) # (deg) rotation about the shank of the probe
         """
 
     class Profile(dj.Part):
