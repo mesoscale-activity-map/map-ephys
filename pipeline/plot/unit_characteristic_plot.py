@@ -197,15 +197,15 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
 
     no_stim_cond = (psth.TrialCondition
                     & {'trial_condition_name':
-                       'all_noearlylick_both_alm_nostim'}).fetch1('KEY')
+                       'all_noearlylick_bilateral_alm_nostim'}).fetch1('KEY')
 
     bi_stim_cond = (psth.TrialCondition
                     & {'trial_condition_name':
-                       'all_noearlylick_both_alm_stim'}).fetch1('KEY')
+                       'all_noearlylick_bilateral_alm_stim'}).fetch1('KEY')
 
     # get photostim duration
     stim_durs = np.unique((experiment.Photostim & experiment.PhotostimEvent
-                           * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')
+                           * psth.TrialCondition().get_trials('all_noearlylick_bilateral_alm_stim')
                            & probe_insertion).fetch('duration'))
     stim_dur = _extract_one_stim_dur(stim_durs)
 
@@ -213,7 +213,7 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
 
     metrics = pd.DataFrame(columns=['unit', 'x', 'y', 'frate_change'])
 
-    _, cue_onset = _get_trial_event_times(['delay'], units, 'all_noearlylick_both_alm_nostim')
+    _, cue_onset = _get_trial_event_times(['delay'], units, 'all_noearlylick_bilateral_alm_nostim')
     cue_onset = cue_onset[0]
 
     # XXX: could be done with 1x fetch+join
@@ -385,26 +385,26 @@ def plot_psth_bilateral_photostim_effect(units, axs=None):
 
     psth_s_l = (psth.UnitPsth * psth.TrialCondition & units
                 & {'trial_condition_name':
-                   'all_noearlylick_both_alm_stim_left'}).fetch('unit_psth')
+                   'all_noearlylick_bilateral_alm_stim_left'}).fetch('unit_psth')
 
     psth_n_l = (psth.UnitPsth * psth.TrialCondition & units
                 & {'trial_condition_name':
-                   'all_noearlylick_both_alm_nostim_left'}).fetch('unit_psth')
+                   'all_noearlylick_bilateral_alm_nostim_left'}).fetch('unit_psth')
 
     psth_s_r = (psth.UnitPsth * psth.TrialCondition & units
                 & {'trial_condition_name':
-                   'all_noearlylick_both_alm_stim_right'}).fetch('unit_psth')
+                   'all_noearlylick_bilateral_alm_stim_right'}).fetch('unit_psth')
 
     psth_n_r = (psth.UnitPsth * psth.TrialCondition & units
                 & {'trial_condition_name':
-                   'all_noearlylick_both_alm_nostim_right'}).fetch('unit_psth')
+                   'all_noearlylick_bilateral_alm_nostim_right'}).fetch('unit_psth')
 
     # get event start times: sample, delay, response
     period_names, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], units, 'good_noearlylick_hit')
 
     # get photostim duration
     stim_durs = np.unique((experiment.Photostim & experiment.PhotostimEvent
-                           * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')
+                           * psth.TrialCondition().get_trials('all_noearlylick_bilateral_alm_stim')
                            & units).fetch('duration'))
     stim_dur = _extract_one_stim_dur(stim_durs)
 
@@ -441,7 +441,7 @@ def plot_psth_bilateral_photostim_effect(units, axs=None):
     return fig
 
 
-def plot_psth_photostim_effect(units, condition_name_kw=['both_alm'], axs=None):
+def plot_psth_photostim_effect(units, condition_name_kw=['bilateral_alm'], axs=None):
     """
     For the specified `units`, plot PSTH comparison between stim vs. no-stim with left/right trial instruction
     The stim location (or other appropriate search keywords) can be specified in `condition_name_kw` (default: bilateral ALM)

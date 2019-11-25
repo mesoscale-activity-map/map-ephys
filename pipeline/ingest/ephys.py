@@ -216,11 +216,7 @@ class EphysIngest(dj.Imported):
               for t in range(len(trials))] for u in set(units)])
 
         # create probe insertion records
-        self._gen_probe_insert(sinfo, probe, npx_meta)
-
-        insertion_key = {'subject_id': sinfo['subject_id'],
-                         'session': sinfo['session'],
-                         'insertion_number': probe}
+        insertion_key = self._gen_probe_insert(sinfo, probe, npx_meta)
 
         electrode_keys = {c['electrode']: c for c in (lab.ElectrodeConfig.Electrode & insertion_key).fetch('KEY')}
 
@@ -302,8 +298,31 @@ class EphysIngest(dj.Imported):
 
         '''
 
-        # ------ npx probe process ------
         part_no = npx_meta.meta['imProbeSN']
+
+        e_config = self._gen_electrode_config(npx_meta)
+
+        # ------ ProbeInsertion ------
+        insertion_key = {'subject_id': sinfo['subject_id'],
+                         'session': sinfo['session'],
+                         'insertion_number': probe}
+
+        # add probe insertion
+        log.info('.. creating probe insertion')
+
+        ephys.ProbeInsertion.insert1(
+            {**insertion_key,  **e_config, 'probe': part_no})
+
+        ephys.ProbeInsertion.RecordingSystemSetup.insert1(
+            {**insertion_key, 'sampling_rate': npx_meta['imSampRate']})
+
+        return insertion_key
+
+    def _gen_electrode_config(self, npx_meta):
+        """
+        Generate and insert (if needed) an ElectrodeConfiguration based on the specified neuropixels meta information
+        """
+
         probe_type = npx_meta.meta.get('imDatPrb_type', 1)
 
         if probe_type == 1:
@@ -324,9 +343,10 @@ class EphysIngest(dj.Imported):
         el_jumps = [0] + np.where(np.diff(el_list) > 1)[0].tolist() + [len(el_list) - 1]
         ec_name = '; '.join([f'{el_list[s]}-{el_list[e]}' for s, e in zip(el_jumps[:-1], el_jumps[1:])])
 
+        e_config = {**probe_type, 'electrode_config_name': ec_name}
+
         # ---- make new ElectrodeConfig if needed ----
         if not (lab.ElectrodeConfig & {'electrode_config_hash': ec_hash}):
-            e_config = {**probe_type, 'electrode_config_name': ec_name}
 
             log.info('.. creating lab.ElectrodeConfig: {}'.format(ec_name))
 
@@ -336,20 +356,7 @@ class EphysIngest(dj.Imported):
 
             lab.ElectrodeConfig.Electrode.insert({**e_config, **m} for m in eg_members)
 
-        # ------ ProbeInsertion ------
-
-        insertion_key = {'subject_id': sinfo['subject_id'],
-                         'session': sinfo['session'],
-                         'insertion_number': probe}
-
-        # add probe insertion
-        log.info('.. creating probe insertion')
-
-        ephys.ProbeInsertion.insert1(
-            {**insertion_key, 'probe': part_no, 'electrode_config_name': ec_name})
-
-        ephys.ProbeInsertion.RecordingSystemSetup.insert1(
-            {**insertion_key, 'sampling_rate': npx_meta['imSampRate']})
+        return e_config
 
     @staticmethod
     def _decode_notes(fh, notes):
