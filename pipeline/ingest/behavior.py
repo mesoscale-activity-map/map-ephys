@@ -29,6 +29,27 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 log = logging.getLogger(__name__)
 
 
+# ================ PHOTOSTIM PROTOCOL ===============
+photostim_duration = 0.5  # (s)
+skull_ref = 'Bregma'
+photostims = {4: {'photo_stim': 4, 'photostim_device': 'OBIS470', 'duration': photostim_duration,
+                  'locations': [{'skull_reference': skull_ref, 'brain_area': 'ALM',
+                                 'ap_location': 2500, 'ml_location': -1500, 'dv_location': 0,
+                                 'theta': 15, 'phi': 15}]},
+              5: {'photo_stim': 5, 'photostim_device': 'OBIS470', 'duration': photostim_duration,
+                  'locations': [{'skull_reference': skull_ref, 'brain_area': 'ALM',
+                                 'ap_location': 2500, 'ml_location': 1500, 'dv_location': 0,
+                                 'theta': 15, 'phi': 15}]},
+              6: {'photo_stim': 6, 'photostim_device': 'OBIS470', 'duration': photostim_duration,
+                  'locations': [{'skull_reference': skull_ref, 'brain_area': 'ALM',
+                                 'ap_location': 2500, 'ml_location': -1500, 'dv_location': 0,
+                                 'theta': 15, 'phi': 15},
+                                {'skull_reference': skull_ref, 'brain_area': 'ALM',
+                                 'ap_location': 2500, 'ml_location': 1500, 'dv_location': 0,
+                                 'theta': 15, 'phi': 15}
+                                ]}}
+
+
 @schema
 class RigDataPath(dj.Lookup):
     ''' rig storage locations '''
@@ -220,17 +241,6 @@ class BehaviorIngest(dj.Imported):
             log.warning("Warning! session exists for {h2o} on {d}".format(
                 h2o=h2o, d=date))
             return
-
-        #
-        # Prepare PhotoStim
-        #
-        photosti_duration = 0.5  # (s) Hard-coded here
-        photostims = {4: {'photo_stim': 4, 'photostim_device': 'OBIS470',
-                          'brain_location_name': 'left_alm', 'duration': photosti_duration},
-                      5: {'photo_stim': 5, 'photostim_device': 'OBIS470',
-                          'brain_location_name': 'right_alm', 'duration': photosti_duration},
-                      6: {'photo_stim': 6, 'photostim_device': 'OBIS470',
-                          'brain_location_name': 'both_alm', 'duration': photosti_duration}}
 
         #
         # Extract trial data from file(s) & prepare trial loop
@@ -672,7 +682,7 @@ class BehaviorIngest(dj.Imported):
                 rows['photostim_trial'].append(tkey)
                 delay_period_idx = np.where(t.state_data == states['DelayPeriod'])[0][0]
                 rows['photostim_trial_event'].append(dict(
-                    tkey, **photostims[t.stim], photostim_event_id=len(rows['photostim_trial_event']),
+                    tkey, photo_stim=t.stim, photostim_event_id=len(rows['photostim_trial_event']),
                     photostim_event_time=t.state_times[delay_period_idx],
                     power=5.5))
 
@@ -728,8 +738,11 @@ class BehaviorIngest(dj.Imported):
         photostim_ids = set([r['photo_stim'] for r in rows['photostim_trial_event']])
         if photostim_ids:
             log.info('BehaviorIngest.make(): ... experiment.Photostim')
-            experiment.Photostim.insert((dict(skey, **photostims[stim]) for stim in photostim_ids),
-                                        ignore_extra_fields=True)
+            for stim in photostim_ids:
+                experiment.Photostim.insert1(dict(skey, **photostims[stim], ignore_extra_fields=True))
+                experiment.Photostim.PhotostimLocation.insert((dict(skey, photostim=photostims[stim]['photostim'], **loc)
+                                                               for loc in photostims[stim]['locations']),
+                                                              ignore_extra_fields=True)
 
         log.info('BehaviorIngest.make(): ... experiment.PhotostimTrial')
         experiment.PhotostimTrial.insert(rows['photostim_trial'],

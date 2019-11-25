@@ -19,7 +19,7 @@ def get_schema_name(name):
         if name.startswith('ingest'):
             prefix = '{}_ingest_'.format(dj.config.get('database.user', 'map'))
         else:
-            prefix = 'map_v1_'
+            prefix = 'map_v2_'
 
     return prefix + name
 
