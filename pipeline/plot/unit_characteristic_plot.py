@@ -9,9 +9,9 @@ import pandas as pd
 
 from pipeline import experiment, ephys, psth
 
-from pipeline.plot.util import (_plot_with_sem, _extract_one_stim_dur, _get_units_hemisphere,
-                                _get_trial_event_times, _get_clustering_method,
-                                _plot_stacked_psth_diff, _plot_avg_psth, jointplot_w_hue)
+from pipeline.plot.util import (_plot_with_sem, _extract_one_stim_dur,
+                                _plot_stacked_psth_diff, _plot_avg_psth, _jointplot_w_hue)
+from pipeline.util import (_get_units_hemisphere, _get_trial_event_times, _get_clustering_method)
 
 m_scale = 1200
 _plt_xmin = -3
@@ -593,8 +593,8 @@ def plot_paired_coding_direction(unit_g1, unit_g2, labels=None, time_period=None
     i_df['trial-type'] = 'ipsi'
     df = c_df.append(i_df)
 
-    jplot = jointplot_w_hue(data=df, x=labels[0], y=labels[1], hue='trial-type', colormap=['b', 'r'],
-                            figsize=(8, 6), fig=None, scatter_kws=None)
+    jplot = _jointplot_w_hue(data=df, x=labels[0], y=labels[1], hue= 'trial-type', colormap=['b', 'r'],
+                             figsize=(8, 6), fig=None, scatter_kws=None)
     jplot['fig'].show()
 
     return fig

@@ -18,7 +18,7 @@ import itertools
 from pipeline import experiment, ephys, psth, tracking, lab, histology, ccf
 from pipeline.plot import behavior_plot, unit_characteristic_plot, unit_psth, histology_plot
 from pipeline import get_schema_name
-from pipeline.plot.util import _plot_with_sem, jointplot_w_hue, _get_trial_event_times
+from pipeline.plot.util import _plot_with_sem, _jointplot_w_hue, _get_trial_event_times
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -190,8 +190,8 @@ class SessionLevelCDReport(dj.Computed):
             df = df[non_nan]
 
             fig = plt.figure(figsize=(6, 6))
-            jplot = jointplot_w_hue(data=df, x=labels[0], y=labels[1], hue='trial-type', colormap=['b', 'r'],
-                                    figsize=(8, 6), fig=fig, scatter_kws=None)
+            jplot = _jointplot_w_hue(data=df, x=labels[0], y=labels[1], hue= 'trial-type', colormap=['b', 'r'],
+                                     figsize=(8, 6), fig=fig, scatter_kws=None)
 
             # ---- plot this fig into the main figure ----
             buf = io.BytesIO()

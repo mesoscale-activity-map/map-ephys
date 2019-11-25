@@ -5,18 +5,15 @@ import hashlib
 from functools import partial
 from inspect import getmembers
 from itertools import repeat
-
 import numpy as np
 import datajoint as dj
-
 import scipy.stats as sc_stats
 
-from . import lab
-from . import experiment
-from . import ephys
+from . import (lab, experiment, ephys)
 [lab, experiment, ephys]  # NOQA
 
 from . import get_schema_name
+from .util import _get_units_hemisphere
 
 schema = dj.schema(get_schema_name('psth'))
 log = logging.getLogger(__name__)
@@ -367,14 +364,7 @@ class PeriodSelectivity(dj.Computed):
         '''
         log.debug('PeriodSelectivity.make(): key: {}'.format(key))
 
-        # Verify insertion location is present,
-        egpos = None
-        try:
-            egpos = (ephys.ProbeInsertion.InsertionLocation & key).fetch1()
-        except dj.DataJointError as e:
-            if 'exactly one tuple' in repr(e):
-                log.error('... Insertion Location missing. skipping')
-                return
+        hemi = _get_units_hemisphere(key)
 
         # retrieving the spikes of interest,
         spikes_q = ((ephys.Unit.TrialSpikes & key)
@@ -405,7 +395,7 @@ class PeriodSelectivity(dj.Computed):
             start_time = start_event_q[trial] - cue_event_q[trial]
             stop_time = end_event_q[trial] - cue_event_q[trial]
             spk_rate = np.logical_and(spike_times >= start_time, spike_times < stop_time).sum() / (stop_time - start_time)
-            if egpos['hemisphere'] == trial_instruct:
+            if hemi == trial_instruct:
                 freq_i.append(spk_rate)
             else:
                 freq_c.append(spk_rate)

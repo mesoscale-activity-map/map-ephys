@@ -254,8 +254,10 @@ class BehaviorIngest(dj.Imported):
             SessionData = mat['SessionData'].flatten()
 
             # parse session datetime
-            session_datetime = SessionData['Info'][0]['SessionDate'] + ' ' + SessionData['Info'][0]['SessionStartTime_UTC']
-            skey['session_time'] = datetime.datetime.strptime(session_datetime, '%d-%b-%Y %H:%M:%S')
+            if 'session_time' not in skey:
+                session_datetime = SessionData['Info'][0]['SessionDate'] + ' ' + SessionData['Info'][0]['SessionStartTime_UTC']
+                skey['session_time'] = datetime.datetime.strptime(session_datetime, '%d-%b-%Y %H:%M:%S')
+                assert skey.pop('session_date') == datetime.datetime.strptime(SessionData['Info'][0]['SessionDate'], '%d-%b-%Y')
 
             AllTrialTypes = SessionData['TrialTypes'][0]
             AllTrialSettings = SessionData['TrialSettings'][0]
