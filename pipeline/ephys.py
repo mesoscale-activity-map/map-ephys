@@ -17,6 +17,7 @@ class ProbeInsertion(dj.Manual):
     -> experiment.Session
     insertion_number: int
     ---
+    -> lab.Probe
     -> lab.ElectrodeConfig
     """
 
@@ -25,9 +26,9 @@ class ProbeInsertion(dj.Manual):
         -> master
         ---
         -> lab.SkullReference
-        ap_location: decimal(6, 2) # (um) from ref; anterior is positive; based on manipulator coordinates/reconstructed track
-        ml_location: decimal(6, 2) # (um) from ref ; right is positive; based on manipulator coordinates/reconstructed track
-        dv_location: decimal(6, 2) # (um) from dura to first site of the probe; ventral is negative; based on manipulator coordinates/reconstructed track
+        ap_location: decimal(6, 2) # (um) anterior-posterior; ref is 0; more anterior is more positive
+        ml_location: decimal(6, 2) # (um) medial axis; ref is 0 ; more right is more positive
+        dv_location: decimal(6, 2) # (um) dorsal-ventral; surface of the brain is 0; more ventral is more negative
         theta:       decimal(5, 2) # (deg) - elevation - rotation about the ml-axis [0, 180] - w.r.t the z+ axis
         phi:         decimal(5, 2) # (deg) - azimuth - rotation about the dv-axis [0, 360] - w.r.t the x+ axis
         beta:        decimal(5, 2) # (deg) rotation about the shank of the probe
@@ -133,8 +134,8 @@ class Unit(dj.Imported):
     unit_uid : int # unique across sessions/animals
     -> UnitQualityType
     -> lab.ElectrodeConfig.Electrode # site on the electrode for which the unit has the largest amplitude
-    unit_posx : double # (um) estimated x position of the unit relative to probe's (0,0)
-    unit_posy : double # (um) estimated y position of the unit relative to probe's (0,0)
+    unit_posx : double # (um) estimated x position of the unit relative to probe's tip (0,0)
+    unit_posy : double # (um) estimated y position of the unit relative to probe's tip (0,0)
     spike_times : longblob  # (s) from the start of the first data point used in clustering
     unit_amp : double
     unit_snr : double
@@ -253,8 +254,6 @@ class UnitCellType(dj.Computed):
 
         self.insert1(dict(key,
                           cell_type='FS' if waveform_width < 0.4 else 'Pyr'))
-
-
 
 
 @schema

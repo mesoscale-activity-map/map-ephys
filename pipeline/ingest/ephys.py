@@ -3,6 +3,7 @@
 import os
 import logging
 import pathlib
+from os import path
 
 from glob import glob
 from itertools import repeat
@@ -96,6 +97,10 @@ class EphysIngest(dj.Imported):
         dpath = pathlib.Path(rigpath, h2o, date)
         dglob = '[0-9]/{}'  # probe directory pattern
 
+        # npx ap.meta: '{}_*.imec.ap.meta'.format(h2o)
+        npx_meta_files = dpath.glob(dglob.format('{}_*.imec.ap.meta'.format(h2o)))
+        npx_metas = {f.parent.name: NeuropixelsMeta(f) for f in npx_meta_files}
+
         v3spec = '{}_*_jrc.mat'.format(h2o)
         # old v3spec = '{}_g0_*.imec.ap_imec3_opt3_jrc.mat'.format(h2o)
         v3files = list(dpath.glob(dglob.format(v3spec)))
@@ -119,9 +124,9 @@ class EphysIngest(dj.Imported):
             loader = self._load_v4
 
         for f in files:
-            self._load(loader(sinfo, rigpath, dpath, f.relative_to(dpath)))
+            self._load(loader(sinfo, rigpath, dpath, f.relative_to(dpath)), npx_metas[f.parent.name])
 
-    def _load(self, data):
+    def _load(self, data, npx_meta):
 
         sinfo = data['sinfo']
         rigpath = data['rigpath']
@@ -211,9 +216,13 @@ class EphysIngest(dj.Imported):
               for t in range(len(trials))] for u in set(units)])
 
         # create probe insertion records
-        self._gen_probe_insert(sinfo, probe)
+        self._gen_probe_insert(sinfo, probe, npx_meta)
 
-        # TODO: electrode config should be passed back above & used here
+        insertion_key = {'subject_id': sinfo['subject_id'],
+                         'session': sinfo['session'],
+                         'insertion_number': probe}
+
+        electrode_keys = {c['electrode']: c for c in (lab.ElectrodeConfig.Electrode & insertion_key).fetch('KEY')}
 
         # insert Unit
         log.info('.. ephys.Unit')
@@ -223,16 +232,12 @@ class EphysIngest(dj.Imported):
 
             for i, u in enumerate(set(units)):
 
-                ib.insert1({**skey,
-                            'insertion_number': probe,
+                ib.insert1({**skey, **insertion_key,
+                            **electrode_keys[vmax_unit_site[i]],
                             'clustering_method': method,
                             'unit': u,
                             'unit_uid': u,
                             'unit_quality': unit_notes[i],
-                            'probe': '15131808323',
-                            'electrode_config_name': 'npx_first384',
-                            'electrode_group': 0,
-                            'electrode': vmax_unit_site[i],
                             'unit_posx': unit_xpos[i],
                             'unit_posy': unit_ypos[i],
                             'unit_amp': unit_amp[i],
@@ -286,9 +291,9 @@ class EphysIngest(dj.Imported):
 
         log.info('ephys ingest for {} complete'.format(skey))
 
-    def _gen_probe_insert(self, sinfo, probe):
+    def _gen_probe_insert(self, sinfo, probe, npx_meta):
         '''
-        generate probe insertion for session / probe
+        generate probe insertion for session / probe - for neuropixels recording
 
         Arguments:
 
@@ -297,46 +302,54 @@ class EphysIngest(dj.Imported):
 
         '''
 
-        ekey = {
-            'subject_id': sinfo['subject_id'],
-            'session': sinfo['session'],
-            'insertion_number': probe
-        }
+        # ------ npx probe process ------
+        part_no = npx_meta.meta['imProbeSN']
+        probe_type = npx_meta.meta.get('imDatPrb_type', 1)
 
-        part_no = '15131808323'  # probe model hard-coded here
-        ec_name = 'npx_first384'
-        ec = {'probe': part_no, 'electrode_config_name': ec_name}
+        if probe_type == 1:
+            eg_members = []
+            probe_type = {'probe_type': 'neuropixels_1.0'}
+            for shank, shank_col, shank_row, is_used in npx_meta.shankmap['data']:
+                q_electrodes = lab.ProbeType.Electrode & probe_type
+                electrode = (q_electrodes & {'shank': shank, 'shank_col': shank_col, 'shank_row': shank_row}).fetch1(
+                    'KEY')
+                eg_members.append({**electrode, 'is_used': is_used, 'electrode_group': 0})
+        else:
+            raise NotImplementedError('Unknown processing for neuropixels probe {}'.format(probe_type))
 
-        # create hardcoded 1:384 ElectrodeConfig if needed
-        if not (lab.ElectrodeConfig & ec):
+        # ---- compute hash for the electrode config (hash of dict of all ElectrodeConfig.Electrode) ----
+        ec_hash = dict_to_hash({k['electrode']: k for k in eg_members})
+
+        el_list = list(eg_members.keys())
+        el_jumps = [0] + np.where(np.diff(el_list) > 1)[0].tolist() + [len(el_list) - 1]
+        ec_name = '; '.join([f'{el_list[s]}-{el_list[e]}' for s, e in zip(el_jumps[:-1], el_jumps[1:])])
+
+        # ---- make new ElectrodeConfig if needed ----
+        if not (lab.ElectrodeConfig & {'electrode_config_hash': ec_hash}):
+            e_config = {**probe_type, 'electrode_config_name': ec_name}
 
             log.info('.. creating lab.ElectrodeConfig')
 
-            eg = {'probe': part_no, 'electrode_group': 0}
+            lab.ElectrodeConfig.insert1({**e_config, 'electrode_config_hash': ec_hash})
 
-            eg_member = [{'electrode': e} for e in range(1, 385)]
+            lab.ElectrodeConfig.ElectrodeGroup.insert1({**e_config, 'electrode_group': 0})
 
-            ec_hash = dict_to_hash(
-                {**eg, **{str(k): v for k, v in enumerate(eg_member)}})
+            lab.ElectrodeConfig.Electrode.insert({**e_config, **m} for m in eg_members)
 
-            lab.ElectrodeConfig.insert1(
-                {**ec, 'electrode_config_hash': ec_hash})
+        # ------ ProbeInsertion ------
 
-            lab.ElectrodeConfig.ElectrodeGroup.insert1(
-                {**eg, 'electrode_config_name': ec_name})
-
-            lab.ElectrodeConfig.Electrode.insert(
-                {**eg, **m, 'electrode_config_name': ec_name}
-                for m in eg_member)
+        insertion_key = {'subject_id': sinfo['subject_id'],
+                         'session': sinfo['session'],
+                         'insertion_number': probe}
 
         # add probe insertion
         log.info('.. creating probe insertion')
 
         ephys.ProbeInsertion.insert1(
-            {**ekey, 'probe': part_no, 'electrode_config_name': ec_name})
+            {**insertion_key, 'probe': part_no, 'electrode_config_name': ec_name})
 
         ephys.ProbeInsertion.RecordingSystemSetup.insert1(
-            {**ekey, 'sampling_rate': 30000})
+            {**insertion_key, 'sampling_rate': npx_meta['imSampRate']})
 
     @staticmethod
     def _decode_notes(fh, notes):
@@ -533,3 +546,145 @@ class EphysIngest(dj.Imported):
         }
 
         return data
+
+
+class NeuropixelsMeta:
+
+    def __init__(self, meta_filepath):
+        self.fname = meta_filepath
+        self.meta = self._read_meta()
+
+        self.chanmap = self._parse_chanmap(self.meta['~snsChanMap']) if '~snsChanMap' in self.meta else None
+        self.shankmap = self._parse_shankmap(self.meta['~snsShankMap']) if '~snsShankMap' in self.meta else None
+        self.imroTbl = self._parse_imrotbl(self.meta['~imroTbl']) if '~imroTbl' in self.meta else None
+
+    def _read_meta(self):
+        '''
+        Read metadata in 'k = v' format.
+
+        The fields '~snsChanMap' and '~snsShankMap' are further parsed into
+        'snsChanMap' and 'snsShankMap' dictionaries via calls to
+        Neuropixels._parse_chanmap and Neuropixels._parse_shankmap.
+        '''
+
+        fname = self.fname
+
+        res = {}
+        with open(fname) as f:
+            for l in (l.rstrip() for l in f):
+                if '=' in l:
+                    k, v = l.split('=')
+                    v = handle_string(v)
+                    res[k] = v
+        return res
+
+    @staticmethod
+    def _parse_chanmap(raw):
+        '''
+        https://github.com/billkarsh/SpikeGLX/blob/master/Markdown/UserManual.md#channel-map
+        Parse channel map header structure. Converts:
+
+            '(x,y,z)(c0,x:y)...(cI,x:y),(sy0;x:y)'
+
+        e.g:
+
+            '(384,384,1)(AP0;0:0)...(AP383;383:383)(SY0;768:768)'
+
+        into dict of form:
+
+            {'shape': [x,y,z], 'c0': [x,y], ... }
+
+        TODO merge createKsChanMap.m logic
+        '''
+
+        res = {}
+        for u in (i.rstrip(')').split(';') for i in raw.split('(') if i != ''):
+            if (len(u)) == 1:
+                res['shape'] = u[0].split(',')
+            else:
+                res[u[0]] = u[1].split(':')
+
+        return res
+
+    @staticmethod
+    def _parse_shankmap(raw):
+        '''
+        https://github.com/billkarsh/SpikeGLX/blob/master/Markdown/UserManual.md#shank-map
+        Parse shank map header structure. Converts:
+
+            '(x,y,z)(a:b:c:d)...(a:b:c:d)'
+
+        e.g:
+
+            '(1,2,480)(0:0:192:1)...(0:1:191:1)'
+
+        into dict of form:
+
+            {'shape': [x,y,z], 'data': [[a,b,c,d],...]}
+
+        '''
+        res = {'shape': None, 'data': []}
+
+        for u in (i.rstrip(')') for i in raw.split('(') if i != ''):
+            if ',' in u:
+                res['shape'] = [int(d) for d in u.split(',')]
+            else:
+                res['data'].append([int(d) for d in u.split(':')])
+
+        return res
+
+    @staticmethod
+    def _parse_imrotbl(raw):
+        '''
+        https://github.com/billkarsh/SpikeGLX/blob/master/Markdown/UserManual.md#imro-per-channel-settings
+        Parse imro tbl structure. Converts:
+
+            '(X,Y,Z)(A B C D E)...(A B C D E)'
+
+        e.g.:
+
+            '(641251209,3,384)(0 1 0 500 250)...(383 0 0 500 250)'
+
+        into dict of form:
+
+            {'shape': (x,y,z), 'data': []}
+
+        TODO: via readSglImro.m:
+
+        IMRO = GETSGLCHANCONFIG(FILEPATH) reads the SpikeGLX imro table
+        location specified by FILEPATH and returns IMRO, a struct with the
+        following fields:
+
+        PROBESERIAL: serial number of the probe
+        PROBEOPTION: phase 3A probe option (1, 2, 3 or 4)
+        NCHANNELS: number of AP/LFP channels recorded
+
+        CHANNELS: struct array containing info for each channel:
+          INDEX: 1-based index of the channel
+          BANK: 1-based index of the bank of the recorded site
+          SHANK: 1-based index of the shank of the recorded site
+          GAIN_AP: gain of the action potential ADC
+          GAIN_LFP: gain of the LFP ADC
+
+        '''
+        res = {'shape': None, 'data': []}
+
+        for u in (i.rstrip(')') for i in raw.split('(') if i != ''):
+            if ',' in u:
+                res['shape'] = [int(d) for d in u.split(',')]
+            else:
+                res['data'].append([int(d) for d in u.split(' ')])
+
+        return res
+
+
+def handle_string(value):
+    if isinstance(value, str):
+        try:
+            value = int(value)
+        except ValueError:
+            try:
+                value = float(value)
+            except ValueError:
+                pass
+    return value

@@ -74,6 +74,9 @@ def ingest_histology(*args):
 
 def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': True}):
 
+    log.info('experiment.PhotostimLaterality.populate()')
+    experiment.PhotostimLaterality.populate(**populate_settings)
+
     log.info('ephys.UnitStat.populate()')
     ephys.UnitStat.populate(**populate_settings)
 

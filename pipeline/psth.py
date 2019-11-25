@@ -139,10 +139,11 @@ class TrialCondition(dj.Lookup):
         ]
 
         # PHOTOSTIM conditions
-        stim_locs = ['left_alm', 'right_alm', 'both_alm']
-        for loc in stim_locs:
+        stim_locs = [('left', 'alm'), ('right', 'alm'), ('bilateral', 'alm')]
+        for hemi, brain_area in stim_locs:
             for instruction in (None, 'left', 'right'):
-                condition = {'trial_condition_name': '_'.join(filter(None, ['all', 'noearlylick', loc, 'stim',
+                condition = {'trial_condition_name': '_'.join(filter(None, ['all', 'noearlylick',
+                                                                            '_'.join([hemi, brain_area]), 'stim',
                                                                             instruction])),
                              'trial_condition_func': '_get_trials_include_stim',
                              'trial_condition_arg': {
@@ -150,7 +151,8 @@ class TrialCondition(dj.Lookup):
                                     'task': 'audio delay',
                                     'task_protocol': 1,
                                     'early_lick': 'no early',
-                                    'brain_location_name': loc},
+                                    'stim_laterality': hemi,
+                                    'stim_brain_area': brain_area},
                                  **({'trial_instruction': instruction} if instruction else {})}
                              }
                 contents_data.append(condition)
@@ -247,6 +249,16 @@ class UnitPsth(dj.Computed):
     unit_psth=NULL: longblob
     """
     psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
+
+    @property
+    def key_source(self):
+        """
+        For those conditions that include stim, process those with PhotostimBrainRegion already computed only
+        """
+        nostim = ephys.Unit * (TrialCondition & 'trial_condition_func = "_get_trials_exclude_stim"')
+        stim = ((ephys.Unit & (experiment.Session & experiment.PhotostimBrainRegion))
+                * (TrialCondition & 'trial_condition_func = "_get_trials_include_stim"'))
+        return nostim.proj() + stim.proj()
 
     def make(self, key):
         log.debug('UnitPsth.make(): key: {}'.format(key))
@@ -347,7 +359,7 @@ class PeriodSelectivity(dj.Computed):
 
     alpha = 0.05  # default alpha value
 
-    key_source = experiment.Period * (ephys.Unit & 'unit_quality != "all"')
+    key_source = experiment.Period * (ephys.Unit & ephys.ProbeInsertion.InsertionLocation & 'unit_quality != "all"')
 
     def make(self, key):
         '''
@@ -358,8 +370,7 @@ class PeriodSelectivity(dj.Computed):
         # Verify insertion location is present,
         egpos = None
         try:
-            egpos = (ephys.ProbeInsertion.InsertionLocation
-                     * experiment.BrainLocation & key).fetch1()
+            egpos = (ephys.ProbeInsertion.InsertionLocation & key).fetch1()
         except dj.DataJointError as e:
             if 'exactly one tuple' in repr(e):
                 log.error('... Insertion Location missing. skipping')

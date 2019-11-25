@@ -315,7 +315,7 @@ class BehaviorIngest(dj.Imported):
                                     'photostim_location', 'photostim_trial',
                                     'photostim_trial_event')}
 
-        i = -1
+        i = 0
         for t in trials:
 
             #
