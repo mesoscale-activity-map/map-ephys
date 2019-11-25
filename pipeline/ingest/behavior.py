@@ -253,6 +253,10 @@ class BehaviorIngest(dj.Imported):
             mat = spio.loadmat(f, squeeze_me=True)
             SessionData = mat['SessionData'].flatten()
 
+            # parse session datetime
+            session_datetime = SessionData['Info'][0]['SessionDate'] + ' ' + SessionData['Info'][0]['SessionStartTime_UTC']
+            skey['session_time'] = datetime.datetime.strptime(session_datetime, '%d-%b-%Y %H:%M:%S')
+
             AllTrialTypes = SessionData['TrialTypes'][0]
             AllTrialSettings = SessionData['TrialSettings'][0]
 

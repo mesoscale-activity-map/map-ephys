@@ -320,7 +320,7 @@ class EphysIngest(dj.Imported):
         # ---- compute hash for the electrode config (hash of dict of all ElectrodeConfig.Electrode) ----
         ec_hash = dict_to_hash({k['electrode']: k for k in eg_members})
 
-        el_list = list(eg_members.keys())
+        el_list = sorted([k['electrode'] for k in eg_members])
         el_jumps = [0] + np.where(np.diff(el_list) > 1)[0].tolist() + [len(el_list) - 1]
         ec_name = '; '.join([f'{el_list[s]}-{el_list[e]}' for s, e in zip(el_jumps[:-1], el_jumps[1:])])
 
@@ -328,7 +328,7 @@ class EphysIngest(dj.Imported):
         if not (lab.ElectrodeConfig & {'electrode_config_hash': ec_hash}):
             e_config = {**probe_type, 'electrode_config_name': ec_name}
 
-            log.info('.. creating lab.ElectrodeConfig')
+            log.info('.. creating lab.ElectrodeConfig: {}'.format(ec_name))
 
             lab.ElectrodeConfig.insert1({**e_config, 'electrode_config_hash': ec_hash})
 
