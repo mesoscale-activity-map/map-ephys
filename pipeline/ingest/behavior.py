@@ -187,7 +187,8 @@ class BehaviorIngest(dj.Imported):
 
     def populate(self, *args, **kwargs):
         for k in self.key_source:
-            self.make(k)
+            with dj.conn().transaction:
+                self.make(k)
 
     def make(self, key):
         log.info('BehaviorIngest.make(): key: {key}'.format(key=key))
@@ -267,7 +268,8 @@ class BehaviorIngest(dj.Imported):
             if 'session_time' not in skey:
                 session_datetime = SessionData['Info'][0]['SessionDate'] + ' ' + SessionData['Info'][0]['SessionStartTime_UTC']
                 skey['session_time'] = datetime.datetime.strptime(session_datetime, '%d-%b-%Y %H:%M:%S')
-                assert skey.pop('session_date') == datetime.datetime.strptime(SessionData['Info'][0]['SessionDate'], '%d-%b-%Y')
+                assert skey.pop('session_date') == datetime.datetime.strptime(
+                    str(SessionData['Info'][0]['SessionDate']), '%d-%b-%Y').date()
 
             AllTrialTypes = SessionData['TrialTypes'][0]
             AllTrialSettings = SessionData['TrialSettings'][0]
@@ -292,7 +294,7 @@ class BehaviorIngest(dj.Imported):
             else:
                 log.debug('StimTrials not detected in session - will skip')
                 AllStimTrials = np.array([
-                    None for i in enumerate(range(AllStateTimestamps.shape[0]))])
+                    None for _ in enumerate(range(AllStateTimestamps.shape[0]))])
 
             z = zip(AllTrialTypes, AllStimTrials, AllTrialSettings,
                     AllStateTimestamps, AllStateNames, AllStateData,
@@ -739,8 +741,8 @@ class BehaviorIngest(dj.Imported):
         if photostim_ids:
             log.info('BehaviorIngest.make(): ... experiment.Photostim')
             for stim in photostim_ids:
-                experiment.Photostim.insert1(dict(skey, **photostims[stim], ignore_extra_fields=True))
-                experiment.Photostim.PhotostimLocation.insert((dict(skey, photostim=photostims[stim]['photostim'], **loc)
+                experiment.Photostim.insert1(dict(skey, **photostims[stim]), ignore_extra_fields=True)
+                experiment.Photostim.PhotostimLocation.insert((dict(skey, photo_stim=photostims[stim]['photo_stim'], **loc)
                                                                for loc in photostims[stim]['locations']),
                                                               ignore_extra_fields=True)
 

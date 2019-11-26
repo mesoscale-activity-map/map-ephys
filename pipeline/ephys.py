@@ -149,15 +149,6 @@ class Unit(dj.Imported):
         -> experiment.SessionTrial
         """
 
-    class UnitPosition(dj.Part):
-        definition = """
-        # Estimated unit position in the brain
-        -> master
-        -> ccf.CCF
-        ---
-        -> experiment.BrainLocation
-        """
-
     class TrialSpikes(dj.Part):
         definition = """
         #
@@ -185,7 +176,8 @@ class UnitCoarseBrainLocation(dj.Computed):
     # Estimated unit position in the brain
     -> Unit
     ---
-    -> [nullable] experiment.BrainLocation
+    -> [nullable] lab.BrainArea
+    -> [nullable] lab.Hemisphere
     """
 
     key_source = Unit & BrainAreaDepthCriteria

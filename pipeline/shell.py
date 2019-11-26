@@ -72,16 +72,22 @@ def ingest_histology(*args):
     histology_ingest.HistologyIngest().populate(display_progress=True)
 
 
-def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': True}):
+def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': True}):
 
-    log.info('experiment.PhotostimLaterality.populate()')
-    experiment.PhotostimLaterality.populate(**populate_settings)
+    log.info('experiment.PhotostimBrainRegion.populate()')
+    experiment.PhotostimBrainRegion.populate(**populate_settings)
+
+    log.info('ephys.UnitCoarseBrainLocation.populate()')
+    ephys.UnitCoarseBrainLocation.populate(**populate_settings)
 
     log.info('ephys.UnitStat.populate()')
     ephys.UnitStat.populate(**populate_settings)
 
     log.info('ephys.UnitCellType.populate()')
     ephys.UnitCellType.populate(**populate_settings)
+
+
+def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': True}):
 
     log.info('psth.UnitPsth.populate()')
     psth.UnitPsth.populate(**populate_settings)
@@ -168,6 +174,8 @@ def automate_computation():
     from pipeline import report
     populate_settings = {'reserve_jobs': True, 'suppress_errors': True, 'display_progress': True}
     while True:
+        log.info('Populate for: Ephys - PSTH - Report')
+        populate_ephys(populate_settings)
         populate_psth(populate_settings)
         generate_report(populate_settings)
 

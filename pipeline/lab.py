@@ -265,7 +265,7 @@ class ElectrodeConfig(dj.Lookup):
     class Electrode(dj.Part):
         definition = """
         -> master.ElectrodeGroup
-        -> Probe.Electrode
+        -> ProbeType.Electrode
         ---
         is_used: bool  # is this channel used for spatial average (ref channels are by default not used)
         """
