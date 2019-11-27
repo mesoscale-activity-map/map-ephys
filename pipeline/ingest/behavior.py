@@ -251,7 +251,7 @@ class BehaviorIngest(dj.Imported):
 
         trial = namedtuple(  # simple structure to track per-trial vars
             'trial', ('ttype', 'stim', 'settings', 'state_times', 'state_names',
-                      'state_data', 'event_data', 'event_times'))
+                      'state_data', 'event_data', 'event_times', 'trial_start'))
 
         for f in matches:
 
@@ -273,6 +273,7 @@ class BehaviorIngest(dj.Imported):
 
             AllTrialTypes = SessionData['TrialTypes'][0]
             AllTrialSettings = SessionData['TrialSettings'][0]
+            AllTrialStarts = SessionData['TrialStartTimestamp'][0]
 
             RawData = SessionData['RawData'][0].flatten()
             AllStateNames = RawData['OriginalStateNamesByNumber'][0]
@@ -285,7 +286,7 @@ class BehaviorIngest(dj.Imported):
             assert(all((x.shape[0] == AllStateTimestamps.shape[0] for x in
                         (AllTrialTypes, AllTrialSettings,
                          AllStateNames, AllStateData, AllEventData,
-                         AllEventTimestamps))))
+                         AllEventTimestamps, AllTrialStarts, AllTrialStarts))))
 
             if 'StimTrials' in SessionData.dtype.fields:
                 log.debug('StimTrials detected in session - will include')
@@ -423,8 +424,8 @@ class BehaviorIngest(dj.Imported):
             try:    
                 tkey['trial'] = i
                 tkey['trial_uid'] = i  # Arseny has unique id to identify some trials
-                tkey['start_time'] = t.state_times[startindex][0]
-                tkey['stop_time'] = t.state_times[endindex][0]
+                tkey['start_time'] = t.trial_start
+                tkey['stop_time'] = t.trial_start + t.state_times[endindex][0]
             except IndexError:
                 log.warning('skipping trial {i}: error indexing {s}/{e} into {t}'.format(i=i, s=str(startindex), e=str(endindex), t=str(t.state_times)))
                 continue

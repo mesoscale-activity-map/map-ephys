@@ -527,11 +527,6 @@ def compute_CD_projected_psth(units, time_period=None):
              psth time-stamps
     """
     unit_hemi = _get_units_hemisphere(units)
-    if len(set(unit_hemi)) != 1:
-        raise Exception('Units from both hemispheres found')
-    else:
-        unit_hemi = unit_hemi[0]
-
     session_key = experiment.Session & units
     if len(session_key) != 1:
         raise Exception('Units from multiple sessions found')
