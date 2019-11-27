@@ -331,11 +331,8 @@ def create_neuropixels_probe(probe_type='neuropixels_1.0'):
     else:
         raise ValueError(f'Unknown probe_type: {probe_type}')
 
-    return electrodes
-
-
-
-
-
-
-
+    # the insert part
+    probe_type = {'probe_type': probe_type}
+    with ProbeType.connection.transaction:
+        ProbeType.insert1(probe_type, skip_duplicates=True)
+        ProbeType.Electrode.insert([{**probe_type, **e} for e in electrodes], skip_duplicates=True)

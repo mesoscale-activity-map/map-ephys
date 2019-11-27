@@ -92,13 +92,18 @@ class EphysIngest(dj.Imported):
 
         rigpath = EphysDataPath().fetch1('data_path')
         h2o = sinfo['water_restriction_number']
-        date = key['session_date'].strftime('%Y%m%d')
+        date = key['session_time'].date().strftime('%Y%m%d')
 
         dpath = pathlib.Path(rigpath, h2o, date)
         dglob = '[0-9]/{}'  # probe directory pattern
 
         # npx ap.meta: '{}_*.imec.ap.meta'.format(h2o)
-        npx_meta_files = dpath.glob(dglob.format('{}_*.imec.ap.meta'.format(h2o)))
+        npx_meta_files = list(dpath.glob(dglob.format('{}_*.imec.ap.meta'.format(h2o))))
+        if not npx_meta_files:
+            log.warning('Error - no imec.ap.meta files. Skipping.')
+            return
+
+        print(npx_meta_files)
         npx_metas = {f.parent.name: NeuropixelsMeta(f) for f in npx_meta_files}
 
         v3spec = '{}_*_jrc.mat'.format(h2o)
@@ -111,8 +116,8 @@ class EphysIngest(dj.Imported):
 
         if (v3files and v4files) or not (v3files or v4files):
             log.warning(
-                'Error - v3files ({}) + v4files ({}). Skipping.'.format(
-                    v3files, v4files))
+                'Error - v3files ({}) + v4files ({}) - Search path: {}. Skipping.'.format(
+                    v3files, v4files, dpath))
             return
 
         if v3files:
@@ -310,11 +315,11 @@ class EphysIngest(dj.Imported):
         # add probe insertion
         log.info('.. creating probe insertion')
 
-        ephys.ProbeInsertion.insert1(
-            {**insertion_key,  **e_config, 'probe': part_no})
+        lab.Probe.insert1({'probe': part_no, 'probe_type': e_config['probe_type']}, skip_duplicates=True)
 
-        ephys.ProbeInsertion.RecordingSystemSetup.insert1(
-            {**insertion_key, 'sampling_rate': npx_meta['imSampRate']})
+        ephys.ProbeInsertion.insert1({**insertion_key,  **e_config, 'probe': part_no})
+
+        ephys.ProbeInsertion.RecordingSystemSetup.insert1({**insertion_key, 'sampling_rate': npx_meta.meta['imSampRate']})
 
         return insertion_key
 
@@ -441,7 +446,7 @@ class EphysIngest(dj.Imported):
             'ef_path': ef_path,
             'probe': probe,
             'skey': skey,
-            'method': 'jrclust',
+            'method': 'jrclust_v3',
             'hz': hz,
             'spikes': spikes,
             'spike_sites': spike_sites,

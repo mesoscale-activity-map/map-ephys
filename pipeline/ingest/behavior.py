@@ -737,8 +737,12 @@ class BehaviorIngest(dj.Imported):
 
         # Photostim Insertion
 
-        photostim_ids = set([r['photo_stim'] for r in rows['photostim_trial_event']])
-        if photostim_ids:
+        photostim_ids = np.unique([r['photo_stim'] for r in rows['photostim_trial_event']])
+        unknown_photostims = np.setdiff1d(photostim_ids, list(photostims.keys()))
+        if unknown_photostims:
+            raise ValueError('Unknown photostim protocol: {}'.format(unknown_photostims))
+
+        if photostim_ids.size > 0:
             log.info('BehaviorIngest.make(): ... experiment.Photostim')
             for stim in photostim_ids:
                 experiment.Photostim.insert1(dict(skey, **photostims[stim]), ignore_extra_fields=True)

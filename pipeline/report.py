@@ -18,7 +18,8 @@ import itertools
 from pipeline import experiment, ephys, psth, tracking, lab, histology, ccf
 from pipeline.plot import behavior_plot, unit_characteristic_plot, unit_psth, histology_plot
 from pipeline import get_schema_name
-from pipeline.plot.util import _plot_with_sem, _jointplot_w_hue, _get_trial_event_times
+from pipeline.plot.util import _plot_with_sem, _jointplot_w_hue
+from pipeline.util import _get_trial_event_times
 
 import warnings
 warnings.filterwarnings('ignore')
