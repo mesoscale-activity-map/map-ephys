@@ -53,7 +53,7 @@ class SessionLevelReport(dj.Computed):
     behavior_performance: filepath@report_store
     """
 
-    key_source = experiment.Session & experiment.BehaviorTrial & tracking.Tracking
+    key_source = experiment.Session & experiment.BehaviorTrial & experiment.PhotostimBrainRegion
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
@@ -62,7 +62,8 @@ class SessionLevelReport(dj.Computed):
 
         # ---- behavior_performance ----
         # photostim
-        photostims = (experiment.Photostim * experiment.BrainLocation & key).fetch(as_dict=True, order_by='brain_area')
+        photostims = (experiment.Photostim * experiment.PhotostimBrainRegion & key).fetch(as_dict=True,
+                                                                                          order_by='stim_brain_area')
 
         fig1, axs = plt.subplots(int(1 + np.ceil(len(photostims) / 3)), 3, figsize=(16, 16))
         fig1.subplots_adjust(wspace=0.5)
@@ -77,8 +78,8 @@ class SessionLevelReport(dj.Computed):
         ax1.axis('on')
 
         for ax, stim_key in zip(axs.flatten()[3:], photostims):
-            behavior_plot.plot_photostim_effect(key, stim_key, axs=ax,
-                                                title=stim_key['brain_location_name'].replace('_', ' ').upper())
+            stim_loc = ' '.join([stim_key['stim_laterality'], stim_key['stim_brain_area']]).upper()
+            behavior_plot.plot_photostim_effect(key, stim_key, axs=ax, title=stim_loc)
             ax.axis('on')
 
         # ---- Save fig and insert ----
@@ -99,8 +100,10 @@ class SessionLevelCDReport(dj.Computed):
 
     @property
     def key_source(self):
-        # Only process Session with UnitSelectivity computation fully completed - only for session with multiple probes
-        ks = experiment.Session.aggr(ephys.ProbeInsertion, probe_count='count(*)') & 'probe_count > 1'
+        # Only process Session with UnitSelectivity computation fully completed
+        # - only on probe insertions with RecordableBrainRegion
+        ks = experiment.Session.aggr(ephys.ProbeInsertion, probe_count='count(*)')
+        ks = ks - (ephys.ProbeInsertion - ephys.ProbeInsertion.RecordableBrainRegion)
         unit = ks.aggr(ephys.Unit & 'unit_quality != "all"', unit_count='count(*)')
         sel_unit = ks.aggr(psth.UnitSelectivity, sel_unit_count='count(*)')
         return unit * sel_unit & 'unit_count = sel_unit_count'
@@ -117,90 +120,102 @@ class SessionLevelCDReport(dj.Computed):
         fig1, axs = plt.subplots(len(probe_keys), len(probe_keys), figsize=(16, 16))
         [a.axis('off') for a in axs.flatten()]
 
-        # ---- Plot Coding Direction per probe ----
-        probe_proj = {}
-        for pid, probe in enumerate(probe_keys):
+        if len(probe_keys) > 1:
+            # ---- Plot Coding Direction per probe ----
+            probe_proj = {}
+            for pid, probe in enumerate(probe_keys):
+                units = ephys.Unit & probe
+                label = (ephys.ProbeInsertion & probe).aggr(ephys.ProbeInsertion.RecordableBrainRegion.proj(
+                    brain_region='CONCAT(hemisphere, " ", brain_area)'),
+                    brain_regions='GROUP_CONCAT(brain_region)').fetch1('brain_regions')
+
+                _, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], units, 'good_noearlylick_hit')
+
+                # ---- compute CD projected PSTH ----
+                _, proj_contra_trial, proj_ipsi_trial, time_stamps, hemi = psth.compute_CD_projected_psth(
+                    units.fetch('KEY'), time_period=time_period)
+
+                # ---- save projection results ----
+                probe_proj[pid] = (proj_contra_trial, proj_ipsi_trial, time_stamps, label, hemi)
+
+                # ---- generate fig with CD plot for this probe ----
+                fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+                _plot_with_sem(proj_contra_trial, time_stamps, ax=ax, c='b')
+                _plot_with_sem(proj_ipsi_trial, time_stamps, ax=ax, c='r')
+                # cosmetic
+                for x in period_starts:
+                    ax.axvline(x=x, linestyle = '--', color = 'k')
+                ax.spines['right'].set_visible(False)
+                ax.spines['top'].set_visible(False)
+                ax.set_ylabel('CD projection (a.u.)')
+                ax.set_xlabel('Time (s)')
+                ax.set_title(label)
+                fig.tight_layout()
+
+                # ---- plot this fig into the main figure ----
+                buf = io.BytesIO()
+                fig.savefig(buf, format='png')
+                buf.seek(0)
+                axs[pid, pid].imshow(Image.open(buf))
+                buf.close()
+                plt.close(fig)
+
+            # ---- Plot probe-pair correlation ----
+            for p1, p2 in itertools.combinations(probe_proj.keys(), r=2):
+                proj_contra_trial_g1, proj_ipsi_trial_g1, time_stamps, label_g1, p1_hemi = probe_proj[p1]
+                proj_contra_trial_g2, proj_ipsi_trial_g2, time_stamps, label_g2, p2_hemi = probe_proj[p2]
+                labels = [label_g1, label_g2]
+
+                # plot trial CD-endpoint correlation
+                p_start, p_end = time_period
+                contra_cdend_1 = proj_contra_trial_g1[:, np.logical_and(
+                    time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+                ipsi_cdend_1 = proj_ipsi_trial_g1[:, np.logical_and(
+                    time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+                if p1_hemi == p2_hemi:
+                    contra_cdend_2 = proj_contra_trial_g2[:, np.logical_and(
+                        time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+                    ipsi_cdend_2 = proj_ipsi_trial_g2[:, np.logical_and(
+                        time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+                else:
+                    contra_cdend_2 = proj_ipsi_trial_g2[:, np.logical_and(
+                        time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+                    ipsi_cdend_2 = proj_contra_trial_g2[:, np.logical_and(
+                        time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
+
+                c_df = pd.DataFrame([contra_cdend_1, contra_cdend_2]).T
+                c_df.columns = labels
+                c_df['trial-type'] = 'contra'
+                i_df = pd.DataFrame([ipsi_cdend_1, ipsi_cdend_2]).T
+                i_df.columns = labels
+                i_df['trial-type'] = 'ipsi'
+                df = c_df.append(i_df)
+
+                # remove NaN trial - could be due to some trials having no spikes
+                non_nan = ~np.logical_or(np.isnan(df[labels[0]]).values, np.isnan(df[labels[1]]).values)
+                df = df[non_nan]
+
+                fig = plt.figure(figsize=(6, 6))
+                jplot = _jointplot_w_hue(data=df, x=labels[0], y=labels[1], hue= 'trial-type', colormap=['b', 'r'],
+                                         figsize=(8, 6), fig=fig, scatter_kws=None)
+
+                # ---- plot this fig into the main figure ----
+                buf = io.BytesIO()
+                fig.savefig(buf, format='png')
+                buf.seek(0)
+                axs[p1, p2].imshow(Image.open(buf))
+                buf.close()
+                plt.close(fig)
+
+        else:
+            # ---- Plot Single-Probe Coding Direction ----
+            probe = probe_keys[0]
             units = ephys.Unit & probe
-            label = (ephys.ProbeInsertion.InsertionLocation & probe).fetch1(
-                'brain_location_name').replace('_', ' ').upper()
+            label = (ephys.ProbeInsertion & probe).aggr(ephys.ProbeInsertion.RecordableBrainRegion.proj(
+                brain_region = 'CONCAT(hemisphere, " ", brain_area)'),
+                brain_regions = 'GROUP_CONCAT(brain_region)').fetch1('brain_regions')
 
-            _, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], units, 'good_noearlylick_hit')
-
-            # ---- compute CD projected PSTH ----
-            _, proj_contra_trial, proj_ipsi_trial, time_stamps, hemi = psth.compute_CD_projected_psth(
-                units.fetch('KEY'), time_period=time_period)
-
-            # ---- save projection results ----
-            probe_proj[pid] = (proj_contra_trial, proj_ipsi_trial, time_stamps, label, hemi)
-
-            # ---- generate fig with CD plot for this probe ----
-            fig, ax = plt.subplots(1, 1, figsize=(6, 6))
-            _plot_with_sem(proj_contra_trial, time_stamps, ax=ax, c='b')
-            _plot_with_sem(proj_ipsi_trial, time_stamps, ax=ax, c='r')
-            # cosmetic
-            for x in period_starts:
-                ax.axvline(x=x, linestyle = '--', color = 'k')
-            ax.spines['right'].set_visible(False)
-            ax.spines['top'].set_visible(False)
-            ax.set_ylabel('CD projection (a.u.)')
-            ax.set_xlabel('Time (s)')
-            ax.set_title(label)
-            fig.tight_layout()
-
-            # ---- plot this fig into the main figure ----
-            buf = io.BytesIO()
-            fig.savefig(buf, format='png')
-            buf.seek(0)
-            axs[pid, pid].imshow(Image.open(buf))
-            buf.close()
-            plt.close(fig)
-
-        # ---- Plot probe-pair correlation ----
-        for p1, p2 in itertools.combinations(probe_proj.keys(), r=2):
-            proj_contra_trial_g1, proj_ipsi_trial_g1, time_stamps, label_g1, p1_hemi = probe_proj[p1]
-            proj_contra_trial_g2, proj_ipsi_trial_g2, time_stamps, label_g2, p2_hemi = probe_proj[p2]
-            labels = [label_g1, label_g2]
-
-            # plot trial CD-endpoint correlation
-            p_start, p_end = time_period
-            contra_cdend_1 = proj_contra_trial_g1[:, np.logical_and(
-                time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
-            ipsi_cdend_1 = proj_ipsi_trial_g1[:, np.logical_and(
-                time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
-            if p1_hemi == p2_hemi:
-                contra_cdend_2 = proj_contra_trial_g2[:, np.logical_and(
-                    time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
-                ipsi_cdend_2 = proj_ipsi_trial_g2[:, np.logical_and(
-                    time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
-            else:
-                contra_cdend_2 = proj_ipsi_trial_g2[:, np.logical_and(
-                    time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
-                ipsi_cdend_2 = proj_contra_trial_g2[:, np.logical_and(
-                    time_stamps >= p_start, time_stamps < p_end)].mean(axis=1)
-
-            c_df = pd.DataFrame([contra_cdend_1, contra_cdend_2]).T
-            c_df.columns = labels
-            c_df['trial-type'] = 'contra'
-            i_df = pd.DataFrame([ipsi_cdend_1, ipsi_cdend_2]).T
-            i_df.columns = labels
-            i_df['trial-type'] = 'ipsi'
-            df = c_df.append(i_df)
-
-            # remove NaN trial - could be due to some trials having no spikes
-            non_nan = ~np.logical_or(np.isnan(df[labels[0]]).values, np.isnan(df[labels[1]]).values)
-            df = df[non_nan]
-
-            fig = plt.figure(figsize=(6, 6))
-            jplot = _jointplot_w_hue(data=df, x=labels[0], y=labels[1], hue= 'trial-type', colormap=['b', 'r'],
-                                     figsize=(8, 6), fig=fig, scatter_kws=None)
-
-            # ---- plot this fig into the main figure ----
-            buf = io.BytesIO()
-            fig.savefig(buf, format='png')
-            buf.seek(0)
-            axs[p1, p2].imshow(Image.open(buf))
-            buf.close()
-            plt.close(fig)
+            unit_characteristic_plot.plot_coding_direction(units, time_period=time_period, label=label, axs=axs)
 
         # ---- Save fig and insert ----
         fn_prefix = f'{water_res_num}_{sess_date}_'
@@ -339,11 +354,12 @@ class ProbeLevelPhotostimEffectReport(dj.Computed):
         units = ephys.Unit & key
 
         # ---- group_photostim ----
-        stim_locs = (experiment.Photostim & probe_insertion).fetch('brain_location_name')
+        stim_locs = (experiment.PhotostimBrainRegion & probe_insertion).proj(
+            brain_region='CONCAT(stim_laterality, "_", stim_brain_area)').fetch('brain_region')
         fig1, axs = plt.subplots(1, 1 + len(stim_locs), figsize=(16, 6))
         for pos, stim_loc in enumerate(stim_locs):
             unit_characteristic_plot.plot_psth_photostim_effect(units,
-                                                                condition_name_kw=[stim_loc],
+                                                                condition_name_kw=[stim_loc.lower()],
                                                                 axs=np.array([axs[0], axs[pos + 1]]))
             if pos < len(stim_locs) - 1:
                 axs[0].clear()
@@ -369,7 +385,7 @@ class UnitLevelEphysReport(dj.Computed):
     """
 
     # only units with selectivity computed (in fact only need all the UnitPSTH computed, but keeping this to be safe)
-    key_source = ephys.Unit & psth.UnitPsth
+    key_source = ephys.Unit & psth.UnitPsth & 'unit_quality != "all"'
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
@@ -395,7 +411,7 @@ class UnitLevelTrackingReport(dj.Computed):
     """
 
     # only units with ingested tracking
-    key_source = ephys.Unit & tracking.Tracking
+    key_source = ephys.Unit & tracking.Tracking & 'unit_quality != "all"'
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
@@ -426,6 +442,7 @@ class UnitLevelTrackingReport(dj.Computed):
         self.insert1({**key, **fig_dict})
 
 # ============================= PROJECT LEVEL ====================================
+
 
 @schema
 class ProjectLevelProbeTrack(dj.Computed):
@@ -494,9 +511,9 @@ report_tables = [SessionLevelReport,
 
 
 def get_wr_sessdate(key):
-    water_res_num, sess_date = (lab.WaterRestriction * experiment.Session & key).fetch1(
-        'water_restriction_number', 'session_date')
-    return water_res_num, datetime.strftime(sess_date, '%Y%m%d')
+    water_res_num, session_time = (lab.WaterRestriction * experiment.Session & key).fetch1(
+        'water_restriction_number', 'session_time')
+    return water_res_num, datetime.strftime(session_time.date(), '%Y%m%d')
 
 
 def save_figs(figs, fig_names, dir2save, prefix):

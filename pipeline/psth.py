@@ -520,8 +520,7 @@ def compute_CD_projected_psth(units, time_period=None):
              ipsi-trials CD projected trial-psth
              psth time-stamps
     """
-    unit_hemi = (ephys.ProbeInsertion.InsertionLocation * experiment.BrainLocation
-                 & units).fetch('hemisphere')
+    unit_hemi = _get_units_hemisphere(units)
     if len(set(unit_hemi)) != 1:
         raise Exception('Units from both hemispheres found')
     else:
