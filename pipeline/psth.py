@@ -200,7 +200,8 @@ class TrialCondition(dj.Lookup):
             else:
                 restr[k] = v
 
-        stim_attrs = set(experiment.Photostim.heading.names) - set(experiment.Session.heading.names)
+        stim_attrs = set((experiment.Photostim * experiment.PhotostimBrainRegion
+                          * experiment.PhotostimEvent).heading.names) - set(experiment.Session.heading.names)
         behav_attrs = set(experiment.BehaviorTrial.heading.names)
 
         _stim_key = {k: v for k, v in _restr.items() if k in stim_attrs}
@@ -210,7 +211,8 @@ class TrialCondition(dj.Lookup):
         behav_key = {k: v for k, v in restr.items() if k in behav_attrs}
 
         return (((experiment.BehaviorTrial & behav_key) - [{k: v} for k, v in _behav_key.items()]) -
-                (experiment.PhotostimEvent * (experiment.Photostim & stim_key) - [{k: v} for k, v in _stim_key.items()]).proj())
+                ((experiment.PhotostimEvent * experiment.PhotostimBrainRegion * experiment.Photostim & stim_key)
+                 - [{k: v} for k, v in _stim_key.items()]).proj())
 
     @classmethod
     def _get_trials_include_stim(cls, **kwargs):
@@ -224,7 +226,8 @@ class TrialCondition(dj.Lookup):
             else:
                 restr[k] = v
 
-        stim_attrs = set(experiment.Photostim.heading.names) - set(experiment.Session.heading.names)
+        stim_attrs = set((experiment.Photostim * experiment.PhotostimBrainRegion
+                          * experiment.PhotostimEvent).heading.names) - set(experiment.Session.heading.names)
         behav_attrs = set(experiment.BehaviorTrial.heading.names)
 
         _stim_key = {k: v for k, v in _restr.items() if k in stim_attrs}
@@ -234,7 +237,8 @@ class TrialCondition(dj.Lookup):
         behav_key = {k: v for k, v in restr.items() if k in behav_attrs}
 
         return (((experiment.BehaviorTrial & behav_key) - [{k: v} for k, v in _behav_key.items()]) &
-                (experiment.PhotostimEvent * (experiment.Photostim & stim_key) - [{k: v} for k, v in _stim_key.items()]).proj())
+                ((experiment.PhotostimEvent * experiment.PhotostimBrainRegion * experiment.Photostim & stim_key)
+                 - [{k: v} for k, v in _stim_key.items()]).proj())
 
 
 @schema
@@ -251,10 +255,12 @@ class UnitPsth(dj.Computed):
     def key_source(self):
         """
         For those conditions that include stim, process those with PhotostimBrainRegion already computed only
+        Only units not of type "all"
         """
-        nostim = ephys.Unit * (TrialCondition & 'trial_condition_func = "_get_trials_exclude_stim"')
+        nostim = (ephys.Unit * (TrialCondition & 'trial_condition_func = "_get_trials_exclude_stim"')
+                  & 'unit_quality != "all"')
         stim = ((ephys.Unit & (experiment.Session & experiment.PhotostimBrainRegion))
-                * (TrialCondition & 'trial_condition_func = "_get_trials_include_stim"'))
+                * (TrialCondition & 'trial_condition_func = "_get_trials_include_stim"') & 'unit_quality != "all"')
         return nostim.proj() + stim.proj()
 
     def make(self, key):
