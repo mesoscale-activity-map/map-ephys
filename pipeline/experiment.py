@@ -12,9 +12,10 @@ schema = dj.schema(get_schema_name('experiment'))
 class Session(dj.Manual):
     definition = """
     -> lab.Subject
-    session : smallint 		# session number
+    session: smallint 		# session number
     ---
-    session_time  : datetime
+    session_date: date
+    session_time: time
     -> lab.Person
     -> lab.Rig
     """
@@ -78,7 +79,7 @@ class Photostim(dj.Manual):
         theta:       decimal(5, 2) # (deg) - elevation - rotation about the ml-axis [0, 180] - w.r.t the z+ axis
         phi:         decimal(5, 2) # (deg) - azimuth - rotation about the dv-axis [0, 360] - w.r.t the x+ axis
         ---
-        -> lab.BrainArea
+        -> lab.BrainArea           # target brain area for photostim 
         """
 
     class Profile(dj.Part):
@@ -97,7 +98,7 @@ class PhotostimBrainRegion(dj.Computed):
     -> Photostim
     ---
     -> lab.BrainArea.proj(stim_brain_area='brain_area')
-    stim_laterality: enum('left', 'right', 'bilateral')
+    stim_laterality: enum('left', 'right', 'both')
     """
 
     def make(self, key):
@@ -106,7 +107,7 @@ class PhotostimBrainRegion(dj.Computed):
         if len(set(brain_areas)) > 1:
             raise ValueError('Multiple different brain areas for one photostim protocol is unsupported')
         if (ml_locations > 0).any() and (ml_locations < 0).any():
-            lat = 'bilateral'
+            lat = 'both'
         elif (ml_locations > 0).all():
             lat = 'right'
         elif (ml_locations < 0).all():

@@ -198,11 +198,11 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
 
     bi_stim_cond = (psth.TrialCondition
                     & {'trial_condition_name':
-                       'all_noearlylick_bilateral_alm_stim'}).fetch1('KEY')
+                       'all_noearlylick_both_alm_stim'}).fetch1('KEY')
 
     # get photostim duration
     stim_durs = np.unique((experiment.Photostim & experiment.PhotostimEvent
-                           * psth.TrialCondition().get_trials('all_noearlylick_bilateral_alm_stim')
+                           * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')
                            & probe_insertion).fetch('duration'))
     stim_dur = _extract_one_stim_dur(stim_durs)
 
@@ -375,10 +375,10 @@ def plot_avg_contra_ipsi_psth(units, axs=None):
     return fig
 
 
-def plot_psth_photostim_effect(units, condition_name_kw=['bilateral_alm'], axs=None):
+def plot_psth_photostim_effect(units, condition_name_kw=['both_alm'], axs=None):
     """
     For the specified `units`, plot PSTH comparison between stim vs. no-stim with left/right trial instruction
-    The stim location (or other appropriate search keywords) can be specified in `condition_name_kw` (default: bilateral ALM)
+    The stim location (or other appropriate search keywords) can be specified in `condition_name_kw` (default: both ALM)
     """
     units = units.proj()
 

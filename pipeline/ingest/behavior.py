@@ -253,6 +253,7 @@ class BehaviorIngest(dj.Imported):
             'trial', ('ttype', 'stim', 'settings', 'state_times', 'state_names',
                       'state_data', 'event_data', 'event_times', 'trial_start'))
 
+        sess_datetimes = []
         for f in matches:
 
             if os.stat(f).st_size/1024 < 1000:
@@ -265,11 +266,8 @@ class BehaviorIngest(dj.Imported):
             SessionData = mat['SessionData'].flatten()
 
             # parse session datetime
-            if 'session_time' not in skey:
-                session_datetime = SessionData['Info'][0]['SessionDate'] + ' ' + SessionData['Info'][0]['SessionStartTime_UTC']
-                skey['session_time'] = datetime.datetime.strptime(session_datetime, '%d-%b-%Y %H:%M:%S')
-                assert skey.pop('session_date') == datetime.datetime.strptime(
-                    str(SessionData['Info'][0]['SessionDate']), '%d-%b-%Y').date()
+            sess_datetime = SessionData['Info'][0]['SessionDate'] + ' ' + SessionData['Info'][0]['SessionStartTime_UTC']
+            sess_datetimes.append(datetime.datetime.strptime(sess_datetime, '%d-%b-%Y %H:%M:%S'))
 
             AllTrialTypes = SessionData['TrialTypes'][0]
             AllTrialSettings = SessionData['TrialSettings'][0]
@@ -299,7 +297,7 @@ class BehaviorIngest(dj.Imported):
 
             z = zip(AllTrialTypes, AllStimTrials, AllTrialSettings,
                     AllStateTimestamps, AllStateNames, AllStateData,
-                    AllEventData, AllEventTimestamps)
+                    AllEventData, AllEventTimestamps, AllTrialStarts)
 
             trials = chain(trials, z)  # concatenate the files
 
@@ -314,6 +312,12 @@ class BehaviorIngest(dj.Imported):
         # Trial data seems valid; synthesize session id & add session record
         # XXX: note - later breaks can result in Sessions without valid trials
         #
+
+        session_datetime = sorted(sess_datetimes)[0]
+        assert skey.pop('session_date') == session_datetime.date()
+
+        skey['session_date'] = session_datetime.date()
+        skey['session_time'] = session_datetime.time()
 
         log.debug('synthesizing session ID')
         session = (dj.U().aggr(experiment.Session() & {'subject_id': subject_id},
@@ -334,7 +338,7 @@ class BehaviorIngest(dj.Imported):
                                     'photostim_location', 'photostim_trial',
                                     'photostim_trial_event')}
 
-        i = 0
+        i = 0  # trial numbering starts at 1
         for t in trials:
 
             #

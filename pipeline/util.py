@@ -22,6 +22,8 @@ def _get_trial_event_times(events, units, trial_cond_name):
 
 def _get_units_hemisphere(units):
     ml_locations = np.unique((ephys.ProbeInsertion.InsertionLocation & units).fetch('ml_location'))
+    if len(ml_locations) == 0:
+        raise Exception('No ProbeInsertion.InsertionLocation available')
     if (ml_locations > 0).any() and (ml_locations < 0).any():
         raise ValueError('The specified units belongs to both hemispheres...')
     if (ml_locations > 0).all():

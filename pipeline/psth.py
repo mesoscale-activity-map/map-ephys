@@ -136,7 +136,7 @@ class TrialCondition(dj.Lookup):
         ]
 
         # PHOTOSTIM conditions
-        stim_locs = [('left', 'alm'), ('right', 'alm'), ('bilateral', 'alm')]
+        stim_locs = [('left', 'alm'), ('right', 'alm'), ('both', 'alm')]
         for hemi, brain_area in stim_locs:
             for instruction in (None, 'left', 'right'):
                 condition = {'trial_condition_name': '_'.join(filter(None, ['all', 'noearlylick',

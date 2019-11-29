@@ -86,13 +86,13 @@ class EphysIngest(dj.Imported):
         # Find Ephys Recording
         #
         key = (experiment.Session & key).fetch1()
-        sinfo = ((lab.WaterRestriction()
-                  * lab.Subject().proj()
-                  * experiment.Session()) & key).fetch1()
+        sinfo = ((lab.WaterRestriction
+                  * lab.Subject.proj()
+                  * experiment.Session.proj(..., '-session_time')) & key).fetch1()
 
         rigpath = EphysDataPath().fetch1('data_path')
         h2o = sinfo['water_restriction_number']
-        date = key['session_time'].date().strftime('%Y%m%d')
+        date = key['session_date'].strftime('%Y%m%d')
 
         dpath = pathlib.Path(rigpath, h2o, date)
         dglob = '[0-9]/{}'  # probe directory pattern
@@ -184,6 +184,11 @@ class EphysIngest(dj.Imported):
             else:
                 start_behav = 0
             trials = np.arange(len(sync_behav_range)) - start_behav
+
+        # mapping to the behav-trial numbering
+        # "trials" here is just the 0-based indices of the behavioral trials
+        behav_trials = (experiment.SessionTrial & skey).fetch('trial')
+        trials = behav_trials[trials]
 
         # trialize the spikes & subtract go cue
         t, trial_spikes, trial_units = 0, [], []
