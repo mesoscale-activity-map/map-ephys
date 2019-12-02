@@ -249,7 +249,7 @@ class ProbeType(dj.Lookup):
         """
         Create `ProbeType` and `Electrode` for neuropixels probe 1.0 (3A and 3B)
         For electrode location, the (0, 0) is the bottom left corner of the probe (ignore the tip portion)
-        Following SpikeGLX, electrode numbering is 0-indexing
+        Electrode numbering is 1-indexing
         """
 
         site_count = 960
