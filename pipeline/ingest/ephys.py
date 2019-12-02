@@ -337,9 +337,9 @@ class EphysIngest(dj.Imported):
 
         if '1.0' in probe_type:
             eg_members = []
-            probe_type = {'probe_type': 'neuropixels_1.0'}
+            probe_type = {'probe_type': probe_type}
+            q_electrodes = lab.ProbeType.Electrode & probe_type
             for shank, shank_col, shank_row, is_used in npx_meta.shankmap['data']:
-                q_electrodes = lab.ProbeType.Electrode & probe_type
                 electrode = (q_electrodes & {'shank': shank, 'shank_col': shank_col, 'shank_row': shank_row}).fetch1(
                     'KEY')
                 eg_members.append({**electrode, 'is_used': is_used, 'electrode_group': 0})

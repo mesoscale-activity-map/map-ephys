@@ -242,7 +242,7 @@ class ProbeType(dj.Lookup):
 
     @property
     def contents(self):
-        return zip(['silicon_probe', 'tetrode_array', 'neuropixel_1.0'])
+        return zip(['silicon_probe', 'tetrode_array', 'neuropixels 1.0 - 3A', 'neuropixels 1.0 - 3B'])
 
 
 @schema
@@ -297,43 +297,45 @@ class PhotostimDevice(dj.Lookup):
 
 # ========================== HELPER FUNCTIONS ============================
 
-def create_neuropixels_probe(probe_type='neuropixels_1.0'):
+def create_neuropixels_probe():
     """
     Create `ProbeType` and `Electrode` for neuropixels probe 1.0 (3A and 3B)
     For electrode location, the (0, 0) is the bottom left corner of the probe (ignore the tip portion)
     Following SpikeGLX, electrode numbering is 0-indexing
     """
-    if probe_type == 'neuropixels_1.0':
-        site_count = 960
-        col_count = 2
-        col_spacing = 32  # (um)
-        row_spacing = 20  # (um)
-        white_spacing = 16  # (um)
-        row_count = int(site_count / col_count)
 
-        x_coords = np.tile([0, 0+col_spacing], row_count)
-        x_white_spaces = np.tile([white_spacing, white_spacing, 0, 0], int(row_count/2))
+    site_count = 960
+    col_count = 2
+    col_spacing = 32  # (um)
+    row_spacing = 20  # (um)
+    white_spacing = 16  # (um)
+    row_count = int(site_count / col_count)
 
-        x_coords = x_coords + x_white_spaces
-        y_coords = np.repeat(np.arange(row_count) * row_spacing, 2)
+    x_coords = np.tile([0, 0+col_spacing], row_count)
+    x_white_spaces = np.tile([white_spacing, white_spacing, 0, 0], int(row_count/2))
 
-        cols = np.tile([0, 1], row_count)
-        rows = np.repeat(range(row_count), 2)
+    x_coords = x_coords + x_white_spaces
+    y_coords = np.repeat(np.arange(row_count) * row_spacing, 2)
 
-        electrodes = [{'electrode': e_id + 1,  # electrode number is 1-based index
-                       'shank': 0,
-                       'shank_col': c_id,
-                       'shank_row': r_id,
-                       'x_coord': x,
-                       'y_coord': y,
-                       'z_coord': 0} for e_id, (c_id, r_id, x, y) in enumerate(
-            zip(cols, rows, x_coords, y_coords))]
+    cols = np.tile([0, 1], row_count)
+    rows = np.repeat(range(row_count), 2)
 
-    else:
-        raise ValueError(f'Unknown probe_type: {probe_type}')
+    electrodes = [{'electrode': e_id + 1,  # electrode number is 1-based index
+                   'shank': 0,
+                   'shank_col': c_id,
+                   'shank_row': r_id,
+                   'x_coord': x,
+                   'y_coord': y,
+                   'z_coord': 0} for e_id, (c_id, r_id, x, y) in enumerate(
+        zip(cols, rows, x_coords, y_coords))]
 
     # the insert part
-    probe_type = {'probe_type': probe_type}
+    probe_type = {'probe_type': 'neuropixels 1.0 - 3A'}
+    with ProbeType.connection.transaction:
+        ProbeType.insert1(probe_type, skip_duplicates=True)
+        ProbeType.Electrode.insert([{**probe_type, **e} for e in electrodes], skip_duplicates=True)
+
+    probe_type = {'probe_type': 'neuropixels 1.0 - 3B'}
     with ProbeType.connection.transaction:
         ProbeType.insert1(probe_type, skip_duplicates=True)
         ProbeType.Electrode.insert([{**probe_type, **e} for e in electrodes], skip_duplicates=True)

@@ -31,7 +31,7 @@ class ProbeInsertion(dj.Manual):
         dv_location: decimal(6, 2) # (um) dorsal-ventral; surface of the brain is 0; more ventral is more negative
         theta:       decimal(5, 2) # (deg) - elevation - rotation about the ml-axis [0, 180] - w.r.t the z+ axis
         phi:         decimal(5, 2) # (deg) - azimuth - rotation about the dv-axis [0, 360] - w.r.t the x+ axis
-        beta:        decimal(5, 2) # (deg) rotation about the shank of the probe - 0 is the probe-front facing anterior
+        beta:        decimal(5, 2) # (deg) rotation about the shank of the probe - clockwise is increasing in degree - 0 is the probe-front facing anterior
         """
 
     class RecordableBrainRegion(dj.Part):
