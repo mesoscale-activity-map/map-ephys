@@ -568,6 +568,8 @@ class EphysIngest(dj.Imported):
 class NeuropixelsMeta:
 
     def __init__(self, meta_filepath):
+        # a good processing reference: https://github.com/jenniferColonell/Neuropixels_evaluation_tools/blob/master/SGLXMetaToCoords.m
+
         self.fname = meta_filepath
         self.meta = self._read_meta()
 
