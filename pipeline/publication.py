@@ -1057,7 +1057,7 @@ class ArchivedTrackingVideo(dj.Imported):
                        if k in experiment.SessionTrial.primary_key}
 
             tv_rec = {**vt_key, **trk_key, **pf_key}
-            ArchivedTrackingVideo.TrialVideo.insert1({**tv_rec})
+            self.TrialVideo.insert1({**tv_rec})
 
 
 def test_flist(fname='globus-index-full.txt'):

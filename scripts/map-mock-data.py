@@ -54,7 +54,6 @@ def mockdata():
     reload(tracking)
     reload(publication)
     try:
-        # TODO: these should be loaded in a more 'official' way
         lab.Person().insert1({
             'username': 'unknown',
             'fullname': 'Unknown'},
@@ -627,114 +626,6 @@ def mockdata():
             'room': '2w.334',
             'rig_description': 'Recording computer'},
             skip_duplicates=True
-        )
-
-        # ---- Brain Location ----
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'left_alm',
-            'brain_area': 'ALM',
-            'hemisphere': 'left',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'right_alm',
-            'brain_area': 'ALM',
-            'hemisphere': 'right',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'both_alm',
-            'brain_area': 'ALM',
-            'hemisphere': 'both',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'left_medulla',
-            'brain_area': 'Medulla',
-            'hemisphere': 'left',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'right_medulla',
-            'brain_area': 'Medulla',
-            'hemisphere': 'right',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'both_medulla',
-            'brain_area': 'Medulla',
-            'hemisphere': 'both',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'left_striatum',
-            'brain_area': 'Striatum',
-            'hemisphere': 'left',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'right_striatum',
-            'brain_area': 'Striatum',
-            'hemisphere': 'right',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'both_striatum',
-            'brain_area': 'Striatum',
-            'hemisphere': 'both',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'left_thalamus',
-            'brain_area': 'Thalamus',
-            'hemisphere': 'left',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'right_thalamus',
-            'brain_area': 'Thalamus',
-            'hemisphere': 'right',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'both_thalamus',
-            'brain_area': 'Thalamus',
-            'hemisphere': 'both',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        # Probe (Neuropixel)
-        npx_probe_model = '15131808323'   # using Model No. - SN TBD?
-        lab.Probe.insert1({
-            'probe': npx_probe_model,
-            'probe_type': 'neuropixel'},
-            skip_duplicates=True,
-        )
-        lab.Probe.Electrode.insert(
-            ({'probe': npx_probe_model, 'electrode': x} for
-             x in range(1, 961)),
-            skip_duplicates=True,
         )
 
     except Exception as e:

@@ -3,6 +3,7 @@
 import os
 import logging
 import pathlib
+from os import path
 
 from glob import glob
 from itertools import repeat
@@ -85,9 +86,9 @@ class EphysIngest(dj.Imported):
         # Find Ephys Recording
         #
         key = (experiment.Session & key).fetch1()
-        sinfo = ((lab.WaterRestriction()
-                  * lab.Subject().proj()
-                  * experiment.Session()) & key).fetch1()
+        sinfo = ((lab.WaterRestriction
+                  * lab.Subject.proj()
+                  * experiment.Session.proj(..., '-session_time')) & key).fetch1()
 
         rigpath = EphysDataPath().fetch1('data_path')
         h2o = sinfo['water_restriction_number']
@@ -95,6 +96,15 @@ class EphysIngest(dj.Imported):
 
         dpath = pathlib.Path(rigpath, h2o, date)
         dglob = '[0-9]/{}'  # probe directory pattern
+
+        # npx ap.meta: '{}_*.imec.ap.meta'.format(h2o)
+        npx_meta_files = list(dpath.glob(dglob.format('{}_*.imec[0-9].ap.meta'.format(h2o))))
+        if not npx_meta_files:
+            log.warning('Error - no imec.ap.meta files. Skipping.')
+            return
+
+        print(npx_meta_files)
+        npx_metas = {f.parent.name: NeuropixelsMeta(f) for f in npx_meta_files}
 
         v3spec = '{}_*_jrc.mat'.format(h2o)
         # old v3spec = '{}_g0_*.imec.ap_imec3_opt3_jrc.mat'.format(h2o)
@@ -106,8 +116,8 @@ class EphysIngest(dj.Imported):
 
         if (v3files and v4files) or not (v3files or v4files):
             log.warning(
-                'Error - v3files ({}) + v4files ({}). Skipping.'.format(
-                    v3files, v4files))
+                'Error - v3files ({}) + v4files ({}) - Search path: {}. Skipping.'.format(
+                    v3files, v4files, dpath))
             return
 
         if v3files:
@@ -119,9 +129,9 @@ class EphysIngest(dj.Imported):
             loader = self._load_v4
 
         for f in files:
-            self._load(loader(sinfo, rigpath, dpath, f.relative_to(dpath)))
+            self._load(loader(sinfo, rigpath, dpath, f.relative_to(dpath)), npx_metas[f.parent.name])
 
-    def _load(self, data):
+    def _load(self, data, npx_meta):
 
         sinfo = data['sinfo']
         rigpath = data['rigpath']
@@ -175,6 +185,11 @@ class EphysIngest(dj.Imported):
                 start_behav = 0
             trials = np.arange(len(sync_behav_range)) - start_behav
 
+        # mapping to the behav-trial numbering
+        # "trials" here is just the 0-based indices of the behavioral trials
+        behav_trials = (experiment.SessionTrial & skey).fetch('trial')
+        trials = behav_trials[trials]
+
         # trialize the spikes & subtract go cue
         t, trial_spikes, trial_units = 0, [], []
 
@@ -211,9 +226,9 @@ class EphysIngest(dj.Imported):
               for t in range(len(trials))] for u in set(units)])
 
         # create probe insertion records
-        self._gen_probe_insert(sinfo, probe)
+        insertion_key = self._gen_probe_insert(sinfo, probe, npx_meta)
 
-        # TODO: electrode config should be passed back above & used here
+        electrode_keys = {c['electrode']: c for c in (lab.ElectrodeConfig.Electrode & insertion_key).fetch('KEY')}
 
         # insert Unit
         log.info('.. ephys.Unit')
@@ -223,16 +238,12 @@ class EphysIngest(dj.Imported):
 
             for i, u in enumerate(set(units)):
 
-                ib.insert1({**skey,
-                            'insertion_number': probe,
+                ib.insert1({**skey, **insertion_key,
+                            **electrode_keys[vmax_unit_site[i]],
                             'clustering_method': method,
                             'unit': u,
                             'unit_uid': u,
                             'unit_quality': unit_notes[i],
-                            'probe': '15131808323',
-                            'electrode_config_name': 'npx_first384',
-                            'electrode_group': 0,
-                            'electrode': vmax_unit_site[i],
                             'unit_posx': unit_xpos[i],
                             'unit_posy': unit_ypos[i],
                             'unit_amp': unit_amp[i],
@@ -286,9 +297,9 @@ class EphysIngest(dj.Imported):
 
         log.info('ephys ingest for {} complete'.format(skey))
 
-    def _gen_probe_insert(self, sinfo, probe):
+    def _gen_probe_insert(self, sinfo, probe, npx_meta):
         '''
-        generate probe insertion for session / probe
+        generate probe insertion for session / probe - for neuropixels recording
 
         Arguments:
 
@@ -297,46 +308,65 @@ class EphysIngest(dj.Imported):
 
         '''
 
-        ekey = {
-            'subject_id': sinfo['subject_id'],
-            'session': sinfo['session'],
-            'insertion_number': probe
-        }
+        part_no = npx_meta.probe_SN
 
-        part_no = '15131808323'  # probe model hard-coded here
-        ec_name = 'npx_first384'
-        ec = {'probe': part_no, 'electrode_config_name': ec_name}
+        e_config = self._gen_electrode_config(npx_meta)
 
-        # create hardcoded 1:384 ElectrodeConfig if needed
-        if not (lab.ElectrodeConfig & ec):
-
-            log.info('.. creating lab.ElectrodeConfig')
-
-            eg = {'probe': part_no, 'electrode_group': 0}
-
-            eg_member = [{'electrode': e} for e in range(1, 385)]
-
-            ec_hash = dict_to_hash(
-                {**eg, **{str(k): v for k, v in enumerate(eg_member)}})
-
-            lab.ElectrodeConfig.insert1(
-                {**ec, 'electrode_config_hash': ec_hash})
-
-            lab.ElectrodeConfig.ElectrodeGroup.insert1(
-                {**eg, 'electrode_config_name': ec_name})
-
-            lab.ElectrodeConfig.Electrode.insert(
-                {**eg, **m, 'electrode_config_name': ec_name}
-                for m in eg_member)
+        # ------ ProbeInsertion ------
+        insertion_key = {'subject_id': sinfo['subject_id'],
+                         'session': sinfo['session'],
+                         'insertion_number': probe}
 
         # add probe insertion
         log.info('.. creating probe insertion')
 
-        ephys.ProbeInsertion.insert1(
-            {**ekey, 'probe': part_no, 'electrode_config_name': ec_name})
+        lab.Probe.insert1({'probe': part_no, 'probe_type': e_config['probe_type']}, skip_duplicates=True)
 
-        ephys.ProbeInsertion.RecordingSystemSetup.insert1(
-            {**ekey, 'sampling_rate': 30000})
+        ephys.ProbeInsertion.insert1({**insertion_key,  **e_config, 'probe': part_no})
+
+        ephys.ProbeInsertion.RecordingSystemSetup.insert1({**insertion_key, 'sampling_rate': npx_meta.meta['imSampRate']})
+
+        return insertion_key
+
+    def _gen_electrode_config(self, npx_meta):
+        """
+        Generate and insert (if needed) an ElectrodeConfiguration based on the specified neuropixels meta information
+        """
+
+        probe_type = npx_meta.probe_model
+
+        if '1.0' in probe_type:
+            eg_members = []
+            probe_type = {'probe_type': probe_type}
+            q_electrodes = lab.ProbeType.Electrode & probe_type
+            for shank, shank_col, shank_row, is_used in npx_meta.shankmap['data']:
+                electrode = (q_electrodes & {'shank': shank, 'shank_col': shank_col, 'shank_row': shank_row}).fetch1(
+                    'KEY')
+                eg_members.append({**electrode, 'is_used': is_used, 'electrode_group': 0})
+        else:
+            raise NotImplementedError('Processing for neuropixels probe model {} not yet implemented'.format(probe_type))
+
+        # ---- compute hash for the electrode config (hash of dict of all ElectrodeConfig.Electrode) ----
+        ec_hash = dict_to_hash({k['electrode']: k for k in eg_members})
+
+        el_list = sorted([k['electrode'] for k in eg_members])
+        el_jumps = [0] + np.where(np.diff(el_list) > 1)[0].tolist() + [len(el_list) - 1]
+        ec_name = '; '.join([f'{el_list[s]}-{el_list[e]}' for s, e in zip(el_jumps[:-1], el_jumps[1:])])
+
+        e_config = {**probe_type, 'electrode_config_name': ec_name}
+
+        # ---- make new ElectrodeConfig if needed ----
+        if not (lab.ElectrodeConfig & {'electrode_config_hash': ec_hash}):
+
+            log.info('.. creating lab.ElectrodeConfig: {}'.format(ec_name))
+
+            lab.ElectrodeConfig.insert1({**e_config, 'electrode_config_hash': ec_hash})
+
+            lab.ElectrodeConfig.ElectrodeGroup.insert1({**e_config, 'electrode_group': 0})
+
+            lab.ElectrodeConfig.Electrode.insert({**e_config, **m} for m in eg_members)
+
+        return e_config
 
     @staticmethod
     def _decode_notes(fh, notes):
@@ -421,7 +451,7 @@ class EphysIngest(dj.Imported):
             'ef_path': ef_path,
             'probe': probe,
             'skey': skey,
-            'method': 'jrclust',
+            'method': 'jrclust_v3',
             'hz': hz,
             'spikes': spikes,
             'spike_sites': spike_sites,
@@ -533,3 +563,146 @@ class EphysIngest(dj.Imported):
         }
 
         return data
+
+
+class NeuropixelsMeta:
+
+    def __init__(self, meta_filepath):
+        # a good processing reference: https://github.com/jenniferColonell/Neuropixels_evaluation_tools/blob/master/SGLXMetaToCoords.m
+
+        self.fname = meta_filepath
+        self.meta = self._read_meta()
+
+        # Infer npx probe model (e.g. 1.0 (3A, 3B) or 2.0)
+        probe_model = self.meta.get('imDatPrb_type', 1)
+        if probe_model <= 1:
+            if 'typeEnabled' in self.meta:
+                self.probe_model = 'neuropixels 1.0 - 3A'
+            elif 'typeImEnabled' in self.meta:
+                self.probe_model = 'neuropixels 1.0 - 3B'
+        else:
+            self.probe_model = str(probe_model)
+
+        # Get probe serial number - 'imProbeSN' for 3A and 'imDatPrb_sn' for 3B
+        try:
+            self.probe_SN = self.meta.get('imProbeSN', self.meta.get('imDatPrb_sn'))
+        except KeyError:
+            raise KeyError('Probe Serial Number not found in either "imProbeSN" or "imDatPrb_sn"')
+
+        self.chanmap = self._parse_chanmap(self.meta['~snsChanMap']) if '~snsChanMap' in self.meta else None
+        self.shankmap = self._parse_shankmap(self.meta['~snsShankMap']) if '~snsShankMap' in self.meta else None
+        self.imroTbl = self._parse_imrotbl(self.meta['~imroTbl']) if '~imroTbl' in self.meta else None
+
+    def _read_meta(self):
+        '''
+        Read metadata in 'k = v' format.
+
+        The fields '~snsChanMap' and '~snsShankMap' are further parsed into
+        'snsChanMap' and 'snsShankMap' dictionaries via calls to
+        Neuropixels._parse_chanmap and Neuropixels._parse_shankmap.
+        '''
+
+        fname = self.fname
+
+        res = {}
+        with open(fname) as f:
+            for l in (l.rstrip() for l in f):
+                if '=' in l:
+                    try:
+                        k, v = l.split('=')
+                        v = handle_string(v)
+                        res[k] = v
+                    except ValueError:
+                        pass
+        return res
+
+    @staticmethod
+    def _parse_chanmap(raw):
+        '''
+        https://github.com/billkarsh/SpikeGLX/blob/master/Markdown/UserManual.md#channel-map
+        Parse channel map header structure. Converts:
+
+            '(x,y,z)(c0,x:y)...(cI,x:y),(sy0;x:y)'
+
+        e.g:
+
+            '(384,384,1)(AP0;0:0)...(AP383;383:383)(SY0;768:768)'
+
+        into dict of form:
+
+            {'shape': [x,y,z], 'c0': [x,y], ... }
+        '''
+
+        res = {}
+        for u in (i.rstrip(')').split(';') for i in raw.split('(') if i != ''):
+            if (len(u)) == 1:
+                res['shape'] = u[0].split(',')
+            else:
+                res[u[0]] = u[1].split(':')
+
+        return res
+
+    @staticmethod
+    def _parse_shankmap(raw):
+        '''
+        https://github.com/billkarsh/SpikeGLX/blob/master/Markdown/UserManual.md#shank-map
+        Parse shank map header structure. Converts:
+
+            '(x,y,z)(a:b:c:d)...(a:b:c:d)'
+
+        e.g:
+
+            '(1,2,480)(0:0:192:1)...(0:1:191:1)'
+
+        into dict of form:
+
+            {'shape': [x,y,z], 'data': [[a,b,c,d],...]}
+
+        '''
+        res = {'shape': None, 'data': []}
+
+        for u in (i.rstrip(')') for i in raw.split('(') if i != ''):
+            if ',' in u:
+                res['shape'] = [int(d) for d in u.split(',')]
+            else:
+                res['data'].append([int(d) for d in u.split(':')])
+
+        return res
+
+    @staticmethod
+    def _parse_imrotbl(raw):
+        '''
+        https://github.com/billkarsh/SpikeGLX/blob/master/Markdown/UserManual.md#imro-per-channel-settings
+        Parse imro tbl structure. Converts:
+
+            '(X,Y,Z)(A B C D E)...(A B C D E)'
+
+        e.g.:
+
+            '(641251209,3,384)(0 1 0 500 250)...(383 0 0 500 250)'
+
+        into dict of form:
+
+            {'shape': (x,y,z), 'data': []}
+        '''
+        res = {'shape': None, 'data': []}
+
+        for u in (i.rstrip(')') for i in raw.split('(') if i != ''):
+            if ',' in u:
+                res['shape'] = [int(d) for d in u.split(',')]
+            else:
+                res['data'].append([int(d) for d in u.split(' ')])
+
+        return res
+
+
+def handle_string(value):
+    if isinstance(value, str):
+        try:
+            value = int(value)
+        except ValueError:
+            try:
+                value = float(value)
+            except ValueError:
+                pass
+    return value

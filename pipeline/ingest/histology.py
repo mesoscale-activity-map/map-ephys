@@ -126,7 +126,7 @@ class HistologyIngest(dj.Imported):
         valid = [isinstance(n, (str,)) for n in names]
         goodn = np.where(np.array(valid))[0]
 
-        electrodes = (ephys.ProbeInsertion.proj() * lab.Probe.Electrode.proj()
+        electrodes = (ephys.ProbeInsertion.proj() * lab.ElectrodeConfig.Electrode.proj()
                       & egmap[probe]).fetch(order_by='electrode asc')
 
         recs = ((*l[0], ccf.CCFLabel.CCF_R3_20UM_ID, *l[1]) for l in

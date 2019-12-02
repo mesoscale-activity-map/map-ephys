@@ -1,4 +1,5 @@
 import datajoint as dj
+import numpy as np
 from . import get_schema_name
 
 schema = dj.schema(get_schema_name('lab'))
@@ -21,6 +22,14 @@ class Rig(dj.Manual):
     room            : varchar(20) # example 2w.342
     rig_description : varchar(1024) 
     """
+
+
+@schema
+class AnimalStrain(dj.Lookup):
+    definition = """
+    animal_strain       : varchar(30)
+    """
+    contents = zip(['pl56', 'kj18'])
 
 
 @schema
@@ -51,6 +60,13 @@ class Subject(dj.Manual):
     sex                 : enum('M','F','Unknown')
     -> [nullable] AnimalSource  # where was the animal ordered from
     """
+
+    class Strain(dj.Part):
+        definition = """
+        # Subject strains
+        -> master
+        -> AnimalStrain
+        """
 
     class GeneModification(dj.Part):
         definition = """
@@ -140,7 +156,7 @@ class BrainArea(dj.Lookup):
     definition = """
     brain_area: varchar(32)
     ---
-    description = null : varchar (4000) # name of the brain area
+    description = null : varchar (4000) # name of the brain area (lab terms, not necessarily in AIBS)
     """
     contents = [('ALM', 'anterior lateral motor cortex'), ('vS1', 'vibrissal primary somatosensory cortex ("barrel cortex")'), ('Thalamus', 'Thalamus'), ('Medulla', 'Medulla'), ('Striatum', 'Striatum')]
     
@@ -164,7 +180,7 @@ class Surgery(dj.Manual):
     end_time            : datetime # end time
     surgery_description : varchar(256)
     """
-    # TODO: confirm location pos/neg convention (contradict with 'BrainLocation' used photostim and ephys)
+
     class VirusInjection(dj.Part):
         definition = """
         # Virus injections
@@ -173,8 +189,8 @@ class Surgery(dj.Manual):
         ---
         -> Virus
         -> SkullReference
-        ml_location     : Decimal(8,3) # um from ref left is positive 
         ap_location     : Decimal(8,3) # um from ref anterior is positive
+        ml_location     : Decimal(8,3) # um from ref right is positive 
         dv_location     : Decimal(8,3) # um from dura dorsal is positive 
         volume          : Decimal(10,3) # in nl
         dilution        : Decimal (10, 2) # 1 to how much
@@ -188,8 +204,8 @@ class Surgery(dj.Manual):
         procedure_id : int
         ---
         -> SkullReference
-        ml_location=null     : Decimal(8,3) # um from ref left is positive
         ap_location=null     : Decimal(8,3) # um from ref anterior is positive
+        ml_location=null     : Decimal(8,3) # um from ref right is positive
         dv_location=null     : Decimal(8,3) # um from dura dorsal is positive 
         surgery_procedure_description     : varchar(1000)
         """
@@ -208,36 +224,75 @@ class SurgeryLocation(dj.Manual):
 @schema
 class ProbeType(dj.Lookup):
     definition = """
-    probe_type: varchar(32)    
-    """
-
-    contents = zip(['silicon_probe', 'tetrode_array', 'neuropixel'])
-
-
-@schema
-class Probe(dj.Lookup):
-    definition = """  # represent a physical probe
-    probe: varchar(32)  # unique identifier for this model of probe (e.g. part number)
-    ---
-    -> ProbeType
-    probe_comment='' :  varchar(1000)
+    probe_type: varchar(32)  # e.g. neuropixels_1.0 
     """
 
     class Electrode(dj.Part):
         definition = """
         -> master
-        electrode: int     # electrode
+        electrode: int       # electrode index, starts at 0
         ---
-        x_coord=NULL: float   # (um) x coordinate of the electrode within the probe
-        y_coord=NULL: float   # (um) y coordinate of the electrode within the probe
-        z_coord=NULL: float   # (um) z coordinate of the electrode within the probe
+        shank: int           # shank index, starts at 0, advance left to right
+        shank_col: int       # column index, starts at 0, advance left to right
+        shank_row: int       # row index, starts at 0, advance tip to tail
+        x_coord=NULL: float  # (um) x coordinate of the electrode within the probe, (0, 0) is the tip of the probe
+        y_coord=NULL: float  # (um) y coordinate of the electrode within the probe, (0, 0) is the tip of the probe
+        z_coord=0: float     # (um) z coordinate of the electrode within the probe, (0, 0) is the tip of the probe
         """
+
+    @property
+    def contents(self):
+        return zip(['silicon_probe', 'tetrode_array', 'neuropixels 1.0 - 3A', 'neuropixels 1.0 - 3B'])
+
+    @staticmethod
+    def create_neuropixels_probe():
+        """
+        Create `ProbeType` and `Electrode` for neuropixels probe 1.0 (3A and 3B)
+        For electrode location, the (0, 0) is the bottom left corner of the probe (ignore the tip portion)
+        Electrode numbering is 1-indexing
+        """
+
+        site_count = 960
+        col_count = 2
+        col_spacing = 32  # (um)
+        row_spacing = 20  # (um)
+        white_spacing = 16  # (um)
+        row_count = int(site_count / col_count)
+
+        x_coords = np.tile([0, 0 + col_spacing], row_count)
+        x_white_spaces = np.tile([white_spacing, white_spacing, 0, 0], int(row_count / 2))
+
+        x_coords = x_coords + x_white_spaces
+        y_coords = np.repeat(np.arange(row_count) * row_spacing, 2)
+
+        cols = np.tile([0, 1], row_count)
+        rows = np.repeat(range(row_count), 2)
+
+        electrodes = [{'electrode': e_id + 1,  # electrode number is 1-based index
+                       'shank': 0,
+                       'shank_col': c_id,
+                       'shank_row': r_id,
+                       'x_coord': x,
+                       'y_coord': y,
+                       'z_coord': 0} for e_id, (c_id, r_id, x, y) in enumerate(
+            zip(cols, rows, x_coords, y_coords))]
+
+        # the insert part
+        probe_type = {'probe_type': 'neuropixels 1.0 - 3A'}
+        with ProbeType.connection.transaction:
+            ProbeType.insert1(probe_type, skip_duplicates = True)
+            ProbeType.Electrode.insert([{**probe_type, **e} for e in electrodes], skip_duplicates = True)
+
+        probe_type = {'probe_type': 'neuropixels 1.0 - 3B'}
+        with ProbeType.connection.transaction:
+            ProbeType.insert1(probe_type, skip_duplicates = True)
+            ProbeType.Electrode.insert([{**probe_type, **e} for e in electrodes], skip_duplicates = True)
 
 
 @schema
 class ElectrodeConfig(dj.Lookup):
     definition = """
-    -> Probe
+    -> ProbeType
     electrode_config_name: varchar(16)  # user friendly name
     ---
     electrode_config_hash: varchar(36)  # hash of the group and group_member (ensure uniqueness)
@@ -254,8 +309,20 @@ class ElectrodeConfig(dj.Lookup):
     class Electrode(dj.Part):
         definition = """
         -> master.ElectrodeGroup
-        -> Probe.Electrode
+        -> ProbeType.Electrode
+        ---
+        is_used: bool  # is this channel used for spatial average (ref channels are by default not used)
         """
+
+
+@schema
+class Probe(dj.Lookup):
+    definition = """  # represent a physical probe
+    probe: varchar(32)  # unique identifier for this model of probe (e.g. part number)
+    ---
+    -> ProbeType
+    probe_comment='' :  varchar(1000)
+    """
 
 
 @schema

@@ -85,13 +85,22 @@ def ingest_histology(*args):
     histology_ingest.HistologyIngest().populate(display_progress=True)
 
 
-def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': True}):
+def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': True}):
+
+    log.info('experiment.PhotostimBrainRegion.populate()')
+    experiment.PhotostimBrainRegion.populate(**populate_settings)
+
+    log.info('ephys.UnitCoarseBrainLocation.populate()')
+    ephys.UnitCoarseBrainLocation.populate(**populate_settings)
 
     log.info('ephys.UnitStat.populate()')
     ephys.UnitStat.populate(**populate_settings)
 
     log.info('ephys.UnitCellType.populate()')
     ephys.UnitCellType.populate(**populate_settings)
+
+
+def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': True}):
 
     log.info('psth.UnitPsth.populate()')
     psth.UnitPsth.populate(**populate_settings)
@@ -178,13 +187,18 @@ def automate_computation():
     from pipeline import report
     populate_settings = {'reserve_jobs': True, 'suppress_errors': True, 'display_progress': True}
     while True:
+        log.info('Populate for: Ephys - PSTH - Report')
+        populate_ephys(populate_settings)
         populate_psth(populate_settings)
         generate_report(populate_settings)
 
+        log.info('report.delete_outdated_probe_tracks()')
         report.delete_outdated_probe_tracks()
 
         # random sleep time between 5 to 10 minutes
-        time.sleep(np.random.randint(300, 600))
+        sleep_time = np.random.randint(300, 600)
+        log.info('Sleep: {} minutes'.format(sleep_time))
+        time.sleep(sleep_time)
 
 
 actions = {
