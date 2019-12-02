@@ -2,8 +2,8 @@
 import numpy as np
 
 import matplotlib.pyplot as plt
-from pipeline import psth, experiment, ephys
-from pipeline.plot.util import _get_trial_event_times
+from pipeline import psth
+from pipeline.util import _get_trial_event_times, _get_units_hemisphere
 
 
 _plt_xlim = [-3, 3]
@@ -61,8 +61,7 @@ def plot_unit_psth(unit_key, axs=None, title='', xlim=_plt_xlim):
     condition_name_kw: list of keywords to match for the TrialCondition name
     """
 
-    hemi = (ephys.ProbeInsertion.InsertionLocation
-            * experiment.BrainLocation & unit_key).fetch1('hemisphere')
+    hemi = _get_units_hemisphere(unit_key)
 
     ipsi_hit_unit_psth = psth.UnitPsth.get_plotting_data(
         unit_key, {'trial_condition_name': f'good_noearlylick_{"left" if hemi == "left" else "right"}_hit'})
@@ -75,7 +74,6 @@ def plot_unit_psth(unit_key, axs=None, title='', xlim=_plt_xlim):
 
     contra_miss_unit_psth = psth.UnitPsth.get_plotting_data(
         unit_key, {'trial_condition_name':  f'good_noearlylick_{"right" if hemi == "left" else "left"}_miss'})
-
 
     # get event start times: sample, delay, response
     periods, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], unit_key, 'good_noearlylick_hit')

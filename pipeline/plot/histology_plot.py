@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 
-from pipeline import experiment, ephys, ccf, histology
+from pipeline import ephys, ccf, histology
 
 
 def plot_probe_tracks(session_key, ax=None):

@@ -95,8 +95,8 @@ def _plot_with_sem(data, t_vec, ax, c='k'):
     ax.spines['top'].set_visible(False)
 
 
-def jointplot_w_hue(data, x, y, hue=None, colormap=None,
-                    figsize=None, fig=None, scatter_kws=None):
+def _jointplot_w_hue(data, x, y, hue=None, colormap=None,
+                     figsize=None, fig=None, scatter_kws=None):
     """
     __author__ = "lewis.r.liu@gmail.com"
     __copyright__ = "Copyright 2018, github.com/ruxi"
@@ -214,36 +214,3 @@ def _extract_one_stim_dur(stim_durs):
         return float(min(stim_durs))
     else:
         return float(stim_durs[0]) if len(stim_durs) == 1 and stim_durs[0] else default_stim_dur
-
-
-def _get_trial_event_times(events, units, trial_cond_name):
-    """
-    Get median event start times from all unit-trials from the specified "trial_cond_name" and "units" - aligned to GO CUE
-    :param events: list of events
-    """
-    events = list(events) + ['go']
-
-    event_types, event_times = (psth.TrialCondition().get_trials(trial_cond_name)
-                                * (experiment.TrialEvent & [{'trial_event_type': eve} for eve in events])
-                                & units).fetch('trial_event_type', 'trial_event_time')
-    period_starts = [(event_type, np.nanmedian((event_times[event_types == event_type]
-                                                - event_times[event_types == 'go']).astype(float)))
-                     for event_type in events[:-1] if len(event_times[event_types == event_type])]
-    present_events, event_starts = list(zip(*period_starts))
-    return np.array(present_events), np.array(event_starts)
-
-
-def _get_units_hemisphere(units):
-    hemispheres = np.unique((ephys.ProbeInsertion.InsertionLocation
-                             * experiment.BrainLocation & units).fetch('hemisphere'))
-    if len(hemispheres) > 1:
-        raise Exception('Error! The specified units belongs to both hemispheres...')
-    return hemispheres[0]
-
-
-def _get_clustering_method(probe_insertion):
-    clustering_methods = (ephys.ClusteringMethod & (ephys.Unit & probe_insertion)).fetch('clustering_method')
-    if len(clustering_methods) == 1:
-        return clustering_methods[0]
-    else:
-        raise ValueError(f'Found multiple clustering methods: {clustering_methods}')
