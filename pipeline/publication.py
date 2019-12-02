@@ -176,12 +176,12 @@ class FileType(dj.Lookup):
                  300Hz and sampled at 2.5kHz - file metadata
                  '''),
                 ('tracking-video-trial',
-                 '*_*_[0-9]*-[0-9]*.[am][vp][i4]',
+                 '*_*_[0-9]*-*.[am][vp][i4]',
                  '''
                  Video Tracking per-trial file at 300fps
                  '''),
                 ('tracking-video-map',
-                 '*_???????_*.txt',
+                 '*_????????_*.txt',
                  '''
                  Video Tracking file-to-trial mapping
                  ''')]
@@ -912,10 +912,12 @@ class ArchivedTrackingVideo(dj.Imported):
                 continue
 
             ftype = next(iter(ftype.values()))['file_type']
+            log.debug('processing as {}'.format(ftype))
 
             file_subpath = '{}/{}'.format(dirname, fname)
 
-            if ftype == 'tracking-video-trial':  # e.g. dl55_20190108_side.txt
+            if ftype == 'tracking-video-map':
+                # e.g. dl55_20190108_side.txt
                 h2o_f, fdate, pos = froot.split('_')
                 sfiles.append({'water_restriction_number': h2o,
                                'session_date': '{}-{}-{}'.format(
@@ -923,8 +925,9 @@ class ArchivedTrackingVideo(dj.Imported):
                                'position': pos,
                                'file_subpath': file_subpath,
                                'file_type': ftype})
-            else:  # tracking-video-map e.g. dl41_side_998-0000.avi
-                h2o_f, pos, video, extra = froot.replace('-', '_').split('_')
+            else:  # tracking-video-map
+                # e.g. dl41_side_998-0000.avi or dl41_side_998-0000_00.avi
+                h2o_f, pos, video = froot.replace('-', '_').split('_')[:3]
                 sfiles.append({'water_restriction_number': h2o,
                                'session_date': '{}-{}-{}'.format(
                                    sdate[:4], sdate[4:6], sdate[6:]),
