@@ -631,8 +631,6 @@ class NeuropixelsMeta:
         into dict of form:
 
             {'shape': [x,y,z], 'c0': [x,y], ... }
-
-        TODO merge createKsChanMap.m logic
         '''
 
         res = {}
@@ -686,24 +684,6 @@ class NeuropixelsMeta:
         into dict of form:
 
             {'shape': (x,y,z), 'data': []}
-
-        TODO: via readSglImro.m:
-
-        IMRO = GETSGLCHANCONFIG(FILEPATH) reads the SpikeGLX imro table
-        location specified by FILEPATH and returns IMRO, a struct with the
-        following fields:
-
-        PROBESERIAL: serial number of the probe
-        PROBEOPTION: phase 3A probe option (1, 2, 3 or 4)
-        NCHANNELS: number of AP/LFP channels recorded
-
-        CHANNELS: struct array containing info for each channel:
-          INDEX: 1-based index of the channel
-          BANK: 1-based index of the bank of the recorded site
-          SHANK: 1-based index of the shank of the recorded site
-          GAIN_AP: gain of the action potential ADC
-          GAIN_LFP: gain of the LFP ADC
-
         '''
         res = {'shape': None, 'data': []}
 
