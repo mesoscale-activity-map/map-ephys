@@ -272,3 +272,13 @@ class UnitStat(dj.Computed):
                        'isi_violation': sum((isi < self.isi_violation_thresh).astype(int)) / len(isi) if isi.size else None,
                        'avg_firing_rate': len(np.hstack(trial_spikes)) / sum(tr_stop - tr_start) if isi.size else None}
         self.insert(make_insert())
+
+
+# TODO: confirm the logic/need for this table
+@schema
+class UnitCCF(dj.Computed):
+    definition = """ 
+    -> Unit
+    ---
+    -> ccf.CCF
+    """
