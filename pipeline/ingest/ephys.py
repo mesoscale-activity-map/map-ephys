@@ -98,7 +98,7 @@ class EphysIngest(dj.Imported):
         dglob = '[0-9]/{}'  # probe directory pattern
 
         # npx ap.meta: '{}_*.imec.ap.meta'.format(h2o)
-        npx_meta_files = list(dpath.glob(dglob.format('{}_*.imec.ap.meta'.format(h2o))))
+        npx_meta_files = list(dpath.glob(dglob.format('{}_*.imec[0-9].ap.meta'.format(h2o))))
         if not npx_meta_files:
             log.warning('Error - no imec.ap.meta files. Skipping.')
             return
@@ -308,7 +308,7 @@ class EphysIngest(dj.Imported):
 
         '''
 
-        part_no = npx_meta.meta['imProbeSN']
+        part_no = npx_meta.probe_SN
 
         e_config = self._gen_electrode_config(npx_meta)
 
@@ -333,9 +333,9 @@ class EphysIngest(dj.Imported):
         Generate and insert (if needed) an ElectrodeConfiguration based on the specified neuropixels meta information
         """
 
-        probe_type = npx_meta.meta.get('imDatPrb_type', 1)
+        probe_type = npx_meta.probe_model
 
-        if probe_type == 1:
+        if '1.0' in probe_type:
             eg_members = []
             probe_type = {'probe_type': 'neuropixels_1.0'}
             for shank, shank_col, shank_row, is_used in npx_meta.shankmap['data']:
@@ -344,7 +344,7 @@ class EphysIngest(dj.Imported):
                     'KEY')
                 eg_members.append({**electrode, 'is_used': is_used, 'electrode_group': 0})
         else:
-            raise NotImplementedError('Unknown processing for neuropixels probe {}'.format(probe_type))
+            raise NotImplementedError('Processing for neuropixels probe model {} not yet implemented'.format(probe_type))
 
         # ---- compute hash for the electrode config (hash of dict of all ElectrodeConfig.Electrode) ----
         ec_hash = dict_to_hash({k['electrode']: k for k in eg_members})
@@ -571,6 +571,22 @@ class NeuropixelsMeta:
         self.fname = meta_filepath
         self.meta = self._read_meta()
 
+        # Infer npx probe model (e.g. 1.0 (3A, 3B) or 2.0)
+        probe_model = self.meta.get('imDatPrb_type', 1)
+        if probe_model <= 1:
+            if 'typeEnabled' in self.meta:
+                self.probe_model = 'neuropixels 1.0 - 3A'
+            elif 'typeImEnabled' in self.meta:
+                self.probe_model = 'neuropixels 1.0 - 3B'
+        else:
+            self.probe_model = str(probe_model)
+
+        # Get probe serial number - 'imProbeSN' for 3A and 'imDatPrb_sn' for 3B
+        try:
+            self.probe_SN = self.meta.get('imProbeSN', self.meta.get('imDatPrb_sn'))
+        except KeyError:
+            raise KeyError('Probe Serial Number not found in either "imProbeSN" or "imDatPrb_sn"')
+
         self.chanmap = self._parse_chanmap(self.meta['~snsChanMap']) if '~snsChanMap' in self.meta else None
         self.shankmap = self._parse_shankmap(self.meta['~snsShankMap']) if '~snsShankMap' in self.meta else None
         self.imroTbl = self._parse_imrotbl(self.meta['~imroTbl']) if '~imroTbl' in self.meta else None
@@ -590,9 +606,12 @@ class NeuropixelsMeta:
         with open(fname) as f:
             for l in (l.rstrip() for l in f):
                 if '=' in l:
-                    k, v = l.split('=')
-                    v = handle_string(v)
-                    res[k] = v
+                    try:
+                        k, v = l.split('=')
+                        v = handle_string(v)
+                        res[k] = v
+                    except ValueError:
+                        pass
         return res
 
     @staticmethod
