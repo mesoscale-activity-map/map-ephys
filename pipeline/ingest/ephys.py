@@ -378,8 +378,9 @@ class EphysIngest(dj.Imported):
         decoded_notes = []
         for n in notes:
             note_val = str().join(chr(c) for c in fh[n])
-            match = [k for k in note_map if re.match(k, note_val)][0]
-            decoded_notes.append(note_map[match])
+            match = [k for k in note_map if re.match(k, note_val)]
+            decoded_notes.append(note_map[match[0]] if len(match) > 0 else 'all')
+
         return decoded_notes
 
     def _load_v3(self, sinfo, rigpath, dpath, fpath):
