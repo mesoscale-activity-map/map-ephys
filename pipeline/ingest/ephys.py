@@ -12,6 +12,7 @@ from itertools import repeat
 import scipy.io as spio
 import h5py
 import numpy as np
+import re
 
 import datajoint as dj
 #import pdb
@@ -374,7 +375,6 @@ class EphysIngest(dj.Imported):
         '''
         note_map = {'single': 'good', 'ok': 'ok', 'multi': 'multi',
                     '\x00\x00': 'all'}  # 'all' is default / null label
-
         decoded_notes = []
         for n in notes:
             note_val = str().join(chr(c) for c in fh[n])
