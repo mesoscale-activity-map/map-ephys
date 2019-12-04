@@ -1,0 +1,84 @@
+{
+    "database.host": "mesoscale-activity.datajoint.io",
+    "database.password": "resetme1234",
+    "database.user": "daveliu",
+    "database.port": 3306,
+    "database.reconnect": false,
+    "connection.init_function": null,
+    "connection.charset": "",
+    "loglevel": "INFO",
+    "safemode": true,
+    "fetch_format": "array",
+    "display.limit": 7,
+    "display.width": 14,
+    "display.show_tuple_count": true,
+    "external.aws_access_key_id": null,
+    "external.aws_secret_access_key": null,
+    "external.location": null,
+    "history": [
+        "No config file found, using default settings."
+    ],
+    "foobar": true,
+    "custom": {
+        "ccf.r3_20um_path": "C://Users/liul.HHMI/Desktop/MikeReg2/Annotation_new_10_ds222_16bit.tif",
+        "ephys_data_paths": [
+            [
+                "H://data/MAP",
+                "0"
+            ]
+        ],
+        "rig_data_paths": [
+            [
+                "TRig1",
+                "I://rig1/Arduino/Bpod_Train1/Bpod Local/Data",
+                "0"
+            ],
+            [
+                "TRig2",
+                "I://rig2/MATLAB/Bpod Local/Data",
+                "1"
+            ],
+            [
+                "TRig3",
+                "I://rig3/Data",
+                "2"
+            ],
+            [
+                "RRig",
+                "//wangt-ww1/Documents/MATLAB/Bpod Local/Data",
+                "3"
+            ]
+        ],
+        "tracking_data_paths": [
+            [
+                "RRig",
+                "H://data/MAP"
+            ]
+        ],
+        "globus.local_endpoints": {
+            "raw-ephys": {
+                "endpoint": "044dfa1c-8492-11e8-9538-0a6d4e044368",
+                "endpoint_subdir": "~/E/MAP",
+                "endpoint_path": "T:/MAP"
+            },
+            "raw-video": {
+                "endpoint": "044dfa1c-8492-11e8-9538-0a6d4e044368",
+                "endpoint_subdir": "~/E/MAP",
+                "endpoint_path": "T:/MAP"
+            }
+        },
+        "globus.token": "AgYnG88gnM6xQBykKYnXjzg25pgJJy7qaE6JMoxmgVzDP57QQDTgUeMEVnM2MK5a7g3xmKKogVdBBg9MPlaNYlE6nJyyb"
+    },
+    "stores": {"report_store":
+        {
+            "protocol": "s3",
+            "endpoint": "s3.amazonaws.com",
+            "access_key": "AKIAXUGZ3UUJNN627PWV",
+            "secret_key": "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",
+            "bucket": "map-report",
+            "location": "report",
+            "stage": "H:/data/MAP/report"
+        }
+    },
+    "enable_python_native_blobs": true
+}

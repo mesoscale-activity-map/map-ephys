@@ -272,6 +272,7 @@ class BehaviorIngest(dj.Imported):
             AllTrialTypes = SessionData['TrialTypes'][0]
             AllTrialSettings = SessionData['TrialSettings'][0]
             AllTrialStarts = SessionData['TrialStartTimestamp'][0]
+            AllTrialStarts = AllTrialStarts - AllTrialStarts[0]
 
             RawData = SessionData['RawData'][0].flatten()
             AllStateNames = RawData['OriginalStateNamesByNumber'][0]

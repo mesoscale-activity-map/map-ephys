@@ -82,7 +82,7 @@ class TrackingIngest(dj.Imported):
 
             log.info('checking {} for tracking data'.format(tdat))
 
-            tpath = pathlib.Path(tdat, h2o, sdate_iso, 'tracking')
+            tpath = pathlib.Path(tdat, h2o, sdate.strftime('%Y%m%d'), 'tracking')
 
             if not tpath.exists():
                 log.warning('tracking path {} n/a - skipping'.format(tpath))

@@ -11,6 +11,7 @@ from itertools import repeat
 import scipy.io as spio
 import h5py
 import numpy as np
+import re
 
 import datajoint as dj
 #import pdb
@@ -98,9 +99,9 @@ class EphysIngest(dj.Imported):
         dglob = '[0-9]/{}'  # probe directory pattern
 
         # npx ap.meta: '{}_*.imec.ap.meta'.format(h2o)
-        npx_meta_files = list(dpath.glob(dglob.format('{}_*.imec[0-9].ap.meta'.format(h2o))))
+        npx_meta_files = list(dpath.glob(dglob.format('{}_*.ap.meta'.format(h2o))))
         if not npx_meta_files:
-            log.warning('Error - no imec.ap.meta files. Skipping.')
+            log.warning('Error - no ap.meta files in {}. Skipping.'.format(dglob))
             return
 
         print(npx_meta_files)
@@ -170,12 +171,11 @@ class EphysIngest(dj.Imported):
         sync_behav_range = sync_behav[sync_behav_start:][:len(sync_ephys)]
 
         if not np.all(np.equal(sync_ephys, sync_behav_range)):
-            try:
-                log.info('ephys/bitcode trial mismatch - attempting fix')
-                start_behav = -1
-                trials = trial_fix - start_behav
-            except IndexError:
-                raise Exception('Bitcode Mismatch')
+            if trial_fix is not None:
+                log.info('ephys/bitcode trial mismatch - fix using "trialNum"')
+                trials = trial_fix[0]
+            else:
+                raise Exception('Bitcode Mismatch - Fix with "trialNum" not available')
         else:
             if len(sync_behav) < len(sync_ephys):
                 start_behav = np.where(sync_behav[0] == sync_ephys)[0][0]
@@ -183,12 +183,12 @@ class EphysIngest(dj.Imported):
                 start_behav = - np.where(sync_ephys[0] == sync_behav)[0][0]
             else:
                 start_behav = 0
-            trials = np.arange(len(sync_behav_range)) - start_behav
+            trial_indices = np.arange(len(sync_behav_range)) - start_behav
 
-        # mapping to the behav-trial numbering
-        # "trials" here is just the 0-based indices of the behavioral trials
-        behav_trials = (experiment.SessionTrial & skey).fetch('trial')
-        trials = behav_trials[trials]
+            # mapping to the behav-trial numbering
+            # "trials" here is just the 0-based indices of the behavioral trials
+            behav_trials = (experiment.SessionTrial & skey).fetch('trial', order_by='trial')
+            trials = behav_trials[trial_indices]
 
         # trialize the spikes & subtract go cue
         t, trial_spikes, trial_units = 0, [], []
@@ -375,8 +375,12 @@ class EphysIngest(dj.Imported):
         '''
         note_map = {'single': 'good', 'ok': 'ok', 'multi': 'multi',
                     '\x00\x00': 'all'}  # 'all' is default / null label
-
-        return [note_map[str().join(chr(c) for c in fh[n])] for n in notes]
+        decoded_notes = []
+        for n in notes:
+            note_val = str().join(chr(c) for c in fh[n])
+            match = [k for k in note_map if re.match(k, note_val)][0]
+            decoded_notes.append(note_map[match])
+        return decoded_notes
 
     def _load_v3(self, sinfo, rigpath, dpath, fpath):
         '''
