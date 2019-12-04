@@ -122,6 +122,12 @@ class EphysIngest(dj.Imported):
 
         jrclust_files = {**v3files, **v4files}
 
+        missing_metas = [p for p in jrclust_files if p not in npx_metas]
+        if missing_metas:
+            log.warning('Error - missing ap.meta for probe(s): {} - Search path: {}. Skipping.'.format(
+                missing_metas, dpath))
+            return
+
         for probe_no, (f, loader) in jrclust_files.items():
             self._load(loader(sinfo, rigpath, dpath, f.relative_to(dpath)), npx_metas[probe_no])
 
