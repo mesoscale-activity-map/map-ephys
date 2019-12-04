@@ -71,7 +71,7 @@ def plot_unit_characteristic(probe_insertion, clustering_method=None, axs=None):
     amp, snr, spk_rate, x, y, insertion_depth = (
             ephys.Unit * ephys.ProbeInsertion.InsertionLocation * ephys.UnitStat
             & probe_insertion & {'clustering_method': clustering_method} & 'unit_quality != "all"').fetch(
-        'unit_amp', 'unit_snr', 'avg_firing_rate', 'unit_posx', 'unit_posy', 'dv_location')
+        'unit_amp', 'unit_snr', 'avg_firing_rate', 'unit_posx', 'unit_posy', 'depth')
 
     metrics = pd.DataFrame(list(zip(*(amp/amp.max(), snr/snr.max(), spk_rate/spk_rate.max(),
                                       x, insertion_depth.astype(float) + y))))
@@ -125,7 +125,7 @@ def plot_unit_selectivity(probe_insertion, clustering_method=None, axs=None):
             raise ValueError(str(e) + '\nPlease specify one with the kwarg "clustering_method"')
 
     attr_names = ['unit', 'period', 'period_selectivity', 'contra_firing_rate',
-                  'ipsi_firing_rate', 'unit_posx', 'unit_posy', 'dv_location']
+                  'ipsi_firing_rate', 'unit_posx', 'unit_posy', 'depth']
     selective_units = (psth.PeriodSelectivity * ephys.Unit * ephys.ProbeInsertion.InsertionLocation
                        * experiment.Period & probe_insertion & {'clustering_method': clustering_method}
                        & 'period_selectivity != "non-selective"').fetch(*attr_names)
@@ -134,7 +134,7 @@ def plot_unit_selectivity(probe_insertion, clustering_method=None, axs=None):
     selective_units.period_selectivity.astype('category')
 
     # --- account for insertion depth (manipulator depth)
-    selective_units.unit_posy = selective_units.dv_location.values.astype(float) + selective_units.unit_posy
+    selective_units.unit_posy = selective_units.depth.values.astype(float) + selective_units.unit_posy
 
     # --- get ipsi vs. contra firing rate difference
     f_rate_diff = np.abs(selective_units.ipsi_firing_rate - selective_units.contra_firing_rate)
@@ -190,7 +190,7 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
         except ValueError as e:
             raise ValueError(str(e) + '\nPlease specify one with the kwarg "clustering_method"')
 
-    dv_loc = (ephys.ProbeInsertion.InsertionLocation & probe_insertion).fetch1('dv_location')
+    dv_loc = (ephys.ProbeInsertion.InsertionLocation & probe_insertion).fetch1('depth')
 
     no_stim_cond = (psth.TrialCondition
                     & {'trial_condition_name':

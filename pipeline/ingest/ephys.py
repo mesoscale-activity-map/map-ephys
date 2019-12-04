@@ -6,6 +6,7 @@ import pathlib
 from os import path
 
 from glob import glob
+import re
 from itertools import repeat
 
 import scipy.io as spio
@@ -101,36 +102,35 @@ class EphysIngest(dj.Imported):
         # npx ap.meta: '{}_*.imec.ap.meta'.format(h2o)
         npx_meta_files = list(dpath.glob(dglob.format('{}_*.ap.meta'.format(h2o))))
         if not npx_meta_files:
-            log.warning('Error - no ap.meta files in {}. Skipping.'.format(dglob))
+            log.warning('Error - no ap.meta files in {}. Skipping.'.format(dpath))
             return
-
-        print(npx_meta_files)
         npx_metas = {f.parent.name: NeuropixelsMeta(f) for f in npx_meta_files}
+        log.info('Found .ap.meta for probe(s): {}'.format(list(npx_metas.keys())))
 
         v3spec = '{}_*_jrc.mat'.format(h2o)
         # old v3spec = '{}_g0_*.imec.ap_imec3_opt3_jrc.mat'.format(h2o)
-        v3files = list(dpath.glob(dglob.format(v3spec)))
+        v3files = {f.parent.name: (f, self._load_v3) for f in dpath.glob(dglob.format(v3spec))}
 
         v4spec = '{}_*.ap_res.mat'.format(h2o)
         # old v4spec = '{}_g0_*.imec?.ap_res.mat'.format(h2o)  # TODO v4ify
-        v4files = list(dpath.glob(dglob.format(v4spec)))
+        v4files = {f.parent.name: (f, self._load_v4) for f in dpath.glob(dglob.format(v4spec))}
 
-        if (v3files and v4files) or not (v3files or v4files):
-            log.warning(
-                'Error - v3files ({}) + v4files ({}) - Search path: {}. Skipping.'.format(
-                    v3files, v4files, dpath))
+        overlap_v3v4 = np.intersect1d(list(v3files), list(v4files))
+        if len(overlap_v3v4) > 0:
+            log.warning('Error - both jrclust V3 and V4 exist for probe(s): {} - Search path: {}. Skipping.'.format(
+                overlap_v3v4, dpath))
             return
 
-        if v3files:
-            files = v3files
-            loader = self._load_v3
+        jrclust_files = {**v3files, **v4files}
 
-        if v4files:
-            files = v4files
-            loader = self._load_v4
+        missing_metas = [p for p in jrclust_files if p not in npx_metas]
+        if missing_metas:
+            log.warning('Error - missing ap.meta for probe(s): {} - Search path: {}. Skipping.'.format(
+                missing_metas, dpath))
+            return
 
-        for f in files:
-            self._load(loader(sinfo, rigpath, dpath, f.relative_to(dpath)), npx_metas[f.parent.name])
+        for probe_no, (f, loader) in jrclust_files.items():
+            self._load(loader(sinfo, rigpath, dpath, f.relative_to(dpath)), npx_metas[probe_no])
 
     def _load(self, data, npx_meta):
 
