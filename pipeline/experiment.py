@@ -126,8 +126,8 @@ class SessionTrial(dj.Imported):
     trial : smallint 		# trial number (1-based indexing)
     ---
     trial_uid : int  # unique across sessions/animals
-    start_time : decimal(8, 4)  # (s) relative to session beginning 
-    stop_time : decimal(8, 4)  # (s) relative to session beginning 
+    start_time : decimal(9, 4)  # (s) relative to session beginning 
+    stop_time : decimal(9, 4)  # (s) relative to session beginning 
     """
 
 
