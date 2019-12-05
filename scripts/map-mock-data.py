@@ -639,115 +639,184 @@ def post_ephys(*args):
         fname = ef['ephys_file']
         print('attempting Probe InsertionLocation for fname: ', end='')
         if re.match('.*2018-12-07.*dl59.*.mat', fname):
-            recs = [{
+            rec_locs = [{
                 'subject_id': 435884,
                 'session': 1,
                 'insertion_number': 1,
-                'brain_location_name': 'right_alm',
+                'skull_reference': 'bregma',
                 'ml_location': 1500,
                 'ap_location': 2500,
-                'dv_location': 1668.9,
-                # ml_angle:
-                # ap_angle:
+                'depth': -1668.9,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
             }]
-            print('match!: {}'.format(recs))
+            rec_brain = [{
+                'subject_id': 435884,
+                'session': 1,
+                'insertion_number': 1,
+                'brain_area': 'ALM',
+                'hemisphere': 'right'
+            }]
+            print('match!: {} - {}'.format(rec_brain, rec_locs))
         elif re.match('.*2018-07-16.*tw34.*.mat', fname):
-            recs = [{
+            rec_locs = [{
                 'subject_id': 412330,
                 'session': 1,
                 'insertion_number': 1,
-                'brain_location_name': 'right_alm',
+                'skull_reference': 'Bregma',
                 'ml_location': 1500,
                 'ap_location': 2500,
-                'dv_location': 2103.2,
-                # ml_angle:
-                # ap_angle:
-            },{
+                'depth': -2103.2,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
+            }, {
                 'subject_id': 412330,
                 'session': 1,
                 'insertion_number': 2,
-                'brain_location_name': 'right_medulla',
+                'skull_reference': 'Bregma',
                 'ml_location': 1000,
                 'ap_location': 6500,
-                'dv_location': 5237.5,
-                # ml_angle:
-                # ap_angle:
+                'depth': -5237.5,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
             }]
-            print('match!: {}'.format(recs))
+
+            rec_brain = [{
+                'subject_id': 412330,
+                'session': 1,
+                'insertion_number': 1,
+                'brain_area': 'ALM',
+                'hemisphere': 'right'
+            }, {
+                'subject_id': 412330,
+                'session': 1,
+                'insertion_number': 2,
+                'brain_area': 'Medulla',
+                'hemisphere': 'right'
+            }
+            ]
+
+            print('match!: {} - {}'.format(rec_brain, rec_locs))
         elif re.match('.*SC022/2019-03-03.*', fname):
             # FIXME: 15deg dv angle -> ?
             # FIXME: 'you should add 175um to the note depths
             #   'because where I used as zero reference is where the 1st tip
             #    enters the dura' ...
             kbase = {'subject_id': 888888, 'session': 1}
-            recs = [{
+            rec_locs = [{
                 **kbase,
                 'insertion_number': 1,
-                'brain_location_name': 'left_alm',
+                'skull_reference': 'Bregma',
                 'ml_location': 1500,
                 'ap_location': 2500,
-                'dv_location': 2900,
-                # ml_angle:
-                # ap_angle:
+                'depth': -2900,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
             },{
                 **kbase,
                 'insertion_number': 2,
-                'brain_location_name': 'right_alm',
+                'skull_reference': 'Bregma',
                 'ml_location': 1500,
                 'ap_location': 2500,
-                'dv_location': 2900,
-                # ml_angle:
-                # ap_angle:
+                'depth': -2900,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
             },{
                 **kbase,
                 'insertion_number': 3,
-                'brain_location_name': 'left_striatum',
+                'skull_reference': 'Bregma',
                 'ml_location': 1000,
                 'ap_location': 2800,
-                'dv_location': 4500,
-                # ml_angle:
-                # ap_angle:
+                'depth': -4500,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
             },{
                 **kbase,
                 'insertion_number': 4,
-                'brain_location_name': 'left_striatum',
+                'skull_reference': 'Bregma',
                 'ml_location': 1000,
                 'ap_location': 2800,
-                'dv_location': 4500,
-                # ml_angle:
-                # ap_angle:
+                'depth': -4500,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
             }]
-            print('match!: {}'.format(recs))
-        elif re.match('.*2018-07-10.*dl36.*.mat', fname):
-            kbase = {'subject_id': 412753, 'session': 1}
-            recs = [{
+
+            rec_brain = [{
                 **kbase,
                 'insertion_number': 1,
-                'brain_location_name': 'right_alm',
+                'brain_area': 'ALM',
+                'hemisphere': 'left'
+            }, {
+                **kbase,
+                'insertion_number': 2,
+                'brain_area': 'ALM',
+                'hemisphere': 'right'
+            }, {
+                **kbase,
+                'insertion_number': 3,
+                'brain_area': 'striatum',
+                'hemisphere': 'left'
+            }, {
+                **kbase,
+                'insertion_number': 4,
+                'brain_area': 'striatum',
+                'hemisphere': 'right'
+            }
+            ]
+
+            print('match!: {} - {}'.format(rec_brain, rec_locs))
+        elif re.match('.*2018-07-10.*dl36.*.mat', fname):
+            kbase = {'subject_id': 412753, 'session': 1}
+            rec_locs = [{
+                **kbase,
+                'insertion_number': 1,
+                'skull_reference': 'Bregma',
                 'ml_location': 1000,
                 'ap_location': 2500,
-                'dv_location': 2019.4,
-                # ml_angle:
-                # ap_angle:
+                'depth': -2019.4,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
             },{
                 **kbase,
                 'insertion_number': 2,
-                'brain_location_name': 'right_thalamus',
+                'skull_reference': 'Bregma',
                 'ml_location': 1000,
                 'ap_location': 1750,
-                'dv_location': 4954.8,
-                # ml_angle:
-                # ap_angle:
+                'depth': -4954.8,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
             }]
-            print('match!: {}'.format(recs))
+
+            rec_brain = [{
+                **kbase,
+                'insertion_number': 1,
+                'brain_area': 'ALM',
+                'hemisphere': 'left'
+            }, {
+                **kbase,
+                'insertion_number': 2,
+                'brain_area': 'Thalamus',
+                'hemisphere': 'right'
+            }
+            ]
+
+            print('match!: {} - {}'.format(rec_brain, rec_locs))
         else:
             print('no match!')
 
-        ephys.ProbeInsertion.InsertionLocation().insert(
-            recs, skip_duplicates=True)
-        ephys.ProbeInsertion.RecordingSystemSetup().insert(
-            [{**r, 'sampling_rate': 30000} for r in recs],
-            ignore_extra_fields=True, skip_duplicates=True)
+        ephys.ProbeInsertion.InsertionLocation.insert(
+            rec_locs, skip_duplicates=True)
+        ephys.ProbeInsertion.RecordableBrainRegion.insert(
+            rec_brain, skip_duplicates=True)
 
 
 def preload(*args):

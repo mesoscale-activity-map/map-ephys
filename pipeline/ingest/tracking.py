@@ -40,7 +40,7 @@ class TrackingDataPath(dj.Lookup):
 @schema
 class TrackingIngest(dj.Imported):
     definition = """
-    -> behavior_ingest.BehaviorIngest
+    -> experiment.Session
     """
 
     class TrackingFile(dj.Part):
@@ -52,13 +52,13 @@ class TrackingIngest(dj.Imported):
         tracking_file:          varchar(255)            # tracking file subpath
         '''
 
+    key_source = experiment.Session - tracking.Tracking
+
     def make(self, key):
         '''
         TrackingIngest .make() function
         '''
         log.info('TrackingIngest().make(): key: {k}'.format(k=key))
-
-        self.insert1(key)
 
         h2o = (lab.WaterRestriction() & key).fetch1('water_restriction_number')
         session = (experiment.Session() & key).fetch1()
@@ -67,13 +67,13 @@ class TrackingIngest(dj.Imported):
         log.info('got session: {} ({} trials)'.format(session, len(trials)))
 
         sdate = session['session_date']
-        sdate_iso = sdate.isoformat()  # YYYY-MM-DD
         sdate_sml = "{}{:02d}{:02d}".format(sdate.year, sdate.month, sdate.day)
 
         paths = TrackingDataPath.fetch(as_dict=True)
         devices = tracking.TrackingDevice().fetch(as_dict=True)
 
         # paths like: <root>/<h2o>/YYYY-MM-DD/tracking
+        tracking_files = []
         for p, d in ((p, d) for d in devices for p in paths):
 
             tdev = d['tracking_device']
@@ -183,11 +183,13 @@ class TrackingIngest(dj.Imported):
                         **{fmap[k]: v for k, v in recs['paw_right'].items()
                            if k in fmap}}, allow_direct_insert=True)
 
-                TrackingIngest.TrackingFile.insert1(
-                    {**key, 'trial': tmap[t], 'tracking_device': tdev,
+                tracking_files.append({**key, 'trial': tmap[t], 'tracking_device': tdev,
                      'tracking_file': str(tfull.relative_to(tdat))})
 
             log.info('... completed {}/{} items.'.format(i, n_tmap))
+
+        self.insert1(key)
+        self.TrackingFile.insert(tracking_files)
 
         log.info('... done.')
 
