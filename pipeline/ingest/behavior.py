@@ -34,18 +34,18 @@ photostim_duration = 0.5  # (s)
 skull_ref = 'Bregma'
 photostims = {4: {'photo_stim': 4, 'photostim_device': 'OBIS470', 'duration': photostim_duration,
                   'locations': [{'skull_reference': skull_ref, 'brain_area': 'ALM',
-                                 'ap_location': 2500, 'ml_location': -1500, 'dv_location': 0,
+                                 'ap_location': 2500, 'ml_location': -1500, 'depth': 0,
                                  'theta': 15, 'phi': 15}]},
               5: {'photo_stim': 5, 'photostim_device': 'OBIS470', 'duration': photostim_duration,
                   'locations': [{'skull_reference': skull_ref, 'brain_area': 'ALM',
-                                 'ap_location': 2500, 'ml_location': 1500, 'dv_location': 0,
+                                 'ap_location': 2500, 'ml_location': 1500, 'depth': 0,
                                  'theta': 15, 'phi': 15}]},
               6: {'photo_stim': 6, 'photostim_device': 'OBIS470', 'duration': photostim_duration,
                   'locations': [{'skull_reference': skull_ref, 'brain_area': 'ALM',
-                                 'ap_location': 2500, 'ml_location': -1500, 'dv_location': 0,
+                                 'ap_location': 2500, 'ml_location': -1500, 'depth': 0,
                                  'theta': 15, 'phi': 15},
                                 {'skull_reference': skull_ref, 'brain_area': 'ALM',
-                                 'ap_location': 2500, 'ml_location': 1500, 'dv_location': 0,
+                                 'ap_location': 2500, 'ml_location': 1500, 'depth': 0,
                                  'theta': 15, 'phi': 15}
                                 ]}}
 
