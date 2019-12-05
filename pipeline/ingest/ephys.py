@@ -51,7 +51,7 @@ class EphysIngest(dj.Imported):
     # subpaths like: \2017-10-21\tw5ap_imec3_opt3_jrc.mat
 
     definition = """
-    -> behavior_ingest.BehaviorIngest
+        -> experiment.Session
     """
 
     class EphysFile(dj.Part):
@@ -62,27 +62,14 @@ class EphysIngest(dj.Imported):
         ephys_file:                     varchar(255)    # rig file subpath
         """
 
+    key_source = experiment.Session - ephys.ProbeInsertion
+
     def make(self, key):
         '''
         Ephys .make() function
         '''
 
         log.info('EphysIngest().make(): key: {k}'.format(k=key))
-
-        #
-        # Find corresponding BehaviorIngest
-        #
-        # ... we are keying times, sessions, etc from behavior ingest;
-        # so lookup behavior ingest for session id, quit with warning otherwise
-        #
-
-        try:
-            behavior = (behavior_ingest.BehaviorIngest() & key).fetch1()
-        except dj.DataJointError:
-            log.warning('EphysIngest().make(): skip - behavior ingest error')
-            return
-
-        log.info('behavior for ephys: {b}'.format(b=behavior))
 
         #
         # Find Ephys Recording
@@ -140,7 +127,7 @@ class EphysIngest(dj.Imported):
         probe = data['probe']
         skey = data['skey']
         method = data['method']
-        hz = data['hz']
+        hz = data['hz'] if data['hz'] else npx_meta.meta['imSampRate']
         spikes = data['spikes']
         spike_sites = data['spike_sites']
         units = data['units']
@@ -156,6 +143,10 @@ class EphysIngest(dj.Imported):
         sync_ephys = data['sync_ephys']
         sync_behav = data['sync_behav']
         trial_fix = data['trial_fix']
+
+        # account for the buffer period before trial_start
+        buffer_sample_count = npx_meta.meta['trgTTLMarginS'] * npx_meta.meta['imSampRate']
+        trial_start = trial_start - np.round(buffer_sample_count).astype(int)
 
         # remove noise clusters
         units, spikes, spike_sites = (v[i] for v, i in zip(
@@ -440,7 +431,7 @@ class EphysIngest(dj.Imported):
         vmax_unit_site = ef['S_clu']['viSite_clu']      # max amplitude site
         vmax_unit_site = np.array(vmax_unit_site[:].flatten(), dtype=np.int64)
 
-        trial_start = bf['sTrig'].flatten() - 7500      # start of trials
+        trial_start = bf['sTrig'].flatten()           # start of trials
         trial_go = bf['goCue'].flatten()                # go cues
 
         sync_ephys = bf['bitCodeS'].flatten()           # ephys sync codes
@@ -492,7 +483,6 @@ class EphysIngest(dj.Imported):
                 if k in experiment.Session.primary_key}
 
         probe = fpath.parts[0]
-        imec = 'Imec{}'.format(int(probe) - 1)          # probe key substring
 
         ef_path = pathlib.Path(dpath, fpath)
 
@@ -510,7 +500,7 @@ class EphysIngest(dj.Imported):
         bf = spio.loadmat(str(bf_path))
 
         # extract unit data
-        hz = bf['{}_SR'.format(imec)][0][0]             # sampling rate
+        hz = bf['SR'][0][0] if 'SR' in bf else None    # sampling rate
 
         spikes = ef['spikeTimes'][0]                    # spikes times
         spike_sites = ef['spikeSites'][0]               # spike electrode
@@ -530,10 +520,8 @@ class EphysIngest(dj.Imported):
         vmax_unit_site = ef['clusterSites']             # max amplitude site
         vmax_unit_site = np.array(vmax_unit_site[:].flatten(), dtype=np.int64)
 
-        start_idx, go_idx = (s.format(imec) for s in ('sTrig{}', 'goCue{}'))
-
-        trial_start = bf[start_idx].flatten() - 7500    # trial start
-        trial_go = bf[go_idx].flatten()                 # trial go cues
+        trial_start = bf['sTrig'].flatten()             # trial start
+        trial_go = bf['goCue'].flatten()                 # trial go cues
 
         sync_ephys = bf['bitCodeS']                     # ephys sync codes
         sync_behav = (experiment.TrialNote()            # behavior sync codes

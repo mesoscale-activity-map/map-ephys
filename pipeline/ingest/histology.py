@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 @schema
 class HistologyIngest(dj.Imported):
     definition = """
-    -> ephys_ingest.EphysIngest
+    -> experiment.Session
     """
 
     class HistologyFile(dj.Part):
@@ -40,6 +40,8 @@ class HistologyIngest(dj.Imported):
         probe_insertion_number:         tinyint         # electrode group
         landmark_file:                  varchar(255)    # rig file subpath
         """
+
+    key_source = experiment.Session - histology.ElectrodeCCFPosition
 
     def make(self, key):
         '''
