@@ -73,7 +73,7 @@ class HistologyIngest(dj.Imported):
         ).fetch1('water_restriction_number')
 
         directory = pathlib.Path(
-            rigpath, water, session_date.strftime('%Y-%m-%d'), 'histology')
+            rigpath, water, session_date.strftime('%Y%m%d'), 'histology')
 
         hist_ingested = False
         for probe in range(1, 3):
@@ -136,13 +136,18 @@ class HistologyIngest(dj.Imported):
         # probe CCF regions
         names = hist.ont.name
         valid = [isinstance(n, (str,)) for n in names]
-        goodn = np.where(np.array(valid))[0]
 
-        electrodes = (ephys.ProbeInsertion.proj() * lab.ElectrodeConfig.Electrode.proj()
-                      & egmap[probe]).fetch(order_by='electrode asc')
+        probe_electrodes = (lab.ProbeType.Electrode & (ephys.ProbeInsertion & egmap[probe])).fetch(
+            'electrode', order_by='electrode asc')
 
-        recs = ((*l[0], ccf.CCFLabel.CCF_R3_20UM_ID, *l[1]) for l in
-                zip(electrodes[goodn], pos_xyz[goodn]))
+        valid_electrodes = probe_electrodes[valid[:len(probe_electrodes)]]
+        valid_pos_xyz = pos_xyz[valid, :]
+
+        inserted_electrodes = (ephys.ProbeInsertion.proj() * lab.ElectrodeConfig.Electrode.proj()
+                               & egmap[probe]).fetch(order_by='electrode asc')
+
+        recs = ((*electrode, ccf.CCFLabel.CCF_R3_20UM_ID, *electrode_pos) for electrode, electrode_pos in
+                zip(inserted_electrodes, valid_pos_xyz) if electrode['electrode'] in valid_electrodes)
 
         # ideally ElectrodePosition.insert(...) but some are outside of CCF...
         log.info('inserting channel ccf position')
