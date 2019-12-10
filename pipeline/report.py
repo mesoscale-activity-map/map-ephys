@@ -536,6 +536,8 @@ def delete_outdated_probe_tracks(project_name='MAP'):
     sess_count = (ProjectLevelProbeTrack & {'project_name': project_name}).fetch1('session_count')
     latest_sess_count = len(SessionLevelProbeTrack())
 
+    print('ProjectLevelProbeTrack is up-to-date')
+
     if sess_count != latest_sess_count:
         uuid_byte = (ProjectLevelProbeTrack & {'project_name': project_name}).proj(ub='(tracks_plot)').fetch1('ub')
         ext_key = {'hash': uuid.UUID(bytes=uuid_byte)}
