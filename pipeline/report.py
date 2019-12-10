@@ -548,4 +548,3 @@ def delete_outdated_probe_tracks(project_name='MAP'):
             print('Outdated ProjectLevelProbeTrack deleted')
     else:
         print('ProjectLevelProbeTrack is up-to-date')
-
