@@ -530,13 +530,11 @@ def save_figs(figs, fig_names, dir2save, prefix):
 
 
 def delete_outdated_probe_tracks(project_name='MAP'):
-    if {'project_name': project_name} not in ProjectLevelProbeTrack:
+    if {'project_name': project_name} not in ProjectLevelProbeTrack.proj():
         return
 
     sess_count = (ProjectLevelProbeTrack & {'project_name': project_name}).fetch1('session_count')
     latest_sess_count = len(SessionLevelProbeTrack())
-
-    print('ProjectLevelProbeTrack is up-to-date')
 
     if sess_count != latest_sess_count:
         uuid_byte = (ProjectLevelProbeTrack & {'project_name': project_name}).proj(ub='(tracks_plot)').fetch1('ub')
@@ -548,3 +546,6 @@ def delete_outdated_probe_tracks(project_name='MAP'):
             # delete from external store
             (schema.external['report_store'] & ext_key).delete(delete_external_files=True)
             print('Outdated ProjectLevelProbeTrack deleted')
+    else:
+        print('ProjectLevelProbeTrack is up-to-date')
+
