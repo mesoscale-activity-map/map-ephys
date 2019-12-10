@@ -118,9 +118,10 @@ class SessionLevelCDReport(dj.Computed):
         probe_keys = (ephys.ProbeInsertion & key).fetch('KEY', order_by='insertion_number')
 
         fig1, axs = plt.subplots(len(probe_keys), len(probe_keys), figsize=(16, 16))
-        [a.axis('off') for a in axs.flatten()]
 
         if len(probe_keys) > 1:
+            [a.axis('off') for a in axs.flatten()]
+
             # ---- Plot Coding Direction per probe ----
             probe_proj = {}
             for pid, probe in enumerate(probe_keys):
@@ -384,8 +385,8 @@ class UnitLevelEphysReport(dj.Computed):
     unit_psth: filepath@report_store
     """
 
-    # only units with selectivity computed (in fact only need all the UnitPSTH computed, but keeping this to be safe)
-    key_source = ephys.Unit & psth.UnitPsth & 'unit_quality != "all"'
+    # only units UnitPSTH computed, and with InsertionLocation present
+    key_source = ephys.Unit & ephys.ProbeInsertion.InsertionLocation & psth.UnitPsth & 'unit_quality != "all"'
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)

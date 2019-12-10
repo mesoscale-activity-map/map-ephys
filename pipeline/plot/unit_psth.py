@@ -21,8 +21,10 @@ def _plot_spike_raster(ipsi, contra, vlines=[], shade_bar=None, ax=None, title='
     for i, tr in enumerate(set(contra['raster'][1])):
         contra_tr = np.where(contra['raster'][1] == tr, i, contra_tr)
 
+    ipsi_tr_max = ipsi_tr.max() if ipsi_tr.size > 0 else 0
+
     ax.plot(ipsi['raster'][0], ipsi_tr, 'r.', markersize=1)
-    ax.plot(contra['raster'][0], contra_tr + ipsi_tr.max() + 1, 'b.', markersize=1)
+    ax.plot(contra['raster'][0], contra_tr + ipsi_tr_max + 1, 'b.', markersize=1)
 
     for x in vlines:
         ax.axvline(x=x, linestyle='--', color='k')
