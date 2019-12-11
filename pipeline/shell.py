@@ -197,7 +197,7 @@ def automate_computation():
 
         # random sleep time between 5 to 10 minutes
         sleep_time = np.random.randint(300, 600)
-        log.info('Sleep: {} minutes'.format(sleep_time))
+        log.info('Sleep: {} minutes'.format(sleep_time / 60))
         time.sleep(sleep_time)
 
 
