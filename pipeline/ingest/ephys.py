@@ -573,6 +573,10 @@ class EphysIngest(dj.Imported):
             unit_xpos.append(ks.data['channel_positions'][site_idx, 0])
             unit_ypos.append(ks.data['channel_positions'][site_idx, 1])
 
+            amps = ks.data['amplitudes'][ks.data['spike_clusters'] == unit]
+            scaled_templates = np.matmul(chn_templates, ks.data['whitening_mat_inv'])
+            best_chn_wf = scaled_templates[:, site_idx] * amps.mean() * bit_volts
+            unit_amp.append(best_chn_wf.max() - best_chn_wf.min())
 
         # -- waveforms --
         log.info('.... extracting waveforms - data dir: {}'.format(str(ks_dir)))
@@ -582,11 +586,6 @@ class EphysIngest(dj.Imported):
 
         # -- snr --
         unit_snr = [calculate_wf_snr(unit_wfs[u][:, np.where(ks.data['channel_map'] == u_site)[0][0], :])
-                    for u, u_site in zip(valid_units, vmax_unit_site)]
-        # -- amp --
-        # mean of all spike of the (max - min of waveform of best channel at each spike)
-        unit_amp = [(unit_wfs[u][:, np.where(ks.data['channel_map'] == u_site)[0][0], :].max(axis=1)
-                    - unit_wfs[u][:, np.where(ks.data['channel_map'] == u_site)[0][0], :].min(axis=1)).mean()
                     for u, u_site in zip(valid_units, vmax_unit_site)]
 
         # -- trial-info from bitcode --
