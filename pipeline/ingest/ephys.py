@@ -7,6 +7,7 @@ from datetime import datetime
 from os import path
 
 from glob import glob
+from tqdm import tqdm
 import re
 from itertools import repeat
 import pandas as pd
@@ -28,6 +29,8 @@ from .. import get_schema_name
 schema = dj.schema(get_schema_name('ingest_ephys'))
 
 log = logging.getLogger(__name__)
+
+npx_bit_volts = {'neuropixels 1.0': 2.34375, 'neuropixels 2.0': 0.763}  # uV per bit scaling factor for neuropixels probes
 
 
 @schema
@@ -83,7 +86,9 @@ class EphysIngest(dj.Imported):
         rigpath = EphysDataPath().fetch1('data_path')
         h2o = sinfo['water_restriction_number']
 
-        dpath, dglob = self._get_sess_dir(rigpath, h2o, key['session_date'])
+        sess_time = (datetime.min + key['session_time']).time()
+        sess_datetime = datetime.combine(key['session_date'], sess_time)
+        dpath, dglob = self._get_sess_dir(rigpath, h2o, sess_datetime)
 
         if dpath is not None:
             log.info('Found session folder: {}'.format(dpath))
@@ -122,14 +127,21 @@ class EphysIngest(dj.Imported):
         sync_behav = data['sync_behav']
         trial_fix = data['trial_fix']
 
+        log.info('Starting insertions for probe: {} - Clustering method: {}'.format(probe, method))
+
         # account for the buffer period before trial_start
-        buffer_sample_count = npx_meta.meta['trgTTLMarginS'] * npx_meta.meta['imSampRate']
+        buffer_sample_count = np.round(npx_meta.meta['trgTTLMarginS'] * npx_meta.meta['imSampRate']).astype(int)
         trial_start = trial_start - np.round(buffer_sample_count).astype(int)
 
         # remove noise clusters
-        if method in ['jrclust_v3', 'jrclust_v3']:
+        if method in ['jrclust_v3', 'jrclust_v4']:
             units, spikes, spike_sites = (v[i] for v, i in zip(
                 (units, spikes, spike_sites), repeat((units > 0))))
+
+        # scale amplitudes by uV/bit scaling factor (for kilosort2)
+        if method in ['kilosort2']:
+            bit_volts = npx_bit_volts[re.match('neuropixels (\d.0)', npx_meta.probe_model).group()]
+            unit_amp = unit_amp * bit_volts
 
         # Determine trial (re)numbering for ephys:
         #
@@ -380,7 +392,7 @@ class EphysIngest(dj.Imported):
         log.info('.... probe: {}'.format(fpath.parent.name))
 
         log.info('.... loading ef_path: {}'.format(str(ef_path)))
-        ef = h5py.File(str(ef_path))  # ephys file
+        ef = h5py.File(str(ef_path), mode='r')  # ephys file
 
         log.info('.... loading bf_path: {}'.format(str(bf_path)))
         bf = spio.loadmat(bf_path)  # bitcode file
@@ -463,7 +475,7 @@ class EphysIngest(dj.Imported):
         log.info('.... probe: {}'.format(fpath.parent.name))
 
         log.info('.... loading ef_path: {}'.format(str(ef_path)))
-        ef = h5py.File(str(ef_path))  # ephys file
+        ef = h5py.File(str(ef_path), mode='r')  # ephys file
 
         # bitcode path (ex: 'SC022_030319_Imec3_bitcode.mat')
         bf_path = list(fpath.parent.glob(
@@ -542,7 +554,7 @@ class EphysIngest(dj.Imported):
         bf = spio.loadmat(bf_path)  # bitcode file
 
         # ---- Read Kilosort results ----
-        log.info('.... loading kilosort dir: {}'.format(str(ks_dir)))
+        log.info('.... loading kilosort - ks_dir: {}'.format(str(ks_dir)))
         ks = Kilosort(ks_dir)
 
         spike_times = ks.data['spike_times']
@@ -569,13 +581,13 @@ class EphysIngest(dj.Imported):
             chn_templates = ks.data['templates'][template_idx, :, :]
             site_idx = np.abs(np.abs(chn_templates).max(axis=0)).argmax()
             vmax_unit_site.append(ks.data['channel_map'][site_idx])
-
+            # unit x, y
             unit_xpos.append(ks.data['channel_positions'][site_idx, 0])
             unit_ypos.append(ks.data['channel_positions'][site_idx, 1])
-
+            # unit amp
             amps = ks.data['amplitudes'][ks.data['spike_clusters'] == unit]
             scaled_templates = np.matmul(chn_templates, ks.data['whitening_mat_inv'])
-            best_chn_wf = scaled_templates[:, site_idx] * amps.mean() * bit_volts
+            best_chn_wf = scaled_templates[:, site_idx] * amps.mean()
             unit_amp.append(best_chn_wf.max() - best_chn_wf.min())
 
         # -- waveforms --
@@ -599,12 +611,21 @@ class EphysIngest(dj.Imported):
 
         trial_fix = bf['trialNum'] if 'trialNum' in bf else None
 
+        # -- Ensuring `spike_times`, `trial_start` and `trial_go` are in `sample` and not `second` --
+        hz = ks.data['params']['sample_rate']
+        if np.mean(spike_times - np.round(spike_times)) != 0:
+            spike_times = np.round(spike_times * hz).astype(int)
+        if np.mean(trial_go - np.round(trial_go)) != 0:
+            trial_go = np.round(trial_go * hz).astype(int)
+        if np.mean(trial_start - np.round(trial_start)) != 0:
+            trial_start = np.round(trial_start * hz).astype(int)
+
         data = {
             'sinfo': sinfo,
             'ef_path': None,
             'skey': skey,
             'method': 'kilosort2',
-            'hz': ks.data['params']['sample_rate'],
+            'hz': hz,
             'spikes': spike_times,
             'spike_sites': spike_sites + 1,  # channel numbering in this pipeline is 1-based indexed
             'units': ks.data['spike_clusters'],
@@ -624,20 +645,20 @@ class EphysIngest(dj.Imported):
 
         return data
 
-    def _get_sess_dir(self, rigpath, h2o, date):
+    def _get_sess_dir(self, rigpath, h2o, sess_datetime):
         dpath, dglob = None, None
-        if pathlib.Path(rigpath, h2o, date.strftime('%Y%m%d')).exists():
-            dpath = pathlib.Path(rigpath, h2o, date.strftime('%Y%m%d'))
+        if pathlib.Path(rigpath, h2o, sess_datetime.date().strftime('%Y%m%d')).exists():
+            dpath = pathlib.Path(rigpath, h2o, sess_datetime.date().strftime('%Y%m%d'))
             dglob = '[0-9]/{}'  # probe directory pattern
         else:
             sess_dirs = list(pathlib.Path(rigpath, h2o).glob('*{}_{}_*'.format(
-                h2o, date.strftime('%m%d%y'))))
+                h2o, sess_datetime.date().strftime('%m%d%y'))))
             for sess_dir in sess_dirs:
                 npx_meta = NeuropixelsMeta(next(sess_dir.rglob('{}_*.ap.meta'.format(h2o))))
                 # match the recording_time's minute from npx_meta to that of the behavior recording - this is to handle multiple sessions in a day
-                if npx_meta.recording_time.minute == date.minute:
+                if npx_meta.recording_time.minute == sess_datetime.minute:
                     dpath = sess_dir
-                    dglob = '{}_{}_*_imec[0-9]'.format(h2o, date.strftime('%m%d%y')) + '/{}'  # probe directory pattern
+                    dglob = '{}_{}_*_imec[0-9]'.format(h2o, sess_datetime.date().strftime('%m%d%y')) + '/{}'  # probe directory pattern
                     break
         return dpath, dglob
 
@@ -654,8 +675,7 @@ class EphysIngest(dj.Imported):
         # npx ap.meta: '{}_*.imec.ap.meta'.format(h2o)
         npx_meta_files = list(dpath.glob(dglob.format('{}_*.ap.meta'.format(h2o))))
         if not npx_meta_files:
-            log.warning('Error - no ap.meta files in {}. Skipping.'.format(dpath))
-            return
+            raise FileNotFoundError('Error - no ap.meta files at {}'.format(dpath))
 
         jrclustv3spec = '{}_*_jrc.mat'.format(h2o)
         jrclustv4spec = '{}_*.ap_res.mat'.format(h2o)
@@ -919,9 +939,6 @@ class Kilosort:
             raise FileNotFoundError('Neither cluster_groups.csv nor cluster_KSLabel.tsv found!')
 
 
-npx_bit_volt = {'neuropixels 1.0': 2.34375, 'neuropixels 2.0': 0.763}  # uV per bit scaling factor for neuropixels probes
-
-
 def extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=(-41, 41), bit_volts=None):
     """
     For
@@ -929,7 +946,7 @@ def extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=(-41, 41), bit_volts=None
     :param ks: instance of Kilosort
     :param n_wf: number of spikes per unit to extract the waveforms
     :param wf_win: number of sample pre and post a spike
-    :param bit_volts: scalar required to convert int16 values into microvolts (default of 2.34375 for Neuropixels 1.0)
+    :param bit_volts: scalar required to convert int16 values into microvolts
     :return: dictionary of the clusters' waveform (sample x channel x spike)
     """
     bin_fp = next(pathlib.Path(npx_dir).glob('*.ap.bin'))
@@ -939,7 +956,7 @@ def extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=(-41, 41), bit_volts=None
     channel_num = meta.meta['nSavedChans']
 
     if bit_volts is None:
-        bit_volts = npx_bit_volt[re.match('neuropixels (\d.0)', meta.probe_model).group()]
+        bit_volts = npx_bit_volts[re.match('neuropixels (\d.0)', meta.probe_model).group()]
 
     raw_data = np.memmap(bin_fp, dtype='int16', mode='r')
     data = np.reshape(raw_data, (int(raw_data.size / channel_num), channel_num))
@@ -947,7 +964,7 @@ def extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=(-41, 41), bit_volts=None
     chan_map = ks.data['channel_map']
 
     unit_wfs = {}
-    for unit in ks.data['cluster_ids']:
+    for unit in tqdm(ks.data['cluster_ids']):
         spikes = ks.data['spike_times'][ks.data['spike_clusters'] == unit]
         np.random.shuffle(spikes)
         spikes = spikes[:n_wf]
