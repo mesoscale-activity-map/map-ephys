@@ -19,7 +19,6 @@ from pipeline import experiment
 from pipeline import ephys
 from pipeline import histology
 from pipeline import tracking
-from pipeline import publication
 from pipeline import get_schema_name
 
 
@@ -52,7 +51,6 @@ def mockdata():
     reload(ephys)
     reload(histology)
     reload(tracking)
-    reload(publication)
     try:
         lab.Person().insert1({
             'username': 'unknown',
