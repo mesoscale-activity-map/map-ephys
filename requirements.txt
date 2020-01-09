@@ -7,3 +7,4 @@ pandas
 seaborn
 matplotlib
 pillow
+tqdm

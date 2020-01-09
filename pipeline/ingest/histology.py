@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 @schema
 class HistologyIngest(dj.Imported):
     definition = """
-    -> ephys_ingest.EphysIngest
+    -> experiment.Session
     """
 
     class HistologyFile(dj.Part):
@@ -40,6 +40,11 @@ class HistologyIngest(dj.Imported):
         probe_insertion_number:         tinyint         # electrode group
         landmark_file:                  varchar(255)    # rig file subpath
         """
+
+    # session with ephys and without ElectrodeCCFPosition and LabeledProbeTrack
+    key_source = ((experiment.Session & ephys.ProbeInsertion)
+                  - histology.ElectrodeCCFPosition
+                  - histology.LabeledProbeTrack)
 
     def make(self, key):
         '''
@@ -68,8 +73,9 @@ class HistologyIngest(dj.Imported):
         ).fetch1('water_restriction_number')
 
         directory = pathlib.Path(
-            rigpath, water, session_date.strftime('%Y-%m-%d'), 'histology')
+            rigpath, water, session_date.strftime('%Y%m%d'), 'histology')
 
+        hist_ingested = False
         for probe in range(1, 3):
 
             probefile = 'landmarks_{}_{}_{}_siteInfo.mat'.format(
@@ -82,17 +88,23 @@ class HistologyIngest(dj.Imported):
 
             try:
 
-                self._load_histology_probe(
+                prb_ingested = self._load_histology_probe(
                     key, session, egmap, probe, probepath)
 
-                self._load_histology_track(
+                trk_ingested = self._load_histology_track(
                     key, session, egmap, probe, trackpath)
+
+                if prb_ingested or trk_ingested:
+                    hist_ingested = True
 
             except StopIteration:
                 pass
 
-        log.info('HistologyIngest().make(): {} complete.'.format(key))
-        self.insert1(key)
+        if hist_ingested:
+            log.info('HistologyIngest().make(): {} complete.'.format(key))
+            self.insert1(key)
+        else:
+            log.info('HistologyIngest().make(): {} - N/A, skipping.'.format(key))
 
     def _load_histology_probe(self, key, session, egmap, probe, probepath):
 
@@ -124,13 +136,18 @@ class HistologyIngest(dj.Imported):
         # probe CCF regions
         names = hist.ont.name
         valid = [isinstance(n, (str,)) for n in names]
-        goodn = np.where(np.array(valid))[0]
 
-        electrodes = (ephys.ProbeInsertion.proj() * lab.Probe.Electrode.proj()
-                      & egmap[probe]).fetch(order_by='electrode asc')
+        probe_electrodes = (lab.ProbeType.Electrode & (ephys.ProbeInsertion & egmap[probe])).fetch(
+            'electrode', order_by='electrode asc')
 
-        recs = ((*l[0], ccf.CCFLabel.CCF_R3_20UM_ID, *l[1]) for l in
-                zip(electrodes[goodn], pos_xyz[goodn]))
+        valid_electrodes = probe_electrodes[valid[:len(probe_electrodes)]]
+        valid_pos_xyz = pos_xyz[valid, :]
+
+        inserted_electrodes = (ephys.ProbeInsertion.proj() * lab.ElectrodeConfig.Electrode.proj()
+                               & egmap[probe]).fetch(order_by='electrode asc')
+
+        recs = ((*electrode, ccf.CCFLabel.CCF_R3_20UM_ID, *electrode_pos) for electrode, electrode_pos in
+                zip(inserted_electrodes, valid_pos_xyz) if electrode['electrode'] in valid_electrodes)
 
         # ideally ElectrodePosition.insert(...) but some are outside of CCF...
         log.info('inserting channel ccf position')
@@ -148,10 +165,11 @@ class HistologyIngest(dj.Imported):
                     r, ignore_extra_fields=True, allow_direct_insert=True)
 
         log.info('... ok.')
+        return True
 
     def _load_histology_track(self, key, session, egmap, probe, trackpath):
 
-        conv = (('landmark_name', str), ('warp', lambda x: x == 'true'),
+        conv = (('landmark_name', str), ('warp', lambda x: x.lower() == 'true'),
                 ('subj_x', float), ('subj_y', float), ('subj_z', float),
                 ('ccf_x', float), ('ccf_y', float), ('ccf_z', float))
 
@@ -199,3 +217,5 @@ class HistologyIngest(dj.Imported):
             ({**top, 'order': rec[0], **rec[1]} for rec in
              enumerate((r for r in recs if r['warp'] is False))),
             ignore_extra_fields=True, allow_direct_insert=True)
+
+        return True

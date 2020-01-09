@@ -29,6 +29,27 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 log = logging.getLogger(__name__)
 
 
+# ================ PHOTOSTIM PROTOCOL ===============
+photostim_duration = 0.5  # (s)
+skull_ref = 'Bregma'
+photostims = {4: {'photo_stim': 4, 'photostim_device': 'OBIS470', 'duration': photostim_duration,
+                  'locations': [{'skull_reference': skull_ref, 'brain_area': 'ALM',
+                                 'ap_location': 2500, 'ml_location': -1500, 'depth': 0,
+                                 'theta': 15, 'phi': 15}]},
+              5: {'photo_stim': 5, 'photostim_device': 'OBIS470', 'duration': photostim_duration,
+                  'locations': [{'skull_reference': skull_ref, 'brain_area': 'ALM',
+                                 'ap_location': 2500, 'ml_location': 1500, 'depth': 0,
+                                 'theta': 15, 'phi': 15}]},
+              6: {'photo_stim': 6, 'photostim_device': 'OBIS470', 'duration': photostim_duration,
+                  'locations': [{'skull_reference': skull_ref, 'brain_area': 'ALM',
+                                 'ap_location': 2500, 'ml_location': -1500, 'depth': 0,
+                                 'theta': 15, 'phi': 15},
+                                {'skull_reference': skull_ref, 'brain_area': 'ALM',
+                                 'ap_location': 2500, 'ml_location': 1500, 'depth': 0,
+                                 'theta': 15, 'phi': 15}
+                                ]}}
+
+
 @schema
 class RigDataPath(dj.Lookup):
     ''' rig storage locations '''
@@ -166,7 +187,8 @@ class BehaviorIngest(dj.Imported):
 
     def populate(self, *args, **kwargs):
         for k in self.key_source:
-            self.make(k)
+            with dj.conn().transaction:
+                self.make(k)
 
     def make(self, key):
         log.info('BehaviorIngest.make(): key: {key}'.format(key=key))
@@ -222,17 +244,6 @@ class BehaviorIngest(dj.Imported):
             return
 
         #
-        # Prepare PhotoStim
-        #
-        photosti_duration = 0.5  # (s) Hard-coded here
-        photostims = {4: {'photo_stim': 4, 'photostim_device': 'OBIS470',
-                          'brain_location_name': 'left_alm', 'duration': photosti_duration},
-                      5: {'photo_stim': 5, 'photostim_device': 'OBIS470',
-                          'brain_location_name': 'right_alm', 'duration': photosti_duration},
-                      6: {'photo_stim': 6, 'photostim_device': 'OBIS470',
-                          'brain_location_name': 'both_alm', 'duration': photosti_duration}}
-
-        #
         # Extract trial data from file(s) & prepare trial loop
         #
 
@@ -240,8 +251,9 @@ class BehaviorIngest(dj.Imported):
 
         trial = namedtuple(  # simple structure to track per-trial vars
             'trial', ('ttype', 'stim', 'settings', 'state_times', 'state_names',
-                      'state_data', 'event_data', 'event_times'))
+                      'state_data', 'event_data', 'event_times', 'trial_start'))
 
+        sess_datetimes = []
         for f in matches:
 
             if os.stat(f).st_size/1024 < 1000:
@@ -253,8 +265,14 @@ class BehaviorIngest(dj.Imported):
             mat = spio.loadmat(f, squeeze_me=True)
             SessionData = mat['SessionData'].flatten()
 
+            # parse session datetime
+            sess_datetime = SessionData['Info'][0]['SessionDate'] + ' ' + SessionData['Info'][0]['SessionStartTime_UTC']
+            sess_datetimes.append(datetime.datetime.strptime(sess_datetime, '%d-%b-%Y %H:%M:%S'))
+
             AllTrialTypes = SessionData['TrialTypes'][0]
             AllTrialSettings = SessionData['TrialSettings'][0]
+            AllTrialStarts = SessionData['TrialStartTimestamp'][0]
+            AllTrialStarts = AllTrialStarts - AllTrialStarts[0]  # 1st trial starts at se
 
             RawData = SessionData['RawData'][0].flatten()
             AllStateNames = RawData['OriginalStateNamesByNumber'][0]
@@ -267,7 +285,7 @@ class BehaviorIngest(dj.Imported):
             assert(all((x.shape[0] == AllStateTimestamps.shape[0] for x in
                         (AllTrialTypes, AllTrialSettings,
                          AllStateNames, AllStateData, AllEventData,
-                         AllEventTimestamps))))
+                         AllEventTimestamps, AllTrialStarts, AllTrialStarts))))
 
             if 'StimTrials' in SessionData.dtype.fields:
                 log.debug('StimTrials detected in session - will include')
@@ -276,11 +294,11 @@ class BehaviorIngest(dj.Imported):
             else:
                 log.debug('StimTrials not detected in session - will skip')
                 AllStimTrials = np.array([
-                    None for i in enumerate(range(AllStateTimestamps.shape[0]))])
+                    None for _ in enumerate(range(AllStateTimestamps.shape[0]))])
 
             z = zip(AllTrialTypes, AllStimTrials, AllTrialSettings,
                     AllStateTimestamps, AllStateNames, AllStateData,
-                    AllEventData, AllEventTimestamps)
+                    AllEventData, AllEventTimestamps, AllTrialStarts)
 
             trials = chain(trials, z)  # concatenate the files
 
@@ -295,6 +313,12 @@ class BehaviorIngest(dj.Imported):
         # Trial data seems valid; synthesize session id & add session record
         # XXX: note - later breaks can result in Sessions without valid trials
         #
+
+        session_datetime = sorted(sess_datetimes)[0]
+        assert skey.pop('session_date') == session_datetime.date()
+
+        skey['session_date'] = session_datetime.date()
+        skey['session_time'] = session_datetime.time()
 
         log.debug('synthesizing session ID')
         session = (dj.U().aggr(experiment.Session() & {'subject_id': subject_id},
@@ -315,7 +339,7 @@ class BehaviorIngest(dj.Imported):
                                     'photostim_location', 'photostim_trial',
                                     'photostim_trial_event')}
 
-        i = -1
+        i = 0  # trial numbering starts at 1
         for t in trials:
 
             #
@@ -405,8 +429,8 @@ class BehaviorIngest(dj.Imported):
             try:    
                 tkey['trial'] = i
                 tkey['trial_uid'] = i  # Arseny has unique id to identify some trials
-                tkey['start_time'] = t.state_times[startindex][0]
-                tkey['stop_time'] = t.state_times[endindex][0]
+                tkey['start_time'] = t.trial_start
+                tkey['stop_time'] = t.trial_start + t.state_times[endindex][0]
             except IndexError:
                 log.warning('skipping trial {i}: error indexing {s}/{e} into {t}'.format(i=i, s=str(startindex), e=str(endindex), t=str(t.state_times)))
                 continue
@@ -666,7 +690,7 @@ class BehaviorIngest(dj.Imported):
                 rows['photostim_trial'].append(tkey)
                 delay_period_idx = np.where(t.state_data == states['DelayPeriod'])[0][0]
                 rows['photostim_trial_event'].append(dict(
-                    tkey, **photostims[t.stim], photostim_event_id=len(rows['photostim_trial_event']),
+                    tkey, photo_stim=t.stim, photostim_event_id=len(rows['photostim_trial_event']),
                     photostim_event_time=t.state_times[delay_period_idx],
                     power=5.5))
 
@@ -719,11 +743,18 @@ class BehaviorIngest(dj.Imported):
 
         # Photostim Insertion
 
-        photostim_ids = set([r['photo_stim'] for r in rows['photostim_trial_event']])
-        if photostim_ids:
+        photostim_ids = np.unique([r['photo_stim'] for r in rows['photostim_trial_event']])
+        unknown_photostims = np.setdiff1d(photostim_ids, list(photostims.keys()))
+        if unknown_photostims:
+            raise ValueError('Unknown photostim protocol: {}'.format(unknown_photostims))
+
+        if photostim_ids.size > 0:
             log.info('BehaviorIngest.make(): ... experiment.Photostim')
-            experiment.Photostim.insert((dict(skey, **photostims[stim]) for stim in photostim_ids),
-                                        ignore_extra_fields=True)
+            for stim in photostim_ids:
+                experiment.Photostim.insert1(dict(skey, **photostims[stim]), ignore_extra_fields=True)
+                experiment.Photostim.PhotostimLocation.insert((dict(skey, photo_stim=photostims[stim]['photo_stim'], **loc)
+                                                               for loc in photostims[stim]['locations']),
+                                                              ignore_extra_fields=True)
 
         log.info('BehaviorIngest.make(): ... experiment.PhotostimTrial')
         experiment.PhotostimTrial.insert(rows['photostim_trial'],

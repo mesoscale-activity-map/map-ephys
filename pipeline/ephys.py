@@ -17,6 +17,7 @@ class ProbeInsertion(dj.Manual):
     -> experiment.Session
     insertion_number: int
     ---
+    -> lab.Probe
     -> lab.ElectrodeConfig
     """
 
@@ -24,12 +25,27 @@ class ProbeInsertion(dj.Manual):
         definition = """
         -> master
         ---
-        -> experiment.BrainLocation
-        ml_location=null: float # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
-        ap_location=null: float # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
-        dv_location=null: float # um from dura to first site of the probe; ventral is positive; based on manipulator coordinates/reconstructed track
-        ml_angle=null: float # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
-        ap_angle=null: float # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive. 
+        -> lab.SkullReference
+        ap_location: decimal(6, 2) # (um) anterior-posterior; ref is 0; more anterior is more positive
+        ml_location: decimal(6, 2) # (um) medial axis; ref is 0 ; more right is more positive
+        depth:       decimal(6, 2) # (um) manipulator depth relative to surface of the brain (0); more ventral is more negative
+        theta:       decimal(5, 2) # (deg) - elevation - rotation about the ml-axis [0, 180] - w.r.t the z+ axis
+        phi:         decimal(5, 2) # (deg) - azimuth - rotation about the dv-axis [0, 360] - w.r.t the x+ axis
+        beta:        decimal(5, 2) # (deg) rotation about the shank of the probe [-180, 180] - clockwise is increasing in degree - 0 is the probe-front facing anterior
+        """
+
+    class RecordableBrainRegion(dj.Part):
+        definition = """
+        -> master
+        -> lab.BrainArea
+        -> lab.Hemisphere
+        """
+
+    class InsertionNote(dj.Part):
+        definition = """
+        -> master
+        ---
+        insertion_note: varchar(1000)
         """
 
     class RecordingSystemSetup(dj.Part):
@@ -96,10 +112,10 @@ class ClusteringMethod(dj.Lookup):
     definition = """
     clustering_method: varchar(16)
     """
-    # jrclust is the version Dave uses (it's actually jrclust_v3)
+    # jrclust_v3 is the version Dave uses
     # jrclust_v4 is the version Susu uses
 
-    contents = zip(['jrclust', 'kilosort', 'jrclust_v4'])
+    contents = zip(['jrclust_v3', 'kilosort', 'jrclust_v4'])
 
 
 @schema
@@ -118,8 +134,8 @@ class Unit(dj.Imported):
     unit_uid : int # unique across sessions/animals
     -> UnitQualityType
     -> lab.ElectrodeConfig.Electrode # site on the electrode for which the unit has the largest amplitude
-    unit_posx : double # (um) estimated x position of the unit relative to probe's (0,0)
-    unit_posy : double # (um) estimated y position of the unit relative to probe's (0,0)
+    unit_posx : double # (um) estimated x position of the unit relative to probe's tip (0,0)
+    unit_posy : double # (um) estimated y position of the unit relative to probe's tip (0,0)
     spike_times : longblob  # (s) from the start of the first data point used in clustering
     unit_amp : double
     unit_snr : double
@@ -131,15 +147,6 @@ class Unit(dj.Imported):
         # Entries for trials a unit is in
         -> master
         -> experiment.SessionTrial
-        """
-
-    class UnitPosition(dj.Part):
-        definition = """
-        # Estimated unit position in the brain
-        -> master
-        -> ccf.CCF
-        ---
-        -> experiment.BrainLocation
         """
 
     class TrialSpikes(dj.Part):
@@ -169,7 +176,8 @@ class UnitCoarseBrainLocation(dj.Computed):
     # Estimated unit position in the brain
     -> Unit
     ---
-    -> [nullable] experiment.BrainLocation
+    -> [nullable] lab.BrainArea
+    -> [nullable] lab.Hemisphere
     """
 
     key_source = Unit & BrainAreaDepthCriteria
@@ -240,8 +248,6 @@ class UnitCellType(dj.Computed):
                           cell_type='FS' if waveform_width < 0.4 else 'Pyr'))
 
 
-
-
 @schema
 class UnitStat(dj.Computed):
     definition = """
@@ -266,3 +272,13 @@ class UnitStat(dj.Computed):
                        'isi_violation': sum((isi < self.isi_violation_thresh).astype(int)) / len(isi) if isi.size else None,
                        'avg_firing_rate': len(np.hstack(trial_spikes)) / sum(tr_stop - tr_start) if isi.size else None}
         self.insert(make_insert())
+
+
+# TODO: confirm the logic/need for this table
+@schema
+class UnitCCF(dj.Computed):
+    definition = """ 
+    -> Unit
+    ---
+    -> ccf.CCF
+    """
