@@ -573,6 +573,7 @@ class EphysIngest(dj.Imported):
 
         valid_units = ks.data['cluster_ids'][withspike_idx]
         valid_unit_labels = ks.data['cluster_groups'][withspike_idx]
+        valid_unit_labels = np.where(valid_unit_labels == 'mua', 'multi', valid_unit_labels)  # rename 'mua' to 'multi'
 
         # -- vmax_unit_site --
         vmax_unit_site, unit_xpos, unit_ypos, unit_amp = [], [], [], []
@@ -622,7 +623,7 @@ class EphysIngest(dj.Imported):
 
         data = {
             'sinfo': sinfo,
-            'ef_path': None,
+            'ef_path': ks_dir,
             'skey': skey,
             'method': 'kilosort2',
             'hz': hz,
@@ -939,9 +940,8 @@ class Kilosort:
             raise FileNotFoundError('Neither cluster_groups.csv nor cluster_KSLabel.tsv found!')
 
 
-def extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=(-41, 41), bit_volts=None):
+def extract_ks_waveforms(npx_dir, ks, n_wf=5, wf_win=(-41, 41), bit_volts=None):
     """
-    For
     :param npx_dir: directory to the ap.bin and ap.meta
     :param ks: instance of Kilosort
     :param n_wf: number of spikes per unit to extract the waveforms
