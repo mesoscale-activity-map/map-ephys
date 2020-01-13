@@ -613,12 +613,16 @@ class EphysIngest(dj.Imported):
         trial_fix = bf['trialNum'] if 'trialNum' in bf else None
 
         # -- Ensuring `spike_times`, `trial_start` and `trial_go` are in `sample` and not `second` --
+        # There is still a risk of times in `second` but with 0 decimal values and thus would be detected as `sample` (very very unlikely)
         hz = ks.data['params']['sample_rate']
         if np.mean(spike_times - np.round(spike_times)) != 0:
+            log.debug('Kilosort2 spike times in seconds - converting to sample')
             spike_times = np.round(spike_times * hz).astype(int)
         if np.mean(trial_go - np.round(trial_go)) != 0:
+            log.debug('Kilosort2 bitcode sTrig in seconds - converting to sample')
             trial_go = np.round(trial_go * hz).astype(int)
         if np.mean(trial_start - np.round(trial_start)) != 0:
+            log.debug('Kilosort2 bitcode goCue in seconds - converting to sample')
             trial_start = np.round(trial_start * hz).astype(int)
 
         data = {
@@ -627,7 +631,7 @@ class EphysIngest(dj.Imported):
             'skey': skey,
             'method': 'kilosort2',
             'hz': hz,
-            'spikes': spike_times,
+            'spikes': spike_times.astype(int),
             'spike_sites': spike_sites + 1,  # channel numbering in this pipeline is 1-based indexed
             'units': ks.data['spike_clusters'],
             'unit_wav': unit_wav,
@@ -657,7 +661,7 @@ class EphysIngest(dj.Imported):
             for sess_dir in sess_dirs:
                 npx_meta = NeuropixelsMeta(next(sess_dir.rglob('{}_*.ap.meta'.format(h2o))))
                 # match the recording_time's minute from npx_meta to that of the behavior recording - this is to handle multiple sessions in a day
-                if npx_meta.recording_time.minute == sess_datetime.minute:
+                if abs(npx_meta.recording_time.minute - sess_datetime.minute) <= 1:
                     dpath = sess_dir
                     dglob = '{}_{}_*_imec[0-9]'.format(h2o, sess_datetime.date().strftime('%m%d%y')) + '/{}'  # probe directory pattern
                     break
@@ -940,7 +944,7 @@ class Kilosort:
             raise FileNotFoundError('Neither cluster_groups.csv nor cluster_KSLabel.tsv found!')
 
 
-def extract_ks_waveforms(npx_dir, ks, n_wf=5, wf_win=(-41, 41), bit_volts=None):
+def extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=(-41, 41), bit_volts=None):
     """
     :param npx_dir: directory to the ap.bin and ap.meta
     :param ks: instance of Kilosort
