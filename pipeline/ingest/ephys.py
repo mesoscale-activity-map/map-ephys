@@ -25,6 +25,7 @@ from pipeline import ephys
 from pipeline import InsertBuffer, dict_to_hash
 from pipeline.ingest import behavior as behavior_ingest
 from .. import get_schema_name
+from . import ProbeInsertionError
 
 schema = dj.schema(get_schema_name('ingest_ephys'))
 
@@ -102,7 +103,12 @@ class EphysIngest(dj.Imported):
             return
 
         for probe_no, (f, loader, npx_meta) in clustering_files.items():
-            self._load(loader(sinfo, f), probe_no, npx_meta, rigpath)
+            try:
+                self._load(loader(sinfo, f), probe_no, npx_meta, rigpath)
+            except ProbeInsertionError as e:
+                dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
+                log.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
+                return
 
     def _load(self, data, probe, npx_meta, rigpath):
 
@@ -208,7 +214,10 @@ class EphysIngest(dj.Imported):
               for t in range(len(trials))] for u in set(units)])
 
         # create probe insertion records
-        insertion_key = self._gen_probe_insert(sinfo, probe, npx_meta)
+        try:
+            insertion_key = self._gen_probe_insert(sinfo, probe, npx_meta)
+        except (NotImplementedError, dj.DataJointError) as e:
+            raise ProbeInsertionError(str(e))
 
         electrode_keys = {c['electrode']: c for c in (lab.ElectrodeConfig.Electrode & insertion_key).fetch('KEY')}
 
@@ -315,18 +324,17 @@ class EphysIngest(dj.Imported):
         Generate and insert (if needed) an ElectrodeConfiguration based on the specified neuropixels meta information
         """
 
-        probe_type = npx_meta.probe_model
-
-        if '1.0' in probe_type:
+        if '1.0' in npx_meta.probe_model:
             eg_members = []
-            probe_type = {'probe_type': probe_type}
+            probe_type = {'probe_type': npx_meta.probe_model}
             q_electrodes = lab.ProbeType.Electrode & probe_type
             for shank, shank_col, shank_row, is_used in npx_meta.shankmap['data']:
                 electrode = (q_electrodes & {'shank': shank, 'shank_col': shank_col, 'shank_row': shank_row}).fetch1(
                     'KEY')
                 eg_members.append({**electrode, 'is_used': is_used, 'electrode_group': 0})
         else:
-            raise NotImplementedError('Processing for neuropixels probe model {} not yet implemented'.format(probe_type))
+            raise NotImplementedError('Processing for neuropixels probe model {} not yet implemented'.format(
+                npx_meta.probe_model))
 
         # ---- compute hash for the electrode config (hash of dict of all ElectrodeConfig.Electrode) ----
         ec_hash = dict_to_hash({k['electrode']: k for k in eg_members})
@@ -340,7 +348,7 @@ class EphysIngest(dj.Imported):
         # ---- make new ElectrodeConfig if needed ----
         if not (lab.ElectrodeConfig & {'electrode_config_hash': ec_hash}):
 
-            log.info('.. creating lab.ElectrodeConfig: {}'.format(ec_name))
+            log.info('.. Probe type: {} - creating lab.ElectrodeConfig: {}'.format(npx_meta.probe_model, ec_name))
 
             lab.ElectrodeConfig.insert1({**e_config, 'electrode_config_hash': ec_hash})
 
