@@ -25,6 +25,7 @@ from pipeline import ephys
 from pipeline import InsertBuffer, dict_to_hash
 from pipeline.ingest import behavior as behavior_ingest
 from .. import get_schema_name
+from . import ProbeInsertionError
 
 schema = dj.schema(get_schema_name('ingest_ephys'))
 
@@ -102,7 +103,12 @@ class EphysIngest(dj.Imported):
             return
 
         for probe_no, (f, loader, npx_meta) in clustering_files.items():
-            self._load(loader(sinfo, f), probe_no, npx_meta, rigpath)
+            try:
+                self._load(loader(sinfo, f), probe_no, npx_meta, rigpath)
+            except ProbeInsertionError as e:
+                dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
+                log.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
+                return
 
     def _load(self, data, probe, npx_meta, rigpath):
 
@@ -208,7 +214,10 @@ class EphysIngest(dj.Imported):
               for t in range(len(trials))] for u in set(units)])
 
         # create probe insertion records
-        insertion_key = self._gen_probe_insert(sinfo, probe, npx_meta)
+        try:
+            insertion_key = self._gen_probe_insert(sinfo, probe, npx_meta)
+        except (NotImplementedError, dj.DataJointError) as e:
+            raise ProbeInsertionError(str(e))
 
         electrode_keys = {c['electrode']: c for c in (lab.ElectrodeConfig.Electrode & insertion_key).fetch('KEY')}
 
@@ -315,18 +324,17 @@ class EphysIngest(dj.Imported):
         Generate and insert (if needed) an ElectrodeConfiguration based on the specified neuropixels meta information
         """
 
-        probe_type = npx_meta.probe_model
-
-        if '1.0' in probe_type:
+        if '1.0' in npx_meta.probe_model:
             eg_members = []
-            probe_type = {'probe_type': probe_type}
+            probe_type = {'probe_type': npx_meta.probe_model}
             q_electrodes = lab.ProbeType.Electrode & probe_type
             for shank, shank_col, shank_row, is_used in npx_meta.shankmap['data']:
                 electrode = (q_electrodes & {'shank': shank, 'shank_col': shank_col, 'shank_row': shank_row}).fetch1(
                     'KEY')
                 eg_members.append({**electrode, 'is_used': is_used, 'electrode_group': 0})
         else:
-            raise NotImplementedError('Processing for neuropixels probe model {} not yet implemented'.format(probe_type))
+            raise NotImplementedError('Processing for neuropixels probe model {} not yet implemented'.format(
+                npx_meta.probe_model))
 
         # ---- compute hash for the electrode config (hash of dict of all ElectrodeConfig.Electrode) ----
         ec_hash = dict_to_hash({k['electrode']: k for k in eg_members})
@@ -340,7 +348,7 @@ class EphysIngest(dj.Imported):
         # ---- make new ElectrodeConfig if needed ----
         if not (lab.ElectrodeConfig & {'electrode_config_hash': ec_hash}):
 
-            log.info('.. creating lab.ElectrodeConfig: {}'.format(ec_name))
+            log.info('.. Probe type: {} - creating lab.ElectrodeConfig: {}'.format(npx_meta.probe_model, ec_name))
 
             lab.ElectrodeConfig.insert1({**e_config, 'electrode_config_hash': ec_hash})
 
@@ -573,6 +581,7 @@ class EphysIngest(dj.Imported):
 
         valid_units = ks.data['cluster_ids'][withspike_idx]
         valid_unit_labels = ks.data['cluster_groups'][withspike_idx]
+        valid_unit_labels = np.where(valid_unit_labels == 'mua', 'multi', valid_unit_labels)  # rename 'mua' to 'multi'
 
         # -- vmax_unit_site --
         vmax_unit_site, unit_xpos, unit_ypos, unit_amp = [], [], [], []
@@ -612,21 +621,25 @@ class EphysIngest(dj.Imported):
         trial_fix = bf['trialNum'] if 'trialNum' in bf else None
 
         # -- Ensuring `spike_times`, `trial_start` and `trial_go` are in `sample` and not `second` --
+        # There is still a risk of times in `second` but with 0 decimal values and thus would be detected as `sample` (very very unlikely)
         hz = ks.data['params']['sample_rate']
         if np.mean(spike_times - np.round(spike_times)) != 0:
+            log.debug('Kilosort2 spike times in seconds - converting to sample')
             spike_times = np.round(spike_times * hz).astype(int)
         if np.mean(trial_go - np.round(trial_go)) != 0:
+            log.debug('Kilosort2 bitcode sTrig in seconds - converting to sample')
             trial_go = np.round(trial_go * hz).astype(int)
         if np.mean(trial_start - np.round(trial_start)) != 0:
+            log.debug('Kilosort2 bitcode goCue in seconds - converting to sample')
             trial_start = np.round(trial_start * hz).astype(int)
 
         data = {
             'sinfo': sinfo,
-            'ef_path': None,
+            'ef_path': ks_dir,
             'skey': skey,
             'method': 'kilosort2',
             'hz': hz,
-            'spikes': spike_times,
+            'spikes': spike_times.astype(int),
             'spike_sites': spike_sites + 1,  # channel numbering in this pipeline is 1-based indexed
             'units': ks.data['spike_clusters'],
             'unit_wav': unit_wav,
@@ -656,7 +669,7 @@ class EphysIngest(dj.Imported):
             for sess_dir in sess_dirs:
                 npx_meta = NeuropixelsMeta(next(sess_dir.rglob('{}_*.ap.meta'.format(h2o))))
                 # match the recording_time's minute from npx_meta to that of the behavior recording - this is to handle multiple sessions in a day
-                if npx_meta.recording_time.minute == sess_datetime.minute:
+                if abs(npx_meta.recording_time.minute - sess_datetime.minute) <= 1:
                     dpath = sess_dir
                     dglob = '{}_{}_*_imec[0-9]'.format(h2o, sess_datetime.date().strftime('%m%d%y')) + '/{}'  # probe directory pattern
                     break
@@ -941,7 +954,6 @@ class Kilosort:
 
 def extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=(-41, 41), bit_volts=None):
     """
-    For
     :param npx_dir: directory to the ap.bin and ap.meta
     :param ks: instance of Kilosort
     :param n_wf: number of spikes per unit to extract the waveforms
