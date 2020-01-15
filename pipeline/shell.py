@@ -6,6 +6,8 @@ import logging
 from code import interact
 import time
 import numpy as np
+import pandas as pd
+import datetime
 
 import datajoint as dj
 
@@ -83,6 +85,32 @@ def ingest_tracking(*args):
 def ingest_histology(*args):
     from pipeline.ingest import histology as histology_ingest
     histology_ingest.HistologyIngest().populate(display_progress=True)
+
+
+def load_insertion_location(excel_fp, sheet_name='Sheet1'):
+    df = pd.read_excel(excel_fp, sheet_name)
+    insertion_locations = []
+    recordable_brain_regions = []
+    for i, row in df.iterrows():
+        sess_key = {'subject_id': row.subject_id, 'session_date': row.session_date.date(),
+                    'session_time': datetime.datetime.strptime(str(row.behaviour_time), '%H%M%S').time()}
+        if sess_key in experiment.Session:
+            pinsert_key = dict(sess_key, insertion_number=row.insertion_number)
+            if pinsert_key in ephys.ProbeInsertion:
+                if not (ephys.ProbeInsertion.InsertionLocation & pinsert_key):
+                    insertion_locations.append(dict(pinsert_key, skull_reference=row.skull_reference,
+                                                    ap_location=row.ap_location, ml_location=row.ml_location,
+                                                    depth=row.depth, theta=row.theta, phi=row.phi, beta=row.beta))
+                if not (ephys.ProbeInsertion.RecordableBrainRegion & pinsert_key):
+                    recordable_brain_regions.append(dict(pinsert_key, brain_area=row.brain_area,
+                                                         hemisphere=row.hemisphere))
+
+    log.debug('load_insertion_location - Number of insertions: {}'.format(len(insertion_locations)))
+    log.debug('InsertionLocation: {}'.format(insertion_locations))
+    log.debug('RecordableBrainRegion: {}'.format(recordable_brain_regions))
+
+    ephys.ProbeInsertion.InsertionLocation.insert(insertion_locations)
+    ephys.ProbeInsertion.RecordableBrainRegion.insert(recordable_brain_regions)
 
 
 def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': True}):
