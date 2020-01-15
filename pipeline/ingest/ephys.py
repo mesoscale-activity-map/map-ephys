@@ -3,16 +3,18 @@
 import os
 import logging
 import pathlib
+from datetime import datetime
 from os import path
 
 from glob import glob
+from tqdm import tqdm
 import re
 from itertools import repeat
+import pandas as pd
 
 import scipy.io as spio
 import h5py
 import numpy as np
-import re
 
 import datajoint as dj
 #import pdb
@@ -23,10 +25,13 @@ from pipeline import ephys
 from pipeline import InsertBuffer, dict_to_hash
 from pipeline.ingest import behavior as behavior_ingest
 from .. import get_schema_name
+from . import ProbeInsertionError
 
 schema = dj.schema(get_schema_name('ingest_ephys'))
 
 log = logging.getLogger(__name__)
+
+npx_bit_volts = {'neuropixels 1.0': 2.34375, 'neuropixels 2.0': 0.763}  # uV per bit scaling factor for neuropixels probes
 
 
 @schema
@@ -81,50 +86,34 @@ class EphysIngest(dj.Imported):
 
         rigpath = EphysDataPath().fetch1('data_path')
         h2o = sinfo['water_restriction_number']
-        date = key['session_date'].strftime('%Y%m%d')
 
-        dpath = pathlib.Path(rigpath, h2o, date)
-        dglob = '[0-9]/{}'  # probe directory pattern
+        sess_time = (datetime.min + key['session_time']).time()
+        sess_datetime = datetime.combine(key['session_date'], sess_time)
+        dpath, dglob = self._get_sess_dir(rigpath, h2o, sess_datetime)
 
-        # npx ap.meta: '{}_*.imec.ap.meta'.format(h2o)
-        npx_meta_files = list(dpath.glob(dglob.format('{}_*.ap.meta'.format(h2o))))
-        if not npx_meta_files:
-            log.warning('Error - no ap.meta files in {}. Skipping.'.format(dpath))
-            return
-        npx_metas = {f.parent.name: NeuropixelsMeta(f) for f in npx_meta_files}
-        log.info('Found .ap.meta for probe(s): {}'.format(list(npx_metas.keys())))
+        if dpath is not None:
+            log.info('Found session folder: {}'.format(dpath))
+        else:
+            log.warning('Error - No session folder found for {}/{}'.format(h2o, key['session_date']))
 
-        v3spec = '{}_*_jrc.mat'.format(h2o)
-        # old v3spec = '{}_g0_*.imec.ap_imec3_opt3_jrc.mat'.format(h2o)
-        v3files = {f.parent.name: (f, self._load_v3) for f in dpath.glob(dglob.format(v3spec))}
-
-        v4spec = '{}_*.ap_res.mat'.format(h2o)
-        # old v4spec = '{}_g0_*.imec?.ap_res.mat'.format(h2o)  # TODO v4ify
-        v4files = {f.parent.name: (f, self._load_v4) for f in dpath.glob(dglob.format(v4spec))}
-
-        overlap_v3v4 = np.intersect1d(list(v3files), list(v4files))
-        if len(overlap_v3v4) > 0:
-            log.warning('Error - both jrclust V3 and V4 exist for probe(s): {} - Search path: {}. Skipping.'.format(
-                overlap_v3v4, dpath))
+        try:
+            clustering_files = self._match_probe_to_ephys(h2o, dpath, dglob)
+        except FileNotFoundError as e:
+            log.warning(str(e) + '. Skipping...')
             return
 
-        jrclust_files = {**v3files, **v4files}
+        for probe_no, (f, loader, npx_meta) in clustering_files.items():
+            try:
+                self._load(loader(sinfo, f), probe_no, npx_meta, rigpath)
+            except ProbeInsertionError as e:
+                dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
+                log.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
+                return
 
-        missing_metas = [p for p in jrclust_files if p not in npx_metas]
-        if missing_metas:
-            log.warning('Error - missing ap.meta for probe(s): {} - Search path: {}. Skipping.'.format(
-                missing_metas, dpath))
-            return
-
-        for probe_no, (f, loader) in jrclust_files.items():
-            self._load(loader(sinfo, rigpath, dpath, f.relative_to(dpath)), npx_metas[probe_no])
-
-    def _load(self, data, npx_meta):
+    def _load(self, data, probe, npx_meta, rigpath):
 
         sinfo = data['sinfo']
-        rigpath = data['rigpath']
         ef_path = data['ef_path']
-        probe = data['probe']
         skey = data['skey']
         method = data['method']
         hz = data['hz'] if data['hz'] else npx_meta.meta['imSampRate']
@@ -144,13 +133,21 @@ class EphysIngest(dj.Imported):
         sync_behav = data['sync_behav']
         trial_fix = data['trial_fix']
 
+        log.info('Starting insertions for probe: {} - Clustering method: {}'.format(probe, method))
+
         # account for the buffer period before trial_start
-        buffer_sample_count = npx_meta.meta['trgTTLMarginS'] * npx_meta.meta['imSampRate']
+        buffer_sample_count = np.round(npx_meta.meta['trgTTLMarginS'] * npx_meta.meta['imSampRate']).astype(int)
         trial_start = trial_start - np.round(buffer_sample_count).astype(int)
 
         # remove noise clusters
-        units, spikes, spike_sites = (v[i] for v, i in zip(
-            (units, spikes, spike_sites), repeat((units > 0))))
+        if method in ['jrclust_v3', 'jrclust_v4']:
+            units, spikes, spike_sites = (v[i] for v, i in zip(
+                (units, spikes, spike_sites), repeat((units > 0))))
+
+        # scale amplitudes by uV/bit scaling factor (for kilosort2)
+        if method in ['kilosort2']:
+            bit_volts = npx_bit_volts[re.match('neuropixels (\d.0)', npx_meta.probe_model).group()]
+            unit_amp = unit_amp * bit_volts
 
         # Determine trial (re)numbering for ephys:
         #
@@ -217,7 +214,10 @@ class EphysIngest(dj.Imported):
               for t in range(len(trials))] for u in set(units)])
 
         # create probe insertion records
-        insertion_key = self._gen_probe_insert(sinfo, probe, npx_meta)
+        try:
+            insertion_key = self._gen_probe_insert(sinfo, probe, npx_meta)
+        except (NotImplementedError, dj.DataJointError) as e:
+            raise ProbeInsertionError(str(e))
 
         electrode_keys = {c['electrode']: c for c in (lab.ElectrodeConfig.Electrode & insertion_key).fetch('KEY')}
 
@@ -282,7 +282,7 @@ class EphysIngest(dj.Imported):
 
         self.insert1(skey, skip_duplicates=True)
 
-        EphysIngest.EphysFile().insert1(
+        self.EphysFile.insert1(
             {**skey, 'probe_insertion_number': probe,
              'ephys_file': str(ef_path.relative_to(rigpath))})
 
@@ -324,18 +324,17 @@ class EphysIngest(dj.Imported):
         Generate and insert (if needed) an ElectrodeConfiguration based on the specified neuropixels meta information
         """
 
-        probe_type = npx_meta.probe_model
-
-        if '1.0' in probe_type:
+        if '1.0' in npx_meta.probe_model:
             eg_members = []
-            probe_type = {'probe_type': probe_type}
+            probe_type = {'probe_type': npx_meta.probe_model}
             q_electrodes = lab.ProbeType.Electrode & probe_type
             for shank, shank_col, shank_row, is_used in npx_meta.shankmap['data']:
                 electrode = (q_electrodes & {'shank': shank, 'shank_col': shank_col, 'shank_row': shank_row}).fetch1(
                     'KEY')
                 eg_members.append({**electrode, 'is_used': is_used, 'electrode_group': 0})
         else:
-            raise NotImplementedError('Processing for neuropixels probe model {} not yet implemented'.format(probe_type))
+            raise NotImplementedError('Processing for neuropixels probe model {} not yet implemented'.format(
+                npx_meta.probe_model))
 
         # ---- compute hash for the electrode config (hash of dict of all ElectrodeConfig.Electrode) ----
         ec_hash = dict_to_hash({k['electrode']: k for k in eg_members})
@@ -349,7 +348,7 @@ class EphysIngest(dj.Imported):
         # ---- make new ElectrodeConfig if needed ----
         if not (lab.ElectrodeConfig & {'electrode_config_hash': ec_hash}):
 
-            log.info('.. creating lab.ElectrodeConfig: {}'.format(ec_name))
+            log.info('.. Probe type: {} - creating lab.ElectrodeConfig: {}'.format(npx_meta.probe_model, ec_name))
 
             lab.ElectrodeConfig.insert1({**e_config, 'electrode_config_hash': ec_hash})
 
@@ -374,7 +373,7 @@ class EphysIngest(dj.Imported):
 
         return decoded_notes
 
-    def _load_v3(self, sinfo, rigpath, dpath, fpath):
+    def _load_jrclust_v3(self, sinfo, fpath):
         '''
         Ephys data loader for JRClust v4 files.
 
@@ -393,21 +392,18 @@ class EphysIngest(dj.Imported):
         skey = {k: v for k, v in sinfo.items()
                 if k in experiment.Session.primary_key}
 
-        probe = fpath.parts[0]
-
-        ef_path = pathlib.Path(dpath, fpath)
-        bf_path = pathlib.Path(dpath, probe, '{}_bitcode.mat'.format(h2o))
+        ef_path = fpath
+        bf_path = pathlib.Path(fpath.parent, '{}_bitcode.mat'.format(h2o))
 
         log.info('.. jrclust v3 data load:')
         log.info('.... sinfo: {}'.format(sinfo))
-        log.info('.... probe: {}'.format(probe))
+        log.info('.... probe: {}'.format(fpath.parent.name))
 
         log.info('.... loading ef_path: {}'.format(str(ef_path)))
-        ef = h5py.File(str(pathlib.Path(dpath, fpath)))  # ephys file
+        ef = h5py.File(str(ef_path), mode='r')  # ephys file
 
         log.info('.... loading bf_path: {}'.format(str(bf_path)))
-        bf = spio.loadmat(pathlib.Path(
-            dpath, probe, '{}_bitcode.mat'.format(h2o)))  # bitcode file
+        bf = spio.loadmat(bf_path)  # bitcode file
 
         # extract unit data
 
@@ -443,9 +439,7 @@ class EphysIngest(dj.Imported):
 
         data = {
             'sinfo': sinfo,
-            'rigpath': rigpath,
             'ef_path': ef_path,
-            'probe': probe,
             'skey': skey,
             'method': 'jrclust_v3',
             'hz': hz,
@@ -468,7 +462,7 @@ class EphysIngest(dj.Imported):
 
         return data
 
-    def _load_v4(self, sinfo, rigpath, dpath, fpath):
+    def _load_jrclust_v4(self, sinfo, fpath):
         '''
         Ephys data loader for JRClust v4 files.
         Arguments:
@@ -482,19 +476,17 @@ class EphysIngest(dj.Imported):
         skey = {k: v for k, v in sinfo.items()
                 if k in experiment.Session.primary_key}
 
-        probe = fpath.parts[0]
-
-        ef_path = pathlib.Path(dpath, fpath)
+        ef_path = fpath
 
         log.info('.. jrclust v4 data load:')
         log.info('.... sinfo: {}'.format(sinfo))
-        log.info('.... probe: {}'.format(probe))
+        log.info('.... probe: {}'.format(fpath.parent.name))
 
         log.info('.... loading ef_path: {}'.format(str(ef_path)))
-        ef = h5py.File(str(pathlib.Path(dpath, fpath)))  # ephys file
+        ef = h5py.File(str(ef_path), mode='r')  # ephys file
 
         # bitcode path (ex: 'SC022_030319_Imec3_bitcode.mat')
-        bf_path = list(pathlib.Path(dpath, probe).glob(
+        bf_path = list(fpath.parent.glob(
             '{}_*bitcode.mat'.format(h2o)))[0]
         log.info('.... loading bf_path: {}'.format(str(bf_path)))
         bf = spio.loadmat(str(bf_path))
@@ -532,9 +524,7 @@ class EphysIngest(dj.Imported):
 
         data = {
             'sinfo': sinfo,
-            'rigpath': rigpath,
             'ef_path': ef_path,
-            'probe': probe,
             'skey': skey,
             'method': 'jrclust_v4',
             'hz': hz,
@@ -557,6 +547,190 @@ class EphysIngest(dj.Imported):
 
         return data
 
+    def _load_kilosort2(self, sinfo, ks_dir):
+
+        h2o = sinfo['water_restriction_number']
+        skey = {k: v for k, v in sinfo.items()
+                if k in experiment.Session.primary_key}
+
+        bf_path = pathlib.Path(ks_dir, '{}_bitcode.mat'.format(h2o))
+
+        log.info('.. kilosort v2 data load:')
+        log.info('.... sinfo: {}'.format(sinfo))
+
+        log.info('.... loading bf_path: {}'.format(str(bf_path)))
+        bf = spio.loadmat(bf_path)  # bitcode file
+
+        # ---- Read Kilosort results ----
+        log.info('.... loading kilosort - ks_dir: {}'.format(str(ks_dir)))
+        ks = Kilosort(ks_dir)
+
+        spike_times = ks.data['spike_times']
+
+        # ---- Spike-level results ----
+        # -- spike_sites --
+        # reimplemented from: https://github.com/JaneliaSciComp/JRCLUST/blob/master/%2Bjrclust/%2Bimport/kilosort.m
+        spike_sites = np.full(spike_times.shape, np.nan)
+        for template_idx, template in enumerate(ks.data['templates']):
+            site_idx = np.abs(np.abs(template).max(axis=0)).argmax()
+            spike_sites[ks.data['spike_templates'] == template_idx] = ks.data['channel_map'][site_idx]
+
+        # ---- Unit-level results ----
+        # -- Remove 0-spike units
+        withspike_idx = [i for i, u in enumerate(ks.data['cluster_ids']) if (ks.data['spike_clusters'] == u).any()]
+
+        valid_units = ks.data['cluster_ids'][withspike_idx]
+        valid_unit_labels = ks.data['cluster_groups'][withspike_idx]
+        valid_unit_labels = np.where(valid_unit_labels == 'mua', 'multi', valid_unit_labels)  # rename 'mua' to 'multi'
+
+        # -- vmax_unit_site --
+        vmax_unit_site, unit_xpos, unit_ypos, unit_amp = [], [], [], []
+        for unit in valid_units:
+            template_idx = ks.data['spike_templates'][np.where(ks.data['spike_clusters'] == unit)[0][0]]
+            chn_templates = ks.data['templates'][template_idx, :, :]
+            site_idx = np.abs(np.abs(chn_templates).max(axis=0)).argmax()
+            vmax_unit_site.append(ks.data['channel_map'][site_idx])
+            # unit x, y
+            unit_xpos.append(ks.data['channel_positions'][site_idx, 0])
+            unit_ypos.append(ks.data['channel_positions'][site_idx, 1])
+            # unit amp
+            amps = ks.data['amplitudes'][ks.data['spike_clusters'] == unit]
+            scaled_templates = np.matmul(chn_templates, ks.data['whitening_mat_inv'])
+            best_chn_wf = scaled_templates[:, site_idx] * amps.mean()
+            unit_amp.append(best_chn_wf.max() - best_chn_wf.min())
+
+        # -- waveforms --
+        log.info('.... extracting waveforms - data dir: {}'.format(str(ks_dir)))
+        unit_wfs = extract_ks_waveforms(ks_dir, ks, wf_win=[-int(ks.data['templates'].shape[1]/2),
+                                                            int(ks.data['templates'].shape[1]/2)])
+        unit_wav = np.dstack([np.nanmean(unit_wfs[u], axis=2) for u in valid_units]).transpose((2, 1, 0))  # unit x channel x sample
+
+        # -- snr --
+        unit_snr = [calculate_wf_snr(unit_wfs[u][:, np.where(ks.data['channel_map'] == u_site)[0][0], :])
+                    for u, u_site in zip(valid_units, vmax_unit_site)]
+
+        # -- trial-info from bitcode --
+        trial_start = bf['sTrig'].flatten()           # start of trials
+        trial_go = bf['goCue'].flatten()                # go cues
+
+        sync_ephys = bf['bitCodeS'].flatten()           # ephys sync codes
+        sync_behav = (experiment.TrialNote()            # behavior sync codes
+                      & {**skey, 'trial_note_type': 'bitcode'}).fetch(
+                          'trial_note', order_by='trial')
+
+        trial_fix = bf['trialNum'] if 'trialNum' in bf else None
+
+        # -- Ensuring `spike_times`, `trial_start` and `trial_go` are in `sample` and not `second` --
+        # There is still a risk of times in `second` but with 0 decimal values and thus would be detected as `sample` (very very unlikely)
+        hz = ks.data['params']['sample_rate']
+        if np.mean(spike_times - np.round(spike_times)) != 0:
+            log.debug('Kilosort2 spike times in seconds - converting to sample')
+            spike_times = np.round(spike_times * hz).astype(int)
+        if np.mean(trial_go - np.round(trial_go)) != 0:
+            log.debug('Kilosort2 bitcode sTrig in seconds - converting to sample')
+            trial_go = np.round(trial_go * hz).astype(int)
+        if np.mean(trial_start - np.round(trial_start)) != 0:
+            log.debug('Kilosort2 bitcode goCue in seconds - converting to sample')
+            trial_start = np.round(trial_start * hz).astype(int)
+
+        data = {
+            'sinfo': sinfo,
+            'ef_path': ks_dir,
+            'skey': skey,
+            'method': 'kilosort2',
+            'hz': hz,
+            'spikes': spike_times.astype(int),
+            'spike_sites': spike_sites + 1,  # channel numbering in this pipeline is 1-based indexed
+            'units': ks.data['spike_clusters'],
+            'unit_wav': unit_wav,
+            'unit_notes': valid_unit_labels,
+            'unit_xpos': np.array(unit_xpos),
+            'unit_ypos': np.array(unit_ypos),
+            'unit_amp': np.array(unit_amp),
+            'unit_snr': np.array(unit_snr),
+            'vmax_unit_site': np.array(vmax_unit_site) + 1,  # channel numbering in this pipeline is 1-based indexed
+            'trial_start': trial_start,
+            'trial_go': trial_go,
+            'sync_ephys': sync_ephys,
+            'sync_behav': sync_behav,
+            'trial_fix': trial_fix,
+        }
+
+        return data
+
+    def _get_sess_dir(self, rigpath, h2o, sess_datetime):
+        dpath, dglob = None, None
+        if pathlib.Path(rigpath, h2o, sess_datetime.date().strftime('%Y%m%d')).exists():
+            dpath = pathlib.Path(rigpath, h2o, sess_datetime.date().strftime('%Y%m%d'))
+            dglob = '[0-9]/{}'  # probe directory pattern
+        else:
+            sess_dirs = list(pathlib.Path(rigpath, h2o).glob('*{}_{}_*'.format(
+                h2o, sess_datetime.date().strftime('%m%d%y'))))
+            for sess_dir in sess_dirs:
+                npx_meta = NeuropixelsMeta(next(sess_dir.rglob('{}_*.ap.meta'.format(h2o))))
+                # match the recording_time's minute from npx_meta to that of the behavior recording - this is to handle multiple sessions in a day
+                if abs(npx_meta.recording_time.minute - sess_datetime.minute) <= 1:
+                    dpath = sess_dir
+                    dglob = '{}_{}_*_imec[0-9]'.format(h2o, sess_datetime.date().strftime('%m%d%y')) + '/{}'  # probe directory pattern
+                    break
+        return dpath, dglob
+
+    def _match_probe_to_ephys(self, h2o, dpath, dglob):
+        """
+        Based on the identified spike sorted file(s), match the probe number (i.e. 1, 2, 3) to the cluster filepath, loader, and npx_meta
+        Return a dict, e.g.:
+        {
+         1: (cluster_fp, loader, npx_meta),
+         2: (cluster_fp, loader, npx_meta),
+         3: (cluster_fp, loader, npx_meta),
+        }
+        """
+        # npx ap.meta: '{}_*.imec.ap.meta'.format(h2o)
+        npx_meta_files = list(dpath.glob(dglob.format('{}_*.ap.meta'.format(h2o))))
+        if not npx_meta_files:
+            raise FileNotFoundError('Error - no ap.meta files at {}'.format(dpath))
+
+        jrclustv3spec = '{}_*_jrc.mat'.format(h2o)
+        jrclustv4spec = '{}_*.ap_res.mat'.format(h2o)
+        ks2spec = 'spike_times.npy'
+
+        clustered_probes = {}
+        for meta_file in npx_meta_files:
+            probe_dir = meta_file.parent
+            probe_number = re.search('(imec)?\d{1}$', probe_dir.name).group()
+            probe_number = int(probe_number.replace('imec', '')) + 1 if 'imec' in probe_number else int(probe_number)
+
+            # JRClust v3
+            v3files = [(f, self._load_jrclust_v3) for f in probe_dir.glob(jrclustv3spec)]
+            # JRClust v4
+            v4files = [(f, self._load_jrclust_v4) for f in probe_dir.glob(jrclustv4spec)]
+            # Kilosort
+            ks2files = [(f.parent, self._load_kilosort2) for f in probe_dir.glob(ks2spec)]
+
+            clustering_results = v4files + v3files + ks2files
+
+            if len(clustering_results) < 1:
+                raise FileNotFoundError('Error - No clustering results found at {}'.format(probe_dir))
+            elif len(clustering_results) > 1:
+                log.warning('Found multiple clustering results at {probe_dir}. Prioritize JRC4 > JRC3 > KS2'.format(probe_dir))
+
+            fp, loader = clustering_results[0]
+            clustered_probes[probe_number] = (fp, loader, NeuropixelsMeta(meta_file))
+
+        return clustered_probes
+
+
+def handle_string(value):
+    if isinstance(value, str):
+        try:
+            value = int(value)
+        except ValueError:
+            try:
+                value = float(value)
+            except ValueError:
+                pass
+    return value
+
 
 class NeuropixelsMeta:
 
@@ -575,6 +749,10 @@ class NeuropixelsMeta:
                 self.probe_model = 'neuropixels 1.0 - 3B'
         else:
             self.probe_model = str(probe_model)
+
+        # Get recording time
+        self.recording_time = datetime.strptime(self.meta.get('fileCreateTime_original', self.meta['fileCreateTime']),
+                                                '%Y-%m-%dT%H:%M:%S')
 
         # Get probe serial number - 'imProbeSN' for 3A and 'imDatPrb_sn' for 3B
         try:
@@ -689,13 +867,148 @@ class NeuropixelsMeta:
         return res
 
 
-def handle_string(value):
-    if isinstance(value, str):
-        try:
-            value = int(value)
-        except ValueError:
-            try:
-                value = float(value)
-            except ValueError:
-                pass
-    return value
+class Kilosort:
+
+    ks_files = [
+        'params.py',
+        'amplitudes.npy',
+        'channel_map.npy',
+        'channel_positions.npy',
+        'pc_features.npy',
+        'pc_feature_ind.npy',
+        'similar_templates.npy',
+        'spike_templates.npy',
+        'spike_times.npy',
+        'template_features.npy',
+        'template_feature_ind.npy',
+        'templates.npy',
+        'templates_ind.npy',
+        'whitening_mat.npy',
+        'whitening_mat_inv.npy',
+        'spike_clusters.npy',
+        'cluster_groups.csv',
+        'cluster_KSLabel.tsv'
+    ]
+
+    # keys to self.files, .data are file name e.g. self.data['params'], etc.
+    ks_keys = [path.splitext(i)[0] for i in ks_files]
+
+    def __init__(self, dname):
+        self._dname = dname
+        self._files = {}
+        self._data = None
+        self._clusters = None
+
+        self._info = {'time_created': datetime.fromtimestamp((dname / 'params.py').stat().st_ctime),
+                      'time_modified': datetime.fromtimestamp((dname / 'params.py').stat().st_mtime)}
+
+    @property
+    def data(self):
+        if self._data is None:
+            self._stat()
+        return self._data
+
+    @property
+    def info(self):
+        return self._info
+
+    def _stat(self):
+        self._data = {}
+        for i in Kilosort.ks_files:
+            f = self._dname / i
+
+            if not f.exists():
+                log.debug('skipping {} - doesnt exist'.format(f))
+                continue
+
+            base, ext = path.splitext(i)
+            self._files[base] = f
+
+            if i == 'params.py':
+                log.debug('loading params.py {}'.format(f))
+                # params.py is a 'key = val' file
+                prm = {}
+                for line in open(f, 'r').readlines():
+                    k, v = line.strip('\n').split('=')
+                    prm[k.strip()] = handle_string(v.strip())
+                log.debug('prm: {}'.format(prm))
+                self._data[base] = prm
+
+            if ext == '.npy':
+                log.debug('loading npy {}'.format(f))
+                d = np.load(f, mmap_mode='r', allow_pickle=False, fix_imports=False)
+                self._data[base] = np.reshape(d, d.shape[0]) if d.ndim == 2 and d.shape[1] == 1 else d
+
+        # Read the Cluster Groups
+        if (self._dname / 'cluster_groups.csv').exists():
+            df = pd.read_csv(self._dname / 'cluster_groups.csv', delimiter='\t')
+            self._data['cluster_groups'] = np.array(df['group'].values)
+            self._data['cluster_ids'] = np.array(df['cluster_id'].values)
+        elif (self._dname / 'cluster_KSLabel.tsv').exists():
+            df = pd.read_csv(self._dname / 'cluster_KSLabel.tsv', sep = "\t", header = 0)
+            self._data['cluster_groups'] = np.array(df['KSLabel'].values)
+            self._data['cluster_ids'] = np.array(df['cluster_id'].values)
+        else:
+            raise FileNotFoundError('Neither cluster_groups.csv nor cluster_KSLabel.tsv found!')
+
+
+def extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=(-41, 41), bit_volts=None):
+    """
+    :param npx_dir: directory to the ap.bin and ap.meta
+    :param ks: instance of Kilosort
+    :param n_wf: number of spikes per unit to extract the waveforms
+    :param wf_win: number of sample pre and post a spike
+    :param bit_volts: scalar required to convert int16 values into microvolts
+    :return: dictionary of the clusters' waveform (sample x channel x spike)
+    """
+    bin_fp = next(pathlib.Path(npx_dir).glob('*.ap.bin'))
+    meta_fp = next(pathlib.Path(npx_dir).glob('*.ap.meta'))
+
+    meta = NeuropixelsMeta(meta_fp)
+    channel_num = meta.meta['nSavedChans']
+
+    if bit_volts is None:
+        bit_volts = npx_bit_volts[re.match('neuropixels (\d.0)', meta.probe_model).group()]
+
+    raw_data = np.memmap(bin_fp, dtype='int16', mode='r')
+    data = np.reshape(raw_data, (int(raw_data.size / channel_num), channel_num))
+
+    chan_map = ks.data['channel_map']
+
+    unit_wfs = {}
+    for unit in tqdm(ks.data['cluster_ids']):
+        spikes = ks.data['spike_times'][ks.data['spike_clusters'] == unit]
+        np.random.shuffle(spikes)
+        spikes = spikes[:n_wf]
+        # ignore spikes at the beginning or end of raw data
+        spikes = spikes[np.logical_and(spikes > wf_win[0], spikes < data.shape[0] - wf_win[-1])]
+        if len(spikes) > 0:
+            # waveform at each spike: (sample x channel x spike)
+            spike_wfs = np.dstack([data[int(spk+wf_win[0]):int(spk+wf_win[-1]), chan_map] for spk in spikes])
+            unit_wfs[unit] = spike_wfs * bit_volts
+        else:  # if no spike found, return NaN of size (sample x channel x 1)
+            unit_wfs[unit] = np.full((len(range(*wf_win)), len(chan_map), 1), np.nan)
+
+    return unit_wfs
+
+
+def calculate_wf_snr(W):
+    """
+    Calculate SNR of spike waveforms.
+    Converted from Matlab by Xiaoxuan Jia
+    ref: (Nordhausen et al., 1996; Suner et al., 2005)
+    credit: https://github.com/AllenInstitute/ecephys_spike_sorting/blob/0643bfdc7e6fe87cd8c433ce5a4107d979687029/ecephys_spike_sorting/modules/mean_waveforms/waveform_metrics.py#L100
+
+    Input:
+    W : array of N waveforms (N x samples)
+
+    Output:
+    snr : signal-to-noise ratio for unit (scalar)
+    """
+
+    W_bar = np.nanmean(W, axis = 0)
+    A = np.max(W_bar) - np.min(W_bar)
+    e = W - np.tile(W_bar, (np.shape(W)[0], 1))
+    snr = A / (2 * np.nanstd(e.flatten()))
+
+    return snr
