@@ -89,6 +89,8 @@ def ingest_histology(*args):
 
 def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     df = pd.read_excel(excel_fp, sheet_name)
+    df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
+
     insertion_locations = []
     recordable_brain_regions = []
     for i, row in df.iterrows():
@@ -105,7 +107,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
                     recordable_brain_regions.append(dict(pinsert_key, brain_area=row.brain_area,
                                                          hemisphere=row.hemisphere))
 
-    log.debug('load_insertion_location - Number of insertions: {}'.format(len(insertion_locations)))
+    log.info('load_insertion_location - Number of insertions: {}'.format(len(insertion_locations)))
     log.debug('InsertionLocation: {}'.format(insertion_locations))
     log.debug('RecordableBrainRegion: {}'.format(recordable_brain_regions))
 
@@ -242,5 +244,6 @@ actions = {
     'shell': shell,
     'erd': erd,
     'ccfload': ccfload,
-    'automate-computation': automate_computation
+    'automate-computation': automate_computation,
+    'load-insertion-location': load_insertion_location
 }
