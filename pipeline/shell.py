@@ -87,6 +87,30 @@ def ingest_histology(*args):
     histology_ingest.HistologyIngest().populate(display_progress=True)
 
 
+def load_animal(excel_fp, sheet_name='Sheet1'):
+    df = pd.read_excel(excel_fp, sheet_name)
+    df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
+
+    subjects, water_restrictions, subject_ids = [], [], []
+    for i, row in df.iterrows():
+        if row.subject_id not in subject_ids and {'subject_id': row.subject_id} not in lab.Subject.proj():
+            subject = {'subject_id': row.subject_id, 'username': row.username,
+                       'cage_number': row.cage_number, 'date_of_birth': row.date_of_birth.date(),
+                       'sex': row.sex, 'animal_source': row.animal_source}
+            wr = {'subject_id': row.subject_id, 'water_restriction_number': row.water_restriction_number,
+                  'cage_number': row.cage_number, 'wr_start_date': row.wr_start_date.date(),
+                  'wr_start_weight': row.wr_start_weight}
+            subject_ids.append(row.subject_id)
+            subjects.append(subject)
+            water_restrictions.append(wr)
+
+    lab.Subject.insert(subjects)
+    lab.WaterRestriction.insert(water_restrictions)
+
+    log.info('Inserted {} subjects'.format(len(subjects)))
+    log.info('Water restriction number: {}'.format([s['water_restriction_number'] for s in subjects]))
+
+
 def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     df = pd.read_excel(excel_fp, sheet_name)
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
@@ -96,9 +120,9 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     for i, row in df.iterrows():
         sess_key = {'subject_id': row.subject_id, 'session_date': row.session_date.date(),
                     'session_time': datetime.datetime.strptime(str(row.behaviour_time), '%H%M%S').time()}
-        if sess_key in experiment.Session:
+        if experiment.Session & sess_key:
             pinsert_key = dict(sess_key, insertion_number=row.insertion_number)
-            if pinsert_key in ephys.ProbeInsertion:
+            if pinsert_key in ephys.ProbeInsertion.proj():
                 if not (ephys.ProbeInsertion.InsertionLocation & pinsert_key):
                     insertion_locations.append(dict(pinsert_key, skull_reference=row.skull_reference,
                                                     ap_location=row.ap_location, ml_location=row.ml_location,
