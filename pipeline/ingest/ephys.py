@@ -48,7 +48,7 @@ class EphysDataPath(dj.Lookup):
         if 'ephys_data_paths' in dj.config['custom']:  # for local testing
             return dj.config['custom']['ephys_data_paths']
 
-        return ((r'H:\\data\MAP', 0),)
+        return ((r'H:\\data\MAP', 0), )
 
 
 @schema
@@ -95,6 +95,7 @@ class EphysIngest(dj.Imported):
             log.info('Found session folder: {}'.format(dpath))
         else:
             log.warning('Error - No session folder found for {}/{}'.format(h2o, key['session_date']))
+            return
 
         try:
             clustering_files = self._match_probe_to_ephys(h2o, dpath, dglob)
@@ -109,6 +110,8 @@ class EphysIngest(dj.Imported):
                 dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
                 log.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
                 return
+
+        self.insert1(key)
 
     def _load(self, data, probe, npx_meta, rigpath):
 
@@ -279,8 +282,6 @@ class EphysIngest(dj.Imported):
                         log.debug('.... (u: {}, t: {})'.format(u, t))
 
         log.info('.. inserting file load information')
-
-        self.insert1(skey, skip_duplicates=True)
 
         self.EphysFile.insert1(
             {**skey, 'probe_insertion_number': probe,
