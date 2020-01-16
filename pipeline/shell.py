@@ -108,7 +108,7 @@ def load_animal(excel_fp, sheet_name='Sheet1'):
     lab.WaterRestriction.insert(water_restrictions)
 
     log.info('Inserted {} subjects'.format(len(subjects)))
-    log.info('Water restriction number: {}'.format([s['water_restriction_number'] for s in subjects]))
+    log.info('Water restriction number: {}'.format([s['water_restriction_number'] for s in water_restrictions]))
 
 
 def load_insertion_location(excel_fp, sheet_name='Sheet1'):
