@@ -169,7 +169,7 @@ class HistologyIngest(dj.Imported):
 
     def _load_histology_track(self, key, session, egmap, probe, trackpath):
 
-        conv = (('landmark_name', str), ('warp', lambda x: x == 'true'),
+        conv = (('landmark_name', str), ('warp', lambda x: x.lower() == 'true'),
                 ('subj_x', float), ('subj_y', float), ('subj_z', float),
                 ('ccf_x', float), ('ccf_y', float), ('ccf_z', float))
 

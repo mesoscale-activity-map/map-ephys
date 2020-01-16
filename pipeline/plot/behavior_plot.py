@@ -65,6 +65,11 @@ def plot_photostim_effect(session_key, photostim_key, axs=None, title='', plot=T
     ctrl_trials = experiment.BehaviorTrial - experiment.PhotostimTrial & session_key
     stim_trials = experiment.BehaviorTrial * experiment.PhotostimTrial & session_key
 
+    if not ctrl_trials:
+        raise ValueError('No control trials')
+    if not stim_trials:
+        raise ValueError('No photostim trials')
+
     ctrl_left = ctrl_trials & 'trial_instruction="left"' & 'early_lick="no early"'
     ctrl_right = ctrl_trials & 'trial_instruction="right"' & 'early_lick="no early"'
 

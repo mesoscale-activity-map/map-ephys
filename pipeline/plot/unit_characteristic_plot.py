@@ -446,11 +446,11 @@ def plot_psth_photostim_effect(units, condition_name_kw=['both_alm'], axs=None):
 
 
 def plot_coding_direction(units, time_period=None, label=None, axs=None):
+    # get event start times: sample, delay, response
+    period_names, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], units, 'good_noearlylick_hit')
+
     _, proj_contra_trial, proj_ipsi_trial, time_stamps, _ = psth.compute_CD_projected_psth(
         units.fetch('KEY'), time_period=time_period)
-
-    # get event start times: sample, delay, response
-    period_names, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], units, 'good_noearlylick')
 
     fig = None
     if axs is None:
@@ -484,7 +484,7 @@ def plot_paired_coding_direction(unit_g1, unit_g2, labels=None, time_period=None
         unit_g2.fetch('KEY'), time_period=time_period)
 
     # get event start times: sample, delay, response
-    period_names, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], unit_g1, 'good_noearlylick')
+    period_names, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], unit_g1, 'good_noearlylick_hit')
 
     if labels:
         assert len(labels) == 2

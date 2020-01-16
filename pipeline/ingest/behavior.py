@@ -470,7 +470,7 @@ class BehaviorIngest(dj.Imported):
                 and 'EarlyLickDelay' in states
                     and np.any(t.state_data == states['EarlyLickDelay'])):
                     early_lick = 'early'
-            if (protocol_type > 5
+            if (protocol_type >= 5
                 and ('EarlyLickSample' in states
                      and np.any(t.state_data == states['EarlyLickSample']))):
                     early_lick = 'early'

@@ -115,7 +115,7 @@ class ClusteringMethod(dj.Lookup):
     # jrclust_v3 is the version Dave uses
     # jrclust_v4 is the version Susu uses
 
-    contents = zip(['jrclust_v3', 'kilosort', 'jrclust_v4'])
+    contents = zip(['jrclust_v3', 'kilosort', 'jrclust_v4', 'kilosort2'])
 
 
 @schema

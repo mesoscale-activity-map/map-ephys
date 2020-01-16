@@ -572,22 +572,41 @@ def mockdata():
             skip_duplicates=True
         )
 
-        # Subject 888888 / SC022
+        # Subject 442571 / SC022
         lab.Subject().insert1({
-            'subject_id': 888888,
+            'subject_id': 442571,
             'username': 'susu',
-            'cage_number': 888888,
-            'date_of_birth': '2018-08-06',
+            'cage_number': 442571,
+            'date_of_birth': '2018-10-29',
             'sex': 'M',
             'animal_source': 'Jackson labs'},
             skip_duplicates=True
         )
         lab.WaterRestriction().insert1({
-            'subject_id': 888888,
+            'subject_id': 442571,
             'water_restriction_number': 'SC022',
-            'cage_number': 888888,
-            'wr_start_date': '2018-09-30',
-            'wr_start_weight': 21.0},
+            'cage_number': 442571,
+            'wr_start_date': '2019-01-02',
+            'wr_start_weight': 26.5},
+            skip_duplicates=True
+        )
+
+        # Subject 440959 / SC011
+        lab.Subject().insert1({
+            'subject_id': 440959,
+            'username': 'susu',
+            'cage_number': 440959,
+            'date_of_birth': '2018-10-09',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates=True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 440959,
+            'water_restriction_number': 'SC011',
+            'cage_number': 440959,
+            'wr_start_date': '2018-12-21',
+            'wr_start_weight': 22.8},
             skip_duplicates=True
         )
         # Rig
