@@ -269,5 +269,6 @@ actions = {
     'erd': erd,
     'ccfload': ccfload,
     'automate-computation': automate_computation,
-    'load-insertion-location': load_insertion_location
+    'load-insertion-location': load_insertion_location,
+    'load-animal': load_animal
 }
