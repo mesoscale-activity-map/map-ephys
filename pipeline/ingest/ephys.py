@@ -106,9 +106,12 @@ class EphysIngest(dj.Imported):
         for probe_no, (f, loader, npx_meta) in clustering_files.items():
             try:
                 self._load(loader(sinfo, f), probe_no, npx_meta, rigpath)
-            except ProbeInsertionError as e:
+            except (ProbeInsertionError, FileNotFoundError) as e:
                 dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
-                log.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
+                if isinstance(e, ProbeInsertionError):
+                    log.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
+                else:
+                    log.warning('Error: {}'.format(str(e)))
                 return
 
         self.insert1(key)
@@ -554,7 +557,10 @@ class EphysIngest(dj.Imported):
         skey = {k: v for k, v in sinfo.items()
                 if k in experiment.Session.primary_key}
 
-        bf_path = pathlib.Path(ks_dir, '{}_bitcode.mat'.format(h2o))
+        try:
+            bf_path = next(pathlib.Path(ks_dir).glob('*{}*_bitcode.mat'.format(h2o)))
+        except StopIteration:
+            raise FileNotFoundError('Not bitcode for {} found in {}'.format(h2o, ks_dir))
 
         log.info('.. kilosort v2 data load:')
         log.info('.... sinfo: {}'.format(sinfo))
