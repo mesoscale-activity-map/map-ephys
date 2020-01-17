@@ -8,3 +8,4 @@ seaborn
 matplotlib
 pillow
 tqdm
+xldr
