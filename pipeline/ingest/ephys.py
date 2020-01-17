@@ -114,8 +114,6 @@ class EphysIngest(dj.Imported):
                     log.warning('Error: {}'.format(str(e)))
                 return
 
-        self.insert1(key)
-
     def _load(self, data, probe, npx_meta, rigpath):
 
         sinfo = data['sinfo']
@@ -286,6 +284,7 @@ class EphysIngest(dj.Imported):
 
         log.info('.. inserting file load information')
 
+        self.insert1(skey, skip_duplicates=True)
         self.EphysFile.insert1(
             {**skey, 'probe_insertion_number': probe,
              'ephys_file': str(ef_path.relative_to(rigpath))})
