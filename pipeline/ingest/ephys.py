@@ -48,7 +48,7 @@ class EphysDataPath(dj.Lookup):
         if 'ephys_data_paths' in dj.config['custom']:  # for local testing
             return dj.config['custom']['ephys_data_paths']
 
-        return ((r'H:\\data\MAP', 0),)
+        return ((r'H:\\data\MAP', 0), )
 
 
 @schema
@@ -95,6 +95,7 @@ class EphysIngest(dj.Imported):
             log.info('Found session folder: {}'.format(dpath))
         else:
             log.warning('Error - No session folder found for {}/{}'.format(h2o, key['session_date']))
+            return
 
         try:
             clustering_files = self._match_probe_to_ephys(h2o, dpath, dglob)
@@ -105,10 +106,15 @@ class EphysIngest(dj.Imported):
         for probe_no, (f, loader, npx_meta) in clustering_files.items():
             try:
                 self._load(loader(sinfo, f), probe_no, npx_meta, rigpath)
-            except ProbeInsertionError as e:
+            except (ProbeInsertionError, FileNotFoundError) as e:
                 dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
-                log.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
+                if isinstance(e, ProbeInsertionError):
+                    log.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
+                else:
+                    log.warning('Error: {}'.format(str(e)))
                 return
+
+        self.insert1(key)
 
     def _load(self, data, probe, npx_meta, rigpath):
 
@@ -279,8 +285,6 @@ class EphysIngest(dj.Imported):
                         log.debug('.... (u: {}, t: {})'.format(u, t))
 
         log.info('.. inserting file load information')
-
-        self.insert1(skey, skip_duplicates=True)
 
         self.EphysFile.insert1(
             {**skey, 'probe_insertion_number': probe,
@@ -553,7 +557,10 @@ class EphysIngest(dj.Imported):
         skey = {k: v for k, v in sinfo.items()
                 if k in experiment.Session.primary_key}
 
-        bf_path = pathlib.Path(ks_dir, '{}_bitcode.mat'.format(h2o))
+        try:
+            bf_path = next(pathlib.Path(ks_dir).glob('*{}*_bitcode.mat'.format(h2o)))
+        except StopIteration:
+            raise FileNotFoundError('Not bitcode for {} found in {}'.format(h2o, ks_dir))
 
         log.info('.. kilosort v2 data load:')
         log.info('.... sinfo: {}'.format(sinfo))
