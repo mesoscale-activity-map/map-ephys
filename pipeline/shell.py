@@ -112,16 +112,21 @@ def load_animal(excel_fp, sheet_name='Sheet1'):
 
 
 def load_insertion_location(excel_fp, sheet_name='Sheet1'):
+    from pipeline.ingest import behavior as behav_ingest
+
     df = pd.read_excel(excel_fp, sheet_name)
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
 
     insertion_locations = []
     recordable_brain_regions = []
     for i, row in df.iterrows():
-        sess_key = {'subject_id': row.subject_id, 'session_date': row.session_date.date(),
-                    'session_time': datetime.datetime.strptime(str(row.behaviour_time), '%H%M%S').time()}
-        if experiment.Session & sess_key:
-            pinsert_key = dict(sess_key, insertion_number=row.insertion_number)
+        sess_key = experiment.Session & (behav_ingest.BehaviorIngest.BehaviorFile
+                                         & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
+                                         & 'behavior_file LIKE "%{}%{}_{}%"'.format(row.water_restriction_number,
+                                                                                    row.session_date.date().strftime('%Y%m%d'),
+                                                                                    row.behaviour_time))
+        if sess_key:
+            pinsert_key = dict(sess_key.fetch1('KEY'), insertion_number=row.insertion_number)
             if pinsert_key in ephys.ProbeInsertion.proj():
                 if not (ephys.ProbeInsertion.InsertionLocation & pinsert_key):
                     insertion_locations.append(dict(pinsert_key, skull_reference=row.skull_reference,
@@ -131,12 +136,13 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
                     recordable_brain_regions.append(dict(pinsert_key, brain_area=row.brain_area,
                                                          hemisphere=row.hemisphere))
 
-    log.info('load_insertion_location - Number of insertions: {}'.format(len(insertion_locations)))
     log.debug('InsertionLocation: {}'.format(insertion_locations))
     log.debug('RecordableBrainRegion: {}'.format(recordable_brain_regions))
 
     ephys.ProbeInsertion.InsertionLocation.insert(insertion_locations)
     ephys.ProbeInsertion.RecordableBrainRegion.insert(recordable_brain_regions)
+
+    log.info('load_insertion_location - Number of insertions: {}'.format(len(insertion_locations)))
 
 
 def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': True}):
