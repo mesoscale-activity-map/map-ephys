@@ -19,7 +19,6 @@ from pipeline import experiment
 from pipeline import ephys
 from pipeline import histology
 from pipeline import tracking
-from pipeline import publication
 from pipeline import get_schema_name
 
 
@@ -52,7 +51,6 @@ def mockdata():
     reload(ephys)
     reload(histology)
     reload(tracking)
-    reload(publication)
     try:
         lab.Person().insert1({
             'username': 'unknown',
@@ -647,6 +645,8 @@ def mockdata():
             skip_duplicates=True
         )
 
+        lab.ProbeType.create_neuropixels_probe()
+
     except Exception as e:
         print("error creating mock data: {e}".format(e=e), file=sys.stderr)
         raise
@@ -656,8 +656,10 @@ def post_ephys(*args):
     from pipeline.ingest import ephys as ephys_ingest
     for ef in ephys_ingest.EphysIngest.EphysFile().fetch(as_dict=True):
         fname = ef['ephys_file']
-        print('attempting Probe InsertionLocation for fname: ', end='')
-        if re.match('.*2018-12-07.*dl59.*.mat', fname):
+        print('attempting Probe InsertionLocation for fname: {}'.format(fname),
+              end=' ')
+
+        if re.match('.*20181207.*dl59.*.mat', fname):
             rec_locs = [{
                 'subject_id': 435884,
                 'session': 1,
@@ -678,7 +680,7 @@ def post_ephys(*args):
                 'hemisphere': 'right'
             }]
             print('match!: {} - {}'.format(rec_brain, rec_locs))
-        elif re.match('.*2018-07-16.*tw34.*.mat', fname):
+        elif re.match('.*20180716.*tw34.*.mat', fname):
             rec_locs = [{
                 'subject_id': 412330,
                 'session': 1,
@@ -719,7 +721,7 @@ def post_ephys(*args):
             ]
 
             print('match!: {} - {}'.format(rec_brain, rec_locs))
-        elif re.match('.*SC022/2019-03-03.*', fname):
+        elif re.match('.*SC022/20190303.*', fname):
             # FIXME: 15deg dv angle -> ?
             # FIXME: 'you should add 175um to the note depths
             #   'because where I used as zero reference is where the 1st tip
@@ -803,7 +805,7 @@ def post_ephys(*args):
                 'theta': 0,
                 'phi': 0,
                 'beta': 0
-            },{
+            }, {
                 **kbase,
                 'insertion_number': 2,
                 'skull_reference': 'Bregma',
@@ -827,10 +829,47 @@ def post_ephys(*args):
                 'hemisphere': 'right'
             }
             ]
+            print('match!: {} - {}'.format(rec_brain, rec_locs))
+        elif re.match('.*20181125.*dl56.*.mat', fname):
+            kbase = {'subject_id': 432572, 'session': 1}
+            rec_locs = [{
+                **kbase,
+                'insertion_number': 1,
+                'skull_reference': 'Bregma',
+                'ml_location': -1500,
+                'ap_location': 2500,
+                'depth': -1666.60,
+                'theta': 15,
+                'phi': 90,
+                'beta': 90
+            }, {
+                **kbase,
+                'insertion_number': 2,
+                'skull_reference': 'Bregma',
+                'ml_location': 1000,
+                'ap_location': -6500,
+                'depth': -4442,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
+            }]
 
+            rec_brain = [{
+                **kbase,
+                'insertion_number': 1,
+                'brain_area': 'ALM',
+                'hemisphere': 'left'
+            }, {
+                **kbase,
+                'insertion_number': 2,
+                'brain_area': 'Medulla',
+                'hemisphere': 'right'
+            }
+            ]
             print('match!: {} - {}'.format(rec_brain, rec_locs))
         else:
             print('no match!')
+            continue
 
         ephys.ProbeInsertion.InsertionLocation.insert(
             rec_locs, skip_duplicates=True)
