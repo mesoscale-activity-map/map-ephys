@@ -1001,7 +1001,7 @@ def extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=(-41, 41), bit_volts=None
             spike_wfs = np.dstack([data[int(spk+wf_win[0]):int(spk+wf_win[-1]), chan_map] for spk in spikes])
             spike_wfs = spike_wfs * bit_volts
             unit_wfs[unit]['snr'] = [calculate_wf_snr(chn_wfs)
-                                     for chn_wfs in spike_wfs.tranpose((1, 2, 0))]  # (channel x spike x sample)
+                                     for chn_wfs in spike_wfs.transpose((1, 2, 0))]  # (channel x spike x sample)
             unit_wfs[unit]['mean_wf'] = np.nanmean(spike_wfs, axis=2)
         else:  # if no spike found, return NaN of size (sample x channel x 1)
             unit_wfs[unit]['snr'] = np.full((1, len(chan_map)), np.nan)
