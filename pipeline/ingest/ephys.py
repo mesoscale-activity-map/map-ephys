@@ -605,14 +605,13 @@ class EphysIngest(dj.Imported):
             best_chn_wf = scaled_templates[:, site_idx] * amps.mean()
             unit_amp.append(best_chn_wf.max() - best_chn_wf.min())
 
-        # -- waveforms --
+        # -- waveforms and SNR --
         log.info('.... extracting waveforms - data dir: {}'.format(str(ks_dir)))
         unit_wfs = extract_ks_waveforms(ks_dir, ks, wf_win=[-int(ks.data['templates'].shape[1]/2),
                                                             int(ks.data['templates'].shape[1]/2)])
-        unit_wav = np.dstack([np.nanmean(unit_wfs[u], axis=2) for u in valid_units]).transpose((2, 1, 0))  # unit x channel x sample
-
-        # -- snr --
-        unit_snr = [calculate_wf_snr(unit_wfs[u][:, np.where(ks.data['channel_map'] == u_site)[0][0], :])
+        unit_wav = np.dstack([unit_wfs[u]['mean_wf']
+                              for u in valid_units]).transpose((2, 1, 0))  # unit x channel x sample
+        unit_snr = [unit_wfs[u]['snr'][np.where(ks.data['channel_map'] == u_site)[0][0]]
                     for u, u_site in zip(valid_units, vmax_unit_site)]
 
         # -- trial-info from bitcode --
@@ -965,7 +964,7 @@ def extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=(-41, 41), bit_volts=None
     :param n_wf: number of spikes per unit to extract the waveforms
     :param wf_win: number of sample pre and post a spike
     :param bit_volts: scalar required to convert int16 values into microvolts
-    :return: dictionary of the clusters' waveform (sample x channel x spike)
+    :return: dictionary of the clusters' waveform (sample x channel x spike) and snr per channel for each cluster
     """
     bin_fp = next(pathlib.Path(npx_dir).glob('*.ap.bin'))
     meta_fp = next(pathlib.Path(npx_dir).glob('*.ap.meta'))
@@ -988,12 +987,18 @@ def extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=(-41, 41), bit_volts=None
         spikes = spikes[:n_wf]
         # ignore spikes at the beginning or end of raw data
         spikes = spikes[np.logical_and(spikes > wf_win[0], spikes < data.shape[0] - wf_win[-1])]
+
+        unit_wfs[unit] = {}
         if len(spikes) > 0:
             # waveform at each spike: (sample x channel x spike)
             spike_wfs = np.dstack([data[int(spk+wf_win[0]):int(spk+wf_win[-1]), chan_map] for spk in spikes])
-            unit_wfs[unit] = spike_wfs * bit_volts
+            spike_wfs = spike_wfs * bit_volts
+            unit_wfs[unit]['snr'] = [calculate_wf_snr(chn_wfs)
+                                     for chn_wfs in spike_wfs.tranpose((1, 2, 0))]  # (channel x spike x sample)
+            unit_wfs[unit]['mean_wf'] = np.nanmean(spike_wfs, axis=2)
         else:  # if no spike found, return NaN of size (sample x channel x 1)
-            unit_wfs[unit] = np.full((len(range(*wf_win)), len(chan_map), 1), np.nan)
+            unit_wfs[unit]['snr'] = np.full((1, len(chan_map)), np.nan)
+            unit_wfs[unit]['mean_wf'] = np.full((len(range(*wf_win)), len(chan_map)), np.nan)
 
     return unit_wfs
 
@@ -1012,7 +1017,7 @@ def calculate_wf_snr(W):
     snr : signal-to-noise ratio for unit (scalar)
     """
 
-    W_bar = np.nanmean(W, axis = 0)
+    W_bar = np.nanmean(W, axis=0)
     A = np.max(W_bar) - np.min(W_bar)
     e = W - np.tile(W_bar, (np.shape(W)[0], 1))
     snr = A / (2 * np.nanstd(e.flatten()))
