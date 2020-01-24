@@ -141,7 +141,7 @@ class EphysIngest(dj.Imported):
 
         # create probe insertion records
         try:
-            insertion_key = self._gen_probe_insert(sinfo, probe, npx_meta)
+            insertion_key = _gen_probe_insert(sinfo, probe, npx_meta)
         except (NotImplementedError, dj.DataJointError) as e:
             raise ProbeInsertionError(str(e))
 
@@ -284,10 +284,10 @@ class EphysIngest(dj.Imported):
 
         log.info('.. inserting file load information')
 
-        self.insert1(skey, skip_duplicates=True)
+        self.insert1(skey, skip_duplicates=True, allow_direct_insert=True)
         self.EphysFile.insert1(
             {**skey, 'probe_insertion_number': probe,
-             'ephys_file': str(ef_path.relative_to(rigpath))})
+             'ephys_file': str(ef_path.relative_to(rigpath))}, allow_direct_insert=True)
 
         log.info('ephys ingest for {} complete'.format(skey))
 
@@ -364,7 +364,6 @@ def _gen_electrode_config(npx_meta):
     return e_config
 
 
-@staticmethod
 def _decode_notes(fh, notes):
     '''
     dereference and decode unit notes, translate to local labels
@@ -1070,10 +1069,11 @@ def extend_ephys_ingest(session_key):
                          'session': sinfo['session'],
                          'insertion_number': probe_no}
         if insertion_key in ephys.ProbeInsertion.proj():
-            return
+            log.info('Probe {} exists, skipping...'.format(probe_no))
+            continue
 
         try:
-            EphysIngest._load(loader(sinfo, f), probe_no, npx_meta, rigpath)
+            EphysIngest()._load(loader(sinfo, f), probe_no, npx_meta, rigpath)
         except (ProbeInsertionError, FileNotFoundError) as e:
             dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
             if isinstance(e, ProbeInsertionError):
@@ -1081,4 +1081,3 @@ def extend_ephys_ingest(session_key):
             else:
                 log.warning('Error: {}'.format(str(e)))
             return
-        
