@@ -3,11 +3,12 @@
 import os
 import glob
 import logging
-import datetime
 import re
 import math
 import pathlib
 
+from datetime import date
+from datetime import datetime
 from itertools import chain
 from collections import namedtuple
 
@@ -147,7 +148,7 @@ class BehaviorIngest(dj.Imported):
 
             fsplit = subpath.stem.split('_')
             h2o = fsplit[0]
-            date = fsplit[-2:-1][0]
+            ymd = fsplit[-2:-1][0]
 
             if h2o not in h2os:
                 log.warning('{f} skipped - no animal for {h2o}'.format(
@@ -160,8 +161,8 @@ class BehaviorIngest(dj.Imported):
 
             return {
                 'subject_id': animal,
-                'session_date': datetime.date(
-                    int(date[0:4]), int(date[4:6]), int(date[6:8])),
+                'session_date': date(
+                    int(ymd[0:4]), int(ymd[4:6]), int(ymd[6:8])),
                 'rig': rig,
                 'rig_data_path': rigpath.as_posix(),
                 'subpath': subpath.as_posix()
@@ -169,6 +170,7 @@ class BehaviorIngest(dj.Imported):
 
         recs = []
         found = set()
+        known = set(BehaviorIngest.BehaviorFile().fetch('behavior_file'))
         rigs = RigDataPath().fetch(as_dict=True, order_by='rig_search_order')
         for r in rigs:
             rig = r['rig']
@@ -179,7 +181,12 @@ class BehaviorIngest(dj.Imported):
                 for f in files:
                     log.debug('RigDataFile.make(): visiting {f}'.format(f=f))
                     r = buildrec(rig, rigpath, root, f)
-                    if r and r['subpath'] not in found:
+                    if not r:
+                        continue
+                    if r['subpath'] in set.union(known, found):
+                        log.info('skipping already ingested file {}'.format(
+                            r['subpath']))
+                    else:
                         found.add(r['subpath'])  # block duplicate path conf
                         recs.append(r)
 
@@ -197,114 +204,81 @@ class BehaviorIngest(dj.Imported):
         h2o = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1(
             'water_restriction_number')
 
-        date = key['session_date']
-        datestr = date.strftime('%Y%m%d')
+        ymd = key['session_date']
+        datestr = ymd.strftime('%Y%m%d')
         log.info('h2o: {h2o}, date: {d}'.format(h2o=h2o, d=datestr))
 
         # session record key
         skey = {}
         skey['subject_id'] = subject_id
-        skey['session_date'] = date
+        skey['session_date'] = ymd
         skey['username'] = self.get_session_user()
+        skey['rig'] = key['rig']
 
         # File paths conform to the pattern:
         # dl7/TW_autoTrain/Session Data/dl7_TW_autoTrain_20180104_132813.mat
         # which is, more generally:
         # {h2o}/{training_protocol}/Session Data/{h2o}_{training protocol}_{YYYYMMDD}_{HHMMSS}.mat
-        root = pathlib.Path(key['rig_data_path'], os.path.dirname(key['subpath']))
-        path = root / '{h2o}_*_{d}*.mat'.format(h2o=h2o, d=datestr)
 
-        log.info('rigpath {p}'.format(p=path))
+        path = pathlib.Path(key['rig_data_path'], key['subpath'])
 
-        matches = sorted(root.glob('{h2o}_*_{d}*.mat'.format(h2o=h2o, d=datestr)))
-        if matches:
-            log.info('found files: {}, this is the rig'.format(matches))
-            skey['rig'] = key['rig']
-        else:
-            log.info('no file matches found in {p}'.format(p=path))
-
-        if not len(matches):
-            log.warning('no file matches found for {h2o} / {d}'.format(
-                h2o=h2o, d=datestr))
-            return
-
-        #
-        # Find files & Check for split files
-        # XXX: not checking rig.. 2+ sessions on 2+ rigs possible for date?
-        #
-
-        if len(matches) > 1:
-            log.warning('split session case detected for {h2o} on {date}'
-                        .format(h2o=h2o, date=date))
-
-        # session:date relationship is 1:1; skip if we have a session
         if experiment.Session() & skey:
-            log.warning("Warning! session exists for {h2o} on {d}".format(
-                h2o=h2o, d=date))
-            return
-
-        #
-        # Extract trial data from file(s) & prepare trial loop
-        #
-
-        trials = zip()
+            log.info("note: session exists for {h2o} on {d}".format(
+                h2o=h2o, d=ymd))
 
         trial = namedtuple(  # simple structure to track per-trial vars
-            'trial', ('ttype', 'stim', 'settings', 'state_times', 'state_names',
-                      'state_data', 'event_data', 'event_times', 'trial_start'))
+            'trial', ('ttype', 'stim', 'settings', 'state_times',
+                      'state_names', 'state_data', 'event_data',
+                      'event_times', 'trial_start'))
 
-        sess_datetimes = []
-        for f in matches:
+        if os.stat(path).st_size/1024 < 1000:
+            log.info('skipping file {} - too small'.format(path))
+            return
 
-            if os.stat(f).st_size/1024 < 1000:
-                log.info('skipping file {f} - too small'.format(f=f))
-                continue
+        log.debug('loading file {}'.format(path))
 
-            log.debug('loading file {}'.format(f))
+        mat = spio.loadmat(path, squeeze_me=True)
+        SessionData = mat['SessionData'].flatten()
 
-            mat = spio.loadmat(f, squeeze_me=True)
-            SessionData = mat['SessionData'].flatten()
+        # parse session datetime
+        session_datetime_str = str('').join((
+            str(SessionData['Info'][0]['SessionDate']),
+            ' ', str(SessionData['Info'][0]['SessionStartTime_UTC'])))
 
-            # parse session datetime
-            sess_datetime = SessionData['Info'][0]['SessionDate'] + ' ' + SessionData['Info'][0]['SessionStartTime_UTC']
-            sess_datetimes.append(datetime.datetime.strptime(sess_datetime, '%d-%b-%Y %H:%M:%S'))
+        session_datetime = datetime.strptime(
+            session_datetime_str, '%d-%b-%Y %H:%M:%S')
 
-            AllTrialTypes = SessionData['TrialTypes'][0]
-            AllTrialSettings = SessionData['TrialSettings'][0]
-            AllTrialStarts = SessionData['TrialStartTimestamp'][0]
-            AllTrialStarts = AllTrialStarts - AllTrialStarts[0]  # 1st trial starts at se
+        AllTrialTypes = SessionData['TrialTypes'][0]
+        AllTrialSettings = SessionData['TrialSettings'][0]
+        AllTrialStarts = SessionData['TrialStartTimestamp'][0]
+        AllTrialStarts = AllTrialStarts - AllTrialStarts[0]  # real 1st trial
 
-            RawData = SessionData['RawData'][0].flatten()
-            AllStateNames = RawData['OriginalStateNamesByNumber'][0]
-            AllStateData = RawData['OriginalStateData'][0]
-            AllEventData = RawData['OriginalEventData'][0]
-            AllStateTimestamps = RawData['OriginalStateTimestamps'][0]
-            AllEventTimestamps = RawData['OriginalEventTimestamps'][0]
+        RawData = SessionData['RawData'][0].flatten()
+        AllStateNames = RawData['OriginalStateNamesByNumber'][0]
+        AllStateData = RawData['OriginalStateData'][0]
+        AllEventData = RawData['OriginalEventData'][0]
+        AllStateTimestamps = RawData['OriginalStateTimestamps'][0]
+        AllEventTimestamps = RawData['OriginalEventTimestamps'][0]
 
-            # verify trial-related data arrays are all same length
-            assert(all((x.shape[0] == AllStateTimestamps.shape[0] for x in
-                        (AllTrialTypes, AllTrialSettings,
-                         AllStateNames, AllStateData, AllEventData,
-                         AllEventTimestamps, AllTrialStarts, AllTrialStarts))))
+        # verify trial-related data arrays are all same length
+        assert(all((x.shape[0] == AllStateTimestamps.shape[0] for x in
+                    (AllTrialTypes, AllTrialSettings,
+                     AllStateNames, AllStateData, AllEventData,
+                     AllEventTimestamps, AllTrialStarts, AllTrialStarts))))
 
-            if 'StimTrials' in SessionData.dtype.fields:
-                log.debug('StimTrials detected in session - will include')
-                AllStimTrials = SessionData['StimTrials'][0]
-                assert(AllStimTrials.shape[0] == AllStateTimestamps.shape[0])
-            else:
-                log.debug('StimTrials not detected in session - will skip')
-                AllStimTrials = np.array([
-                    None for _ in enumerate(range(AllStateTimestamps.shape[0]))])
+        if 'StimTrials' in SessionData.dtype.fields:
+            log.debug('StimTrials detected in session - will include')
+            AllStimTrials = SessionData['StimTrials'][0]
+            assert(AllStimTrials.shape[0] == AllStateTimestamps.shape[0])
+        else:
+            log.debug('StimTrials not detected in session - will skip')
+            AllStimTrials = np.array([
+                None for _ in enumerate(range(AllStateTimestamps.shape[0]))])
 
-            z = zip(AllTrialTypes, AllStimTrials, AllTrialSettings,
-                    AllStateTimestamps, AllStateNames, AllStateData,
-                    AllEventData, AllEventTimestamps, AllTrialStarts)
+        trials = list(zip(AllTrialTypes, AllStimTrials, AllTrialSettings,
+                          AllStateTimestamps, AllStateNames, AllStateData,
+                          AllEventData, AllEventTimestamps, AllTrialStarts))
 
-            trials = chain(trials, z)  # concatenate the files
-
-        trials = list(trials)
-
-        # all files were internally invalid or size < 100k
         if not trials:
             log.warning('skipping date {d}, no valid files'.format(d=date))
             return
@@ -314,15 +288,16 @@ class BehaviorIngest(dj.Imported):
         # XXX: note - later breaks can result in Sessions without valid trials
         #
 
-        session_datetime = sorted(sess_datetimes)[0]
-        assert skey.pop('session_date') == session_datetime.date()
+        assert skey['session_date'] == session_datetime.date()
 
         skey['session_date'] = session_datetime.date()
         skey['session_time'] = session_datetime.time()
 
         log.debug('synthesizing session ID')
-        session = (dj.U().aggr(experiment.Session() & {'subject_id': subject_id},
+        session = (dj.U().aggr(experiment.Session()
+                               & {'subject_id': subject_id},
                                n='max(session)').fetch1('n') or 0) + 1
+
         log.info('generated session id: {session}'.format(session=session))
         skey['session'] = session
         key = dict(key, **skey)
@@ -423,19 +398,20 @@ class BehaviorIngest(dj.Imported):
             log.debug('endindex\n' + str(endindex))
 
             if not(len(startindex) and len(endindex)):
-                log.warning('skipping trial {i}: start/end index error: {s}/{e}'.format(i=i,s=str(startindex), e=str(endindex)))
+                log.warning('skipping {}: start/end mismatch: {}/{}'.format(
+                    i, str(startindex), str(endindex)))
                 continue
 
-            try:    
+            try:
                 tkey['trial'] = i
-                tkey['trial_uid'] = i  # Arseny has unique id to identify some trials
+                tkey['trial_uid'] = i
                 tkey['start_time'] = t.trial_start
                 tkey['stop_time'] = t.trial_start + t.state_times[endindex][0]
             except IndexError:
-                log.warning('skipping trial {i}: error indexing {s}/{e} into {t}'.format(i=i, s=str(startindex), e=str(endindex), t=str(t.state_times)))
+                log.warning('skipping {}: IndexError: {}/{} -> {}'.format(
+                    i, str(startindex), str(endindex), str(t.state_times)))
                 continue
 
-            log.debug('BehaviorIngest.make(): Trial().insert1')  # TODO msg
             log.debug('tkey' + str(tkey))
             rows['trial'].append(tkey)
 
@@ -652,7 +628,8 @@ class BehaviorIngest(dj.Imported):
             action_event_count = len(rows['action_event'])
             if len(lickleft):
                 [rows['action_event'].append(
-                    dict(tkey, action_event_id=action_event_count+idx, action_event_type='left lick',
+                    dict(tkey, action_event_id=action_event_count+idx,
+                         action_event_type='left lick',
                          action_event_time=t.event_times[l]))
                  for idx, l in enumerate(lickleft)]
 
@@ -662,37 +639,27 @@ class BehaviorIngest(dj.Imported):
             action_event_count = len(rows['action_event'])
             if len(lickright):
                 [rows['action_event'].append(
-                    dict(tkey, action_event_id=action_event_count+idx, action_event_type='right lick',
+                    dict(tkey, action_event_id=action_event_count+idx,
+                         action_event_type='right lick',
                          action_event_time=t.event_times[r]))
                     for idx, r in enumerate(lickright)]
 
+            #
             # Photostim Events
             #
-            # TODO:
-            #
-            # - base stimulation parameters:
-            #
-            #   - should be loaded elsewhere - where
-            #   - actual ccf locations - cannot be known apriori apparently?
-            #   - Photostim.Profile: what is? fix/add
-            #
-            # - stim data
-            #
-            #   - how retrieve power from file (didn't see) or should
-            #     be statically coded here?
-            #   - how encode stim type 6?
-            #     - we have hemisphere as boolean or
-            #     - but adding an event 4 and event 5 means querying
-            #       is less straightforwrard (e.g. sessions with 5 & 6)
 
             if t.stim:
                 log.info('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
                 rows['photostim_trial'].append(tkey)
-                delay_period_idx = np.where(t.state_data == states['DelayPeriod'])[0][0]
-                rows['photostim_trial_event'].append(dict(
-                    tkey, photo_stim=t.stim, photostim_event_id=len(rows['photostim_trial_event']),
-                    photostim_event_time=t.state_times[delay_period_idx],
-                    power=5.5))
+                delay_period_idx = np.where(
+                    t.state_data == states['DelayPeriod'])[0][0]
+                rows['photostim_trial_event'].append(
+                    dict(tkey,
+                         photo_stim=t.stim,
+                         photostim_event_id=len(
+                             rows['photostim_trial_event']),
+                         photostim_event_time=t.state_times[delay_period_idx],
+                         power=5.5))
 
             # end of trial loop.
 
@@ -737,24 +704,29 @@ class BehaviorIngest(dj.Imported):
             rows['action_event'], ignore_extra_fields=True,
             allow_direct_insert=True)
 
-        BehaviorIngest.BehaviorFile().insert(
-            (dict(key, behavior_file=f.name) for f in matches),
-            ignore_extra_fields=True, allow_direct_insert=True)
-
         # Photostim Insertion
 
-        photostim_ids = np.unique([r['photo_stim'] for r in rows['photostim_trial_event']])
-        unknown_photostims = np.setdiff1d(photostim_ids, list(photostims.keys()))
+        photostim_ids = np.unique(
+            [r['photo_stim'] for r in rows['photostim_trial_event']])
+
+        unknown_photostims = np.setdiff1d(
+            photostim_ids, list(photostims.keys()))
+
         if unknown_photostims:
-            raise ValueError('Unknown photostim protocol: {}'.format(unknown_photostims))
+            raise ValueError(
+                'Unknown photostim protocol: {}'.format(unknown_photostims))
 
         if photostim_ids.size > 0:
             log.info('BehaviorIngest.make(): ... experiment.Photostim')
             for stim in photostim_ids:
-                experiment.Photostim.insert1(dict(skey, **photostims[stim]), ignore_extra_fields=True)
-                experiment.Photostim.PhotostimLocation.insert((dict(skey, photo_stim=photostims[stim]['photo_stim'], **loc)
-                                                               for loc in photostims[stim]['locations']),
-                                                              ignore_extra_fields=True)
+                experiment.Photostim.insert1(
+                    dict(skey, **photostims[stim]), ignore_extra_fields=True)
+
+                experiment.Photostim.PhotostimLocation.insert(
+                    (dict(skey, **loc,
+                          photo_stim=photostims[stim]['photo_stim'])
+                     for loc in photostims[stim]['locations']),
+                    ignore_extra_fields=True)
 
         log.info('BehaviorIngest.make(): ... experiment.PhotostimTrial')
         experiment.PhotostimTrial.insert(rows['photostim_trial'],
@@ -765,3 +737,10 @@ class BehaviorIngest(dj.Imported):
         experiment.PhotostimEvent.insert(rows['photostim_trial_event'],
                                          ignore_extra_fields=True,
                                          allow_direct_insert=True)
+
+        # Behavior Ingest Insertion
+
+        log.info('BehaviorIngest.make(): ... BehaviorIngest.BehaviorFile')
+        BehaviorIngest.BehaviorFile().insert1(
+            dict(key, behavior_file=str(key['subpath'])),
+            ignore_extra_fields=True, allow_direct_insert=True)
