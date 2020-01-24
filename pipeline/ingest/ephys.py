@@ -139,6 +139,12 @@ class EphysIngest(dj.Imported):
 
         log.info('Starting insertions for probe: {} - Clustering method: {}'.format(probe, method))
 
+        # create probe insertion records
+        try:
+            insertion_key = self._gen_probe_insert(sinfo, probe, npx_meta)
+        except (NotImplementedError, dj.DataJointError) as e:
+            raise ProbeInsertionError(str(e))
+
         # account for the buffer period before trial_start
         buffer_sample_count = np.round(npx_meta.meta['trgTTLMarginS'] * npx_meta.meta['imSampRate']).astype(int)
         trial_start = trial_start - np.round(buffer_sample_count).astype(int)
@@ -216,12 +222,6 @@ class EphysIngest(dj.Imported):
         unit_trial_spikes = np.array(
             [[trial_spikes[t][np.where(trial_units[t] == u)]
               for t in range(len(trials))] for u in set(units)])
-
-        # create probe insertion records
-        try:
-            insertion_key = self._gen_probe_insert(sinfo, probe, npx_meta)
-        except (NotImplementedError, dj.DataJointError) as e:
-            raise ProbeInsertionError(str(e))
 
         electrode_keys = {c['electrode']: c for c in (lab.ElectrodeConfig.Electrode & insertion_key).fetch('KEY')}
 
