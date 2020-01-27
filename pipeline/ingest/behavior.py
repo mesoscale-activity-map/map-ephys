@@ -56,7 +56,7 @@ def get_behavior_paths():
       dj.config = {
         ...,
         'custom': {
-          'behavior_paths': {
+          'behavior_data_paths': {
             'Rig1': '/path/string',
           }
         }
@@ -64,7 +64,7 @@ def get_behavior_paths():
       }
 
     '''
-    return dj.config.get('custom', {}).get('behavior_paths', None)
+    return dj.config.get('custom', {}).get('behavior_data_paths', None)
 
 
 @schema

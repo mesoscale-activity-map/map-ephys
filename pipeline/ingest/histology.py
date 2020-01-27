@@ -65,7 +65,7 @@ class HistologyIngest(dj.Imported):
             log.info('... no probe information. skipping.'.format(key))
             return
 
-        rigpath = ephys_ingest.EphysDataPath().fetch1('data_path')
+        rigpath = ephys_ingest.get_ephys_path()
         subject_id = session['subject_id']
         session_date = session['session_date']
         water = (
