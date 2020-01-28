@@ -1048,12 +1048,16 @@ def extend_ephys_ingest(session_key):
               * lab.Subject.proj()
               * experiment.Session.proj(..., '-session_time')) & key).fetch1()
 
-    rigpath = EphysDataPath().fetch1('data_path')
+    rigpaths = get_ephys_path()
     h2o = sinfo['water_restriction_number']
 
     sess_time = (datetime.min + key['session_time']).time()
     sess_datetime = datetime.combine(key['session_date'], sess_time)
-    dpath, dglob = _get_sess_dir(rigpath, h2o, sess_datetime)
+
+    for rigpath in rigpaths:
+        dpath, dglob = _get_sess_dir(rigpath, h2o, sess_datetime)
+        if dpath is not None:
+            break
 
     if dpath is not None:
         log.info('Found session folder: {}'.format(dpath))
