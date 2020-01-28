@@ -21,20 +21,23 @@ log = logging.getLogger(__name__)
 [behavior_ingest]  # NOQA schema only use
 
 
-@schema
-class TrackingDataPath(dj.Lookup):
-    # ephys data storage location(s)
-    definition = """
-    -> lab.Rig
-    tracking_data_path:         varchar(255)            # rig data path
-    """
+def get_tracking_paths():
+    '''
+    retrieve behavior rig paths from dj.config
+    config should be in dj.config of the format:
 
-    @property
-    def contents(self):
-        if 'tracking_data_paths' in dj.config['custom']:  # for local testing
-            return dj.config['custom']['tracking_data_paths']
+      dj.config = {
+        ...,
+        'custom': {
+          'tracking_data_paths': {
+            'Rig1': '/path/string',
+          }
+        }
+        ...
+      }
 
-        return [('RRig', r'H:\\data\MAP',)]
+    '''
+    return dj.config.get('custom', {}).get('tracking_data_paths', None)
 
 
 @schema
@@ -69,7 +72,7 @@ class TrackingIngest(dj.Imported):
         sdate = session['session_date']
         sdate_sml = "{}{:02d}{:02d}".format(sdate.year, sdate.month, sdate.day)
 
-        paths = TrackingDataPath.fetch(as_dict=True)
+        paths = get_tracking_paths()
         devices = tracking.TrackingDevice().fetch(as_dict=True)
 
         # paths like: <root>/<h2o>/YYYY-MM-DD/tracking
@@ -78,7 +81,7 @@ class TrackingIngest(dj.Imported):
 
             tdev = d['tracking_device']
             tpos = d['tracking_position']
-            tdat = p['tracking_data_path']
+            tdat = paths[p]
 
             log.info('checking {} for tracking data'.format(tdat))
 

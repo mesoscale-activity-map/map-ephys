@@ -65,15 +65,17 @@ class HistologyIngest(dj.Imported):
             log.info('... no probe information. skipping.'.format(key))
             return
 
-        rigpath = ephys_ingest.EphysDataPath().fetch1('data_path')
+        rigpaths = ephys_ingest.get_ephys_path()
         subject_id = session['subject_id']
         session_date = session['session_date']
         water = (
             lab.WaterRestriction() & {'subject_id': subject_id}
         ).fetch1('water_restriction_number')
 
-        directory = pathlib.Path(
-            rigpath, water, session_date.strftime('%Y%m%d'), 'histology')
+        for rigpath in rigpaths:
+            directory = pathlib.Path(rigpath, water, session_date.strftime('%Y%m%d'), 'histology')
+            if directory.exists():
+                break
 
         hist_ingested = False
         for probe in range(1, 3):

@@ -34,21 +34,20 @@ log = logging.getLogger(__name__)
 npx_bit_volts = {'neuropixels 1.0': 2.34375, 'neuropixels 2.0': 0.763}  # uV per bit scaling factor for neuropixels probes
 
 
-@schema
-class EphysDataPath(dj.Lookup):
-    # ephys data storage location(s)
-    definition = """
-    data_path:              varchar(255)                # rig data path
-    ---
-    search_order:           int                         # rig search order
+def get_ephys_path():
     """
+    retrieve behavior rig paths from dj.config
+    config should be in dj.config of the format:
 
-    @property
-    def contents(self):
-        if 'ephys_data_paths' in dj.config['custom']:  # for local testing
-            return dj.config['custom']['ephys_data_paths']
-
-        return ((r'H:\\data\MAP', 0), )
+      dj.config = {
+        ...,
+        'custom': {
+          'ephys_data_path': ['/path/string', '/path2/string']
+        }
+        ...
+      }
+    """
+    return dj.config.get('custom', {}).get('ephys_data_path', None)
 
 
 @schema
@@ -84,12 +83,16 @@ class EphysIngest(dj.Imported):
                   * lab.Subject.proj()
                   * experiment.Session.proj(..., '-session_time')) & key).fetch1()
 
-        rigpath = EphysDataPath().fetch1('data_path')
+        rigpaths = get_ephys_path()
         h2o = sinfo['water_restriction_number']
 
         sess_time = (datetime.min + key['session_time']).time()
         sess_datetime = datetime.combine(key['session_date'], sess_time)
-        dpath, dglob = _get_sess_dir(rigpath, h2o, sess_datetime)
+
+        for rigpath in rigpaths:
+            dpath, dglob = _get_sess_dir(rigpath, h2o, sess_datetime)
+            if dpath is not None:
+                break
 
         if dpath is not None:
             log.info('Found session folder: {}'.format(dpath))
