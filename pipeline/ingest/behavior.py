@@ -56,15 +56,24 @@ def get_behavior_paths():
       dj.config = {
         ...,
         'custom': {
-          'behavior_data_paths': {
-            'Rig1': '/path/string',
-          }
+          'behavior_data_paths':
+            [
+                ["RRig", "/path/string", 0],
+                ["RRig2", "/path2/string2", 1]
+            ],
         }
         ...
       }
 
+    where 'behavior_data_paths' is a list of multiple possible path for behavior data, each in format:
+    [rig name, rig full path, search order]
     '''
-    return dj.config.get('custom', {}).get('behavior_data_paths', None)
+
+    paths = dj.config.get('custom', {}).get('behavior_data_paths', None)
+    if paths is None:
+        raise ValueError("Missing 'behavior_data_paths' in dj.config['custom']")
+
+    return sorted(paths, key=lambda x: x[-1])
 
 
 @schema
@@ -162,8 +171,8 @@ class BehaviorIngest(dj.Imported):
         known = set(BehaviorIngest.BehaviorFile().fetch('behavior_file'))
         rigs = get_behavior_paths()
 
-        for rig in rigs:
-            rigpath = pathlib.Path(rigs[rig])
+        for (rig, rigpath, _) in rigs:
+            rigpath = pathlib.Path(rigpath)
 
             log.info('RigDataFile.make(): traversing {}'.format(rigpath))
             for root, dirs, files in os.walk(rigpath):

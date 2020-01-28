@@ -29,9 +29,10 @@ def get_tracking_paths():
       dj.config = {
         ...,
         'custom': {
-          'tracking_data_paths': {
-            'Rig1': '/path/string',
-          }
+        "tracking_data_paths":
+            [
+                ["RRig", "/path/string"]
+            ]
         }
         ...
       }
@@ -81,7 +82,7 @@ class TrackingIngest(dj.Imported):
 
             tdev = d['tracking_device']
             tpos = d['tracking_position']
-            tdat = paths[p]
+            tdat = p[-1]
 
             log.info('checking {} for tracking data'.format(tdat))
 
