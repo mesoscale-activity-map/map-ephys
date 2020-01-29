@@ -108,7 +108,7 @@ class EphysIngest(dj.Imported):
 
         for probe_no, (f, loader, npx_meta) in clustering_files.items():
             try:
-                self._load(loader(sinfo, f), probe_no, npx_meta, rigpath)
+                self._load(loader(sinfo, *f), probe_no, npx_meta, rigpath)
             except (ProbeInsertionError, FileNotFoundError) as e:
                 dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
                 if isinstance(e, ProbeInsertionError):
@@ -332,13 +332,12 @@ def _gen_electrode_config(npx_meta):
     Generate and insert (if needed) an ElectrodeConfiguration based on the specified neuropixels meta information
     """
 
-    if '1.0' in npx_meta.probe_model:
+    if re.search('(1.0|2.0)', npx_meta.probe_model):
         eg_members = []
         probe_type = {'probe_type': npx_meta.probe_model}
         q_electrodes = lab.ProbeType.Electrode & probe_type
         for shank, shank_col, shank_row, is_used in npx_meta.shankmap['data']:
-            electrode = (q_electrodes & {'shank': shank, 'shank_col': shank_col, 'shank_row': shank_row}).fetch1(
-                'KEY')
+            electrode = (q_electrodes & {'shank': shank, 'shank_col': shank_col, 'shank_row': shank_row}).fetch1('KEY')
             eg_members.append({**electrode, 'is_used': is_used, 'electrode_group': 0})
     else:
         raise NotImplementedError('Processing for neuropixels probe model {} not yet implemented'.format(
@@ -348,8 +347,8 @@ def _gen_electrode_config(npx_meta):
     ec_hash = dict_to_hash({k['electrode']: k for k in eg_members})
 
     el_list = sorted([k['electrode'] for k in eg_members])
-    el_jumps = [0] + np.where(np.diff(el_list) > 1)[0].tolist() + [len(el_list) - 1]
-    ec_name = '; '.join([f'{el_list[s]}-{el_list[e]}' for s, e in zip(el_jumps[:-1], el_jumps[1:])])
+    el_jumps = [-1] + np.where(np.diff(el_list) > 1)[0].tolist() + [len(el_list) - 1]
+    ec_name = '; '.join([f'{el_list[s + 1]}-{el_list[e]}' for s, e in zip(el_jumps[:-1], el_jumps[1:])])
 
     e_config = {**probe_type, 'electrode_config_name': ec_name}
 
@@ -558,14 +557,14 @@ def _load_jrclust_v4(sinfo, fpath):
     return data
 
 
-def _load_kilosort2(sinfo, ks_dir):
+def _load_kilosort2(sinfo, ks_dir, npx_dir):
 
     h2o = sinfo['water_restriction_number']
     skey = {k: v for k, v in sinfo.items()
             if k in experiment.Session.primary_key}
 
     try:
-        bf_path = next(pathlib.Path(ks_dir).glob('*{}*_bitcode.mat'.format(h2o)))
+        bf_path = next(pathlib.Path(npx_dir).glob('*{}*_bitcode.mat'.format(h2o)))
     except StopIteration:
         raise FileNotFoundError('Not bitcode for {} found in {}'.format(h2o, ks_dir))
 
@@ -615,7 +614,7 @@ def _load_kilosort2(sinfo, ks_dir):
 
     # -- waveforms and SNR --
     log.info('.... extracting waveforms - data dir: {}'.format(str(ks_dir)))
-    unit_wfs = extract_ks_waveforms(ks_dir, ks, wf_win=[-int(ks.data['templates'].shape[1]/2),
+    unit_wfs = extract_ks_waveforms(npx_dir, ks, wf_win=[-int(ks.data['templates'].shape[1]/2),
                                                         int(ks.data['templates'].shape[1]/2)])
     unit_wav = np.dstack([unit_wfs[u]['mean_wf']
                           for u in valid_units]).transpose((2, 1, 0))  # unit x channel x sample
@@ -716,11 +715,14 @@ def _match_probe_to_ephys(h2o, dpath, dglob):
         probe_number = int(probe_number.replace('imec', '')) + 1 if 'imec' in probe_number else int(probe_number)
 
         # JRClust v3
-        v3files = [(f, _load_jrclust_v3) for f in probe_dir.glob(jrclustv3spec)]
+        v3files = [((f, ), _load_jrclust_v3) for f in probe_dir.glob(jrclustv3spec)]
         # JRClust v4
-        v4files = [(f, _load_jrclust_v4) for f in probe_dir.glob(jrclustv4spec)]
+        v4files = [((f, ), _load_jrclust_v4) for f in probe_dir.glob(jrclustv4spec)]
         # Kilosort
-        ks2files = [(f.parent, _load_kilosort2) for f in probe_dir.glob(ks2spec)]
+        ks2files = [((f.parent, probe_dir), _load_kilosort2) for f in probe_dir.rglob(ks2spec)]
+
+        if len(ks2files) > 1:
+            raise ValueError('Multiple Kilosort outputs found at: {}'.format([str(x[0]) for x in ks2files]))
 
         clustering_results = v4files + v3files + ks2files
 
@@ -762,6 +764,10 @@ class NeuropixelsMeta:
                 self.probe_model = 'neuropixels 1.0 - 3A'
             elif 'typeImEnabled' in self.meta:
                 self.probe_model = 'neuropixels 1.0 - 3B'
+        elif probe_model == 21:
+            self.probe_model = 'neuropixels 2.0 - SS'
+        elif probe_model == 24:
+            self.probe_model = 'neuropixels 2.0 - MS'
         else:
             self.probe_model = str(probe_model)
 
