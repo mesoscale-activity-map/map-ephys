@@ -510,7 +510,7 @@ def compute_coding_direction(contra_psths, ipsi_psths, time_period=None):
     contra_ave_spk_rate = np.array([spk_rate[np.logical_and(spk_edge >= p_start, spk_edge < p_end)].mean()
                                     for spk_rate, spk_edge in contra_psths])
     ipsi_ave_spk_rate = np.array([spk_rate[np.logical_and(spk_edge >= p_start, spk_edge < p_end)].mean()
-                                    for spk_rate, spk_edge in ipsi_psths])
+                                  for spk_rate, spk_edge in ipsi_psths])
 
     cd_vec = contra_ave_spk_rate - ipsi_ave_spk_rate
     return cd_vec / np.linalg.norm(cd_vec)
