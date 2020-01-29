@@ -142,6 +142,8 @@ class EphysIngest(dj.Imported):
 
         log.info('Starting insertions for probe: {} - Clustering method: {}'.format(probe, method))
 
+        assert len(trial_start) == len(trial_go)
+        
         # create probe insertion records
         try:
             insertion_key = _gen_probe_insert(sinfo, probe, npx_meta)
@@ -149,8 +151,13 @@ class EphysIngest(dj.Imported):
             raise ProbeInsertionError(str(e))
 
         # account for the buffer period before trial_start
-        buffer_sample_count = np.round(npx_meta.meta['trgTTLMarginS'] * npx_meta.meta['imSampRate']).astype(int)
-        trial_start = trial_start - np.round(buffer_sample_count).astype(int)
+        if 'trgTTLMarginS' in npx_meta.meta:
+            buffer_sample_count = np.round(npx_meta.meta['trgTTLMarginS'] * npx_meta.meta['imSampRate']).astype(int)
+            buffer_sample_count = np.round(buffer_sample_count).astype(int)
+        else:
+            buffer_sample_count = 0
+
+        trial_start = trial_start - buffer_sample_count
 
         # remove noise clusters
         if method in ['jrclust_v3', 'jrclust_v4']:
@@ -614,8 +621,8 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
 
     # -- waveforms and SNR --
     log.info('.... extracting waveforms - data dir: {}'.format(str(ks_dir)))
-    unit_wfs = extract_ks_waveforms(npx_dir, ks, wf_win=[-int(ks.data['templates'].shape[1]/2),
-                                                        int(ks.data['templates'].shape[1]/2)])
+    unit_wfs = extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=[-int(ks.data['templates'].shape[1]/2),
+                                                                   int(ks.data['templates'].shape[1]/2)])
     unit_wav = np.dstack([unit_wfs[u]['mean_wf']
                           for u in valid_units]).transpose((2, 1, 0))  # unit x channel x sample
     unit_snr = [unit_wfs[u]['snr'][np.where(ks.data['channel_map'] == u_site)[0][0]]
