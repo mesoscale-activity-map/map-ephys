@@ -229,6 +229,8 @@ class BehaviorTrial(dj.Imported):
     -> TrialInstruction
     -> EarlyLick
     -> Outcome
+    auto_water=0: bool
+    free_water=0: bool
     """
 
 
