@@ -21,6 +21,22 @@ schema = dj.schema(get_schema_name('ingest_histology'))
 log = logging.getLogger(__name__)
 
 
+def get_histology_paths():
+    """
+    retrieve histology paths from dj.config
+    config should be in dj.config of the format:
+
+      dj.config = {
+        ...,
+        'custom': {
+          'histology_data_path': ['/path/string', '/path2/string']
+        }
+        ...
+      }
+    """
+    return dj.config.get('custom', {}).get('histology_data_path', None)
+
+
 @schema
 class HistologyIngest(dj.Imported):
     definition = """
@@ -65,7 +81,7 @@ class HistologyIngest(dj.Imported):
             log.info('... no probe information. skipping.'.format(key))
             return
 
-        rigpaths = ephys_ingest.get_ephys_path()
+        rigpaths = get_histology_paths()
         subject_id = session['subject_id']
         session_date = session['session_date']
         water = (
