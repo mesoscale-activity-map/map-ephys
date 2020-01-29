@@ -274,6 +274,42 @@ class UnitStat(dj.Computed):
         self.insert(make_insert())
 
 
+@schema
+class ClusterMetric(dj.Imported):
+    definition = """
+    -> Unit
+    ---
+    epoch_name_quality_metrics: varchar(64)
+    presence_ratio: float
+    amplitude_cutoff: float
+    isolation_distance=null: float
+    l_ratio=null: float
+    d_prime=null: float
+    nn_hit_rate=null: float
+    nn_miss_rate=null: float
+    silhouette_score=null: float
+    max_drift: float
+    cumulative_drift: float   
+    """
+
+
+@schema
+class WaveformMetric(dj.Imported):
+    definition = """
+    -> Unit
+    ---
+    epoch_name_waveform_metrics: varchar(64)
+    duration: float
+    halfwidth: float
+    PT_ratio: float
+    repolarization_slope: float
+    recovery_slope: float
+    spread: float
+    velocity_above=null: float
+    velocity_below=null: float   
+    """
+
+
 # TODO: confirm the logic/need for this table
 @schema
 class UnitCCF(dj.Computed):
