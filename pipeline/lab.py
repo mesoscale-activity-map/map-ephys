@@ -339,7 +339,7 @@ class ProbeType(dj.Lookup):
 class ElectrodeConfig(dj.Lookup):
     definition = """
     -> ProbeType
-    electrode_config_name: varchar(48)  # user friendly name
+    electrode_config_name: varchar(64)  # user friendly name
     ---
     electrode_config_hash: varchar(36)  # hash of the group and group_member (ensure uniqueness)
     unique index (electrode_config_hash)
