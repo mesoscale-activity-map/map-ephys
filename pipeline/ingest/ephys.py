@@ -34,9 +34,9 @@ log = logging.getLogger(__name__)
 npx_bit_volts = {'neuropixels 1.0': 2.34375, 'neuropixels 2.0': 0.763}  # uV per bit scaling factor for neuropixels probes
 
 
-def get_ephys_path():
+def get_ephys_paths():
     """
-    retrieve behavior rig paths from dj.config
+    retrieve ephys paths from dj.config
     config should be in dj.config of the format:
 
       dj.config = {
@@ -83,7 +83,7 @@ class EphysIngest(dj.Imported):
                   * lab.Subject.proj()
                   * experiment.Session.proj(..., '-session_time')) & key).fetch1()
 
-        rigpaths = get_ephys_path()
+        rigpaths = get_ephys_paths()
         h2o = sinfo['water_restriction_number']
 
         sess_time = (datetime.min + key['session_time']).time()
@@ -713,7 +713,7 @@ def _match_probe_to_ephys(h2o, dpath, dglob):
 
     jrclustv3spec = '{}_*_jrc.mat'.format(h2o)
     jrclustv4spec = '{}_*.ap_res.mat'.format(h2o)
-    ks2spec = 'spike_times.npy'
+    ks2specs = ('mean_waveforms.npy', 'spike_times.npy')  # prioritize QC output, then orig
 
     clustered_probes = {}
     for meta_file in npx_meta_files:
@@ -726,6 +726,7 @@ def _match_probe_to_ephys(h2o, dpath, dglob):
         # JRClust v4
         v4files = [((f, ), _load_jrclust_v4) for f in probe_dir.glob(jrclustv4spec)]
         # Kilosort
+        ks2spec = ks2specs[0] if len(probe_dir.rglob(ks2specs[0])) > 0 else ks2specs[1]
         ks2files = [((f.parent, probe_dir), _load_kilosort2) for f in probe_dir.rglob(ks2spec)]
 
         if len(ks2files) > 1:
@@ -1061,7 +1062,7 @@ def extend_ephys_ingest(session_key):
               * lab.Subject.proj()
               * experiment.Session.proj(..., '-session_time')) & key).fetch1()
 
-    rigpaths = get_ephys_path()
+    rigpaths = get_ephys_paths()
     h2o = sinfo['water_restriction_number']
 
     sess_time = (datetime.min + key['session_time']).time()
