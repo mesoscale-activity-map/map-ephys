@@ -603,30 +603,48 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
     valid_unit_labels = ks.data['cluster_groups'][withspike_idx]
     valid_unit_labels = np.where(valid_unit_labels == 'mua', 'multi', valid_unit_labels)  # rename 'mua' to 'multi'
 
-    # -- vmax_unit_site --
-    vmax_unit_site, unit_xpos, unit_ypos, unit_amp = [], [], [], []
-    for unit in valid_units:
-        template_idx = ks.data['spike_templates'][np.where(ks.data['spike_clusters'] == unit)[0][0]]
-        chn_templates = ks.data['templates'][template_idx, :, :]
-        site_idx = np.abs(np.abs(chn_templates).max(axis=0)).argmax()
-        vmax_unit_site.append(ks.data['channel_map'][site_idx])
-        # unit x, y
-        unit_xpos.append(ks.data['channel_positions'][site_idx, 0])
-        unit_ypos.append(ks.data['channel_positions'][site_idx, 1])
-        # unit amp
-        amps = ks.data['amplitudes'][ks.data['spike_clusters'] == unit]
-        scaled_templates = np.matmul(chn_templates, ks.data['whitening_mat_inv'])
-        best_chn_wf = scaled_templates[:, site_idx] * amps.mean()
-        unit_amp.append(best_chn_wf.max() - best_chn_wf.min())
+    # -- vmax_unit_site (peak channel), x, y, amp, waveforms, SNR --
+    metric_fp = ks_dir / 'metrics.csv'
 
-    # -- waveforms and SNR --
-    log.info('.... extracting waveforms - data dir: {}'.format(str(ks_dir)))
-    unit_wfs = extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=[-int(ks.data['templates'].shape[1]/2),
-                                                                   int(ks.data['templates'].shape[1]/2)])
-    unit_wav = np.dstack([unit_wfs[u]['mean_wf']
-                          for u in valid_units]).transpose((2, 1, 0))  # unit x channel x sample
-    unit_snr = [unit_wfs[u]['snr'][np.where(ks.data['channel_map'] == u_site)[0][0]]
-                for u, u_site in zip(valid_units, vmax_unit_site)]
+    if metric_fp.exists():
+        log.info('.... reading metrics.csv - data dir: {}'.format(str(metric_fp)))
+        metrics = pd.read_csv(metric_fp)
+        metrics = metrics[metrics.cluster_id == valid_units]
+
+        vmax_unit_site = metrics.peak_channel.values  # peak channel
+        unit_amp = metrics.amplitude.values  # amp
+        unit_snr = metrics.snr.values  # snr
+        # unit x, y
+        vmax_unit_site_idx = [np.where(ks.data['channel_map'] == peak_site)[0][0] for peak_site in vmax_unit_site]
+        unit_xpos = [ks.data['channel_positions'][site_idx, 0] for site_idx in vmax_unit_site_idx]
+        unit_ypos = [ks.data['channel_positions'][site_idx, 1] for site_idx in vmax_unit_site_idx]
+        # unit waveforms
+        unit_wav = np.load(ks_dir / 'mean_waveforms.npy')
+        unit_wav = unit_wav[valid_units, :, :]  # unit x channel x sample
+    else:
+        vmax_unit_site, unit_xpos, unit_ypos, unit_amp = [], [], [], []
+        for unit in valid_units:
+            template_idx = ks.data['spike_templates'][np.where(ks.data['spike_clusters'] == unit)[0][0]]
+            chn_templates = ks.data['templates'][template_idx, :, :]
+            site_idx = np.abs(np.abs(chn_templates).max(axis=0)).argmax()
+            vmax_unit_site.append(ks.data['channel_map'][site_idx])
+            # unit x, y
+            unit_xpos.append(ks.data['channel_positions'][site_idx, 0])
+            unit_ypos.append(ks.data['channel_positions'][site_idx, 1])
+            # unit amp
+            amps = ks.data['amplitudes'][ks.data['spike_clusters'] == unit]
+            scaled_templates = np.matmul(chn_templates, ks.data['whitening_mat_inv'])
+            best_chn_wf = scaled_templates[:, site_idx] * amps.mean()
+            unit_amp.append(best_chn_wf.max() - best_chn_wf.min())
+
+        # waveforms and SNR
+        log.info('.... extracting waveforms - data dir: {}'.format(str(ks_dir)))
+        unit_wfs = extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=[-int(ks.data['templates'].shape[1]/2),
+                                                                       int(ks.data['templates'].shape[1]/2)])
+        unit_wav = np.dstack([unit_wfs[u]['mean_wf']
+                              for u in valid_units]).transpose((2, 1, 0))  # unit x channel x sample
+        unit_snr = [unit_wfs[u]['snr'][np.where(ks.data['channel_map'] == u_site)[0][0]]
+                    for u, u_site in zip(valid_units, vmax_unit_site)]
 
     # -- trial-info from bitcode --
     trial_start = bf['sTrig'].flatten()           # start of trials
