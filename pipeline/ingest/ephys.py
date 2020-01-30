@@ -140,6 +140,8 @@ class EphysIngest(dj.Imported):
         sync_behav = data['sync_behav']
         trial_fix = data['trial_fix']
         metrics = data['metrics']  # either None or a pd.DataFrame loaded from 'metrics.csv'
+        creation_time = data['creation_time']
+        clustering_label = data['clustering_label']
 
         log.info('Starting insertions for probe: {} - Clustering method: {}'.format(probe, method))
 
@@ -320,6 +322,15 @@ class EphysIngest(dj.Imported):
                                     'avg_firing_rate': metrics[u]['firing_rate']} for u in set(units)],
                                   allow_direct_insert=True)
 
+        log.info('.. inserting clustering timestamp and label')
+
+        ephys.ClusteringLabel.insert([{**skey, 'insertion_number': probe,
+                                       'clustering_method': method, 'unit': u,
+                                       'clustering_time': creation_time,
+                                       'quality_control': bool('qc' in clustering_label),
+                                       'manual_curation': bool('curated' in clustering_label)} for u in set(units)],
+                                     allow_direct_insert = True)
+
         log.info('.. inserting file load information')
 
         self.insert1(skey, skip_duplicates=True, allow_direct_insert=True)
@@ -480,6 +491,8 @@ def _load_jrclust_v3(sinfo, fpath):
 
     trial_fix = bf['trialNum'] if 'trialNum' in bf else None
 
+    creation_time, clustering_label = extract_clustering_info(fpath.parent, 'jrclust_v3')
+
     metrics = None
 
     data = {
@@ -503,7 +516,9 @@ def _load_jrclust_v3(sinfo, fpath):
         'sync_ephys': sync_ephys,
         'sync_behav': sync_behav,
         'trial_fix': trial_fix,
-        'metrics': metrics
+        'metrics': metrics,
+        'creation_time': creation_time,
+        'clustering_label': clustering_label
     }
 
     return data
@@ -569,6 +584,8 @@ def _load_jrclust_v4(sinfo, fpath):
 
     trial_fix = bf['trialNum'] if 'trialNum' in bf else None
 
+    creation_time, clustering_label = extract_clustering_info(fpath.parent, 'jrclust_v4')
+
     metrics = None
 
     data = {
@@ -592,7 +609,9 @@ def _load_jrclust_v4(sinfo, fpath):
         'sync_ephys': sync_ephys,
         'sync_behav': sync_behav,
         'trial_fix': trial_fix,
-        'metrics': metrics
+        'metrics': metrics,
+        'creation_time': creation_time,
+        'clustering_label': clustering_label
     }
 
     return data
@@ -619,7 +638,11 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
     log.info('.... loading kilosort - ks_dir: {}'.format(str(ks_dir)))
     ks = Kilosort(ks_dir)
 
-    spike_times = ks.data['spike_times']
+    # -- Spike-times --
+    # spike_times_sec_adj > spike_times_sec > spike_times
+    spk_time_key = ('spike_times_sec_adj' if 'spike_times_sec_adj' in ks.data
+                    else 'spike_times_sec' if 'spike_times_sec' in ks.data else 'spike_times')
+    spike_times = ks.data[spk_time_key]
 
     # ---- Spike-level results ----
     # -- spike_sites --
@@ -707,6 +730,8 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
         log.debug('Kilosort2 bitcode goCue in seconds - converting to sample')
         trial_start = np.round(trial_start * hz).astype(int)
 
+    creation_time, clustering_label = extract_clustering_info(ks_dir, 'kilosort2')
+
     data = {
         'sinfo': sinfo,
         'ef_path': ks_dir,
@@ -728,7 +753,9 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
         'sync_ephys': sync_ephys,
         'sync_behav': sync_behav,
         'trial_fix': trial_fix,
-        'metrics': metrics
+        'metrics': metrics,
+        'creation_time': creation_time,
+        'clustering_label': clustering_label
     }
 
     return data
@@ -964,6 +991,8 @@ class Kilosort:
         'similar_templates.npy',
         'spike_templates.npy',
         'spike_times.npy',
+        'spike_times_sec.npy',
+        'spike_times_sec_adj.npy',
         'template_features.npy',
         'template_feature_ind.npy',
         'templates.npy',
@@ -1103,6 +1132,52 @@ def calculate_wf_snr(W):
     snr = A / (2 * np.nanstd(e.flatten()))
 
     return snr
+
+
+def extract_clustering_info(cluster_output_dir, cluster_method):
+    creation_time = None
+
+    phy_curation_indicators = ['Merge clusters', 'Split cluster', 'Change metadata_group']
+    # ---- Manual curation? ----
+    phylog_fp = cluster_output_dir / 'phy.log'
+    if phylog_fp.exists():
+        phylog = pd.read_fwf(phylog_fp)
+        phylog.columns = ['meta', 'detail']
+        curation_row = [bool(re.match('|'.join(phy_curation_indicators), s)) for s in phylog.detail]
+        curation_prefix = 'curated_' if np.any(curation_row) else ''
+        if creation_time is None and curation_prefix == 'curated_':
+            row_meta = phylog.meta[np.where(curation_row)[0].max()]
+            time_str = re.search('\d{2}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}', row_meta)
+            if time_str:
+                creation_time = datetime.strptime(time_str.group(), '%Y-%m-%d %H:%M:%S')
+            else:
+                creation_time = datetime.fromtimestamp(phylog_fp.stat().st_ctime)
+    else:
+        curation_prefix = ''
+
+    # ---- Quality control? ----
+    metric_fp = cluster_output_dir / 'metrics.csv'
+    if metric_fp.exists():
+        qc_prefix = 'qc_'
+        if creation_time is None:
+            creation_time = datetime.fromtimestamp(metric_fp.stat().st_ctime)
+    else:
+        qc_prefix = 'raw_'
+
+    if creation_time is None:
+        if cluster_method == 'jrclust_v3':
+            jr_fp = next(cluster_output_dir.glob('*jrc.mat'))
+            creation_time = datetime.fromtimestamp(jr_fp.stat().st_ctime)
+        elif cluster_method == 'jrclust_v3':
+            jr_fp = next(cluster_output_dir.glob('*.ap_res.mat'))
+            creation_time = datetime.fromtimestamp(jr_fp.stat().st_ctime)
+        elif cluster_method == 'kilosort_v2':
+            spk_fp = next(cluster_output_dir.glob('spike_times.npy'))
+            creation_time = datetime.fromtimestamp(spk_fp.stat().st_ctime)
+
+    label = ''.join([curation_prefix, qc_prefix])
+
+    return creation_time, label
 
 
 # ====== Methods for reprocessing of ephys ingestion ======

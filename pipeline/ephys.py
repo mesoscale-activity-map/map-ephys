@@ -160,6 +160,18 @@ class Unit(dj.Imported):
 
 
 @schema
+class ClusteringLabel(dj.Imported):
+    definition = """
+    -> Unit
+    ---
+    clustering_time: datetime  # time of generation of this set of clustering results 
+    quality_control: bool  # has this clustering results undergone quality control
+    manual_curation: bool  # is manual curation performed on this clustering result
+    clustering_note=null: varchar(2000)  
+    """
+
+
+@schema
 class BrainAreaDepthCriteria(dj.Manual):
     definition = """
     -> ProbeInsertion
@@ -276,20 +288,22 @@ class UnitStat(dj.Computed):
 
 @schema
 class ClusterMetric(dj.Imported):
-    definition = """
+    definition = """ 
+    # Quality metrics for sorted unit
+    # Ref: https://github.com/AllenInstitute/ecephys_spike_sorting/blob/master/ecephys_spike_sorting/modules/quality_metrics/README.md
     -> Unit
     ---
     epoch_name_quality_metrics: varchar(64)
-    presence_ratio: float
-    amplitude_cutoff: float
-    isolation_distance=null: float
-    l_ratio=null: float
-    d_prime=null: float
-    nn_hit_rate=null: float
+    presence_ratio: float  # Fraction of epoch in which spikes are present
+    amplitude_cutoff: float  # Estimate of miss rate based on amplitude histogram
+    isolation_distance=null: float  # Distance to nearest cluster in Mahalanobis space
+    l_ratio=null: float  # 
+    d_prime=null: float  # Classification accuracy based on LDA
+    nn_hit_rate=null: float  # 
     nn_miss_rate=null: float
-    silhouette_score=null: float
-    max_drift: float
-    cumulative_drift: float   
+    silhouette_score=null: float  # Standard metric for cluster overlap
+    max_drift: float  # Maximum change in spike depth throughout recording
+    cumulative_drift: float  # Cumulative change in spike depth throughout recording 
     """
 
 
