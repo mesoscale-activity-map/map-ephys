@@ -25,7 +25,7 @@ from pipeline import ephys
 from pipeline import InsertBuffer, dict_to_hash
 from pipeline.ingest import behavior as behavior_ingest
 from .. import get_schema_name
-from . import ProbeInsertionError
+from . import ProbeInsertionError, ClusterMetricError
 
 schema = dj.schema(get_schema_name('ingest_ephys'))
 
@@ -109,7 +109,7 @@ class EphysIngest(dj.Imported):
         for probe_no, (f, loader, npx_meta) in clustering_files.items():
             try:
                 self._load(loader(sinfo, *f), probe_no, npx_meta, rigpath)
-            except (ProbeInsertionError, FileNotFoundError) as e:
+            except (ProbeInsertionError, ClusterMetricError, FileNotFoundError) as e:
                 dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
                 if isinstance(e, ProbeInsertionError):
                     log.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
@@ -139,6 +139,7 @@ class EphysIngest(dj.Imported):
         sync_ephys = data['sync_ephys']
         sync_behav = data['sync_behav']
         trial_fix = data['trial_fix']
+        metrics = data['metrics']  # either None or a pd.DataFrame loaded from 'metrics.csv'
 
         log.info('Starting insertions for probe: {} - Clustering method: {}'.format(probe, method))
 
@@ -291,6 +292,30 @@ class EphysIngest(dj.Imported):
                                 'spike_times': unit_trial_spikes[i][t]})
                     if ib.flush():
                         log.debug('.... (u: {}, t: {})'.format(u, t))
+
+        if metrics is not None:
+            metrics.columns = [c.lower() for c in metrics.columns]  # lower-case col names
+            # -- confirm correct attribute names from the PD
+            required_columns = np.setdiff1d(ephys.ClusterMetric.heading.names + ephys.WaveformMetric.heading.names,
+                                            ephys.Unit.primary_key)
+            missing_columns = np.setdiff1d(required_columns, metrics.columns)
+
+            if len(missing_columns) > 0:
+                raise ClusterMetricError('Missing or misnamed column(s) in metrics.csv: {}'.format(missing_columns))
+
+            metrics = dict(metrics.T)
+
+            log.info('.. inserting cluster metrics and waveform metrics')
+            ephys.ClusterMetric.insert([{**skey,
+                                        'insertion_number': probe,
+                                         'clustering_method': method,
+                                         'unit': u, **metrics[u]} for u in set(units)],
+                                       ignore_extra_fields=True, allow_direct_insert=True)
+            ephys.WaveformMetric.insert([{**skey,
+                                          'insertion_number': probe,
+                                          'clustering_method': method,
+                                          'unit': u, **metrics[u]} for u in set(units)],
+                                        ignore_extra_fields=True, allow_direct_insert=True)
 
         log.info('.. inserting file load information')
 
@@ -452,6 +477,8 @@ def _load_jrclust_v3(sinfo, fpath):
 
     trial_fix = bf['trialNum'] if 'trialNum' in bf else None
 
+    metrics = None
+
     data = {
         'sinfo': sinfo,
         'ef_path': ef_path,
@@ -473,6 +500,7 @@ def _load_jrclust_v3(sinfo, fpath):
         'sync_ephys': sync_ephys,
         'sync_behav': sync_behav,
         'trial_fix': trial_fix,
+        'metrics': metrics
     }
 
     return data
@@ -538,6 +566,8 @@ def _load_jrclust_v4(sinfo, fpath):
 
     trial_fix = bf['trialNum'] if 'trialNum' in bf else None
 
+    metrics = None
+
     data = {
         'sinfo': sinfo,
         'ef_path': ef_path,
@@ -559,6 +589,7 @@ def _load_jrclust_v4(sinfo, fpath):
         'sync_ephys': sync_ephys,
         'sync_behav': sync_behav,
         'trial_fix': trial_fix,
+        'metrics': metrics
     }
 
     return data
@@ -606,11 +637,14 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
     # -- vmax_unit_site (peak channel), x, y, amp, waveforms, SNR --
     metric_fp = ks_dir / 'metrics.csv'
 
+    metrics = None
     if metric_fp.exists():
         log.info('.... reading metrics.csv - data dir: {}'.format(str(metric_fp)))
         metrics = pd.read_csv(metric_fp)
-        metrics = metrics[metrics.cluster_id == valid_units]
+        metrics.set_index('cluster_id', inplace=True)
+        metrics = metrics[metrics.index == valid_units]
 
+        # peak_chn, amp, snr
         vmax_unit_site = metrics.peak_channel.values  # peak channel
         unit_amp = metrics.amplitude.values  # amp
         unit_snr = metrics.snr.values  # snr
@@ -691,6 +725,7 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
         'sync_ephys': sync_ephys,
         'sync_behav': sync_behav,
         'trial_fix': trial_fix,
+        'metrics': metrics
     }
 
     return data
