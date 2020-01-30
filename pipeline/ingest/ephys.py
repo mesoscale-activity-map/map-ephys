@@ -306,16 +306,19 @@ class EphysIngest(dj.Imported):
             metrics = dict(metrics.T)
 
             log.info('.. inserting cluster metrics and waveform metrics')
-            ephys.ClusterMetric.insert([{**skey,
-                                        'insertion_number': probe,
-                                         'clustering_method': method,
-                                         'unit': u, **metrics[u]} for u in set(units)],
+            ephys.ClusterMetric.insert([{**skey, 'insertion_number': probe,
+                                         'clustering_method': method, 'unit': u, **metrics[u]}
+                                        for u in set(units)],
                                        ignore_extra_fields=True, allow_direct_insert=True)
-            ephys.WaveformMetric.insert([{**skey,
-                                          'insertion_number': probe,
-                                          'clustering_method': method,
-                                          'unit': u, **metrics[u]} for u in set(units)],
+            ephys.WaveformMetric.insert([{**skey, 'insertion_number': probe,
+                                          'clustering_method': method, 'unit': u, **metrics[u]}
+                                         for u in set(units)],
                                         ignore_extra_fields=True, allow_direct_insert=True)
+            ephys.UnitStat.insert([{**skey, 'insertion_number': probe,
+                                    'clustering_method': method, 'unit': u,
+                                    'isi_violation': metrics[u]['isi_viol'],
+                                    'avg_firing_rate': metrics[u]['firing_rate']} for u in set(units)],
+                                  allow_direct_insert=True)
 
         log.info('.. inserting file load information')
 
