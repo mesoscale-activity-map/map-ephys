@@ -70,6 +70,8 @@ class HistologyIngest(dj.Imported):
         '''
         # TODO: check the length of the `site.ont.name` variable,
         #   and only ingest the sites with an ontology associated to it.
+
+        log.info('\n======================================================')
         log.info('HistologyIngest().make(): key: {}'.format(key))
 
         self.session = (experiment.Session * lab.WaterRestriction.proj('water_restriction_number') & key).fetch1()
@@ -85,22 +87,33 @@ class HistologyIngest(dj.Imported):
         self.shanks = np.unique((lab.ElectrodeConfig.Electrode * lab.ProbeType.Electrode & self.egroup).fetch('shank'))
 
         # behavior_file
+        if not (behavior_ingest.BehaviorIngest.BehaviorFile & key):
+            log.warning('Missing BehaviorFile for session: {}. Skipping...'.format(self.session))
+            return
+
         behavior_file = (behavior_ingest.BehaviorIngest.BehaviorFile & key).fetch1('behavior_file')
         self.behavior_time_str = re.search('_(\d{6}).mat', behavior_file).groups()[0]
 
+        self.directory = None
         for rigpath in rigpaths:
             directory = pathlib.Path(rigpath, self.water, 'histology')
             if directory.exists():
                 self.directory = directory
                 break
 
+        if self.directory is None:
+            log.warning('Histology folder for animal: {} not found. Skipping...'.format(self.water))
+            return
+
         # ingest histology
+        prb_ingested, trk_ingested = False, False
+
         try:
             prb_ingested = self._load_histology_probe()
         except FileNotFoundError as e:
             log.warning('Error: {}'.format(str(e)))
             pass
-        except AssertionError as e:
+        except HistologyFileError as e:
             log.warning('Error: {}'.format(str(e)))
             return
 
@@ -110,7 +123,7 @@ class HistologyIngest(dj.Imported):
             log.warning('Error: {}'.format(str(e)))
             log.warning('Error: No histology without probe track. Skipping...')
             return
-        except AssertionError as e:
+        except HistologyFileError as e:
             log.warning('Error: {}'.format(str(e)))
             return
 
@@ -122,7 +135,7 @@ class HistologyIngest(dj.Imported):
         sz = 20   # 20um voxel size
 
         log.info('... probe {} position ingest.'.format(self.probe))
-        probefiles = self._search_histology_files('histology_file')
+        probefiles = self._search_histology_files('landmark_file')
 
         log.info('... found probe {} histology file {}'.format(
             self.probe, probefiles))
@@ -223,6 +236,7 @@ class HistologyIngest(dj.Imported):
         :param file_type, either:
         + histology_file - format: landmarks_{water_res_number}_{session_date}_{session_time}_{probe_no}_{shank_no}.csv
         + landmark_file - format landmarks_{water_res_number}_{session_date}_{session_time}_{probe_no}_{shank_no}_siteInfo.mat
+        Returns a list of files (1 file for SS, 4 for MS)
         """
 
         file_format_map = {'landmark_file': '_siteInfo.mat',
@@ -236,16 +250,20 @@ class HistologyIngest(dj.Imported):
         if len(histology_files) < 1:
             raise FileNotFoundError('Probe {} histology file {} not found!'.format(self.probe, file_format))
         elif len(histology_files) == 1:
-            assert len(self.shanks) == 1  # ensure Single-shank probe
+            if len(self.shanks) != 1:
+                raise HistologyFileError('Only 1 file found ({}) for a {}-shank probe'.format(histology_files[0].name, len(self.shanks)))
 
             match = re.search('landmarks_{}_{}_?(.*)_{}_?(.*){}'.format(
                 self.water, self.session_date_str, self.probe, file_format_map[file_type]), histology_files[0].name)
             session_time_str, _ = match.groups()
-            if self.session_date_str == '':
-                assert len(experiment.Session & {'subject_id': self.session['subject_id'],
-                                                 'session_date': self.session['session_date']}) == 1
+            if session_time_str == '':
+                same_day_sess_count = len(experiment.Session & {'subject_id': self.session['subject_id'], 'session_date': self.session['session_date']})
+                if same_day_sess_count != 1:
+                    raise HistologyFileError('{} same-day sessions found - but only 1 histology file found ({}) with no "session_time" specified'.format(same_day_sess_count, histology_files[0].name))
             else:
-                assert session_time_str == self.behavior_time_str
+                if session_time_str != self.behavior_time_str:
+                    raise HistologyFileError('Only 1 histology file found ({}) with "session_time" ({}) different from "behavior_time" ({})'.format(histology_files[0].name, session_time_str, self.behavior_time_str))
+
         else:
             file_format = 'landmarks_{}_{}_{}_{}*{}'.format(self.water, self.session_date_str,
                                                             self.behavior_time_str,
@@ -253,6 +271,15 @@ class HistologyIngest(dj.Imported):
             histology_files = list(self.directory.glob(file_format))
             if len(histology_files) < 1:
                 raise FileNotFoundError('Probe {} histology file {} not found!'.format(self.probe, file_format))
-            assert len(histology_files) == len(self.shanks)
+
+            if len(histology_files) != len(self.shanks):  # ensure 1 file per shank
+                raise HistologyFileError('{} files found for a {}-shank probe'.format(len(histology_files), len(self.shanks)))
 
         return histology_files
+
+
+class HistologyFileError(Exception):
+    """Raise when error encountered when ingesting probe insertion"""
+    def __init__(self, msg=None):
+        super().__init__('Histology File Error: \n{}'.format(msg))
+    pass
