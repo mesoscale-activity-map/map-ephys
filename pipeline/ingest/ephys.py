@@ -73,6 +73,7 @@ class EphysIngest(dj.Imported):
         Ephys .make() function
         '''
 
+        log.info('\n======================================================')
         log.info('EphysIngest().make(): key: {k}'.format(k=key))
 
         #
@@ -108,6 +109,7 @@ class EphysIngest(dj.Imported):
 
         for probe_no, (f, loader, npx_meta) in clustering_files.items():
             try:
+                log.info('------ Start loading clustering results for probe: {} ------'.format(probe_no))
                 self._load(loader(sinfo, *f), probe_no, npx_meta, rigpath)
             except (ProbeInsertionError, ClusterMetricError, FileNotFoundError) as e:
                 dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
@@ -143,7 +145,7 @@ class EphysIngest(dj.Imported):
         creation_time = data['creation_time']
         clustering_label = data['clustering_label']
 
-        log.info('Starting insertions for probe: {} - Clustering method: {}'.format(probe, method))
+        log.info('-- Start insertions for probe: {} - Clustering method: {} - Label: {}'.format(probe, method, clustering_label))
 
         assert len(trial_start) == len(trial_go)
         
@@ -245,7 +247,6 @@ class EphysIngest(dj.Imported):
                           allow_direct_insert=True) as ib:
 
             for i, u in enumerate(set(units)):
-
                 ib.insert1({**skey, **insertion_key,
                             **electrode_keys[vmax_unit_site[i]],
                             'clustering_method': method,
@@ -338,7 +339,7 @@ class EphysIngest(dj.Imported):
             {**skey, 'probe_insertion_number': probe,
              'ephys_file': str(ef_path.relative_to(rigpath))}, allow_direct_insert=True)
 
-        log.info('ephys ingest for {} complete'.format(skey))
+        log.info('-- ephys ingest for {} - probe {} complete'.format(skey, probe))
 
 
 def _gen_probe_insert(sinfo, probe, npx_meta):
@@ -699,7 +700,7 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
 
         # waveforms and SNR
         log.info('.... extracting waveforms - data dir: {}'.format(str(ks_dir)))
-        unit_wfs = extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=[-int(ks.data['templates'].shape[1]/2),
+        unit_wfs = extract_ks_waveforms(npx_dir, ks, wf_win=[-int(ks.data['templates'].shape[1]/2),
                                                                        int(ks.data['templates'].shape[1]/2)])
         unit_wav = np.dstack([unit_wfs[u]['mean_wf']
                               for u in valid_units]).transpose((2, 1, 0))  # unit x channel x sample
@@ -809,7 +810,7 @@ def _match_probe_to_ephys(h2o, dpath, dglob):
         # JRClust v4
         v4files = [((f, ), _load_jrclust_v4) for f in probe_dir.glob(jrclustv4spec)]
         # Kilosort
-        ks2spec = ks2specs[0] if len(probe_dir.rglob(ks2specs[0])) > 0 else ks2specs[1]
+        ks2spec = ks2specs[0] if len(list(probe_dir.rglob(ks2specs[0]))) > 0 else ks2specs[1]
         ks2files = [((f.parent, probe_dir), _load_kilosort2) for f in probe_dir.rglob(ks2spec)]
 
         if len(ks2files) > 1:
@@ -1066,7 +1067,7 @@ class Kilosort:
             raise FileNotFoundError('Neither cluster_groups.csv nor cluster_KSLabel.tsv found!')
 
 
-def extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=(-41, 41), bit_volts=None):
+def extract_ks_waveforms(npx_dir, ks, n_wf=5, wf_win=(-41, 41), bit_volts=None):
     """
     :param npx_dir: directory to the ap.bin and ap.meta
     :param ks: instance of Kilosort
@@ -1130,8 +1131,7 @@ def calculate_wf_snr(W):
     A = np.max(W_bar) - np.min(W_bar)
     e = W - np.tile(W_bar, (np.shape(W)[0], 1))
     snr = A / (2 * np.nanstd(e.flatten()))
-
-    return snr
+    return snr if not np.isinf(snr) else 0
 
 
 def extract_clustering_info(cluster_output_dir, cluster_method):
@@ -1141,9 +1141,9 @@ def extract_clustering_info(cluster_output_dir, cluster_method):
     # ---- Manual curation? ----
     phylog_fp = cluster_output_dir / 'phy.log'
     if phylog_fp.exists():
-        phylog = pd.read_fwf(phylog_fp)
+        phylog = pd.read_fwf(phylog_fp, colspecs=[(6, 40), (41, 250)])
         phylog.columns = ['meta', 'detail']
-        curation_row = [bool(re.match('|'.join(phy_curation_indicators), s)) for s in phylog.detail]
+        curation_row = [bool(re.match('|'.join(phy_curation_indicators), str(s))) for s in phylog.detail]
         curation_prefix = 'curated_' if np.any(curation_row) else ''
         if creation_time is None and curation_prefix == 'curated_':
             row_meta = phylog.meta[np.where(curation_row)[0].max()]
@@ -1168,10 +1168,10 @@ def extract_clustering_info(cluster_output_dir, cluster_method):
         if cluster_method == 'jrclust_v3':
             jr_fp = next(cluster_output_dir.glob('*jrc.mat'))
             creation_time = datetime.fromtimestamp(jr_fp.stat().st_ctime)
-        elif cluster_method == 'jrclust_v3':
+        elif cluster_method == 'jrclust_v4':
             jr_fp = next(cluster_output_dir.glob('*.ap_res.mat'))
             creation_time = datetime.fromtimestamp(jr_fp.stat().st_ctime)
-        elif cluster_method == 'kilosort_v2':
+        elif cluster_method == 'kilosort2':
             spk_fp = next(cluster_output_dir.glob('spike_times.npy'))
             creation_time = datetime.fromtimestamp(spk_fp.stat().st_ctime)
 
