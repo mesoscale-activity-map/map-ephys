@@ -373,12 +373,11 @@ class BehaviorIngest(dj.Imported):
                             .format(i=i))
                 continue
 
-            # HACK FIXME susu protocols
             protocol_type = gui['ProtocolType'][0]
-            # if gui['ProtocolType'][0] < 3:
-            #     log.warning('skipping trial {i}; protocol {n} < 3'
-            #                 .format(i=i, n=gui['ProtocolType'][0]))
-            #     continue
+            if gui['ProtocolType'][0] < 3:
+                log.warning('skipping trial {i}; protocol {n} < 3'
+                            .format(i=i, n=gui['ProtocolType'][0]))
+                continue
 
             #
             # Top-level 'Trial' record
