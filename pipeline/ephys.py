@@ -292,8 +292,8 @@ class ClusterMetric(dj.Imported):
     # Quality metrics for sorted unit
     # Ref: https://github.com/AllenInstitute/ecephys_spike_sorting/blob/master/ecephys_spike_sorting/modules/quality_metrics/README.md
     -> Unit
-    ---
     epoch_name_quality_metrics: varchar(64)
+    ---
     presence_ratio: float  # Fraction of epoch in which spikes are present
     amplitude_cutoff: float  # Estimate of miss rate based on amplitude histogram
     isolation_distance=null: float  # Distance to nearest cluster in Mahalanobis space
@@ -302,8 +302,8 @@ class ClusterMetric(dj.Imported):
     nn_hit_rate=null: float  # 
     nn_miss_rate=null: float
     silhouette_score=null: float  # Standard metric for cluster overlap
-    max_drift: float  # Maximum change in spike depth throughout recording
-    cumulative_drift: float  # Cumulative change in spike depth throughout recording 
+    max_drift=null: float  # Maximum change in spike depth throughout recording
+    cumulative_drift=null: float  # Cumulative change in spike depth throughout recording 
     """
 
 
@@ -311,14 +311,14 @@ class ClusterMetric(dj.Imported):
 class WaveformMetric(dj.Imported):
     definition = """
     -> Unit
-    ---
     epoch_name_waveform_metrics: varchar(64)
+    ---
     duration: float
     halfwidth: float
     pt_ratio: float
-    repolarization_slope: float
-    recovery_slope: float
-    spread: float
+    repolarization_slope=null: float
+    recovery_slope=null: float
+    spread=null: float
     velocity_above=null: float
     velocity_below=null: float   
     """
