@@ -373,12 +373,11 @@ class BehaviorIngest(dj.Imported):
                             .format(i=i))
                 continue
 
-            # HACK FIXME susu protocols
             protocol_type = gui['ProtocolType'][0]
-            # if gui['ProtocolType'][0] < 3:
-            #     log.warning('skipping trial {i}; protocol {n} < 3'
-            #                 .format(i=i, n=gui['ProtocolType'][0]))
-            #     continue
+            if gui['ProtocolType'][0] < 3:
+                log.warning('skipping trial {i}; protocol {n} < 3'
+                            .format(i=i, n=gui['ProtocolType'][0]))
+                continue
 
             #
             # Top-level 'Trial' record
@@ -467,7 +466,7 @@ class BehaviorIngest(dj.Imported):
 
             bkey['outcome'] = outcome
 
-            # Determine free/autowater
+            # Determine free/autowater (Autowater 1 == enabled, 2 == disabled)
             bkey['auto_water'] = True if gui['Autowater'][0] == 1 else False
             bkey['free_water'] = t.free
 
