@@ -466,7 +466,7 @@ class BehaviorIngest(dj.Imported):
 
             bkey['outcome'] = outcome
 
-            # Determine free/autowater
+            # Determine free/autowater (Autowater 2 == enabled, 1 == disabled)
             bkey['auto_water'] = True if gui['Autowater'][0] == 2 else False
             bkey['free_water'] = t.free
 
