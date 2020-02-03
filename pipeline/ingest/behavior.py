@@ -226,7 +226,7 @@ class BehaviorIngest(dj.Imported):
                 h2o=h2o, d=ymd))
 
         trial = namedtuple(  # simple structure to track per-trial vars
-            'trial', ('ttype', 'stim', 'settings', 'state_times',
+            'trial', ('ttype', 'stim', 'free', 'settings', 'state_times',
                       'state_names', 'state_data', 'event_data',
                       'event_times', 'trial_start'))
 
@@ -265,6 +265,7 @@ class BehaviorIngest(dj.Imported):
                      AllStateNames, AllStateData, AllEventData,
                      AllEventTimestamps, AllTrialStarts, AllTrialStarts))))
 
+        # AllStimTrials optional special case
         if 'StimTrials' in SessionData.dtype.fields:
             log.debug('StimTrials detected in session - will include')
             AllStimTrials = SessionData['StimTrials'][0]
@@ -274,9 +275,20 @@ class BehaviorIngest(dj.Imported):
             AllStimTrials = np.array([
                 None for _ in enumerate(range(AllStateTimestamps.shape[0]))])
 
-        trials = list(zip(AllTrialTypes, AllStimTrials, AllTrialSettings,
-                          AllStateTimestamps, AllStateNames, AllStateData,
-                          AllEventData, AllEventTimestamps, AllTrialStarts))
+        # AllFreeTrials optional special case
+        if 'FreeTrials' in SessionData.dtype.fields:
+            log.debug('FreeTrials detected in session - will include')
+            AllFreeTrials = SessionData['FreeTrials'][0]
+            assert(AllFreeTrials.shape[0] == AllStateTimestamps.shape[0])
+        else:
+            log.debug('FreeTrials not detected in session - synthesizing')
+            AllFreeTrials = np.zeros(AllStateTimestamps.shape[0],
+                                     dtype=np.uint8)
+
+        trials = list(zip(AllTrialTypes, AllStimTrials, AllFreeTrials,
+                          AllTrialSettings, AllStateTimestamps, AllStateNames,
+                          AllStateData, AllEventData, AllEventTimestamps,
+                          AllTrialStarts))
 
         if not trials:
             log.warning('skipping date {d}, no valid files'.format(d=date))
@@ -329,25 +341,12 @@ class BehaviorIngest(dj.Imported):
             #
             # names (seem to be? are?):
             #
-            # Trigtrialstart
-            # PreSamplePeriod
-            # SamplePeriod
-            # DelayPeriod
-            # EarlyLickDelay
-            # EarlyLickSample
-            # ResponseCue
-            # GiveLeftDrop
-            # GiveRightDrop
-            # GiveLeftDropShort
-            # GiveRightDropShort
-            # AnswerPeriod
-            # Reward
-            # RewardConsumption
-            # NoResponse
-            # TimeOut
-            # StopLicking
-            # StopLickingReturn
-            # TrialEnd
+            # Trigtrialstart, PreSamplePeriod, SamplePeriod, DelayPeriod
+            # EarlyLickDelay, EarlyLickSample, ResponseCue, GiveLeftDrop
+            # GiveRightDrop, GiveLeftDropShort, GiveRightDropShort
+            # AnswerPeriod, Reward, RewardConsumption, NoResponse
+            # TimeOut, StopLicking, StopLickingReturn, TrialEnd
+            #
 
             states = {k: (v+1) for v, k in enumerate(t.state_names)}
             required_states = ('PreSamplePeriod', 'SamplePeriod',
@@ -466,6 +465,11 @@ class BehaviorIngest(dj.Imported):
                 outcome = 'ignore'
 
             bkey['outcome'] = outcome
+
+            # Determine free/autowater (Autowater 1 == enabled, 2 == disabled)
+            bkey['auto_water'] = True if gui['Autowater'][0] == 1 else False
+            bkey['free_water'] = t.free
+
             rows['behavior_trial'].append(bkey)
 
             #
@@ -648,7 +652,7 @@ class BehaviorIngest(dj.Imported):
             #
 
             if t.stim:
-                log.info('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
+                log.debug('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
                 rows['photostim_trial'].append(tkey)
                 delay_period_idx = np.where(
                     t.state_data == states['DelayPeriod'])[0][0]
