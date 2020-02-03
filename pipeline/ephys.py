@@ -288,13 +288,13 @@ class UnitStat(dj.Computed):
                 if isis.size > 0:
                     # remove duplicated spikes
                     processed_trial_spikes = []
-                    for spike_train in processed_trial_spikes:
+                    for spike_train in trial_spikes:
                         duplicate_spikes = np.where(np.diff(spike_train) <= self.min_isi)[0]
                         processed_trial_spikes.append(np.delete(spike_train, duplicate_spikes + 1))
 
                     num_spikes = len(np.hstack(processed_trial_spikes))
-                    avg_firing_rate = num_spikes / sum(tr_stop - tr_start)
-                    
+                    avg_firing_rate = num_spikes / float(sum(tr_stop - tr_start))
+
                     num_violations = sum(isis < self.isi_violation_thresh)
                     violation_time = 2 * num_spikes * (self.isi_threshold - self.min_isi)
                     violation_rate = num_violations / violation_time
