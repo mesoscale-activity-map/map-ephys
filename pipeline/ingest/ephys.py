@@ -151,7 +151,7 @@ class EphysIngest(dj.Imported):
         
         # create probe insertion records
         try:
-            insertion_key = _gen_probe_insert(sinfo, probe, npx_meta)
+            insertion_key, e_config_key = _gen_probe_insert(sinfo, probe, npx_meta)
         except (NotImplementedError, dj.DataJointError) as e:
             raise ProbeInsertionError(str(e))
 
@@ -238,7 +238,16 @@ class EphysIngest(dj.Imported):
             [[trial_spikes[t][np.where(trial_units[t] == u)]
               for t in range(len(trials))] for u in set(units)])
 
-        electrode_keys = {c['electrode']: c for c in (lab.ElectrodeConfig.Electrode & insertion_key).fetch('KEY')}
+        q_electrodes = lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode & e_config_key
+        site2electrode_map = {}
+        print(q_electrodes)
+        print(np.unique(vmax_unit_site))
+        for recorded_site in np.unique(vmax_unit_site):
+            shank, shank_col, shank_row, _ = npx_meta.shankmap['data'][recorded_site - 1]  # subtract 1 because npx_meta shankmap is 0-indexed
+            site2electrode_map[recorded_site] = (q_electrodes
+                                                 & {'shank': shank + 1,  # this is a 1-indexed pipeline
+                                                    'shank_col': shank_col + 1,
+                                                    'shank_row': shank_row + 1}).fetch1('KEY')
 
         # insert Unit
         log.info('.. ephys.Unit')
@@ -248,7 +257,7 @@ class EphysIngest(dj.Imported):
 
             for i, u in enumerate(set(units)):
                 ib.insert1({**skey, **insertion_key,
-                            **electrode_keys[vmax_unit_site[i]],
+                            **site2electrode_map[vmax_unit_site[i]],
                             'clustering_method': method,
                             'unit': u,
                             'unit_uid': u,
@@ -355,7 +364,7 @@ def _gen_probe_insert(sinfo, probe, npx_meta):
 
     part_no = npx_meta.probe_SN
 
-    e_config = _gen_electrode_config(npx_meta)
+    e_config_key = _gen_electrode_config(npx_meta)
 
     # ------ ProbeInsertion ------
     insertion_key = {'subject_id': sinfo['subject_id'],
@@ -365,13 +374,13 @@ def _gen_probe_insert(sinfo, probe, npx_meta):
     # add probe insertion
     log.info('.. creating probe insertion')
 
-    lab.Probe.insert1({'probe': part_no, 'probe_type': e_config['probe_type']}, skip_duplicates=True)
+    lab.Probe.insert1({'probe': part_no, 'probe_type': e_config_key['probe_type']}, skip_duplicates=True)
 
-    ephys.ProbeInsertion.insert1({**insertion_key,  **e_config, 'probe': part_no})
+    ephys.ProbeInsertion.insert1({**insertion_key,  **e_config_key, 'probe': part_no})
 
     ephys.ProbeInsertion.RecordingSystemSetup.insert1({**insertion_key, 'sampling_rate': npx_meta.meta['imSampRate']})
 
-    return insertion_key
+    return insertion_key, e_config_key
 
 
 def _gen_electrode_config(npx_meta):
@@ -384,7 +393,9 @@ def _gen_electrode_config(npx_meta):
         probe_type = {'probe_type': npx_meta.probe_model}
         q_electrodes = lab.ProbeType.Electrode & probe_type
         for shank, shank_col, shank_row, is_used in npx_meta.shankmap['data']:
-            electrode = (q_electrodes & {'shank': shank, 'shank_col': shank_col, 'shank_row': shank_row}).fetch1('KEY')
+            electrode = (q_electrodes & {'shank': shank + 1,  # shank is 1-indexed in this pipeline
+                                         'shank_col': shank_col + 1,
+                                         'shank_row': shank_row + 1}).fetch1('KEY')
             eg_members.append({**electrode, 'is_used': is_used, 'electrode_group': 0})
     else:
         raise NotImplementedError('Processing for neuropixels probe model {} not yet implemented'.format(
