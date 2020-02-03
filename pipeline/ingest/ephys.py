@@ -240,8 +240,6 @@ class EphysIngest(dj.Imported):
 
         q_electrodes = lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode & e_config_key
         site2electrode_map = {}
-        print(q_electrodes)
-        print(np.unique(vmax_unit_site))
         for recorded_site in np.unique(vmax_unit_site):
             shank, shank_col, shank_row, _ = npx_meta.shankmap['data'][recorded_site - 1]  # subtract 1 because npx_meta shankmap is 0-indexed
             site2electrode_map[recorded_site] = (q_electrodes
@@ -1078,7 +1076,7 @@ class Kilosort:
             raise FileNotFoundError('Neither cluster_groups.csv nor cluster_KSLabel.tsv found!')
 
 
-def extract_ks_waveforms(npx_dir, ks, n_wf=5, wf_win=(-41, 41), bit_volts=None):
+def extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=(-41, 41), bit_volts=None):
     """
     :param npx_dir: directory to the ap.bin and ap.meta
     :param ks: instance of Kilosort
