@@ -269,20 +269,42 @@ class UnitStat(dj.Computed):
     avg_firing_rate=null: float  # (Hz)
     """
 
-    isi_violation_thresh = 0.002  # violation threshold of 2 ms
+    isi_threshold = 0.002  # threshold for isi violation of 2 ms
+    min_isi = 0  # threshold for duplicate spikes
 
     # NOTE - this key_source logic relies on ALL TrialSpikes ingest all at once in a transaction
     key_source = ProbeInsertion & Unit.TrialSpikes
 
     def make(self, key):
+        # Following isi_violations() function
+        # Ref: https://github.com/AllenInstitute/ecephys_spike_sorting/blob/master/ecephys_spike_sorting/modules/quality_metrics/metrics.py
         def make_insert():
             for unit in (Unit & key).fetch('KEY'):
                 trial_spikes, tr_start, tr_stop = (Unit.TrialSpikes * experiment.SessionTrial & unit).fetch(
                     'spike_times', 'start_time', 'stop_time')
-                isi = np.hstack(np.diff(spks) for spks in trial_spikes)
-                yield {**unit,
-                       'isi_violation': sum((isi < self.isi_violation_thresh).astype(int)) / len(isi) if isi.size else None,
-                       'avg_firing_rate': len(np.hstack(trial_spikes)) / sum(tr_stop - tr_start) if isi.size else None}
+
+                isis = np.hstack(np.diff(spks) for spks in trial_spikes)
+
+                if isis.size > 0:
+                    # remove duplicated spikes
+                    processed_trial_spikes = []
+                    for spike_train in processed_trial_spikes:
+                        duplicate_spikes = np.where(np.diff(spike_train) <= self.min_isi)[0]
+                        processed_trial_spikes.append(np.delete(spike_train, duplicate_spikes + 1))
+
+                    num_spikes = len(np.hstack(processed_trial_spikes))
+                    avg_firing_rate = num_spikes / sum(tr_stop - tr_start)
+                    
+                    num_violations = sum(isis < self.isi_violation_thresh)
+                    violation_time = 2 * num_spikes * (self.isi_threshold - self.min_isi)
+                    violation_rate = num_violations / violation_time
+                    fpRate = violation_rate / avg_firing_rate
+
+                    yield {**unit, 'isi_violation': fpRate, 'avg_firing_rate': avg_firing_rate}
+
+                else:
+                    yield {**unit, 'isi_violation': None, 'avg_firing_rate': None}
+
         self.insert(make_insert())
 
 
