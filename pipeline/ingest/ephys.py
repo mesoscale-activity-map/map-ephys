@@ -457,7 +457,6 @@ def _load_jrclust_v3(sinfo, fpath):
             if k in experiment.Session.primary_key}
 
     ef_path = fpath
-    bf_path = pathlib.Path(fpath.parent, '{}_bitcode.mat'.format(h2o))
 
     log.info('.. jrclust v3 data load:')
     log.info('.... sinfo: {}'.format(sinfo))
@@ -466,8 +465,11 @@ def _load_jrclust_v3(sinfo, fpath):
     log.info('.... loading ef_path: {}'.format(str(ef_path)))
     ef = h5py.File(str(ef_path), mode='r')  # ephys file
 
-    log.info('.... loading bf_path: {}'.format(str(bf_path)))
-    bf = spio.loadmat(bf_path)  # bitcode file
+    # -- trial-info from bitcode --
+    try:
+        sync_behav, sync_ephys, trial_fix, trial_go, trial_start = read_bitcode(fpath.parent, h2o, skey)
+    except FileNotFoundError as e:
+        raise e
 
     # extract unit data
 
@@ -490,16 +492,6 @@ def _load_jrclust_v3(sinfo, fpath):
 
     vmax_unit_site = ef['S_clu']['viSite_clu']      # max amplitude site
     vmax_unit_site = np.array(vmax_unit_site[:].flatten(), dtype=np.int64)
-
-    trial_start = bf['sTrig'].flatten()           # start of trials
-    trial_go = bf['goCue'].flatten()                # go cues
-
-    sync_ephys = bf['bitCodeS'].flatten()           # ephys sync codes
-    sync_behav = (experiment.TrialNote()            # behavior sync codes
-                  & {**skey, 'trial_note_type': 'bitcode'}).fetch(
-                      'trial_note', order_by='trial')
-
-    trial_fix = bf['trialNum'] if 'trialNum' in bf else None
 
     creation_time, clustering_label = extract_clustering_info(fpath.parent, 'jrclust_v3')
 
@@ -557,14 +549,14 @@ def _load_jrclust_v4(sinfo, fpath):
     log.info('.... loading ef_path: {}'.format(str(ef_path)))
     ef = h5py.File(str(ef_path), mode='r')  # ephys file
 
-    # bitcode path (ex: 'SC022_030319_Imec3_bitcode.mat')
-    bf_path = list(fpath.parent.glob(
-        '{}_*bitcode.mat'.format(h2o)))[0]
-    log.info('.... loading bf_path: {}'.format(str(bf_path)))
-    bf = spio.loadmat(str(bf_path))
+    # -- trial-info from bitcode --
+    try:
+        sync_behav, sync_ephys, trial_fix, trial_go, trial_start = read_bitcode(fpath.parent, h2o, skey)
+    except FileNotFoundError as e:
+        raise e
 
     # extract unit data
-    hz = bf['SR'][0][0] if 'SR' in bf else None    # sampling rate
+    hz = None                                       # sampling rate  (N/A from jrclustv4, use from npx_meta)
 
     spikes = ef['spikeTimes'][0]                    # spikes times
     spike_sites = ef['spikeSites'][0]               # spike electrode
@@ -583,16 +575,6 @@ def _load_jrclust_v4(sinfo, fpath):
 
     vmax_unit_site = ef['clusterSites']             # max amplitude site
     vmax_unit_site = np.array(vmax_unit_site[:].flatten(), dtype=np.int64)
-
-    trial_start = bf['sTrig'].flatten()             # trial start
-    trial_go = bf['goCue'].flatten()                 # trial go cues
-
-    sync_ephys = bf['bitCodeS']                     # ephys sync codes
-    sync_behav = (experiment.TrialNote()            # behavior sync codes
-                  & {**skey, 'trial_note_type': 'bitcode'}).fetch(
-                      'trial_note', order_by='trial')
-
-    trial_fix = bf['trialNum'] if 'trialNum' in bf else None
 
     creation_time, clustering_label = extract_clustering_info(fpath.parent, 'jrclust_v4')
 
@@ -633,16 +615,14 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
     skey = {k: v for k, v in sinfo.items()
             if k in experiment.Session.primary_key}
 
-    try:
-        bf_path = next(pathlib.Path(npx_dir).glob('*{}*_bitcode.mat'.format(h2o)))
-    except StopIteration:
-        raise FileNotFoundError('Not bitcode for {} found in {}'.format(h2o, ks_dir))
-
     log.info('.. kilosort v2 data load:')
     log.info('.... sinfo: {}'.format(sinfo))
 
-    log.info('.... loading bf_path: {}'.format(str(bf_path)))
-    bf = spio.loadmat(bf_path)  # bitcode file
+    # -- trial-info from bitcode --
+    try:
+        sync_behav, sync_ephys, trial_fix, trial_go, trial_start = read_bitcode(npx_dir, h2o, skey)
+    except FileNotFoundError as e:
+        raise e
 
     # ---- Read Kilosort results ----
     log.info('.... loading kilosort - ks_dir: {}'.format(str(ks_dir)))
@@ -715,17 +695,6 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
                               for u in valid_units]).transpose((2, 1, 0))  # unit x channel x sample
         unit_snr = [unit_wfs[u]['snr'][np.where(ks.data['channel_map'] == u_site)[0][0]]
                     for u, u_site in zip(valid_units, vmax_unit_site)]
-
-    # -- trial-info from bitcode --
-    trial_start = bf['sTrig'].flatten()           # start of trials
-    trial_go = bf['goCue'].flatten()                # go cues
-
-    sync_ephys = bf['bitCodeS'].flatten()           # ephys sync codes
-    sync_behav = (experiment.TrialNote()            # behavior sync codes
-                  & {**skey, 'trial_note_type': 'bitcode'}).fetch(
-                      'trial_note', order_by='trial')
-
-    trial_fix = bf['trialNum'] if 'trialNum' in bf else None
 
     # -- Ensuring `spike_times`, `trial_start` and `trial_go` are in `sample` and not `second` --
     # There is still a risk of times in `second` but with 0 decimal values and thus would be detected as `sample` (very very unlikely)
@@ -836,6 +805,45 @@ def _match_probe_to_ephys(h2o, dpath, dglob):
         clustered_probes[probe_number] = (fp, loader, NeuropixelsMeta(meta_file))
 
     return clustered_probes
+
+
+def read_bitcode(bitcode_dir, h2o, skey):
+    """
+    Load bitcode file from specified dir - example bitcode format: e.g. 'SC022_030319_Imec3_bitcode.mat'
+    :return: sync_behav, sync_ephys, trial_fix, trial_go, trial_start
+    """
+    bitcode_dir = pathlib.Path(bitcode_dir)
+    try:
+        bf_path = next(bitcode_dir.glob('{}_*bitcode.mat'.format(h2o)))
+    except StopIteration:
+        raise FileNotFoundError('No bitcode for {} found in {}'.format(h2o, bitcode_dir))
+
+    log.info('.... loading bitcode file: {}'.format(str(bf_path)))
+
+    bf = spio.loadmat(str(bf_path))
+
+    trial_start = bf['sTrig'].flatten()  # trial start
+    trial_go = bf['goCue'].flatten()  # trial go cues
+
+    # check if there are `FreeWater` trials (i.e. no trial_go), if so, set those with trial_go value of NaN
+    if len(trial_go) < len(trial_start):
+        assert len(experiment.BehaviorTrial & skey & 'free_water = 0') == len(trial_go)
+        assert len(experiment.BehaviorTrial & skey) == len(trial_start)
+
+        all_tr = (experiment.BehaviorTrial & skey).fetch('trial', order_by='trial')
+        no_free_water_tr = (experiment.BehaviorTrial & skey & 'free_water = 0').fetch('trial', order_by='trial')
+        is_go_trial = np.in1d(all_tr, no_free_water_tr)
+
+        trial_go_full = np.full_like(trial_start, np.nan)
+        trial_go_full[is_go_trial] = trial_go
+        trial_go = trial_go_full
+
+    sync_ephys = bf['bitCodeS']  # ephys sync codes
+    sync_behav = (experiment.TrialNote()  # behavior sync codes
+                  & {**skey, 'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial')
+    trial_fix = bf['trialNum'] if 'trialNum' in bf else None
+
+    return sync_behav, sync_ephys, trial_fix, trial_go, trial_start
 
 
 def handle_string(value):
@@ -1076,7 +1084,7 @@ class Kilosort:
             raise FileNotFoundError('Neither cluster_groups.csv nor cluster_KSLabel.tsv found!')
 
 
-def extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=(-41, 41), bit_volts=None):
+def extract_ks_waveforms(npx_dir, ks, n_wf=5, wf_win=(-41, 41), bit_volts=None):
     """
     :param npx_dir: directory to the ap.bin and ap.meta
     :param ks: instance of Kilosort

@@ -62,7 +62,9 @@ class TrialCondition(dj.Lookup):
                     'task': 'audio delay',
                     'task_protocol': 1,
                     'outcome': 'hit',
-                    'early_lick': 'no early'}
+                    'early_lick': 'no early',
+                    'auto_water': 0,
+                    'free_water': 0}
             },
             {
                 'trial_condition_name': 'good_noearlylick_left_hit',
@@ -72,6 +74,8 @@ class TrialCondition(dj.Lookup):
                     'task_protocol': 1,
                     'outcome': 'hit',
                     'early_lick': 'no early',
+                    'auto_water': 0,
+                    'free_water': 0,
                     'trial_instruction': 'left'}
             },
             {
@@ -82,6 +86,8 @@ class TrialCondition(dj.Lookup):
                     'task_protocol': 1,
                     'outcome': 'hit',
                     'early_lick': 'no early',
+                    'auto_water': 0,
+                    'free_water': 0,
                     'trial_instruction': 'right'}
             },
             {
@@ -92,6 +98,8 @@ class TrialCondition(dj.Lookup):
                     'task_protocol': 1,
                     'outcome': 'miss',
                     'early_lick': 'no early',
+                    'auto_water': 0,
+                    'free_water': 0,
                     'trial_instruction': 'left'}
             },
             {
@@ -102,6 +110,8 @@ class TrialCondition(dj.Lookup):
                     'task_protocol': 1,
                     'outcome': 'miss',
                     'early_lick': 'no early',
+                    'auto_water': 0,
+                    'free_water': 0,
                     'trial_instruction': 'right'}
             },
             {
@@ -111,7 +121,9 @@ class TrialCondition(dj.Lookup):
                     '_outcome': 'ignore',
                     'task': 'audio delay',
                     'task_protocol': 1,
-                    'early_lick': 'no early'}
+                    'early_lick': 'no early',
+                    'auto_water': 0,
+                    'free_water': 0}
             },
             {
                 'trial_condition_name': 'all_noearlylick_nostim_left',
@@ -121,6 +133,8 @@ class TrialCondition(dj.Lookup):
                     'task': 'audio delay',
                     'task_protocol': 1,
                     'early_lick': 'no early',
+                    'auto_water': 0,
+                    'free_water': 0,
                     'trial_instruction': 'left'}
             },
             {
@@ -131,6 +145,8 @@ class TrialCondition(dj.Lookup):
                     'task': 'audio delay',
                     'task_protocol': 1,
                     'early_lick': 'no early',
+                    'auto_water': 0,
+                    'free_water': 0,
                     'trial_instruction': 'right'}
             }
         ]
@@ -148,6 +164,8 @@ class TrialCondition(dj.Lookup):
                                     'task': 'audio delay',
                                     'task_protocol': 1,
                                     'early_lick': 'no early',
+                                    'auto_water': 0,
+                                    'free_water': 0,
                                     'stim_laterality': hemi,
                                     'stim_brain_area': brain_area},
                                  **({'trial_instruction': instruction} if instruction else {})}

@@ -269,20 +269,42 @@ class UnitStat(dj.Computed):
     avg_firing_rate=null: float  # (Hz)
     """
 
-    isi_violation_thresh = 0.002  # violation threshold of 2 ms
+    isi_threshold = 0.002  # threshold for isi violation of 2 ms
+    min_isi = 0  # threshold for duplicate spikes
 
     # NOTE - this key_source logic relies on ALL TrialSpikes ingest all at once in a transaction
     key_source = ProbeInsertion & Unit.TrialSpikes
 
     def make(self, key):
+        # Following isi_violations() function
+        # Ref: https://github.com/AllenInstitute/ecephys_spike_sorting/blob/master/ecephys_spike_sorting/modules/quality_metrics/metrics.py
         def make_insert():
             for unit in (Unit & key).fetch('KEY'):
                 trial_spikes, tr_start, tr_stop = (Unit.TrialSpikes * experiment.SessionTrial & unit).fetch(
                     'spike_times', 'start_time', 'stop_time')
-                isi = np.hstack(np.diff(spks) for spks in trial_spikes)
-                yield {**unit,
-                       'isi_violation': sum((isi < self.isi_violation_thresh).astype(int)) / len(isi) if isi.size else None,
-                       'avg_firing_rate': len(np.hstack(trial_spikes)) / sum(tr_stop - tr_start) if isi.size else None}
+
+                isis = np.hstack(np.diff(spks) for spks in trial_spikes)
+
+                if isis.size > 0:
+                    # remove duplicated spikes
+                    processed_trial_spikes = []
+                    for spike_train in trial_spikes:
+                        duplicate_spikes = np.where(np.diff(spike_train) <= self.min_isi)[0]
+                        processed_trial_spikes.append(np.delete(spike_train, duplicate_spikes + 1))
+
+                    num_spikes = len(np.hstack(processed_trial_spikes))
+                    avg_firing_rate = num_spikes / float(sum(tr_stop - tr_start))
+
+                    num_violations = sum(isis < self.isi_violation_thresh)
+                    violation_time = 2 * num_spikes * (self.isi_threshold - self.min_isi)
+                    violation_rate = num_violations / violation_time
+                    fpRate = violation_rate / avg_firing_rate
+
+                    yield {**unit, 'isi_violation': fpRate, 'avg_firing_rate': avg_firing_rate}
+
+                else:
+                    yield {**unit, 'isi_violation': None, 'avg_firing_rate': None}
+
         self.insert(make_insert())
 
 
@@ -292,8 +314,8 @@ class ClusterMetric(dj.Imported):
     # Quality metrics for sorted unit
     # Ref: https://github.com/AllenInstitute/ecephys_spike_sorting/blob/master/ecephys_spike_sorting/modules/quality_metrics/README.md
     -> Unit
-    ---
     epoch_name_quality_metrics: varchar(64)
+    ---
     presence_ratio: float  # Fraction of epoch in which spikes are present
     amplitude_cutoff: float  # Estimate of miss rate based on amplitude histogram
     isolation_distance=null: float  # Distance to nearest cluster in Mahalanobis space
@@ -302,8 +324,8 @@ class ClusterMetric(dj.Imported):
     nn_hit_rate=null: float  # 
     nn_miss_rate=null: float
     silhouette_score=null: float  # Standard metric for cluster overlap
-    max_drift: float  # Maximum change in spike depth throughout recording
-    cumulative_drift: float  # Cumulative change in spike depth throughout recording 
+    max_drift=null: float  # Maximum change in spike depth throughout recording
+    cumulative_drift=null: float  # Cumulative change in spike depth throughout recording 
     """
 
 
@@ -311,14 +333,14 @@ class ClusterMetric(dj.Imported):
 class WaveformMetric(dj.Imported):
     definition = """
     -> Unit
-    ---
     epoch_name_waveform_metrics: varchar(64)
+    ---
     duration: float
     halfwidth: float
     pt_ratio: float
-    repolarization_slope: float
-    recovery_slope: float
-    spread: float
+    repolarization_slope=null: float
+    recovery_slope=null: float
+    spread=null: float
     velocity_above=null: float
     velocity_below=null: float   
     """
