@@ -282,9 +282,9 @@ class ProbeType(dj.Lookup):
             npx_electrodes = []
             for shank_no in range(shank_count):
                 npx_electrodes.extend([{'electrode': (site_count * shank_no) + e_id + 1,  # electrode number is 1-based index
-                                        'shank': shank_no,
-                                        'shank_col': c_id,
-                                        'shank_row': r_id,
+                                        'shank': shank_no + 1,  # shank number is 1-based index
+                                        'shank_col': c_id + 1,  # column number is 1-based index
+                                        'shank_row': r_id + 1,  # row number is 1-based index
                                         'x_coord': x + (shank_no * shank_spacing),
                                         'y_coord': y,
                                         'z_coord': 0} for e_id, (c_id, r_id, x, y) in enumerate(
