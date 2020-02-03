@@ -569,26 +569,6 @@ def mockdata():
             'wr_start_weight': 21.0},
             skip_duplicates=True
         )
-
-        # Subject 442571 / SC022
-        lab.Subject().insert1({
-            'subject_id': 442571,
-            'username': 'susu',
-            'cage_number': 442571,
-            'date_of_birth': '2018-10-29',
-            'sex': 'M',
-            'animal_source': 'Jackson labs'},
-            skip_duplicates=True
-        )
-        lab.WaterRestriction().insert1({
-            'subject_id': 442571,
-            'water_restriction_number': 'SC022',
-            'cage_number': 442571,
-            'wr_start_date': '2019-01-02',
-            'wr_start_weight': 26.5},
-            skip_duplicates=True
-        )
-
         # Subject 440959 / SC011
         lab.Subject().insert1({
             'subject_id': 440959,
@@ -607,6 +587,43 @@ def mockdata():
             'wr_start_weight': 22.8},
             skip_duplicates=True
         )
+        # Subject 442571 / SC022
+        lab.Subject().insert1({
+            'subject_id': 442571,
+            'username': 'susu',
+            'cage_number': 442571,
+            'date_of_birth': '2018-10-29',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates=True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 442571,
+            'water_restriction_number': 'SC022',
+            'cage_number': 442571,
+            'wr_start_date': '2019-01-02',
+            'wr_start_weight': 26.5},
+            skip_duplicates=True
+        )
+        # Subject 460432 / SC032
+        lab.Subject().insert1({
+            'subject_id': 460432,
+            'username': 'susu',
+            'cage_number': 173167,
+            'date_of_birth': '2019-07-15',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates=True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 460432,
+            'water_restriction_number': 'SC032',
+            'cage_number': 173167,
+            'wr_start_date': '2019-09-20',
+            'wr_start_weight': 22.8},
+            skip_duplicates=True
+        )
+
         # Rig
         lab.Rig().insert1({
             'rig': 'TRig1',
