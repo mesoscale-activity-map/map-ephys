@@ -25,7 +25,7 @@ from pipeline import ephys
 from pipeline import InsertBuffer, dict_to_hash
 from pipeline.ingest import behavior as behavior_ingest
 from .. import get_schema_name
-from . import ProbeInsertionError
+from . import ProbeInsertionError, ClusterMetricError
 
 schema = dj.schema(get_schema_name('ingest_ephys'))
 
@@ -34,9 +34,9 @@ log = logging.getLogger(__name__)
 npx_bit_volts = {'neuropixels 1.0': 2.34375, 'neuropixels 2.0': 0.763}  # uV per bit scaling factor for neuropixels probes
 
 
-def get_ephys_path():
+def get_ephys_paths():
     """
-    retrieve behavior rig paths from dj.config
+    retrieve ephys paths from dj.config
     config should be in dj.config of the format:
 
       dj.config = {
@@ -73,6 +73,7 @@ class EphysIngest(dj.Imported):
         Ephys .make() function
         '''
 
+        log.info('\n======================================================')
         log.info('EphysIngest().make(): key: {k}'.format(k=key))
 
         #
@@ -83,7 +84,7 @@ class EphysIngest(dj.Imported):
                   * lab.Subject.proj()
                   * experiment.Session.proj(..., '-session_time')) & key).fetch1()
 
-        rigpaths = get_ephys_path()
+        rigpaths = get_ephys_paths()
         h2o = sinfo['water_restriction_number']
 
         sess_time = (datetime.min + key['session_time']).time()
@@ -108,8 +109,9 @@ class EphysIngest(dj.Imported):
 
         for probe_no, (f, loader, npx_meta) in clustering_files.items():
             try:
-                self._load(loader(sinfo, f), probe_no, npx_meta, rigpath)
-            except (ProbeInsertionError, FileNotFoundError) as e:
+                log.info('------ Start loading clustering results for probe: {} ------'.format(probe_no))
+                self._load(loader(sinfo, *f), probe_no, npx_meta, rigpath)
+            except (ProbeInsertionError, ClusterMetricError, FileNotFoundError) as e:
                 dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
                 if isinstance(e, ProbeInsertionError):
                     log.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
@@ -139,18 +141,28 @@ class EphysIngest(dj.Imported):
         sync_ephys = data['sync_ephys']
         sync_behav = data['sync_behav']
         trial_fix = data['trial_fix']
+        metrics = data['metrics']  # either None or a pd.DataFrame loaded from 'metrics.csv'
+        creation_time = data['creation_time']
+        clustering_label = data['clustering_label']
 
-        log.info('Starting insertions for probe: {} - Clustering method: {}'.format(probe, method))
+        log.info('-- Start insertions for probe: {} - Clustering method: {} - Label: {}'.format(probe, method, clustering_label))
 
+        assert len(trial_start) == len(trial_go)
+        
         # create probe insertion records
         try:
-            insertion_key = _gen_probe_insert(sinfo, probe, npx_meta)
+            insertion_key, e_config_key = _gen_probe_insert(sinfo, probe, npx_meta)
         except (NotImplementedError, dj.DataJointError) as e:
             raise ProbeInsertionError(str(e))
 
         # account for the buffer period before trial_start
-        buffer_sample_count = np.round(npx_meta.meta['trgTTLMarginS'] * npx_meta.meta['imSampRate']).astype(int)
-        trial_start = trial_start - np.round(buffer_sample_count).astype(int)
+        if 'trgTTLMarginS' in npx_meta.meta:
+            buffer_sample_count = np.round(npx_meta.meta['trgTTLMarginS'] * npx_meta.meta['imSampRate']).astype(int)
+            buffer_sample_count = np.round(buffer_sample_count).astype(int)
+        else:
+            buffer_sample_count = 0
+
+        trial_start = trial_start - buffer_sample_count
 
         # remove noise clusters
         if method in ['jrclust_v3', 'jrclust_v4']:
@@ -226,7 +238,14 @@ class EphysIngest(dj.Imported):
             [[trial_spikes[t][np.where(trial_units[t] == u)]
               for t in range(len(trials))] for u in set(units)])
 
-        electrode_keys = {c['electrode']: c for c in (lab.ElectrodeConfig.Electrode & insertion_key).fetch('KEY')}
+        q_electrodes = lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode & e_config_key
+        site2electrode_map = {}
+        for recorded_site in np.unique(vmax_unit_site):
+            shank, shank_col, shank_row, _ = npx_meta.shankmap['data'][recorded_site - 1]  # subtract 1 because npx_meta shankmap is 0-indexed
+            site2electrode_map[recorded_site] = (q_electrodes
+                                                 & {'shank': shank + 1,  # this is a 1-indexed pipeline
+                                                    'shank_col': shank_col + 1,
+                                                    'shank_row': shank_row + 1}).fetch1('KEY')
 
         # insert Unit
         log.info('.. ephys.Unit')
@@ -235,9 +254,8 @@ class EphysIngest(dj.Imported):
                           allow_direct_insert=True) as ib:
 
             for i, u in enumerate(set(units)):
-
                 ib.insert1({**skey, **insertion_key,
-                            **electrode_keys[vmax_unit_site[i]],
+                            **site2electrode_map[vmax_unit_site[i]],
                             'clustering_method': method,
                             'unit': u,
                             'unit_uid': u,
@@ -285,6 +303,42 @@ class EphysIngest(dj.Imported):
                     if ib.flush():
                         log.debug('.... (u: {}, t: {})'.format(u, t))
 
+        if metrics is not None:
+            metrics.columns = [c.lower() for c in metrics.columns]  # lower-case col names
+            # -- confirm correct attribute names from the PD
+            required_columns = np.setdiff1d(ephys.ClusterMetric.heading.names + ephys.WaveformMetric.heading.names,
+                                            ephys.Unit.primary_key)
+            missing_columns = np.setdiff1d(required_columns, metrics.columns)
+
+            if len(missing_columns) > 0:
+                raise ClusterMetricError('Missing or misnamed column(s) in metrics.csv: {}'.format(missing_columns))
+
+            metrics = dict(metrics.T)
+
+            log.info('.. inserting cluster metrics and waveform metrics')
+            ephys.ClusterMetric.insert([{**skey, 'insertion_number': probe,
+                                         'clustering_method': method, 'unit': u, **metrics[u]}
+                                        for u in set(units)],
+                                       ignore_extra_fields=True, allow_direct_insert=True)
+            ephys.WaveformMetric.insert([{**skey, 'insertion_number': probe,
+                                          'clustering_method': method, 'unit': u, **metrics[u]}
+                                         for u in set(units)],
+                                        ignore_extra_fields=True, allow_direct_insert=True)
+            ephys.UnitStat.insert([{**skey, 'insertion_number': probe,
+                                    'clustering_method': method, 'unit': u,
+                                    'isi_violation': metrics[u]['isi_viol'],
+                                    'avg_firing_rate': metrics[u]['firing_rate']} for u in set(units)],
+                                  allow_direct_insert=True)
+
+        log.info('.. inserting clustering timestamp and label')
+
+        ephys.ClusteringLabel.insert([{**skey, 'insertion_number': probe,
+                                       'clustering_method': method, 'unit': u,
+                                       'clustering_time': creation_time,
+                                       'quality_control': bool('qc' in clustering_label),
+                                       'manual_curation': bool('curated' in clustering_label)} for u in set(units)],
+                                     allow_direct_insert = True)
+
         log.info('.. inserting file load information')
 
         self.insert1(skey, skip_duplicates=True, allow_direct_insert=True)
@@ -292,7 +346,7 @@ class EphysIngest(dj.Imported):
             {**skey, 'probe_insertion_number': probe,
              'ephys_file': str(ef_path.relative_to(rigpath))}, allow_direct_insert=True)
 
-        log.info('ephys ingest for {} complete'.format(skey))
+        log.info('-- ephys ingest for {} - probe {} complete'.format(skey, probe))
 
 
 def _gen_probe_insert(sinfo, probe, npx_meta):
@@ -308,7 +362,7 @@ def _gen_probe_insert(sinfo, probe, npx_meta):
 
     part_no = npx_meta.probe_SN
 
-    e_config = _gen_electrode_config(npx_meta)
+    e_config_key = _gen_electrode_config(npx_meta)
 
     # ------ ProbeInsertion ------
     insertion_key = {'subject_id': sinfo['subject_id'],
@@ -318,13 +372,13 @@ def _gen_probe_insert(sinfo, probe, npx_meta):
     # add probe insertion
     log.info('.. creating probe insertion')
 
-    lab.Probe.insert1({'probe': part_no, 'probe_type': e_config['probe_type']}, skip_duplicates=True)
+    lab.Probe.insert1({'probe': part_no, 'probe_type': e_config_key['probe_type']}, skip_duplicates=True)
 
-    ephys.ProbeInsertion.insert1({**insertion_key,  **e_config, 'probe': part_no})
+    ephys.ProbeInsertion.insert1({**insertion_key,  **e_config_key, 'probe': part_no})
 
     ephys.ProbeInsertion.RecordingSystemSetup.insert1({**insertion_key, 'sampling_rate': npx_meta.meta['imSampRate']})
 
-    return insertion_key
+    return insertion_key, e_config_key
 
 
 def _gen_electrode_config(npx_meta):
@@ -332,13 +386,14 @@ def _gen_electrode_config(npx_meta):
     Generate and insert (if needed) an ElectrodeConfiguration based on the specified neuropixels meta information
     """
 
-    if '1.0' in npx_meta.probe_model:
+    if re.search('(1.0|2.0)', npx_meta.probe_model):
         eg_members = []
         probe_type = {'probe_type': npx_meta.probe_model}
         q_electrodes = lab.ProbeType.Electrode & probe_type
         for shank, shank_col, shank_row, is_used in npx_meta.shankmap['data']:
-            electrode = (q_electrodes & {'shank': shank, 'shank_col': shank_col, 'shank_row': shank_row}).fetch1(
-                'KEY')
+            electrode = (q_electrodes & {'shank': shank + 1,  # shank is 1-indexed in this pipeline
+                                         'shank_col': shank_col + 1,
+                                         'shank_row': shank_row + 1}).fetch1('KEY')
             eg_members.append({**electrode, 'is_used': is_used, 'electrode_group': 0})
     else:
         raise NotImplementedError('Processing for neuropixels probe model {} not yet implemented'.format(
@@ -348,8 +403,8 @@ def _gen_electrode_config(npx_meta):
     ec_hash = dict_to_hash({k['electrode']: k for k in eg_members})
 
     el_list = sorted([k['electrode'] for k in eg_members])
-    el_jumps = [0] + np.where(np.diff(el_list) > 1)[0].tolist() + [len(el_list) - 1]
-    ec_name = '; '.join([f'{el_list[s]}-{el_list[e]}' for s, e in zip(el_jumps[:-1], el_jumps[1:])])
+    el_jumps = [-1] + np.where(np.diff(el_list) > 1)[0].tolist() + [len(el_list) - 1]
+    ec_name = '; '.join([f'{el_list[s + 1]}-{el_list[e]}' for s, e in zip(el_jumps[:-1], el_jumps[1:])])
 
     e_config = {**probe_type, 'electrode_config_name': ec_name}
 
@@ -402,7 +457,6 @@ def _load_jrclust_v3(sinfo, fpath):
             if k in experiment.Session.primary_key}
 
     ef_path = fpath
-    bf_path = pathlib.Path(fpath.parent, '{}_bitcode.mat'.format(h2o))
 
     log.info('.. jrclust v3 data load:')
     log.info('.... sinfo: {}'.format(sinfo))
@@ -411,8 +465,11 @@ def _load_jrclust_v3(sinfo, fpath):
     log.info('.... loading ef_path: {}'.format(str(ef_path)))
     ef = h5py.File(str(ef_path), mode='r')  # ephys file
 
-    log.info('.... loading bf_path: {}'.format(str(bf_path)))
-    bf = spio.loadmat(bf_path)  # bitcode file
+    # -- trial-info from bitcode --
+    try:
+        sync_behav, sync_ephys, trial_fix, trial_go, trial_start = read_bitcode(fpath.parent, h2o, skey)
+    except FileNotFoundError as e:
+        raise e
 
     # extract unit data
 
@@ -436,15 +493,9 @@ def _load_jrclust_v3(sinfo, fpath):
     vmax_unit_site = ef['S_clu']['viSite_clu']      # max amplitude site
     vmax_unit_site = np.array(vmax_unit_site[:].flatten(), dtype=np.int64)
 
-    trial_start = bf['sTrig'].flatten()           # start of trials
-    trial_go = bf['goCue'].flatten()                # go cues
+    creation_time, clustering_label = extract_clustering_info(fpath.parent, 'jrclust_v3')
 
-    sync_ephys = bf['bitCodeS'].flatten()           # ephys sync codes
-    sync_behav = (experiment.TrialNote()            # behavior sync codes
-                  & {**skey, 'trial_note_type': 'bitcode'}).fetch(
-                      'trial_note', order_by='trial')
-
-    trial_fix = bf['trialNum'] if 'trialNum' in bf else None
+    metrics = None
 
     data = {
         'sinfo': sinfo,
@@ -467,6 +518,9 @@ def _load_jrclust_v3(sinfo, fpath):
         'sync_ephys': sync_ephys,
         'sync_behav': sync_behav,
         'trial_fix': trial_fix,
+        'metrics': metrics,
+        'creation_time': creation_time,
+        'clustering_label': clustering_label
     }
 
     return data
@@ -495,14 +549,14 @@ def _load_jrclust_v4(sinfo, fpath):
     log.info('.... loading ef_path: {}'.format(str(ef_path)))
     ef = h5py.File(str(ef_path), mode='r')  # ephys file
 
-    # bitcode path (ex: 'SC022_030319_Imec3_bitcode.mat')
-    bf_path = list(fpath.parent.glob(
-        '{}_*bitcode.mat'.format(h2o)))[0]
-    log.info('.... loading bf_path: {}'.format(str(bf_path)))
-    bf = spio.loadmat(str(bf_path))
+    # -- trial-info from bitcode --
+    try:
+        sync_behav, sync_ephys, trial_fix, trial_go, trial_start = read_bitcode(fpath.parent, h2o, skey)
+    except FileNotFoundError as e:
+        raise e
 
     # extract unit data
-    hz = bf['SR'][0][0] if 'SR' in bf else None    # sampling rate
+    hz = None                                       # sampling rate  (N/A from jrclustv4, use from npx_meta)
 
     spikes = ef['spikeTimes'][0]                    # spikes times
     spike_sites = ef['spikeSites'][0]               # spike electrode
@@ -522,15 +576,9 @@ def _load_jrclust_v4(sinfo, fpath):
     vmax_unit_site = ef['clusterSites']             # max amplitude site
     vmax_unit_site = np.array(vmax_unit_site[:].flatten(), dtype=np.int64)
 
-    trial_start = bf['sTrig'].flatten()             # trial start
-    trial_go = bf['goCue'].flatten()                 # trial go cues
+    creation_time, clustering_label = extract_clustering_info(fpath.parent, 'jrclust_v4')
 
-    sync_ephys = bf['bitCodeS']                     # ephys sync codes
-    sync_behav = (experiment.TrialNote()            # behavior sync codes
-                  & {**skey, 'trial_note_type': 'bitcode'}).fetch(
-                      'trial_note', order_by='trial')
-
-    trial_fix = bf['trialNum'] if 'trialNum' in bf else None
+    metrics = None
 
     data = {
         'sinfo': sinfo,
@@ -553,33 +601,38 @@ def _load_jrclust_v4(sinfo, fpath):
         'sync_ephys': sync_ephys,
         'sync_behav': sync_behav,
         'trial_fix': trial_fix,
+        'metrics': metrics,
+        'creation_time': creation_time,
+        'clustering_label': clustering_label
     }
 
     return data
 
 
-def _load_kilosort2(sinfo, ks_dir):
+def _load_kilosort2(sinfo, ks_dir, npx_dir):
 
     h2o = sinfo['water_restriction_number']
     skey = {k: v for k, v in sinfo.items()
             if k in experiment.Session.primary_key}
 
-    try:
-        bf_path = next(pathlib.Path(ks_dir).glob('*{}*_bitcode.mat'.format(h2o)))
-    except StopIteration:
-        raise FileNotFoundError('Not bitcode for {} found in {}'.format(h2o, ks_dir))
-
     log.info('.. kilosort v2 data load:')
     log.info('.... sinfo: {}'.format(sinfo))
 
-    log.info('.... loading bf_path: {}'.format(str(bf_path)))
-    bf = spio.loadmat(bf_path)  # bitcode file
+    # -- trial-info from bitcode --
+    try:
+        sync_behav, sync_ephys, trial_fix, trial_go, trial_start = read_bitcode(npx_dir, h2o, skey)
+    except FileNotFoundError as e:
+        raise e
 
     # ---- Read Kilosort results ----
     log.info('.... loading kilosort - ks_dir: {}'.format(str(ks_dir)))
     ks = Kilosort(ks_dir)
 
-    spike_times = ks.data['spike_times']
+    # -- Spike-times --
+    # spike_times_sec_adj > spike_times_sec > spike_times
+    spk_time_key = ('spike_times_sec_adj' if 'spike_times_sec_adj' in ks.data
+                    else 'spike_times_sec' if 'spike_times_sec' in ks.data else 'spike_times')
+    spike_times = ks.data[spk_time_key]
 
     # ---- Spike-level results ----
     # -- spike_sites --
@@ -597,41 +650,51 @@ def _load_kilosort2(sinfo, ks_dir):
     valid_unit_labels = ks.data['cluster_groups'][withspike_idx]
     valid_unit_labels = np.where(valid_unit_labels == 'mua', 'multi', valid_unit_labels)  # rename 'mua' to 'multi'
 
-    # -- vmax_unit_site --
-    vmax_unit_site, unit_xpos, unit_ypos, unit_amp = [], [], [], []
-    for unit in valid_units:
-        template_idx = ks.data['spike_templates'][np.where(ks.data['spike_clusters'] == unit)[0][0]]
-        chn_templates = ks.data['templates'][template_idx, :, :]
-        site_idx = np.abs(np.abs(chn_templates).max(axis=0)).argmax()
-        vmax_unit_site.append(ks.data['channel_map'][site_idx])
+    # -- vmax_unit_site (peak channel), x, y, amp, waveforms, SNR --
+    metric_fp = ks_dir / 'metrics.csv'
+
+    metrics = None
+    if metric_fp.exists():
+        log.info('.... reading metrics.csv - data dir: {}'.format(str(metric_fp)))
+        metrics = pd.read_csv(metric_fp)
+        metrics.set_index('cluster_id', inplace=True)
+        metrics = metrics[metrics.index == valid_units]
+
+        # peak_chn, amp, snr
+        vmax_unit_site = metrics.peak_channel.values  # peak channel
+        unit_amp = metrics.amplitude.values  # amp
+        unit_snr = metrics.snr.values  # snr
         # unit x, y
-        unit_xpos.append(ks.data['channel_positions'][site_idx, 0])
-        unit_ypos.append(ks.data['channel_positions'][site_idx, 1])
-        # unit amp
-        amps = ks.data['amplitudes'][ks.data['spike_clusters'] == unit]
-        scaled_templates = np.matmul(chn_templates, ks.data['whitening_mat_inv'])
-        best_chn_wf = scaled_templates[:, site_idx] * amps.mean()
-        unit_amp.append(best_chn_wf.max() - best_chn_wf.min())
+        vmax_unit_site_idx = [np.where(ks.data['channel_map'] == peak_site)[0][0] for peak_site in vmax_unit_site]
+        unit_xpos = [ks.data['channel_positions'][site_idx, 0] for site_idx in vmax_unit_site_idx]
+        unit_ypos = [ks.data['channel_positions'][site_idx, 1] for site_idx in vmax_unit_site_idx]
+        # unit waveforms
+        unit_wav = np.load(ks_dir / 'mean_waveforms.npy')
+        unit_wav = unit_wav[valid_units, :, :]  # unit x channel x sample
+    else:
+        vmax_unit_site, unit_xpos, unit_ypos, unit_amp = [], [], [], []
+        for unit in valid_units:
+            template_idx = ks.data['spike_templates'][np.where(ks.data['spike_clusters'] == unit)[0][0]]
+            chn_templates = ks.data['templates'][template_idx, :, :]
+            site_idx = np.abs(np.abs(chn_templates).max(axis=0)).argmax()
+            vmax_unit_site.append(ks.data['channel_map'][site_idx])
+            # unit x, y
+            unit_xpos.append(ks.data['channel_positions'][site_idx, 0])
+            unit_ypos.append(ks.data['channel_positions'][site_idx, 1])
+            # unit amp
+            amps = ks.data['amplitudes'][ks.data['spike_clusters'] == unit]
+            scaled_templates = np.matmul(chn_templates, ks.data['whitening_mat_inv'])
+            best_chn_wf = scaled_templates[:, site_idx] * amps.mean()
+            unit_amp.append(best_chn_wf.max() - best_chn_wf.min())
 
-    # -- waveforms and SNR --
-    log.info('.... extracting waveforms - data dir: {}'.format(str(ks_dir)))
-    unit_wfs = extract_ks_waveforms(ks_dir, ks, wf_win=[-int(ks.data['templates'].shape[1]/2),
-                                                        int(ks.data['templates'].shape[1]/2)])
-    unit_wav = np.dstack([unit_wfs[u]['mean_wf']
-                          for u in valid_units]).transpose((2, 1, 0))  # unit x channel x sample
-    unit_snr = [unit_wfs[u]['snr'][np.where(ks.data['channel_map'] == u_site)[0][0]]
-                for u, u_site in zip(valid_units, vmax_unit_site)]
-
-    # -- trial-info from bitcode --
-    trial_start = bf['sTrig'].flatten()           # start of trials
-    trial_go = bf['goCue'].flatten()                # go cues
-
-    sync_ephys = bf['bitCodeS'].flatten()           # ephys sync codes
-    sync_behav = (experiment.TrialNote()            # behavior sync codes
-                  & {**skey, 'trial_note_type': 'bitcode'}).fetch(
-                      'trial_note', order_by='trial')
-
-    trial_fix = bf['trialNum'] if 'trialNum' in bf else None
+        # waveforms and SNR
+        log.info('.... extracting waveforms - data dir: {}'.format(str(ks_dir)))
+        unit_wfs = extract_ks_waveforms(npx_dir, ks, wf_win=[-int(ks.data['templates'].shape[1]/2),
+                                                                       int(ks.data['templates'].shape[1]/2)])
+        unit_wav = np.dstack([unit_wfs[u]['mean_wf']
+                              for u in valid_units]).transpose((2, 1, 0))  # unit x channel x sample
+        unit_snr = [unit_wfs[u]['snr'][np.where(ks.data['channel_map'] == u_site)[0][0]]
+                    for u, u_site in zip(valid_units, vmax_unit_site)]
 
     # -- Ensuring `spike_times`, `trial_start` and `trial_go` are in `sample` and not `second` --
     # There is still a risk of times in `second` but with 0 decimal values and thus would be detected as `sample` (very very unlikely)
@@ -645,6 +708,8 @@ def _load_kilosort2(sinfo, ks_dir):
     if np.mean(trial_start - np.round(trial_start)) != 0:
         log.debug('Kilosort2 bitcode goCue in seconds - converting to sample')
         trial_start = np.round(trial_start * hz).astype(int)
+
+    creation_time, clustering_label = extract_clustering_info(ks_dir, 'kilosort2')
 
     data = {
         'sinfo': sinfo,
@@ -667,6 +732,9 @@ def _load_kilosort2(sinfo, ks_dir):
         'sync_ephys': sync_ephys,
         'sync_behav': sync_behav,
         'trial_fix': trial_fix,
+        'metrics': metrics,
+        'creation_time': creation_time,
+        'clustering_label': clustering_label
     }
 
     return data
@@ -707,7 +775,7 @@ def _match_probe_to_ephys(h2o, dpath, dglob):
 
     jrclustv3spec = '{}_*_jrc.mat'.format(h2o)
     jrclustv4spec = '{}_*.ap_res.mat'.format(h2o)
-    ks2spec = 'spike_times.npy'
+    ks2specs = ('mean_waveforms.npy', 'spike_times.npy')  # prioritize QC output, then orig
 
     clustered_probes = {}
     for meta_file in npx_meta_files:
@@ -716,11 +784,15 @@ def _match_probe_to_ephys(h2o, dpath, dglob):
         probe_number = int(probe_number.replace('imec', '')) + 1 if 'imec' in probe_number else int(probe_number)
 
         # JRClust v3
-        v3files = [(f, _load_jrclust_v3) for f in probe_dir.glob(jrclustv3spec)]
+        v3files = [((f, ), _load_jrclust_v3) for f in probe_dir.glob(jrclustv3spec)]
         # JRClust v4
-        v4files = [(f, _load_jrclust_v4) for f in probe_dir.glob(jrclustv4spec)]
+        v4files = [((f, ), _load_jrclust_v4) for f in probe_dir.glob(jrclustv4spec)]
         # Kilosort
-        ks2files = [(f.parent, _load_kilosort2) for f in probe_dir.glob(ks2spec)]
+        ks2spec = ks2specs[0] if len(list(probe_dir.rglob(ks2specs[0]))) > 0 else ks2specs[1]
+        ks2files = [((f.parent, probe_dir), _load_kilosort2) for f in probe_dir.rglob(ks2spec)]
+
+        if len(ks2files) > 1:
+            raise ValueError('Multiple Kilosort outputs found at: {}'.format([str(x[0]) for x in ks2files]))
 
         clustering_results = v4files + v3files + ks2files
 
@@ -733,6 +805,45 @@ def _match_probe_to_ephys(h2o, dpath, dglob):
         clustered_probes[probe_number] = (fp, loader, NeuropixelsMeta(meta_file))
 
     return clustered_probes
+
+
+def read_bitcode(bitcode_dir, h2o, skey):
+    """
+    Load bitcode file from specified dir - example bitcode format: e.g. 'SC022_030319_Imec3_bitcode.mat'
+    :return: sync_behav, sync_ephys, trial_fix, trial_go, trial_start
+    """
+    bitcode_dir = pathlib.Path(bitcode_dir)
+    try:
+        bf_path = next(bitcode_dir.glob('{}_*bitcode.mat'.format(h2o)))
+    except StopIteration:
+        raise FileNotFoundError('No bitcode for {} found in {}'.format(h2o, bitcode_dir))
+
+    log.info('.... loading bitcode file: {}'.format(str(bf_path)))
+
+    bf = spio.loadmat(str(bf_path))
+
+    trial_start = bf['sTrig'].flatten()  # trial start
+    trial_go = bf['goCue'].flatten()  # trial go cues
+
+    # check if there are `FreeWater` trials (i.e. no trial_go), if so, set those with trial_go value of NaN
+    if len(trial_go) < len(trial_start):
+        assert len(experiment.BehaviorTrial & skey & 'free_water = 0') == len(trial_go)
+        assert len(experiment.BehaviorTrial & skey) == len(trial_start)
+
+        all_tr = (experiment.BehaviorTrial & skey).fetch('trial', order_by='trial')
+        no_free_water_tr = (experiment.BehaviorTrial & skey & 'free_water = 0').fetch('trial', order_by='trial')
+        is_go_trial = np.in1d(all_tr, no_free_water_tr)
+
+        trial_go_full = np.full_like(trial_start, np.nan)
+        trial_go_full[is_go_trial] = trial_go
+        trial_go = trial_go_full
+
+    sync_ephys = bf['bitCodeS']  # ephys sync codes
+    sync_behav = (experiment.TrialNote()  # behavior sync codes
+                  & {**skey, 'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial')
+    trial_fix = bf['trialNum'] if 'trialNum' in bf else None
+
+    return sync_behav, sync_ephys, trial_fix, trial_go, trial_start
 
 
 def handle_string(value):
@@ -762,6 +873,10 @@ class NeuropixelsMeta:
                 self.probe_model = 'neuropixels 1.0 - 3A'
             elif 'typeImEnabled' in self.meta:
                 self.probe_model = 'neuropixels 1.0 - 3B'
+        elif probe_model == 21:
+            self.probe_model = 'neuropixels 2.0 - SS'
+        elif probe_model == 24:
+            self.probe_model = 'neuropixels 2.0 - MS'
         else:
             self.probe_model = str(probe_model)
 
@@ -894,6 +1009,8 @@ class Kilosort:
         'similar_templates.npy',
         'spike_templates.npy',
         'spike_times.npy',
+        'spike_times_sec.npy',
+        'spike_times_sec_adj.npy',
         'template_features.npy',
         'template_feature_ind.npy',
         'templates.npy',
@@ -1031,8 +1148,53 @@ def calculate_wf_snr(W):
     A = np.max(W_bar) - np.min(W_bar)
     e = W - np.tile(W_bar, (np.shape(W)[0], 1))
     snr = A / (2 * np.nanstd(e.flatten()))
+    return snr if not np.isinf(snr) else 0
 
-    return snr
+
+def extract_clustering_info(cluster_output_dir, cluster_method):
+    creation_time = None
+
+    phy_curation_indicators = ['Merge clusters', 'Split cluster', 'Change metadata_group']
+    # ---- Manual curation? ----
+    phylog_fp = cluster_output_dir / 'phy.log'
+    if phylog_fp.exists():
+        phylog = pd.read_fwf(phylog_fp, colspecs=[(6, 40), (41, 250)])
+        phylog.columns = ['meta', 'detail']
+        curation_row = [bool(re.match('|'.join(phy_curation_indicators), str(s))) for s in phylog.detail]
+        curation_prefix = 'curated_' if np.any(curation_row) else ''
+        if creation_time is None and curation_prefix == 'curated_':
+            row_meta = phylog.meta[np.where(curation_row)[0].max()]
+            time_str = re.search('\d{2}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}', row_meta)
+            if time_str:
+                creation_time = datetime.strptime(time_str.group(), '%Y-%m-%d %H:%M:%S')
+            else:
+                creation_time = datetime.fromtimestamp(phylog_fp.stat().st_ctime)
+    else:
+        curation_prefix = ''
+
+    # ---- Quality control? ----
+    metric_fp = cluster_output_dir / 'metrics.csv'
+    if metric_fp.exists():
+        qc_prefix = 'qc_'
+        if creation_time is None:
+            creation_time = datetime.fromtimestamp(metric_fp.stat().st_ctime)
+    else:
+        qc_prefix = 'raw_'
+
+    if creation_time is None:
+        if cluster_method == 'jrclust_v3':
+            jr_fp = next(cluster_output_dir.glob('*jrc.mat'))
+            creation_time = datetime.fromtimestamp(jr_fp.stat().st_ctime)
+        elif cluster_method == 'jrclust_v4':
+            jr_fp = next(cluster_output_dir.glob('*.ap_res.mat'))
+            creation_time = datetime.fromtimestamp(jr_fp.stat().st_ctime)
+        elif cluster_method == 'kilosort2':
+            spk_fp = next(cluster_output_dir.glob('spike_times.npy'))
+            creation_time = datetime.fromtimestamp(spk_fp.stat().st_ctime)
+
+    label = ''.join([curation_prefix, qc_prefix])
+
+    return creation_time, label
 
 
 # ====== Methods for reprocessing of ephys ingestion ======
@@ -1048,7 +1210,7 @@ def extend_ephys_ingest(session_key):
               * lab.Subject.proj()
               * experiment.Session.proj(..., '-session_time')) & key).fetch1()
 
-    rigpaths = get_ephys_path()
+    rigpaths = get_ephys_paths()
     h2o = sinfo['water_restriction_number']
 
     sess_time = (datetime.min + key['session_time']).time()
