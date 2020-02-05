@@ -128,7 +128,7 @@ class SessionLevelCDReport(dj.Computed):
                 units = ephys.Unit & probe
                 label = (ephys.ProbeInsertion & probe).aggr(ephys.ProbeInsertion.RecordableBrainRegion.proj(
                     brain_region='CONCAT(hemisphere, " ", brain_area)'),
-                    brain_regions='GROUP_CONCAT(brain_region)').fetch1('brain_regions')
+                    brain_regions='GROUP_CONCAT(brain_region) SEPARATOR(, )').fetch1('brain_regions')
 
                 _, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], units, 'good_noearlylick_hit')
 
@@ -214,7 +214,7 @@ class SessionLevelCDReport(dj.Computed):
             units = ephys.Unit & probe
             label = (ephys.ProbeInsertion & probe).aggr(ephys.ProbeInsertion.RecordableBrainRegion.proj(
                 brain_region = 'CONCAT(hemisphere, " ", brain_area)'),
-                brain_regions = 'GROUP_CONCAT(brain_region)').fetch1('brain_regions')
+                brain_regions = 'GROUP_CONCAT(brain_region) SEPARATOR(, )').fetch1('brain_regions')
 
             unit_characteristic_plot.plot_coding_direction(units, time_period=time_period, label=label, axs=axs)
 
@@ -341,9 +341,12 @@ class ProbeLevelPhotostimEffectReport(dj.Computed):
         # Only process ProbeInsertion with UnitPSTH computation (for all TrialCondition) fully completed
         ks = ephys.ProbeInsertion * ephys.ClusteringMethod
         probe_current_psth = ks.aggr(psth.UnitPsth, present_u_psth_count='count(*)')
+        # Note: keep this 'probe_full_psth' query in sync with psth.UnitPSTH.key_source
         probe_full_psth = (ks.aggr(
-            ephys.Unit.proj(), unit_count=f'count(*)') * dj.U().aggr(psth.TrialCondition, trial_cond_count='count(*)')).proj(
-            full_u_psth_count = 'unit_count * trial_cond_count')
+            (ephys.Unit & 'unit_quality != "all"').proj(), unit_count=f'count(*)') * dj.U().aggr(
+            psth.TrialCondition, trial_cond_count='count(*)')).proj(
+            full_u_psth_count='unit_count * trial_cond_count')
+
         return probe_current_psth * probe_full_psth & 'present_u_psth_count = full_u_psth_count'
 
     def make(self, key):

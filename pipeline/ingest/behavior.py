@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 
 import os
-import glob
 import logging
 import re
 import math
@@ -9,7 +8,6 @@ import pathlib
 
 from datetime import date
 from datetime import datetime
-from itertools import chain
 from collections import namedtuple
 
 import scipy.io as spio
@@ -18,7 +16,6 @@ import warnings
 
 import datajoint as dj
 
-from pipeline import ccf
 from pipeline import lab
 from pipeline import experiment
 from .. import get_schema_name
@@ -51,31 +48,32 @@ photostims = {4: {'photo_stim': 4, 'photostim_device': 'OBIS470', 'duration': ph
                                 ]}}
 
 
-@schema
-class RigDataPath(dj.Lookup):
-    ''' rig storage locations '''
-    # todo: cross platform path mapping needed?
-    definition = """
-    -> lab.Rig
-    ---
-    rig_data_path:              varchar(1024)           # rig data path
-    rig_search_order:           int                     # rig search order
-    """
+def get_behavior_paths():
+    '''
+    retrieve behavior rig paths from dj.config
+    config should be in dj.config of the format:
 
-    @property
-    def contents(self):
+      dj.config = {
+        ...,
+        'custom': {
+          'behavior_data_paths':
+            [
+                ["RRig", "/path/string", 0],
+                ["RRig2", "/path2/string2", 1]
+            ],
+        }
+        ...
+      }
 
-        custom_paths = dj.config.get('custom', {}).get('rig_data_paths', None)
+    where 'behavior_data_paths' is a list of multiple possible path for behavior data, each in format:
+    [rig name, rig full path, search order]
+    '''
 
-        if custom_paths:
-            return custom_paths
+    paths = dj.config.get('custom', {}).get('behavior_data_paths', None)
+    if paths is None:
+        raise ValueError("Missing 'behavior_data_paths' in dj.config['custom']")
 
-        return (('TRig1', r'\\MOHARB-NUC1\Documents\Arduino\Bpod_Train1\Bpod Local\Data', 0),  # Hardcode the rig path
-                ('TRig2', r'\\MOHARB-WW2\C\Users\labadmin\Documents\MATLAB\Bpod Local\Data', 1),
-                ('TRig3', r'\\WANGT-NUC\Documents\MATLAB\Bpod Local\Data', 2),
-                ('RRig', r'\\wangt-ww1\Documents\MATLAB\Bpod Local\Data', 3),
-                ('RRig2', r'\\Yuj10-ww3\C\Bpod Local\Data', 4)
-                ) # A table with the data path
+    return sorted(paths, key=lambda x: x[-1])
 
 
 @schema
@@ -88,7 +86,7 @@ class BehaviorIngest(dj.Imported):
         ''' files in rig-specific storage '''
         definition = """
         -> BehaviorIngest
-        behavior_file:              varchar(255)          # rig file subpath
+        behavior_file:              varchar(255)          # behavior file name
         """
 
     class CorrectedTrialEvents(dj.Part):
@@ -171,23 +169,24 @@ class BehaviorIngest(dj.Imported):
         recs = []
         found = set()
         known = set(BehaviorIngest.BehaviorFile().fetch('behavior_file'))
-        rigs = RigDataPath().fetch(as_dict=True, order_by='rig_search_order')
-        for r in rigs:
-            rig = r['rig']
-            rigpath = pathlib.Path(r['rig_data_path'])
-            log.info('RigDataFile.make(): traversing {p}'.format(p=rigpath))
+        rigs = get_behavior_paths()
+
+        for (rig, rigpath, _) in rigs:
+            rigpath = pathlib.Path(rigpath)
+
+            log.info('RigDataFile.make(): traversing {}'.format(rigpath))
             for root, dirs, files in os.walk(rigpath):
-                log.debug('RigDataFile.make(): entering {r}'.format(r=root))
+                log.debug('RigDataFile.make(): entering {}'.format(root))
                 for f in files:
-                    log.debug('RigDataFile.make(): visiting {f}'.format(f=f))
+                    log.debug('RigDataFile.make(): visiting {}'.format(f))
                     r = buildrec(rig, rigpath, root, f)
                     if not r:
                         continue
-                    if r['subpath'] in set.union(known, found):
+                    if f in set.union(known, found):
                         log.info('skipping already ingested file {}'.format(
                             r['subpath']))
                     else:
-                        found.add(r['subpath'])  # block duplicate path conf
+                        found.add(f)  # block duplicate path conf
                         recs.append(r)
 
         return recs
@@ -227,7 +226,7 @@ class BehaviorIngest(dj.Imported):
                 h2o=h2o, d=ymd))
 
         trial = namedtuple(  # simple structure to track per-trial vars
-            'trial', ('ttype', 'stim', 'settings', 'state_times',
+            'trial', ('ttype', 'stim', 'free', 'settings', 'state_times',
                       'state_names', 'state_data', 'event_data',
                       'event_times', 'trial_start'))
 
@@ -266,6 +265,7 @@ class BehaviorIngest(dj.Imported):
                      AllStateNames, AllStateData, AllEventData,
                      AllEventTimestamps, AllTrialStarts, AllTrialStarts))))
 
+        # AllStimTrials optional special case
         if 'StimTrials' in SessionData.dtype.fields:
             log.debug('StimTrials detected in session - will include')
             AllStimTrials = SessionData['StimTrials'][0]
@@ -275,9 +275,20 @@ class BehaviorIngest(dj.Imported):
             AllStimTrials = np.array([
                 None for _ in enumerate(range(AllStateTimestamps.shape[0]))])
 
-        trials = list(zip(AllTrialTypes, AllStimTrials, AllTrialSettings,
-                          AllStateTimestamps, AllStateNames, AllStateData,
-                          AllEventData, AllEventTimestamps, AllTrialStarts))
+        # AllFreeTrials optional special case
+        if 'FreeTrials' in SessionData.dtype.fields:
+            log.debug('FreeTrials detected in session - will include')
+            AllFreeTrials = SessionData['FreeTrials'][0]
+            assert(AllFreeTrials.shape[0] == AllStateTimestamps.shape[0])
+        else:
+            log.debug('FreeTrials not detected in session - synthesizing')
+            AllFreeTrials = np.zeros(AllStateTimestamps.shape[0],
+                                     dtype=np.uint8)
+
+        trials = list(zip(AllTrialTypes, AllStimTrials, AllFreeTrials,
+                          AllTrialSettings, AllStateTimestamps, AllStateNames,
+                          AllStateData, AllEventData, AllEventTimestamps,
+                          AllTrialStarts))
 
         if not trials:
             log.warning('skipping date {d}, no valid files'.format(d=date))
@@ -330,25 +341,12 @@ class BehaviorIngest(dj.Imported):
             #
             # names (seem to be? are?):
             #
-            # Trigtrialstart
-            # PreSamplePeriod
-            # SamplePeriod
-            # DelayPeriod
-            # EarlyLickDelay
-            # EarlyLickSample
-            # ResponseCue
-            # GiveLeftDrop
-            # GiveRightDrop
-            # GiveLeftDropShort
-            # GiveRightDropShort
-            # AnswerPeriod
-            # Reward
-            # RewardConsumption
-            # NoResponse
-            # TimeOut
-            # StopLicking
-            # StopLickingReturn
-            # TrialEnd
+            # Trigtrialstart, PreSamplePeriod, SamplePeriod, DelayPeriod
+            # EarlyLickDelay, EarlyLickSample, ResponseCue, GiveLeftDrop
+            # GiveRightDrop, GiveLeftDropShort, GiveRightDropShort
+            # AnswerPeriod, Reward, RewardConsumption, NoResponse
+            # TimeOut, StopLicking, StopLickingReturn, TrialEnd
+            #
 
             states = {k: (v+1) for v, k in enumerate(t.state_names)}
             required_states = ('PreSamplePeriod', 'SamplePeriod',
@@ -467,6 +465,11 @@ class BehaviorIngest(dj.Imported):
                 outcome = 'ignore'
 
             bkey['outcome'] = outcome
+
+            # Determine free/autowater (Autowater 1 == enabled, 2 == disabled)
+            bkey['auto_water'] = True if gui['Autowater'][0] == 1 else False
+            bkey['free_water'] = t.free
+
             rows['behavior_trial'].append(bkey)
 
             #
@@ -649,7 +652,7 @@ class BehaviorIngest(dj.Imported):
             #
 
             if t.stim:
-                log.info('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
+                log.debug('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
                 rows['photostim_trial'].append(tkey)
                 delay_period_idx = np.where(
                     t.state_data == states['DelayPeriod'])[0][0]
@@ -742,5 +745,5 @@ class BehaviorIngest(dj.Imported):
 
         log.info('BehaviorIngest.make(): ... BehaviorIngest.BehaviorFile')
         BehaviorIngest.BehaviorFile().insert1(
-            dict(key, behavior_file=str(key['subpath'])),
+            dict(key, behavior_file=os.path.basename(key['subpath'])),
             ignore_extra_fields=True, allow_direct_insert=True)
