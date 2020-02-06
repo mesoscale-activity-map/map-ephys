@@ -664,6 +664,7 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
         vmax_unit_site = metrics.peak_channel.values  # peak channel
         unit_amp = metrics.amplitude.values  # amp
         unit_snr = metrics.snr.values  # snr
+        unit_snr = np.where(np.logical_or(np.isinf(unit_snr), np.isnan(unit_snr)), 0, unit_snr)  # set value to 0 if INF or NaN
         # unit x, y
         vmax_unit_site_idx = [np.where(ks.data['channel_map'] == peak_site)[0][0] for peak_site in vmax_unit_site]
         unit_xpos = [ks.data['channel_positions'][site_idx, 0] for site_idx in vmax_unit_site_idx]
