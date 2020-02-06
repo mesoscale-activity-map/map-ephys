@@ -236,9 +236,11 @@ def ccfload(*args):
 
 
 def erd(*args):
-    for mod in (ephys, lab, experiment, tracking, psth, ccf, publication):
+    mods = (ephys, lab, experiment, tracking, psth, ccf, histology,
+            publication)
+    for mod in mods:
         modname = str().join(mod.__name__.split('.')[1:])
-        fname = os.path.join('pipeline', './images/{}.png'.format(modname))
+        fname = os.path.join('images', '{}.png'.format(modname))
         print('saving', fname)
         dj.ERD(mod, context={modname: mod}).save(fname)
 
