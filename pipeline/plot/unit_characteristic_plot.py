@@ -9,9 +9,9 @@ import pandas as pd
 
 from pipeline import experiment, ephys, psth
 
-from pipeline.plot.util import (_plot_with_sem, _extract_one_stim_dur, _get_units_hemisphere,
-                                _get_trial_event_times, _get_clustering_method,
-                                _plot_stacked_psth_diff, _plot_avg_psth, jointplot_w_hue)
+from pipeline.plot.util import (_plot_with_sem, _extract_one_stim_dur,
+                                _plot_stacked_psth_diff, _plot_avg_psth, _jointplot_w_hue)
+from pipeline.util import (_get_units_hemisphere, _get_trial_event_times, _get_clustering_method)
 
 m_scale = 1200
 _plt_xmin = -3
@@ -71,11 +71,10 @@ def plot_unit_characteristic(probe_insertion, clustering_method=None, axs=None):
     amp, snr, spk_rate, x, y, insertion_depth = (
             ephys.Unit * ephys.ProbeInsertion.InsertionLocation * ephys.UnitStat
             & probe_insertion & {'clustering_method': clustering_method} & 'unit_quality != "all"').fetch(
-        'unit_amp', 'unit_snr', 'avg_firing_rate', 'unit_posx', 'unit_posy', 'dv_location')
+        'unit_amp', 'unit_snr', 'avg_firing_rate', 'unit_posx', 'unit_posy', 'depth')
 
-    insertion_depth = np.where(np.isnan(insertion_depth), 0, insertion_depth)
-
-    metrics = pd.DataFrame(list(zip(*(amp/amp.max(), snr/snr.max(), spk_rate/spk_rate.max(), x, y - insertion_depth))))
+    metrics = pd.DataFrame(list(zip(*(amp/amp.max(), snr/snr.max(), spk_rate/spk_rate.max(),
+                                      x, insertion_depth.astype(float) + y))))
     metrics.columns = ['amp', 'snr', 'rate', 'x', 'y']
 
     fig = None
@@ -126,7 +125,7 @@ def plot_unit_selectivity(probe_insertion, clustering_method=None, axs=None):
             raise ValueError(str(e) + '\nPlease specify one with the kwarg "clustering_method"')
 
     attr_names = ['unit', 'period', 'period_selectivity', 'contra_firing_rate',
-                  'ipsi_firing_rate', 'unit_posx', 'unit_posy', 'dv_location']
+                  'ipsi_firing_rate', 'unit_posx', 'unit_posy', 'depth']
     selective_units = (psth.PeriodSelectivity * ephys.Unit * ephys.ProbeInsertion.InsertionLocation
                        * experiment.Period & probe_insertion & {'clustering_method': clustering_method}
                        & 'period_selectivity != "non-selective"').fetch(*attr_names)
@@ -135,9 +134,7 @@ def plot_unit_selectivity(probe_insertion, clustering_method=None, axs=None):
     selective_units.period_selectivity.astype('category')
 
     # --- account for insertion depth (manipulator depth)
-    selective_units.unit_posy = (selective_units.unit_posy
-                                 - np.where(np.isnan(selective_units.dv_location.values.astype(float)),
-                                            0, selective_units.dv_location.values.astype(float)))
+    selective_units.unit_posy = selective_units.depth.values.astype(float) + selective_units.unit_posy
 
     # --- get ipsi vs. contra firing rate difference
     f_rate_diff = np.abs(selective_units.ipsi_firing_rate - selective_units.contra_firing_rate)
@@ -193,11 +190,11 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
         except ValueError as e:
             raise ValueError(str(e) + '\nPlease specify one with the kwarg "clustering_method"')
 
-    dv_loc = (ephys.ProbeInsertion.InsertionLocation & probe_insertion).fetch1('dv_location')
+    dv_loc = (ephys.ProbeInsertion.InsertionLocation & probe_insertion).fetch1('depth')
 
     no_stim_cond = (psth.TrialCondition
                     & {'trial_condition_name':
-                       'all_noearlylick_both_alm_nostim'}).fetch1('KEY')
+                       'all_noearlylick_nostim'}).fetch1('KEY')
 
     bi_stim_cond = (psth.TrialCondition
                     & {'trial_condition_name':
@@ -213,7 +210,7 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
 
     metrics = pd.DataFrame(columns=['unit', 'x', 'y', 'frate_change'])
 
-    _, cue_onset = _get_trial_event_times(['delay'], units, 'all_noearlylick_both_alm_nostim')
+    _, cue_onset = _get_trial_event_times(['delay'], units, 'all_noearlylick_nostim')
     cue_onset = cue_onset[0]
 
     # XXX: could be done with 1x fetch+join
@@ -239,7 +236,7 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
         frate_change = (stim_frate.mean() - ctrl_frate.mean()) / ctrl_frate.mean()
         frate_change = abs(frate_change) if frate_change < 0 else 0.0001
 
-        metrics.loc[u_idx] = (int(unit['unit']), x, y - dv_loc, frate_change)
+        metrics.loc[u_idx] = (int(unit['unit']), x, float(dv_loc) + y, frate_change)
 
     metrics.frate_change = metrics.frate_change / metrics.frate_change.max()
 
@@ -378,73 +375,10 @@ def plot_avg_contra_ipsi_psth(units, axs=None):
     return fig
 
 
-def plot_psth_bilateral_photostim_effect(units, axs=None):
-    units = units.proj()
-
-    hemi = _get_units_hemisphere(units)
-
-    psth_s_l = (psth.UnitPsth * psth.TrialCondition & units
-                & {'trial_condition_name':
-                   'all_noearlylick_both_alm_stim_left'}).fetch('unit_psth')
-
-    psth_n_l = (psth.UnitPsth * psth.TrialCondition & units
-                & {'trial_condition_name':
-                   'all_noearlylick_both_alm_nostim_left'}).fetch('unit_psth')
-
-    psth_s_r = (psth.UnitPsth * psth.TrialCondition & units
-                & {'trial_condition_name':
-                   'all_noearlylick_both_alm_stim_right'}).fetch('unit_psth')
-
-    psth_n_r = (psth.UnitPsth * psth.TrialCondition & units
-                & {'trial_condition_name':
-                   'all_noearlylick_both_alm_nostim_right'}).fetch('unit_psth')
-
-    # get event start times: sample, delay, response
-    period_names, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], units, 'good_noearlylick_hit')
-
-    # get photostim duration
-    stim_durs = np.unique((experiment.Photostim & experiment.PhotostimEvent
-                           * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')
-                           & units).fetch('duration'))
-    stim_dur = _extract_one_stim_dur(stim_durs)
-
-    if hemi == 'left':
-        psth_s_i = psth_s_l
-        psth_n_i = psth_n_l
-        psth_s_c = psth_s_r
-        psth_n_c = psth_n_r
-    else:
-        psth_s_i = psth_s_r
-        psth_n_i = psth_n_r
-        psth_s_c = psth_s_l
-        psth_n_c = psth_n_l
-
-
-    fig = None
-    if axs is None:
-        fig, axs = plt.subplots(1, 2, figsize=(16, 6))
-    assert axs.size == 2
-
-    _plot_avg_psth(psth_n_i, psth_n_c, period_starts, axs[0],
-                   'Control')
-    _plot_avg_psth(psth_s_i, psth_s_c, period_starts, axs[1],
-                   'Bilateral ALM photostim')
-    # cosmetic
-    ymax = max([ax.get_ylim()[1] for ax in axs])
-    for ax in axs:
-        ax.set_ylim((0, ymax))
-
-    # add shaded bar for photostim
-    stim_time = period_starts[np.where(period_names == 'delay')[0][0]]
-    axs[1].axvspan(stim_time, stim_time + stim_dur, alpha=0.3, color='royalblue')
-
-    return fig
-
-
 def plot_psth_photostim_effect(units, condition_name_kw=['both_alm'], axs=None):
     """
     For the specified `units`, plot PSTH comparison between stim vs. no-stim with left/right trial instruction
-    The stim location (or other appropriate search keywords) can be specified in `condition_name_kw` (default: bilateral ALM)
+    The stim location (or other appropriate search keywords) can be specified in `condition_name_kw` (default: both ALM)
     """
     units = units.proj()
 
@@ -511,12 +445,12 @@ def plot_psth_photostim_effect(units, condition_name_kw=['both_alm'], axs=None):
     return fig
 
 
-def plot_coding_direction(units, time_period=None, axs=None):
+def plot_coding_direction(units, time_period=None, label=None, axs=None):
+    # get event start times: sample, delay, response
+    period_names, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], units, 'good_noearlylick_hit')
+
     _, proj_contra_trial, proj_ipsi_trial, time_stamps, _ = psth.compute_CD_projected_psth(
         units.fetch('KEY'), time_period=time_period)
-
-    # get event start times: sample, delay, response
-    period_names, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], units, 'good_noearlylick')
 
     fig = None
     if axs is None:
@@ -533,6 +467,8 @@ def plot_coding_direction(units, time_period=None, axs=None):
     axs.spines['top'].set_visible(False)
     axs.set_ylabel('CD projection (a.u.)')
     axs.set_xlabel('Time (s)')
+    if label:
+        axs.set_title(label)
 
     return fig
 
@@ -548,7 +484,7 @@ def plot_paired_coding_direction(unit_g1, unit_g2, labels=None, time_period=None
         unit_g2.fetch('KEY'), time_period=time_period)
 
     # get event start times: sample, delay, response
-    period_names, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], unit_g1, 'good_noearlylick')
+    period_names, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], unit_g1, 'good_noearlylick_hit')
 
     if labels:
         assert len(labels) == 2
@@ -593,8 +529,8 @@ def plot_paired_coding_direction(unit_g1, unit_g2, labels=None, time_period=None
     i_df['trial-type'] = 'ipsi'
     df = c_df.append(i_df)
 
-    jplot = jointplot_w_hue(data=df, x=labels[0], y=labels[1], hue='trial-type', colormap=['b', 'r'],
-                            figsize=(8, 6), fig=None, scatter_kws=None)
+    jplot = _jointplot_w_hue(data=df, x=labels[0], y=labels[1], hue= 'trial-type', colormap=['b', 'r'],
+                             figsize=(8, 6), fig=None, scatter_kws=None)
     jplot['fig'].show()
 
     return fig

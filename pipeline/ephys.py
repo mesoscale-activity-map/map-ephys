@@ -17,6 +17,7 @@ class ProbeInsertion(dj.Manual):
     -> experiment.Session
     insertion_number: int
     ---
+    -> lab.Probe
     -> lab.ElectrodeConfig
     """
 
@@ -24,12 +25,27 @@ class ProbeInsertion(dj.Manual):
         definition = """
         -> master
         ---
-        -> experiment.BrainLocation
-        ml_location=null: float # um from ref ; right is positive; based on manipulator coordinates/reconstructed track
-        ap_location=null: float # um from ref; anterior is positive; based on manipulator coordinates/reconstructed track
-        dv_location=null: float # um from dura to first site of the probe; ventral is positive; based on manipulator coordinates/reconstructed track
-        ml_angle=null: float # Angle between the manipulator/reconstructed track and the Medio-Lateral axis. A tilt towards the right hemishpere is positive.
-        ap_angle=null: float # Angle between the manipulator/reconstructed track and the Anterior-Posterior axis. An anterior tilt is positive. 
+        -> lab.SkullReference
+        ap_location: decimal(6, 2) # (um) anterior-posterior; ref is 0; more anterior is more positive
+        ml_location: decimal(6, 2) # (um) medial axis; ref is 0 ; more right is more positive
+        depth:       decimal(6, 2) # (um) manipulator depth relative to surface of the brain (0); more ventral is more negative
+        theta:       decimal(5, 2) # (deg) - elevation - rotation about the ml-axis [0, 180] - w.r.t the z+ axis
+        phi:         decimal(5, 2) # (deg) - azimuth - rotation about the dv-axis [0, 360] - w.r.t the x+ axis
+        beta:        decimal(5, 2) # (deg) rotation about the shank of the probe [-180, 180] - clockwise is increasing in degree - 0 is the probe-front facing anterior
+        """
+
+    class RecordableBrainRegion(dj.Part):
+        definition = """
+        -> master
+        -> lab.BrainArea
+        -> lab.Hemisphere
+        """
+
+    class InsertionNote(dj.Part):
+        definition = """
+        -> master
+        ---
+        insertion_note: varchar(1000)
         """
 
     class RecordingSystemSetup(dj.Part):
@@ -96,10 +112,10 @@ class ClusteringMethod(dj.Lookup):
     definition = """
     clustering_method: varchar(16)
     """
-    # jrclust is the version Dave uses (it's actually jrclust_v3)
+    # jrclust_v3 is the version Dave uses
     # jrclust_v4 is the version Susu uses
 
-    contents = zip(['jrclust', 'kilosort', 'jrclust_v4'])
+    contents = zip(['jrclust_v3', 'kilosort', 'jrclust_v4', 'kilosort2'])
 
 
 @schema
@@ -118,8 +134,8 @@ class Unit(dj.Imported):
     unit_uid : int # unique across sessions/animals
     -> UnitQualityType
     -> lab.ElectrodeConfig.Electrode # site on the electrode for which the unit has the largest amplitude
-    unit_posx : double # (um) estimated x position of the unit relative to probe's (0,0)
-    unit_posy : double # (um) estimated y position of the unit relative to probe's (0,0)
+    unit_posx : double # (um) estimated x position of the unit relative to probe's tip (0,0)
+    unit_posy : double # (um) estimated y position of the unit relative to probe's tip (0,0)
     spike_times : longblob  # (s) from the start of the first data point used in clustering
     unit_amp : double
     unit_snr : double
@@ -133,15 +149,6 @@ class Unit(dj.Imported):
         -> experiment.SessionTrial
         """
 
-    class UnitPosition(dj.Part):
-        definition = """
-        # Estimated unit position in the brain
-        -> master
-        -> ccf.CCF
-        ---
-        -> experiment.BrainLocation
-        """
-
     class TrialSpikes(dj.Part):
         definition = """
         #
@@ -150,6 +157,18 @@ class Unit(dj.Imported):
         ---
         spike_times : longblob # (s) per-trial spike times relative to go-cue
         """
+
+
+@schema
+class ClusteringLabel(dj.Imported):
+    definition = """
+    -> Unit
+    ---
+    clustering_time: datetime  # time of generation of this set of clustering results 
+    quality_control: bool  # has this clustering results undergone quality control
+    manual_curation: bool  # is manual curation performed on this clustering result
+    clustering_note=null: varchar(2000)  
+    """
 
 
 @schema
@@ -169,7 +188,8 @@ class UnitCoarseBrainLocation(dj.Computed):
     # Estimated unit position in the brain
     -> Unit
     ---
-    -> [nullable] experiment.BrainLocation
+    -> [nullable] lab.BrainArea
+    -> [nullable] lab.Hemisphere
     """
 
     key_source = Unit & BrainAreaDepthCriteria
@@ -240,8 +260,6 @@ class UnitCellType(dj.Computed):
                           cell_type='FS' if waveform_width < 0.4 else 'Pyr'))
 
 
-
-
 @schema
 class UnitStat(dj.Computed):
     definition = """
@@ -251,18 +269,88 @@ class UnitStat(dj.Computed):
     avg_firing_rate=null: float  # (Hz)
     """
 
-    isi_violation_thresh = 0.002  # violation threshold of 2 ms
+    isi_threshold = 0.002  # threshold for isi violation of 2 ms
+    min_isi = 0  # threshold for duplicate spikes
 
     # NOTE - this key_source logic relies on ALL TrialSpikes ingest all at once in a transaction
     key_source = ProbeInsertion & Unit.TrialSpikes
 
     def make(self, key):
+        # Following isi_violations() function
+        # Ref: https://github.com/AllenInstitute/ecephys_spike_sorting/blob/master/ecephys_spike_sorting/modules/quality_metrics/metrics.py
         def make_insert():
             for unit in (Unit & key).fetch('KEY'):
                 trial_spikes, tr_start, tr_stop = (Unit.TrialSpikes * experiment.SessionTrial & unit).fetch(
                     'spike_times', 'start_time', 'stop_time')
-                isi = np.hstack(np.diff(spks) for spks in trial_spikes)
-                yield {**unit,
-                       'isi_violation': sum((isi < self.isi_violation_thresh).astype(int)) / len(isi) if isi.size else None,
-                       'avg_firing_rate': len(np.hstack(trial_spikes)) / sum(tr_stop - tr_start) if isi.size else None}
+
+                isis = np.hstack(np.diff(spks) for spks in trial_spikes)
+
+                if isis.size > 0:
+                    # remove duplicated spikes
+                    processed_trial_spikes = []
+                    for spike_train in trial_spikes:
+                        duplicate_spikes = np.where(np.diff(spike_train) <= self.min_isi)[0]
+                        processed_trial_spikes.append(np.delete(spike_train, duplicate_spikes + 1))
+
+                    num_spikes = len(np.hstack(processed_trial_spikes))
+                    avg_firing_rate = num_spikes / float(sum(tr_stop - tr_start))
+
+                    num_violations = sum(isis < self.isi_violation_thresh)
+                    violation_time = 2 * num_spikes * (self.isi_threshold - self.min_isi)
+                    violation_rate = num_violations / violation_time
+                    fpRate = violation_rate / avg_firing_rate
+
+                    yield {**unit, 'isi_violation': fpRate, 'avg_firing_rate': avg_firing_rate}
+
+                else:
+                    yield {**unit, 'isi_violation': None, 'avg_firing_rate': None}
+
         self.insert(make_insert())
+
+
+@schema
+class ClusterMetric(dj.Imported):
+    definition = """ 
+    # Quality metrics for sorted unit
+    # Ref: https://github.com/AllenInstitute/ecephys_spike_sorting/blob/master/ecephys_spike_sorting/modules/quality_metrics/README.md
+    -> Unit
+    epoch_name_quality_metrics: varchar(64)
+    ---
+    presence_ratio: float  # Fraction of epoch in which spikes are present
+    amplitude_cutoff: float  # Estimate of miss rate based on amplitude histogram
+    isolation_distance=null: float  # Distance to nearest cluster in Mahalanobis space
+    l_ratio=null: float  # 
+    d_prime=null: float  # Classification accuracy based on LDA
+    nn_hit_rate=null: float  # 
+    nn_miss_rate=null: float
+    silhouette_score=null: float  # Standard metric for cluster overlap
+    max_drift=null: float  # Maximum change in spike depth throughout recording
+    cumulative_drift=null: float  # Cumulative change in spike depth throughout recording 
+    """
+
+
+@schema
+class WaveformMetric(dj.Imported):
+    definition = """
+    -> Unit
+    epoch_name_waveform_metrics: varchar(64)
+    ---
+    duration: float
+    halfwidth: float
+    pt_ratio: float
+    repolarization_slope=null: float
+    recovery_slope=null: float
+    spread=null: float
+    velocity_above=null: float
+    velocity_below=null: float   
+    """
+
+
+# TODO: confirm the logic/need for this table
+@schema
+class UnitCCF(dj.Computed):
+    definition = """ 
+    -> Unit
+    ---
+    -> ccf.CCF
+    """

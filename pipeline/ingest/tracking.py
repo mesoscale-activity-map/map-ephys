@@ -21,26 +21,30 @@ log = logging.getLogger(__name__)
 [behavior_ingest]  # NOQA schema only use
 
 
-@schema
-class TrackingDataPath(dj.Lookup):
-    # ephys data storage location(s)
-    definition = """
-    -> lab.Rig
-    tracking_data_path:         varchar(255)            # rig data path
-    """
+def get_tracking_paths():
+    '''
+    retrieve behavior rig paths from dj.config
+    config should be in dj.config of the format:
 
-    @property
-    def contents(self):
-        if 'tracking_data_paths' in dj.config['custom']:  # for local testing
-            return dj.config['custom']['tracking_data_paths']
+      dj.config = {
+        ...,
+        'custom': {
+        "tracking_data_paths":
+            [
+                ["RRig", "/path/string"]
+            ]
+        }
+        ...
+      }
 
-        return [('RRig', r'H:\\data\MAP',)]
+    '''
+    return dj.config.get('custom', {}).get('tracking_data_paths', None)
 
 
 @schema
 class TrackingIngest(dj.Imported):
     definition = """
-    -> behavior_ingest.BehaviorIngest
+    -> experiment.Session
     """
 
     class TrackingFile(dj.Part):
@@ -52,13 +56,13 @@ class TrackingIngest(dj.Imported):
         tracking_file:          varchar(255)            # tracking file subpath
         '''
 
+    key_source = experiment.Session - tracking.Tracking
+
     def make(self, key):
         '''
         TrackingIngest .make() function
         '''
         log.info('TrackingIngest().make(): key: {k}'.format(k=key))
-
-        self.insert1(key)
 
         h2o = (lab.WaterRestriction() & key).fetch1('water_restriction_number')
         session = (experiment.Session() & key).fetch1()
@@ -67,22 +71,22 @@ class TrackingIngest(dj.Imported):
         log.info('got session: {} ({} trials)'.format(session, len(trials)))
 
         sdate = session['session_date']
-        sdate_iso = sdate.isoformat()  # YYYY-MM-DD
         sdate_sml = "{}{:02d}{:02d}".format(sdate.year, sdate.month, sdate.day)
 
-        paths = TrackingDataPath.fetch(as_dict=True)
+        paths = get_tracking_paths()
         devices = tracking.TrackingDevice().fetch(as_dict=True)
 
         # paths like: <root>/<h2o>/YYYY-MM-DD/tracking
+        tracking_files = []
         for p, d in ((p, d) for d in devices for p in paths):
 
             tdev = d['tracking_device']
             tpos = d['tracking_position']
-            tdat = p['tracking_data_path']
+            tdat = p[-1]
 
             log.info('checking {} for tracking data'.format(tdat))
 
-            tpath = pathlib.Path(tdat, h2o, sdate_iso, 'tracking')
+            tpath = pathlib.Path(tdat, h2o, sdate.strftime('%Y%m%d'), 'tracking')
 
             if not tpath.exists():
                 log.warning('tracking path {} n/a - skipping'.format(tpath))
@@ -183,11 +187,13 @@ class TrackingIngest(dj.Imported):
                         **{fmap[k]: v for k, v in recs['paw_right'].items()
                            if k in fmap}}, allow_direct_insert=True)
 
-                TrackingIngest.TrackingFile.insert1(
-                    {**key, 'trial': tmap[t], 'tracking_device': tdev,
+                tracking_files.append({**key, 'trial': tmap[t], 'tracking_device': tdev,
                      'tracking_file': str(tfull.relative_to(tdat))})
 
             log.info('... completed {}/{} items.'.format(i, n_tmap))
+
+        self.insert1(key)
+        self.TrackingFile.insert(tracking_files)
 
         log.info('... done.')
 
@@ -196,7 +202,7 @@ class TrackingIngest(dj.Imported):
         ''' load camera position file-to-trial map '''
         log.debug("load_campath(): {}".format(campath))
         with open(campath, 'r') as f:
-            return {int(k): int(v) - 1 for i in f
+            return {int(k): int(v) for i in f
                     for k, v in (i.strip().split('\t'),)}
 
     def load_tracking(self, trkpath):

@@ -19,7 +19,6 @@ from pipeline import experiment
 from pipeline import ephys
 from pipeline import histology
 from pipeline import tracking
-from pipeline import publication
 from pipeline import get_schema_name
 
 
@@ -52,9 +51,7 @@ def mockdata():
     reload(ephys)
     reload(histology)
     reload(tracking)
-    reload(publication)
     try:
-        # TODO: these should be loaded in a more 'official' way
         lab.Person().insert1({
             'username': 'unknown',
             'fullname': 'Unknown'},
@@ -572,25 +569,61 @@ def mockdata():
             'wr_start_weight': 21.0},
             skip_duplicates=True
         )
-
-        # Subject 888888 / SC022
+        # Subject 440959 / SC011
         lab.Subject().insert1({
-            'subject_id': 888888,
+            'subject_id': 440959,
             'username': 'susu',
-            'cage_number': 888888,
-            'date_of_birth': '2018-08-06',
+            'cage_number': 440959,
+            'date_of_birth': '2018-10-09',
             'sex': 'M',
             'animal_source': 'Jackson labs'},
             skip_duplicates=True
         )
         lab.WaterRestriction().insert1({
-            'subject_id': 888888,
-            'water_restriction_number': 'SC022',
-            'cage_number': 888888,
-            'wr_start_date': '2018-09-30',
-            'wr_start_weight': 21.0},
+            'subject_id': 440959,
+            'water_restriction_number': 'SC011',
+            'cage_number': 440959,
+            'wr_start_date': '2018-12-21',
+            'wr_start_weight': 22.8},
             skip_duplicates=True
         )
+        # Subject 442571 / SC022
+        lab.Subject().insert1({
+            'subject_id': 442571,
+            'username': 'susu',
+            'cage_number': 442571,
+            'date_of_birth': '2018-10-29',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates=True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 442571,
+            'water_restriction_number': 'SC022',
+            'cage_number': 442571,
+            'wr_start_date': '2019-01-02',
+            'wr_start_weight': 26.5},
+            skip_duplicates=True
+        )
+        # Subject 460432 / SC032
+        lab.Subject().insert1({
+            'subject_id': 460432,
+            'username': 'susu',
+            'cage_number': 173167,
+            'date_of_birth': '2019-07-15',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates=True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 460432,
+            'water_restriction_number': 'SC032',
+            'cage_number': 173167,
+            'wr_start_date': '2019-09-20',
+            'wr_start_weight': 22.8},
+            skip_duplicates=True
+        )
+
         # Rig
         lab.Rig().insert1({
             'rig': 'TRig1',
@@ -629,113 +662,7 @@ def mockdata():
             skip_duplicates=True
         )
 
-        # ---- Brain Location ----
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'left_alm',
-            'brain_area': 'ALM',
-            'hemisphere': 'left',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'right_alm',
-            'brain_area': 'ALM',
-            'hemisphere': 'right',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'both_alm',
-            'brain_area': 'ALM',
-            'hemisphere': 'both',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'left_medulla',
-            'brain_area': 'Medulla',
-            'hemisphere': 'left',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'right_medulla',
-            'brain_area': 'Medulla',
-            'hemisphere': 'right',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'both_medulla',
-            'brain_area': 'Medulla',
-            'hemisphere': 'both',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'left_striatum',
-            'brain_area': 'Striatum',
-            'hemisphere': 'left',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'right_striatum',
-            'brain_area': 'Striatum',
-            'hemisphere': 'right',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'both_striatum',
-            'brain_area': 'Striatum',
-            'hemisphere': 'both',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'left_thalamus',
-            'brain_area': 'Thalamus',
-            'hemisphere': 'left',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'right_thalamus',
-            'brain_area': 'Thalamus',
-            'hemisphere': 'right',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-        experiment.BrainLocation.insert1({
-            'brain_location_name': 'both_thalamus',
-            'brain_area': 'Thalamus',
-            'hemisphere': 'both',
-            'skull_reference': 'Bregma'},
-            skip_duplicates=True
-        )
-
-        # Probe (Neuropixel)
-        npx_probe_model = '15131808323'   # using Model No. - SN TBD?
-        lab.Probe.insert1({
-            'probe': npx_probe_model,
-            'probe_type': 'neuropixel'},
-            skip_duplicates=True,
-        )
-        lab.Probe.Electrode.insert(
-            ({'probe': npx_probe_model, 'electrode': x} for
-             x in range(1, 961)),
-            skip_duplicates=True,
-        )
+        lab.ProbeType.create_neuropixels_probe()
 
     except Exception as e:
         print("error creating mock data: {e}".format(e=e), file=sys.stderr)
@@ -746,117 +673,225 @@ def post_ephys(*args):
     from pipeline.ingest import ephys as ephys_ingest
     for ef in ephys_ingest.EphysIngest.EphysFile().fetch(as_dict=True):
         fname = ef['ephys_file']
-        print('attempting Probe InsertionLocation for fname: ', end='')
-        if re.match('.*2018-12-07.*dl59.*.mat', fname):
-            recs = [{
+        print('attempting Probe InsertionLocation for fname: {}'.format(fname),
+              end=' ')
+
+        if re.match('.*20181207.*dl59.*.mat', fname):
+            rec_locs = [{
                 'subject_id': 435884,
                 'session': 1,
                 'insertion_number': 1,
-                'brain_location_name': 'right_alm',
+                'skull_reference': 'bregma',
                 'ml_location': 1500,
                 'ap_location': 2500,
-                'dv_location': 1668.9,
-                # ml_angle:
-                # ap_angle:
+                'depth': -1668.9,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
             }]
-            print('match!: {}'.format(recs))
-        elif re.match('.*2018-07-16.*tw34.*.mat', fname):
-            recs = [{
+            rec_brain = [{
+                'subject_id': 435884,
+                'session': 1,
+                'insertion_number': 1,
+                'brain_area': 'ALM',
+                'hemisphere': 'right'
+            }]
+            print('match!: {} - {}'.format(rec_brain, rec_locs))
+        elif re.match('.*20180716.*tw34.*.mat', fname):
+            rec_locs = [{
                 'subject_id': 412330,
                 'session': 1,
                 'insertion_number': 1,
-                'brain_location_name': 'right_alm',
+                'skull_reference': 'Bregma',
                 'ml_location': 1500,
                 'ap_location': 2500,
-                'dv_location': 2103.2,
-                # ml_angle:
-                # ap_angle:
-            },{
+                'depth': -2103.2,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
+            }, {
                 'subject_id': 412330,
                 'session': 1,
                 'insertion_number': 2,
-                'brain_location_name': 'right_medulla',
+                'skull_reference': 'Bregma',
                 'ml_location': 1000,
                 'ap_location': 6500,
-                'dv_location': 5237.5,
-                # ml_angle:
-                # ap_angle:
+                'depth': -5237.5,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
             }]
-            print('match!: {}'.format(recs))
-        elif re.match('.*SC022/2019-03-03.*', fname):
+
+            rec_brain = [{
+                'subject_id': 412330,
+                'session': 1,
+                'insertion_number': 1,
+                'brain_area': 'ALM',
+                'hemisphere': 'right'
+            }, {
+                'subject_id': 412330,
+                'session': 1,
+                'insertion_number': 2,
+                'brain_area': 'Medulla',
+                'hemisphere': 'right'
+            }
+            ]
+
+            print('match!: {} - {}'.format(rec_brain, rec_locs))
+        elif re.match('.*SC022/20190303.*', fname):
             # FIXME: 15deg dv angle -> ?
             # FIXME: 'you should add 175um to the note depths
             #   'because where I used as zero reference is where the 1st tip
             #    enters the dura' ...
             kbase = {'subject_id': 888888, 'session': 1}
-            recs = [{
+            rec_locs = [{
                 **kbase,
                 'insertion_number': 1,
-                'brain_location_name': 'left_alm',
+                'skull_reference': 'Bregma',
                 'ml_location': 1500,
                 'ap_location': 2500,
-                'dv_location': 2900,
-                # ml_angle:
-                # ap_angle:
+                'depth': -2900,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
             },{
                 **kbase,
                 'insertion_number': 2,
-                'brain_location_name': 'right_alm',
+                'skull_reference': 'Bregma',
                 'ml_location': 1500,
                 'ap_location': 2500,
-                'dv_location': 2900,
-                # ml_angle:
-                # ap_angle:
+                'depth': -2900,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
             },{
                 **kbase,
                 'insertion_number': 3,
-                'brain_location_name': 'left_striatum',
+                'skull_reference': 'Bregma',
                 'ml_location': 1000,
                 'ap_location': 2800,
-                'dv_location': 4500,
-                # ml_angle:
-                # ap_angle:
+                'depth': -4500,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
             },{
                 **kbase,
                 'insertion_number': 4,
-                'brain_location_name': 'left_striatum',
+                'skull_reference': 'Bregma',
                 'ml_location': 1000,
                 'ap_location': 2800,
-                'dv_location': 4500,
-                # ml_angle:
-                # ap_angle:
+                'depth': -4500,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
             }]
-            print('match!: {}'.format(recs))
-        elif re.match('.*2018-07-10.*dl36.*.mat', fname):
-            kbase = {'subject_id': 412753, 'session': 1}
-            recs = [{
+
+            rec_brain = [{
                 **kbase,
                 'insertion_number': 1,
-                'brain_location_name': 'right_alm',
-                'ml_location': 1000,
-                'ap_location': 2500,
-                'dv_location': 2019.4,
-                # ml_angle:
-                # ap_angle:
-            },{
+                'brain_area': 'ALM',
+                'hemisphere': 'left'
+            }, {
                 **kbase,
                 'insertion_number': 2,
-                'brain_location_name': 'right_thalamus',
+                'brain_area': 'ALM',
+                'hemisphere': 'right'
+            }, {
+                **kbase,
+                'insertion_number': 3,
+                'brain_area': 'striatum',
+                'hemisphere': 'left'
+            }, {
+                **kbase,
+                'insertion_number': 4,
+                'brain_area': 'striatum',
+                'hemisphere': 'right'
+            }
+            ]
+
+            print('match!: {} - {}'.format(rec_brain, rec_locs))
+        elif re.match('.*2018-07-10.*dl36.*.mat', fname):
+            kbase = {'subject_id': 412753, 'session': 1}
+            rec_locs = [{
+                **kbase,
+                'insertion_number': 1,
+                'skull_reference': 'Bregma',
+                'ml_location': 1000,
+                'ap_location': 2500,
+                'depth': -2019.4,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
+            }, {
+                **kbase,
+                'insertion_number': 2,
+                'skull_reference': 'Bregma',
                 'ml_location': 1000,
                 'ap_location': 1750,
-                'dv_location': 4954.8,
-                # ml_angle:
-                # ap_angle:
+                'depth': -4954.8,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
             }]
-            print('match!: {}'.format(recs))
+
+            rec_brain = [{
+                **kbase,
+                'insertion_number': 1,
+                'brain_area': 'ALM',
+                'hemisphere': 'left'
+            }, {
+                **kbase,
+                'insertion_number': 2,
+                'brain_area': 'Thalamus',
+                'hemisphere': 'right'
+            }
+            ]
+            print('match!: {} - {}'.format(rec_brain, rec_locs))
+        elif re.match('.*20181125.*dl56.*.mat', fname):
+            kbase = {'subject_id': 432572, 'session': 1}
+            rec_locs = [{
+                **kbase,
+                'insertion_number': 1,
+                'skull_reference': 'Bregma',
+                'ml_location': -1500,
+                'ap_location': 2500,
+                'depth': -1666.60,
+                'theta': 15,
+                'phi': 90,
+                'beta': 90
+            }, {
+                **kbase,
+                'insertion_number': 2,
+                'skull_reference': 'Bregma',
+                'ml_location': 1000,
+                'ap_location': -6500,
+                'depth': -4442,
+                'theta': 0,
+                'phi': 0,
+                'beta': 0
+            }]
+
+            rec_brain = [{
+                **kbase,
+                'insertion_number': 1,
+                'brain_area': 'ALM',
+                'hemisphere': 'left'
+            }, {
+                **kbase,
+                'insertion_number': 2,
+                'brain_area': 'Medulla',
+                'hemisphere': 'right'
+            }
+            ]
+            print('match!: {} - {}'.format(rec_brain, rec_locs))
         else:
             print('no match!')
+            continue
 
-        ephys.ProbeInsertion.InsertionLocation().insert(
-            recs, skip_duplicates=True)
-        ephys.ProbeInsertion.RecordingSystemSetup().insert(
-            [{**r, 'sampling_rate': 30000} for r in recs],
-            ignore_extra_fields=True, skip_duplicates=True)
+        ephys.ProbeInsertion.InsertionLocation.insert(
+            rec_locs, skip_duplicates=True)
+        ephys.ProbeInsertion.RecordableBrainRegion.insert(
+            rec_brain, skip_duplicates=True)
 
 
 def preload(*args):
