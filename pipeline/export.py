@@ -123,8 +123,10 @@ def export_recording(insert_key, filepath=None):
     # [[depth_in_um, cell_type, recording_location] ...]
     print('... neuron_unit_info:', end='')
 
-    dv = insertion['dv_location'] if insertion['dv_location'] else np.nan
-    loc = insertion['brain_location_name']
+    dv = float(insertion['depth']) if insertion['depth'] else np.nan
+    loc = (ephys.ProbeInsertion & insert_key).aggr(ephys.ProbeInsertion.RecordableBrainRegion.proj(
+        brain_region='CONCAT(hemisphere, " ", brain_area)'),
+        brain_regions='GROUP_CONCAT(brain_region) SEPARATOR(, )').fetch1('brain_regions')
 
     types = (ephys.UnitCellType & insert_key).fetch()
 
@@ -203,17 +205,18 @@ def export_recording(insert_key, filepath=None):
 
     _ts = []  # [[power, type, on-time, off-time], ...]
 
-    photostim = (experiment.Photostim() & insert_key).fetch()
+    photostim = (experiment.Photostim * experiment.PhotostimBrainRegion.proj(
+        stim_brain_region='CONCAT(stim_laterality, " ", stim_brain_area)') & insert_key).fetch()
 
     photostim_map = {}
     photostim_dat = {}
-    photostim_keys = ['left_alm', 'right_alm', 'both_alm']
+    photostim_keys = ['left ALM', 'right ALM', 'both ALM']
     photostim_vals = [1, 2, 6]
 
     # XXX: we don't detect duplicate presence of photostim_keys in data
     for fk, rk in zip(photostim_keys, photostim_vals):
 
-        i = np.where(photostim['brain_location_name'] == fk)[0][0]
+        i = np.where(photostim['stim_brain_region'] == fk)[0][0]
         j = photostim[i]['photo_stim']
         photostim_map[j] = rk
         photostim_dat[j] = photostim[i]

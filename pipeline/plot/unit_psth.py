@@ -2,8 +2,8 @@
 import numpy as np
 
 import matplotlib.pyplot as plt
-from pipeline import psth, experiment, ephys
-from pipeline.plot.util import _get_trial_event_times
+from pipeline import psth
+from pipeline.util import _get_trial_event_times, _get_units_hemisphere
 
 
 _plt_xlim = [-3, 3]
@@ -21,8 +21,10 @@ def _plot_spike_raster(ipsi, contra, vlines=[], shade_bar=None, ax=None, title='
     for i, tr in enumerate(set(contra['raster'][1])):
         contra_tr = np.where(contra['raster'][1] == tr, i, contra_tr)
 
+    ipsi_tr_max = ipsi_tr.max() if ipsi_tr.size > 0 else 0
+
     ax.plot(ipsi['raster'][0], ipsi_tr, 'r.', markersize=1)
-    ax.plot(contra['raster'][0], contra_tr + ipsi_tr.max() + 1, 'b.', markersize=1)
+    ax.plot(contra['raster'][0], contra_tr + ipsi_tr_max + 1, 'b.', markersize=1)
 
     for x in vlines:
         ax.axvline(x=x, linestyle='--', color='k')
@@ -61,8 +63,7 @@ def plot_unit_psth(unit_key, axs=None, title='', xlim=_plt_xlim):
     condition_name_kw: list of keywords to match for the TrialCondition name
     """
 
-    hemi = (ephys.ProbeInsertion.InsertionLocation
-            * experiment.BrainLocation & unit_key).fetch1('hemisphere')
+    hemi = _get_units_hemisphere(unit_key)
 
     ipsi_hit_unit_psth = psth.UnitPsth.get_plotting_data(
         unit_key, {'trial_condition_name': f'good_noearlylick_{"left" if hemi == "left" else "right"}_hit'})
@@ -75,7 +76,6 @@ def plot_unit_psth(unit_key, axs=None, title='', xlim=_plt_xlim):
 
     contra_miss_unit_psth = psth.UnitPsth.get_plotting_data(
         unit_key, {'trial_condition_name':  f'good_noearlylick_{"right" if hemi == "left" else "left"}_miss'})
-
 
     # get event start times: sample, delay, response
     periods, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], unit_key, 'good_noearlylick_hit')

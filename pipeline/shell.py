@@ -6,6 +6,8 @@ import logging
 from code import interact
 import time
 import numpy as np
+import pandas as pd
+import datetime
 
 import datajoint as dj
 
@@ -85,13 +87,80 @@ def ingest_histology(*args):
     histology_ingest.HistologyIngest().populate(display_progress=True)
 
 
-def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': True}):
+def load_animal(excel_fp, sheet_name='Sheet1'):
+    df = pd.read_excel(excel_fp, sheet_name)
+    df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
+
+    subjects, water_restrictions, subject_ids = [], [], []
+    for i, row in df.iterrows():
+        if row.subject_id not in subject_ids and {'subject_id': row.subject_id} not in lab.Subject.proj():
+            subject = {'subject_id': row.subject_id, 'username': row.username,
+                       'cage_number': row.cage_number, 'date_of_birth': row.date_of_birth.date(),
+                       'sex': row.sex, 'animal_source': row.animal_source}
+            wr = {'subject_id': row.subject_id, 'water_restriction_number': row.water_restriction_number,
+                  'cage_number': row.cage_number, 'wr_start_date': row.wr_start_date.date(),
+                  'wr_start_weight': row.wr_start_weight}
+            subject_ids.append(row.subject_id)
+            subjects.append(subject)
+            water_restrictions.append(wr)
+
+    lab.Subject.insert(subjects)
+    lab.WaterRestriction.insert(water_restrictions)
+
+    log.info('Inserted {} subjects'.format(len(subjects)))
+    log.info('Water restriction number: {}'.format([s['water_restriction_number'] for s in water_restrictions]))
+
+
+def load_insertion_location(excel_fp, sheet_name='Sheet1'):
+    from pipeline.ingest import behavior as behav_ingest
+
+    df = pd.read_excel(excel_fp, sheet_name)
+    df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
+
+    insertion_locations = []
+    recordable_brain_regions = []
+    for i, row in df.iterrows():
+        sess_key = experiment.Session & (behav_ingest.BehaviorIngest.BehaviorFile
+                                         & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
+                                         & 'behavior_file LIKE "%{}%{}_{}%"'.format(row.water_restriction_number,
+                                                                                    row.session_date.date().strftime('%Y%m%d'),
+                                                                                    row.behaviour_time))
+        if sess_key:
+            pinsert_key = dict(sess_key.fetch1('KEY'), insertion_number=row.insertion_number)
+            if pinsert_key in ephys.ProbeInsertion.proj():
+                if not (ephys.ProbeInsertion.InsertionLocation & pinsert_key):
+                    insertion_locations.append(dict(pinsert_key, skull_reference=row.skull_reference,
+                                                    ap_location=row.ap_location, ml_location=row.ml_location,
+                                                    depth=row.depth, theta=row.theta, phi=row.phi, beta=row.beta))
+                if not (ephys.ProbeInsertion.RecordableBrainRegion & pinsert_key):
+                    recordable_brain_regions.append(dict(pinsert_key, brain_area=row.brain_area,
+                                                         hemisphere=row.hemisphere))
+
+    log.debug('InsertionLocation: {}'.format(insertion_locations))
+    log.debug('RecordableBrainRegion: {}'.format(recordable_brain_regions))
+
+    ephys.ProbeInsertion.InsertionLocation.insert(insertion_locations)
+    ephys.ProbeInsertion.RecordableBrainRegion.insert(recordable_brain_regions)
+
+    log.info('load_insertion_location - Number of insertions: {}'.format(len(insertion_locations)))
+
+
+def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': True}):
+
+    log.info('experiment.PhotostimBrainRegion.populate()')
+    experiment.PhotostimBrainRegion.populate(**populate_settings)
+
+    log.info('ephys.UnitCoarseBrainLocation.populate()')
+    ephys.UnitCoarseBrainLocation.populate(**populate_settings)
 
     log.info('ephys.UnitStat.populate()')
     ephys.UnitStat.populate(**populate_settings)
 
     log.info('ephys.UnitCellType.populate()')
     ephys.UnitCellType.populate(**populate_settings)
+
+
+def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': True}):
 
     log.info('psth.UnitPsth.populate()')
     psth.UnitPsth.populate(**populate_settings)
@@ -178,13 +247,18 @@ def automate_computation():
     from pipeline import report
     populate_settings = {'reserve_jobs': True, 'suppress_errors': True, 'display_progress': True}
     while True:
+        log.info('Populate for: Ephys - PSTH - Report')
+        populate_ephys(populate_settings)
         populate_psth(populate_settings)
         generate_report(populate_settings)
 
+        log.info('report.delete_outdated_probe_tracks()')
         report.delete_outdated_probe_tracks()
 
         # random sleep time between 5 to 10 minutes
-        time.sleep(np.random.randint(300, 600))
+        sleep_time = np.random.randint(300, 600)
+        log.info('Sleep: {} minutes'.format(sleep_time / 60))
+        time.sleep(sleep_time)
 
 
 actions = {
@@ -200,5 +274,7 @@ actions = {
     'shell': shell,
     'erd': erd,
     'ccfload': ccfload,
-    'automate-computation': automate_computation
+    'automate-computation': automate_computation,
+    'load-insertion-location': load_insertion_location,
+    'load-animal': load_animal
 }
