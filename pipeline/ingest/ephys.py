@@ -1171,11 +1171,15 @@ def extract_clustering_info(cluster_output_dir, cluster_method):
         curation_prefix = 'curated_' if np.any(curation_row) else ''
         if creation_time is None and curation_prefix == 'curated_':
             row_meta = phylog.meta[np.where(curation_row)[0].max()]
-            time_str = re.search('\d{2}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}', row_meta)
-            if time_str:
-                creation_time = datetime.strptime(time_str.group(), '%Y-%m-%d %H:%M:%S')
+            datetime_str = re.search('\d{2}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}', row_meta)
+            if datetime_str:
+                creation_time = datetime.strptime(datetime_str.group(), '%Y-%m-%d %H:%M:%S')
             else:
                 creation_time = datetime.fromtimestamp(phylog_fp.stat().st_ctime)
+                time_str = re.search('\d{2}:\d{2}:\d{2}', row_meta)
+                if time_str:
+                    creation_time = datetime.combine(creation_time.date(),
+                                                     datetime.strptime(time_str.group(), '%H:%M:%S').time())
     else:
         curation_prefix = ''
 
