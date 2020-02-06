@@ -111,27 +111,6 @@ within the map-ephys pipeline, along with an
 [ERD](https://docs.datajoint.io/data-definition/ERD.html) illustrating the
 DataJoint tables within each schema and their relationship to each other.
 
-### CCF
-
-This portion of the pipeline will be used to record annotation information in the Allen Institute's [Common Coordinate Framework](http://help.brain-map.org/download/attachments/2818169/MouseCCF.pdf)
-
-![CCF ERD](images/ccf.png)
-
-### EPhys
-
-This portion of the pipeline is used to store / process Electrophysiology
-related records such as electrode type and position information, detected for
-the MAP recordings.
-
-![ephys ERD](images/ephys.png)
-
-### Experiment
-
-This portion of the pipeline is used to store / process experiment related
-records such as task, event, and experiment session for for the MAP experiment.
-
-![experiment ERD](images/experiment.png)
-
 ### Lab
 
 This portion of the pipleine is used to store static laboratory
@@ -143,7 +122,53 @@ shared between various experiments in the lab.
 
 ![pipeline ERD](images/lab.png)
 
-## Publication
+### Experiment
+
+This portion of the pipeline is used to store / process experiment related
+records such as task, event, and experiment session for for the MAP experiment.
+
+![experiment ERD](images/experiment.png)
+
+### EPhys
+
+This portion of the pipeline is used to store / process Electrophysiology
+related records such as electrode type and position information, detected for
+the MAP recordings.
+
+![ephys ERD](images/ephys.png)
+
+### PSTH
+
+This portion of the pipeline is used to store computed ephys results.
+
+![psth ERD](images/psth.png)
+
+### Tracking
+
+This portion of the pipeline is used to store motion tracking related data.
+
+![psth ERD](images/tracking.png)
+
+### CCF
+
+This portion of the pipeline will be used to record annotation information in the Allen Institute's [Common Coordinate Framework](http://help.brain-map.org/download/attachments/2818169/MouseCCF.pdf)
+
+![CCF ERD](images/ccf.png)
+
+### Histology
+
+This portion of the pipeline is used to store histology related data.
+
+![psth ERD](images/histology.png)
+
+### Report
+
+This portion of the pipeline is used to store tables related to automatic
+report image generation.
+
+![psth ERD](images/report.png)
+
+### Publication
 
 This portion of the pipeline is used to manage the upload/download and tracking
 of raw data as published to the petrel service (see [Raw Recording File
