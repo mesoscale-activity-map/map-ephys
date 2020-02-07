@@ -339,7 +339,7 @@ class ProbeLevelPhotostimEffectReport(dj.Computed):
     @property
     def key_source(self):
         # Only process ProbeInsertion with UnitPSTH computation (for all TrialCondition) fully completed
-        ks = ephys.ProbeInsertion * ephys.ClusteringMethod
+        ks = ephys.ProbeInsertion * ephys.ClusteringMethod & ephys.ProbeInsertion.InsertionLocation
         probe_current_psth = ks.aggr(psth.UnitPsth, present_u_psth_count='count(*)')
         # Note: keep this 'probe_full_psth' query in sync with psth.UnitPSTH.key_source
         probe_full_psth = (ks.aggr(
