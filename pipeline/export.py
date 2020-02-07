@@ -56,7 +56,7 @@ def mkfilename(insert_key):
         fvars['session'], fvars['insertion_number'])
 
 
-def export_recordings(insert_keys, output_dir='./', filename=None):
+def export_recording(insert_keys, output_dir='./', filename=None):
     '''
     Export a 'recording' (or a list of recording) (probe specific data + related events) to a file.
 
