@@ -13,3 +13,10 @@ class ClusterMetricError(Exception):
     def __init__(self, msg=None):
         super().__init__('Cluster Metrics Error: \n{}'.format(msg))
     pass
+
+
+class BitCodeError(Exception):
+    """Raise when error encountered when extracting information from bitcode file"""
+    def __init__(self, msg=None):
+        super().__init__('BitCode Error: \n{}'.format(msg))
+    pass

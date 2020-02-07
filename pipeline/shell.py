@@ -18,6 +18,7 @@ from pipeline import ephys
 from pipeline import histology
 from pipeline import tracking
 from pipeline import psth
+from pipeline import report
 from pipeline import export
 from pipeline import publication
 
@@ -236,9 +237,11 @@ def ccfload(*args):
 
 
 def erd(*args):
-    for mod in (ephys, lab, experiment, tracking, psth, ccf, publication):
+    mods = (ephys, lab, experiment, tracking, psth, ccf, histology,
+            report, publication)
+    for mod in mods:
         modname = str().join(mod.__name__.split('.')[1:])
-        fname = os.path.join('pipeline', './images/{}.png'.format(modname))
+        fname = os.path.join('images', '{}.png'.format(modname))
         print('saving', fname)
         dj.ERD(mod, context={modname: mod}).save(fname)
 

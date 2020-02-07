@@ -335,9 +335,9 @@ class WaveformMetric(dj.Imported):
     -> Unit
     epoch_name_waveform_metrics: varchar(64)
     ---
-    duration: float
-    halfwidth: float
-    pt_ratio: float
+    duration=null: float
+    halfwidth=null: float
+    pt_ratio=null: float
     repolarization_slope=null: float
     recovery_slope=null: float
     spread=null: float

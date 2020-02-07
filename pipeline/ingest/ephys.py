@@ -25,7 +25,7 @@ from pipeline import ephys
 from pipeline import InsertBuffer, dict_to_hash
 from pipeline.ingest import behavior as behavior_ingest
 from .. import get_schema_name
-from . import ProbeInsertionError, ClusterMetricError
+from . import ProbeInsertionError, ClusterMetricError, BitCodeError
 
 schema = dj.schema(get_schema_name('ingest_ephys'))
 
@@ -751,8 +751,8 @@ def _get_sess_dir(rigpath, h2o, sess_datetime):
             h2o, sess_datetime.date().strftime('%m%d%y'))))
         for sess_dir in sess_dirs:
             npx_meta = NeuropixelsMeta(next(sess_dir.rglob('{}_*.ap.meta'.format(h2o))))
-            # match the recording_time's minute from npx_meta to that of the behavior recording - this is to handle multiple sessions in a day
-            if abs(npx_meta.recording_time.minute - sess_datetime.minute) <= 1:
+            # ensuring time difference between behavior-start and ephys-start is no more than 2 minutes - this is to handle multiple sessions in a day
+            if abs((npx_meta.recording_time - sess_datetime).seconds) <= 120:
                 dpath = sess_dir
                 dglob = '{}_{}_*_imec[0-9]'.format(h2o, sess_datetime.date().strftime('%m%d%y')) + '/{}'  # probe directory pattern
                 break
@@ -828,8 +828,14 @@ def read_bitcode(bitcode_dir, h2o, skey):
 
     # check if there are `FreeWater` trials (i.e. no trial_go), if so, set those with trial_go value of NaN
     if len(trial_go) < len(trial_start):
-        assert len(experiment.BehaviorTrial & skey & 'free_water = 0') == len(trial_go)
-        assert len(experiment.BehaviorTrial & skey) == len(trial_start)
+
+        if len(experiment.BehaviorTrial & skey) != len(trial_start):
+            raise BitCodeError('Mismatch sTrig ({} elements) and total behavior trials ({} trials)'.format(
+                len(trial_start), len(experiment.BehaviorTrial & skey)))
+
+        if len(experiment.BehaviorTrial & skey & 'free_water = 0') != len(trial_go):
+            raise BitCodeError('Mismatch goCue ({} elements) and non-FreeWater trials ({} trials)'.format(
+                len(trial_go), len(experiment.BehaviorTrial & skey & 'free_water = 0')))
 
         all_tr = (experiment.BehaviorTrial & skey).fetch('trial', order_by='trial')
         no_free_water_tr = (experiment.BehaviorTrial & skey & 'free_water = 0').fetch('trial', order_by='trial')
@@ -1165,11 +1171,15 @@ def extract_clustering_info(cluster_output_dir, cluster_method):
         curation_prefix = 'curated_' if np.any(curation_row) else ''
         if creation_time is None and curation_prefix == 'curated_':
             row_meta = phylog.meta[np.where(curation_row)[0].max()]
-            time_str = re.search('\d{2}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}', row_meta)
-            if time_str:
-                creation_time = datetime.strptime(time_str.group(), '%Y-%m-%d %H:%M:%S')
+            datetime_str = re.search('\d{2}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}', row_meta)
+            if datetime_str:
+                creation_time = datetime.strptime(datetime_str.group(), '%Y-%m-%d %H:%M:%S')
             else:
                 creation_time = datetime.fromtimestamp(phylog_fp.stat().st_ctime)
+                time_str = re.search('\d{2}:\d{2}:\d{2}', row_meta)
+                if time_str:
+                    creation_time = datetime.combine(creation_time.date(),
+                                                     datetime.strptime(time_str.group(), '%H:%M:%S').time())
     else:
         curation_prefix = ''
 
