@@ -162,16 +162,12 @@ def _export_recording(insert_key, output_dir='./', filename=None):
         brain_region='CONCAT(hemisphere, " ", brain_area)'),
         brain_regions='GROUP_CONCAT(brain_region SEPARATOR ", ")').fetch1('brain_regions')
 
-    types = (ephys.UnitCellType & insert_key).fetch()
+    cell_types = {u['unit']: u['cell_type'] for u in (ephys.UnitCellType & insert_key).fetch(as_dict=True)}
 
     _ui = []
     for u in units:
-
-        if u['unit'] in types['unit']:
-            typ = types[np.where(types['unit'] == u['unit'])][0]
-            _ui.append([u['unit_posy'] + dv, typ['cell_type'], loc])
-        else:
-            _ui.append([u['unit_posy'] + dv, 'unknown', loc])
+        typ = cell_types[u['unit']] if u['unit'] in cell_types else 'unknown'
+        _ui.append([u['unit_posy'] + dv, typ, loc])
 
     edata['neuron_unit_info'] = np.array(_ui, dtype='O')
 
