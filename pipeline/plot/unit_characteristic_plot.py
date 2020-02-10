@@ -7,13 +7,12 @@ import seaborn as sns
 import itertools
 import pandas as pd
 
-from pipeline import experiment, ephys, psth
+from pipeline import experiment, ephys, psth, lab
 
 from pipeline.plot.util import (_plot_with_sem, _extract_one_stim_dur,
                                 _plot_stacked_psth_diff, _plot_avg_psth, _jointplot_w_hue)
 from pipeline.util import (_get_units_hemisphere, _get_trial_event_times, _get_clustering_method)
 
-m_scale = 1200
 _plt_xmin = -3
 _plt_xmax = 2
 
@@ -68,15 +67,38 @@ def plot_unit_characteristic(probe_insertion, clustering_method=None, axs=None):
         except ValueError as e:
             raise ValueError(str(e) + '\nPlease specify one with the kwarg "clustering_method"')
 
-    amp, snr, spk_rate, x, y, insertion_depth = (
-            ephys.Unit * ephys.ProbeInsertion.InsertionLocation * ephys.UnitStat
-            & probe_insertion & {'clustering_method': clustering_method} & 'unit_quality != "all"').fetch(
-        'unit_amp', 'unit_snr', 'avg_firing_rate', 'unit_posx', 'unit_posy', 'depth')
+    if clustering_method in ('kilosort2'):
+        q_unit = (ephys.Unit * ephys.ProbeInsertion.InsertionLocation.proj('depth') * ephys.UnitStat
+                  * lab.ElectrodeConfig.Electrode.proj() * lab.ProbeType.Electrode.proj('x_coord', 'y_coord')
+                  & probe_insertion & {'clustering_method': clustering_method} & 'unit_quality != "all"').proj(
+            ..., x='x_coord', y='y_coord')
+    else:
+        q_unit = (ephys.Unit * ephys.ProbeInsertion.InsertionLocation.proj('depth') * ephys.UnitStat
+                  & probe_insertion & {'clustering_method': clustering_method} & 'unit_quality != "all"').proj(
+            ..., x='unit_posx', y='unit_posy')
+
+    amp, snr, spk_rate, x, y, insertion_depth = q_unit.fetch(
+        'unit_amp', 'unit_snr', 'avg_firing_rate', 'x', 'y', 'depth')
 
     metrics = pd.DataFrame(list(zip(*(amp/amp.max(), snr/snr.max(), spk_rate/spk_rate.max(),
                                       x, insertion_depth.astype(float) + y))))
     metrics.columns = ['amp', 'snr', 'rate', 'x', 'y']
 
+    # --- prepare for plotting
+    shank_count = (ephys.ProbeInsertion & probe_insertion).aggr(lab.ElectrodeConfig.Electrode * lab.ProbeType.Electrode,
+                                                                shank_count='count(distinct shank)').fetch1('shank_count')
+    m_scale = get_m_scale(shank_count)
+
+    ymin = metrics.y.min() - 100
+    ymax = metrics.y.max() + 200
+    xmax = 1.3 * metrics.x.max()
+    xmin = -1/6*xmax
+    cosmetic = {'legend': None,
+                'linewidth': 1.75,
+                'alpha': 0.9,
+                'facecolor': 'none', 'edgecolor': 'k'}
+
+    # --- plot
     fig = None
     if axs is None:
         fig, axs = plt.subplots(1, 3, figsize=(10, 8))
@@ -84,20 +106,14 @@ def plot_unit_characteristic(probe_insertion, clustering_method=None, axs=None):
 
     assert axs.size == 3
 
-    ymin = metrics.y.min() - 100
-    ymax = metrics.y.max() + 200
-    cosmetic = {'legend': None,
-                'linewidth': 1.75,
-                'alpha': 0.9,
-                'facecolor': 'none', 'edgecolor': 'k'}
-
     sns.scatterplot(data=metrics, x='x', y='y', s=metrics.amp*m_scale, ax=axs[0], **cosmetic)
     sns.scatterplot(data=metrics, x='x', y='y', s=metrics.snr*m_scale, ax=axs[1], **cosmetic)
     sns.scatterplot(data=metrics, x='x', y='y', s=metrics.rate*m_scale, ax=axs[2], **cosmetic)
 
     # manually draw the legend
     lg_ypos = ymax
-    data = pd.DataFrame({'x': [3, 20, 40], 'y': [lg_ypos, lg_ypos, lg_ypos], 'size_ratio': np.array([0.2, 0.5, 0.8])})
+    data = pd.DataFrame({'x': [0.1*xmax, 0.4*xmax, 0.75*xmax], 'y': [lg_ypos, lg_ypos, lg_ypos],
+                         'size_ratio': np.array([0.2, 0.5, 0.8])})
     for ax, ax_maxval in zip(axs.flatten(), (amp.max(), snr.max(), spk_rate.max())):
         sns.scatterplot(data=data, x='x', y='y', s=data.size_ratio*m_scale, ax=ax, **dict(cosmetic, facecolor='k'))
         for _, r in data.iterrows():
@@ -108,8 +124,8 @@ def plot_unit_characteristic(probe_insertion, clustering_method=None, axs=None):
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
         ax.set_title(title)
-        ax.set_xlim((-10, 60))
-        ax.add_patch(mpl.patches.Rectangle((-7, lg_ypos-80), 62, 210, fill=False))
+        ax.set_xlim((xmin, xmax))
+        ax.plot([0.5*xmin, xmax], [lg_ypos-80, lg_ypos-80], '-k')
         ax.set_ylim((ymin, ymax + 150))
 
     return fig
@@ -124,27 +140,42 @@ def plot_unit_selectivity(probe_insertion, clustering_method=None, axs=None):
         except ValueError as e:
             raise ValueError(str(e) + '\nPlease specify one with the kwarg "clustering_method"')
 
+    if clustering_method in ('kilosort2'):
+        q_unit = (psth.PeriodSelectivity * ephys.Unit * ephys.ProbeInsertion.InsertionLocation
+                  * lab.ElectrodeConfig.Electrode.proj() * lab.ProbeType.Electrode.proj('x_coord', 'y_coord')
+                  * experiment.Period & probe_insertion & {'clustering_method': clustering_method}
+                  & 'period_selectivity != "non-selective"').proj(..., x='unit_posx', y='unit_posy').proj(
+            ..., x='x_coord', y='y_coord')
+    else:
+        q_unit = (psth.PeriodSelectivity * ephys.Unit * ephys.ProbeInsertion.InsertionLocation
+                  * experiment.Period & probe_insertion & {'clustering_method': clustering_method}
+                  & 'period_selectivity != "non-selective"').proj(..., x='unit_posx', y='unit_posy')
+
     attr_names = ['unit', 'period', 'period_selectivity', 'contra_firing_rate',
-                  'ipsi_firing_rate', 'unit_posx', 'unit_posy', 'depth']
-    selective_units = (psth.PeriodSelectivity * ephys.Unit * ephys.ProbeInsertion.InsertionLocation
-                       * experiment.Period & probe_insertion & {'clustering_method': clustering_method}
-                       & 'period_selectivity != "non-selective"').fetch(*attr_names)
+                  'ipsi_firing_rate', 'x', 'y', 'depth']
+    selective_units = q_unit.fetch(*attr_names)
     selective_units = pd.DataFrame(selective_units).T
     selective_units.columns = attr_names
     selective_units.period_selectivity.astype('category')
 
     # --- account for insertion depth (manipulator depth)
-    selective_units.unit_posy = selective_units.depth.values.astype(float) + selective_units.unit_posy
+    selective_units.y = selective_units.depth.values.astype(float) + selective_units.y
 
     # --- get ipsi vs. contra firing rate difference
     f_rate_diff = np.abs(selective_units.ipsi_firing_rate - selective_units.contra_firing_rate)
     selective_units['f_rate_diff'] = f_rate_diff / f_rate_diff.max()
 
     # --- prepare for plotting
+    shank_count = (ephys.ProbeInsertion & probe_insertion).aggr(lab.ElectrodeConfig.Electrode * lab.ProbeType.Electrode,
+                                                                shank_count='count(distinct shank)').fetch1('shank_count')
+    m_scale = get_m_scale(shank_count)
+
     cosmetic = {'legend': None,
                 'linewidth': 0.0001}
-    ymin = selective_units.unit_posy.min() - 100
-    ymax = selective_units.unit_posy.max() + 100
+    ymin = selective_units.y.min() - 100
+    ymax = selective_units.y.max() + 100
+    xmax = 1.3 * selective_units.x.max()
+    xmin = -1/6*xmax
 
     # a bit of hack to get the 'open circle'
     pts = np.linspace(0, np.pi * 2, 24)
@@ -163,7 +194,7 @@ def plot_unit_selectivity(probe_insertion, clustering_method=None, axs=None):
 
     for (title, df), ax in zip(((p, selective_units[selective_units.period == p])
                                 for p in ('sample', 'delay', 'response')), axs):
-        sns.scatterplot(data=df, x='unit_posx', y='unit_posy',
+        sns.scatterplot(data=df, x='x', y='y',
                         s=df.f_rate_diff.values.astype(float)*m_scale,
                         hue='period_selectivity', marker=open_circle,
                         palette={'contra-selective': 'b', 'ipsi-selective': 'r'},
@@ -173,7 +204,7 @@ def plot_unit_selectivity(probe_insertion, clustering_method=None, axs=None):
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
         ax.set_title(f'{title}\n% contra: {contra_p:.2f}\n% ipsi: {100-contra_p:.2f}')
-        ax.set_xlim((-10, 60))
+        ax.set_xlim((xmin, xmax))
         ax.set_xlabel('x')
         ax.set_ylabel('y')
         ax.set_ylim((ymin, ymax))
@@ -534,3 +565,9 @@ def plot_paired_coding_direction(unit_g1, unit_g2, labels=None, time_period=None
     jplot['fig'].show()
 
     return fig
+
+
+# =========== HELPER ==============
+
+def get_m_scale(shank_count):
+    return 1350 - 150*shank_count
