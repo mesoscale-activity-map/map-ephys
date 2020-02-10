@@ -160,7 +160,7 @@ def _export_recording(insert_key, output_dir='./', filename=None):
     dv = float(insertion['depth']) if insertion['depth'] else np.nan
     loc = (ephys.ProbeInsertion & insert_key).aggr(ephys.ProbeInsertion.RecordableBrainRegion.proj(
         brain_region='CONCAT(hemisphere, " ", brain_area)'),
-        brain_regions='GROUP_CONCAT(brain_region) SEPARATOR(, )').fetch1('brain_regions')
+        brain_regions='GROUP_CONCAT(brain_region) SEPARATOR", "').fetch1('brain_regions')
 
     types = (ephys.UnitCellType & insert_key).fetch()
 
