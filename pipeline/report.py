@@ -28,7 +28,6 @@ warnings.filterwarnings('ignore')
 schema = dj.schema(get_schema_name('report'))
 
 os.environ['DJ_SUPPORT_FILEPATH_MANAGEMENT'] = "TRUE"
-dj.config['safemode'] = False
 
 store_stage = pathlib.Path(dj.config['stores']['report_store']['stage'])
 
@@ -533,6 +532,8 @@ def save_figs(figs, fig_names, dir2save, prefix):
 
 
 def delete_outdated_probe_tracks(project_name='MAP'):
+    dj.config['safemode'] = False
+
     if {'project_name': project_name} not in ProjectLevelProbeTrack.proj():
         return
 

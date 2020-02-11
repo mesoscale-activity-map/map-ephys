@@ -271,6 +271,11 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
 
     metrics.frate_change = metrics.frate_change / metrics.frate_change.max()
 
+    # --- prepare for plotting
+    shank_count = (ephys.ProbeInsertion & probe_insertion).aggr(lab.ElectrodeConfig.Electrode * lab.ProbeType.Electrode,
+                                                                shank_count='count(distinct shank)').fetch1('shank_count')
+    m_scale = get_m_scale(shank_count)
+
     fig = None
     if axs is None:
         fig, axs = plt.subplots(1, 1, figsize=(4, 8))
