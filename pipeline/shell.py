@@ -264,6 +264,16 @@ def automate_computation():
         time.sleep(sleep_time)
 
 
+def sync_and_external_cleanup():
+    if dj.config['custom'].get('allow_external_cleanup', False):
+        from pipeline import report
+
+        while True:
+            sync_report()
+            report.schema.external['report_store'].delete(delete_external_files=True)
+            time.sleep(3600)  # once every hour
+
+
 actions = {
     'ingest-behavior': ingest_behavior,
     'ingest-ephys': ingest_ephys,
