@@ -56,7 +56,7 @@ def mkfilename(insert_key):
         fvars['session'], fvars['insertion_number'])
 
 
-def export_recording(insert_keys, output_dir='./', filename=None):
+def export_recording(insert_keys, output_dir='./', filename=None, overwrite=False):
     '''
     Export a 'recording' (or a list of recording) (probe specific data + related events) to a file.
 
@@ -73,18 +73,18 @@ def export_recording(insert_keys, output_dir='./', filename=None):
         Note: if exporting a list of probe keys, filename will be auto-generated
     '''
     if not isinstance(insert_keys, list):
-        _export_recording(insert_keys, output_dir=output_dir, filename=filename)
+        _export_recording(insert_keys, output_dir=output_dir, filename=filename, overwrite=overwrite)
     else:
         filename = None
         for insert_key in insert_keys:
             try:
-                _export_recording(insert_key, output_dir=output_dir, filename=filename)
+                _export_recording(insert_key, output_dir=output_dir, filename=filename, overwrite=overwrite)
             except Exception as e:
                 print(str(e))
                 pass
 
 
-def _export_recording(insert_key, output_dir='./', filename=None):
+def _export_recording(insert_key, output_dir='./', filename=None, overwrite=False):
     '''
     Export a 'recording' (probe specific data + related events) to a file.
 
@@ -104,6 +104,10 @@ def _export_recording(insert_key, output_dir='./', filename=None):
         filename = mkfilename(insert_key)
 
     filepath = pathlib.Path(output_dir) / filename
+
+    if filepath.exists() and not overwrite:
+        print('{} already exists, skipping...'.format(filepath))
+        return
 
     print('exporting {} to {}'.format(insert_key, filepath))
 
