@@ -514,9 +514,10 @@ report_tables = [SessionLevelReport,
 
 
 def get_wr_sessdate(key):
-    water_res_num, session_date = (lab.WaterRestriction * experiment.Session & key).fetch1(
-        'water_restriction_number', 'session_date')
-    return water_res_num, datetime.strftime(session_date, '%Y%m%d')
+    water_res_num, session_datetime = (lab.WaterRestriction * experiment.Session.proj(
+        session_datetime="cast(concat(session_date, ' ', session_time) as datetime)") & key).fetch1(
+        'water_restriction_number', 'session_datetime')
+    return water_res_num, datetime.strftime(session_datetime, '%Y%m%d_%H%M%S')
 
 
 def save_figs(figs, fig_names, dir2save, prefix):
