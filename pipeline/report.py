@@ -28,7 +28,6 @@ warnings.filterwarnings('ignore')
 schema = dj.schema(get_schema_name('report'))
 
 os.environ['DJ_SUPPORT_FILEPATH_MANAGEMENT'] = "TRUE"
-dj.config['safemode'] = False
 
 store_stage = pathlib.Path(dj.config['stores']['report_store']['stage'])
 
@@ -515,9 +514,10 @@ report_tables = [SessionLevelReport,
 
 
 def get_wr_sessdate(key):
-    water_res_num, session_date = (lab.WaterRestriction * experiment.Session & key).fetch1(
-        'water_restriction_number', 'session_date')
-    return water_res_num, datetime.strftime(session_date, '%Y%m%d')
+    water_res_num, session_datetime = (lab.WaterRestriction * experiment.Session.proj(
+        session_datetime="cast(concat(session_date, ' ', session_time) as datetime)") & key).fetch1(
+        'water_restriction_number', 'session_datetime')
+    return water_res_num, datetime.strftime(session_datetime, '%Y%m%d_%H%M%S')
 
 
 def save_figs(figs, fig_names, dir2save, prefix):
@@ -543,11 +543,13 @@ def delete_outdated_probe_tracks(project_name='MAP'):
         uuid_byte = (ProjectLevelProbeTrack & {'project_name': project_name}).proj(ub='(tracks_plot)').fetch1('ub')
         ext_key = {'hash': uuid.UUID(bytes=uuid_byte)}
 
-        with ProjectLevelProbeTrack.connection.transaction:
-            # delete the outdated Probe Tracks
-            (ProjectLevelProbeTrack & {'project_name': project_name}).delete()
-            # delete from external store
-            (schema.external['report_store'] & ext_key).delete(delete_external_files=True)
-            print('Outdated ProjectLevelProbeTrack deleted')
+        with dj.config(safemode=False) as cfg:
+            with ProjectLevelProbeTrack.connection.transaction:
+                # delete the outdated Probe Tracks
+                (ProjectLevelProbeTrack & {'project_name': project_name}).delete()
+                # delete from external store
+                (schema.external['report_store'] & ext_key).delete(delete_external_files=True)
+                print('Outdated ProjectLevelProbeTrack deleted')
+
     else:
         print('ProjectLevelProbeTrack is up-to-date')
