@@ -16,6 +16,7 @@ class Session(dj.Manual):
     ---
     session_date: date
     session_time: time
+    unique index (subject_id, session_date, session_time)
     -> lab.Person
     -> lab.Rig
     """

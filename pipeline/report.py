@@ -28,7 +28,6 @@ warnings.filterwarnings('ignore')
 schema = dj.schema(get_schema_name('report'))
 
 os.environ['DJ_SUPPORT_FILEPATH_MANAGEMENT'] = "TRUE"
-dj.config['safemode'] = False
 
 store_stage = pathlib.Path(dj.config['stores']['report_store']['stage'])
 
@@ -128,7 +127,7 @@ class SessionLevelCDReport(dj.Computed):
                 units = ephys.Unit & probe
                 label = (ephys.ProbeInsertion & probe).aggr(ephys.ProbeInsertion.RecordableBrainRegion.proj(
                     brain_region='CONCAT(hemisphere, " ", brain_area)'),
-                    brain_regions='GROUP_CONCAT(brain_region) SEPARATOR(, )').fetch1('brain_regions')
+                    brain_regions='GROUP_CONCAT(brain_region SEPARATOR", ")').fetch1('brain_regions')
 
                 _, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], units, 'good_noearlylick_hit')
 
@@ -214,7 +213,7 @@ class SessionLevelCDReport(dj.Computed):
             units = ephys.Unit & probe
             label = (ephys.ProbeInsertion & probe).aggr(ephys.ProbeInsertion.RecordableBrainRegion.proj(
                 brain_region = 'CONCAT(hemisphere, " ", brain_area)'),
-                brain_regions = 'GROUP_CONCAT(brain_region) SEPARATOR(, )').fetch1('brain_regions')
+                brain_regions = 'GROUP_CONCAT(brain_region SEPARATOR", ")').fetch1('brain_regions')
 
             unit_characteristic_plot.plot_coding_direction(units, time_period=time_period, label=label, axs=axs)
 
@@ -339,7 +338,7 @@ class ProbeLevelPhotostimEffectReport(dj.Computed):
     @property
     def key_source(self):
         # Only process ProbeInsertion with UnitPSTH computation (for all TrialCondition) fully completed
-        ks = ephys.ProbeInsertion * ephys.ClusteringMethod
+        ks = ephys.ProbeInsertion * ephys.ClusteringMethod & ephys.ProbeInsertion.InsertionLocation
         probe_current_psth = ks.aggr(psth.UnitPsth, present_u_psth_count='count(*)')
         # Note: keep this 'probe_full_psth' query in sync with psth.UnitPSTH.key_source
         probe_full_psth = (ks.aggr(
@@ -515,9 +514,10 @@ report_tables = [SessionLevelReport,
 
 
 def get_wr_sessdate(key):
-    water_res_num, session_date = (lab.WaterRestriction * experiment.Session & key).fetch1(
-        'water_restriction_number', 'session_date')
-    return water_res_num, datetime.strftime(session_date, '%Y%m%d')
+    water_res_num, session_datetime = (lab.WaterRestriction * experiment.Session.proj(
+        session_datetime="cast(concat(session_date, ' ', session_time) as datetime)") & key).fetch1(
+        'water_restriction_number', 'session_datetime')
+    return water_res_num, datetime.strftime(session_datetime, '%Y%m%d_%H%M%S')
 
 
 def save_figs(figs, fig_names, dir2save, prefix):
@@ -543,11 +543,13 @@ def delete_outdated_probe_tracks(project_name='MAP'):
         uuid_byte = (ProjectLevelProbeTrack & {'project_name': project_name}).proj(ub='(tracks_plot)').fetch1('ub')
         ext_key = {'hash': uuid.UUID(bytes=uuid_byte)}
 
-        with ProjectLevelProbeTrack.connection.transaction:
-            # delete the outdated Probe Tracks
-            (ProjectLevelProbeTrack & {'project_name': project_name}).delete()
-            # delete from external store
-            (schema.external['report_store'] & ext_key).delete(delete_external_files=True)
-            print('Outdated ProjectLevelProbeTrack deleted')
+        with dj.config(safemode=False) as cfg:
+            with ProjectLevelProbeTrack.connection.transaction:
+                # delete the outdated Probe Tracks
+                (ProjectLevelProbeTrack & {'project_name': project_name}).delete()
+                # delete from external store
+                (schema.external['report_store'] & ext_key).delete(delete_external_files=True)
+                print('Outdated ProjectLevelProbeTrack deleted')
+
     else:
         print('ProjectLevelProbeTrack is up-to-date')
