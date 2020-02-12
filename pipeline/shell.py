@@ -123,9 +123,8 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     for i, row in df.iterrows():
         sess_key = experiment.Session & (behav_ingest.BehaviorIngest.BehaviorFile
                                          & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
-                                         & 'behavior_file LIKE "%{}%{}_{}%"'.format(row.water_restriction_number,
-                                                                                    row.session_date.date().strftime('%Y%m%d'),
-                                                                                    row.behaviour_time))
+                                         & 'behavior_file LIKE "%{}%{}_{:06}%"'.format(
+                    row.water_restriction_number, row.session_date.date().strftime('%Y%m%d'), int(row.behaviour_time)))
         if sess_key:
             pinsert_key = dict(sess_key.fetch1('KEY'), insertion_number=row.insertion_number)
             if pinsert_key in ephys.ProbeInsertion.proj():
@@ -271,7 +270,9 @@ def sync_and_external_cleanup():
         while True:
             sync_report()
             report.schema.external['report_store'].delete(delete_external_files=True)
-            time.sleep(3600)  # once every hour
+            time.sleep(1800)  # once every 30 minutes
+    else:
+        print("allow_external_cleanup disabled, set dj.config['custom']['allow_external_cleanup'] = True to enable")
 
 
 actions = {
@@ -288,6 +289,7 @@ actions = {
     'erd': erd,
     'ccfload': ccfload,
     'automate-computation': automate_computation,
+    'automate-sync-and-cleanup': sync_and_external_cleanup,
     'load-insertion-location': load_insertion_location,
     'load-animal': load_animal
 }
