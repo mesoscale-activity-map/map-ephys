@@ -269,6 +269,7 @@ def sync_and_external_cleanup():
 
         while True:
             sync_report()
+            log.info('Report "report_store" external cleanup')
             report.schema.external['report_store'].delete(delete_external_files=True)
             time.sleep(1800)  # once every 30 minutes
     else:
