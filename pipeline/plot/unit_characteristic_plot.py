@@ -246,8 +246,11 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
 
     # XXX: could be done with 1x fetch+join
     for u_idx, unit in enumerate(units.fetch('KEY', order_by='unit')):
-
-        x, y = (ephys.Unit & unit).fetch1('unit_posx', 'unit_posy')
+        if clustering_method in ('kilosort2'):
+            x, y = (ephys.Unit * lab.ElectrodeConfig.Electrode.proj()
+                    * lab.ProbeType.Electrode.proj('x_coord', 'y_coord') & unit).fetch1('x_coord', 'y_coord')
+        else:
+            x, y = (ephys.Unit & unit).fetch1('unit_posx', 'unit_posy')
 
         # obtain unit psth per trial, for all nostim and bistim trials
         nostim_trials = ephys.Unit.TrialSpikes & unit & psth.TrialCondition.get_trials(no_stim_cond['trial_condition_name'])
