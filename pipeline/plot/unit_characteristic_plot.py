@@ -283,6 +283,9 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
     if axs is None:
         fig, axs = plt.subplots(1, 1, figsize=(4, 8))
 
+    xmax = 1.3 * metrics.x.max()
+    xmin = -1/6*xmax
+
     cosmetic = {'legend': None,
                 'linewidth': 1.75,
                 'alpha': 0.9,
@@ -294,7 +297,7 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
     axs.spines['right'].set_visible(False)
     axs.spines['top'].set_visible(False)
     axs.set_title('% change')
-    axs.set_xlim((-10, 60))
+    axs.set_xlim((xmin, xmax))
 
     return fig
 

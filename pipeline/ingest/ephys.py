@@ -752,7 +752,7 @@ def _get_sess_dir(rigpath, h2o, sess_datetime):
         for sess_dir in sess_dirs:
             npx_meta = NeuropixelsMeta(next(sess_dir.rglob('{}_*.ap.meta'.format(h2o))))
             # ensuring time difference between behavior-start and ephys-start is no more than 2 minutes - this is to handle multiple sessions in a day
-            if abs((npx_meta.recording_time - sess_datetime).seconds) <= 120:
+            if abs((npx_meta.recording_time - sess_datetime).total_seconds()) <= 120:
                 dpath = sess_dir
                 dglob = '{}_{}_*_imec[0-9]'.format(h2o, sess_datetime.date().strftime('%m%d%y')) + '/{}'  # probe directory pattern
                 break
