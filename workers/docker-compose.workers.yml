@@ -1,7 +1,7 @@
 version: '2.4'
 
 services:
-  map_workers:
+  map_compute_workers:
     build: .
     environment:
       - report_store_stage
@@ -14,3 +14,15 @@ services:
       && python scripts/mapshell.py automate-computation
       & tail -f /dev/null"
     scale: $worker_count
+
+  map_cleanup_workers:
+    build: .
+    environment:
+      - report_store_stage
+    volumes:
+      - $report_store_stage:/data/report
+    command: >
+      /bin/sh -c
+      "cd /dj_map
+      && python scripts/mapshell.py automate-sync-and-cleanup
+      & tail -f /dev/null"

@@ -1,16 +1,21 @@
 import math
+import datajoint as dj
 from collections import defaultdict
 import numpy as np
+from decimal import Decimal
 import scipy.io as scio
 import json
 import pathlib
+import pandas as pd
 from tqdm import tqdm
+
 from datetime import datetime
 from pipeline import lab
 from pipeline import experiment
 from pipeline import ephys
 from pipeline import histology
 from pipeline import psth
+from pipeline.util import _get_clustering_method
 
 '''
 
@@ -81,6 +86,7 @@ def export_recording(insert_keys, output_dir='./', filename=None, overwrite=Fals
                 _export_recording(insert_key, output_dir=output_dir, filename=filename, overwrite=overwrite)
             except Exception as e:
                 print(str(e))
+                print('Skipping...')
                 pass
 
 
@@ -113,8 +119,20 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     print('fetching spike/behavior data')
 
-    insertion = (ephys.ProbeInsertion.InsertionLocation & insert_key).fetch1()
-    units = (ephys.Unit & insert_key).fetch()
+    try:
+        insertion = (ephys.ProbeInsertion.InsertionLocation & insert_key).fetch1()
+        loc = (ephys.ProbeInsertion & insert_key).aggr(ephys.ProbeInsertion.RecordableBrainRegion.proj(
+            brain_region='CONCAT(hemisphere, " ", brain_area)'),
+            brain_regions='GROUP_CONCAT(brain_region SEPARATOR ", ")').fetch1('brain_regions')
+    except dj.DataJointErro:
+        raise KeyError('Probe Insertion Location not yet available')
+
+    clustering_method = _get_clustering_method(insert_key)
+
+    q_unit = (ephys.Unit * lab.ElectrodeConfig.Electrode.proj()
+              * lab.ProbeType.Electrode.proj('shank') & insert_key & {'clustering_method': clustering_method})
+
+    units = q_unit.fetch(order_by='unit')
 
     trial_spikes = (ephys.Unit.TrialSpikes & insert_key).fetch(order_by='trial asc')
 
@@ -122,13 +140,22 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     trials = behav['trial']
 
-    exports = ['neuron_single_units', 'neuron_unit_info', 'behavior_report',
+    exports = ['probe_insertion_info',
+               'neuron_single_units', 'neuron_unit_info', 'neuron_unit_quality_control',
+               'behavior_report',
                'behavior_early_report', 'behavior_lick_times',
-               'task_trial_type', 'task_stimulation', 'task_cue_time']
+               'behavior_is_free_water', 'behavior_is_auto_water',
+               'task_trial_type', 'task_stimulation',
+               'task_sample_time', 'task_delay_time', 'task_cue_time']
 
     edata = {k: None for k in exports}
 
     print('reshaping/processing for export')
+
+    # probe_insertion_info
+    # -------------------
+    edata['probe_insertion_info'] = {k: float(v) if isinstance(v, Decimal) else v for k, v in dict(
+        insertion, recordable_brain_regions=loc).items() if k not in ephys.ProbeInsertion.InsertionLocation.primary_key}
 
     # neuron_single_units
     # -------------------
@@ -162,26 +189,42 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     print('... neuron_unit_info:', end='')
 
     dv = float(insertion['depth']) if insertion['depth'] else np.nan
-    loc = (ephys.ProbeInsertion & insert_key).aggr(ephys.ProbeInsertion.RecordableBrainRegion.proj(
-        brain_region='CONCAT(hemisphere, " ", brain_area)'),
-        brain_regions='GROUP_CONCAT(brain_region SEPARATOR ", ")').fetch1('brain_regions')
 
     cell_types = {u['unit']: u['cell_type'] for u in (ephys.UnitCellType & insert_key).fetch(as_dict=True)}
 
     _ui = []
     for u in units:
         typ = cell_types[u['unit']] if u['unit'] in cell_types else 'unknown'
-        _ui.append([u['unit_posy'] + dv, typ, loc])
+        _ui.append([u['unit_posx'], u['unit_posy'] + dv, u['shank'], typ, loc])
 
     edata['neuron_unit_info'] = np.array(_ui, dtype='O')
 
     print('ok.')
 
+    # neuron_unit_quality_control
+    # ----------------
+    # structure of all of the QC fields, each contains 1d array of length equals to the number of unit. E.g.:
+    # presence_ratio: (Nx1)
+    # unit_amp: (Nx1)
+    # unit_snr: (Nx1)
+    # ...
+
+    q_qc = ephys.Unit.proj('unit_amp', 'unit_snr') * ephys.UnitStat * ephys.ClusterMetric * ephys.WaveformMetric
+    qc_names = [n for n in q_qc.heading.names if n not in q_qc.primary_key]
+
+    if q_qc & insert_key:
+        qc = (q_qc & insert_key).fetch(*qc_names, order_by='unit')
+        qc_df = pd.DataFrame(qc).T
+        qc_df.columns = qc_names
+        edata['neuron_unit_quality_control'] = {n: qc_df.get(n).values for n in qc_names}
+    else:
+        edata['neuron_unit_quality_control'] = None
+
     # behavior_report
     # ---------------
     print('... behavior_report:', end='')
 
-    behavior_report_map = {'hit': 1, 'miss': 0, 'ignore': 0}  # XXX: ignore ok?
+    behavior_report_map = {'hit': 1, 'miss': 0, 'ignore': -1}
     edata['behavior_report'] = np.array([
         behavior_report_map[i] for i in behav['outcome']])
 
@@ -194,6 +237,22 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     early_report_map = {'early': 1, 'no early': 0}
     edata['behavior_early_report'] = np.array([
         early_report_map[i] for i in behav['early_lick']])
+
+    print('ok.')
+
+    # behavior_is_free_water
+    # ---------------------
+    print('... behavior_is_free_water:', end='')
+
+    edata['behavior_is_free_water'] = np.array([i for i in behav['free_water']])
+
+    print('ok.')
+
+    # behavior_is_auto_water
+    # ---------------------
+    print('... behavior_is_auto_water:', end='')
+
+    edata['behavior_is_auto_water'] = np.array([i for i in behav['auto_water']])
 
     print('ok.')
 
@@ -263,11 +322,11 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
             ev = photostim_ev[np.where(photostim_ev['trial'] == t)]
             ps = photostim_map[ev['photo_stim'][0]]
-            pd = photostim_dat[ev['photo_stim'][0]]
+            pdat = photostim_dat[ev['photo_stim'][0]]
 
             _ts.append([float(ev['power']), ps,
                         float(ev['photostim_event_time']),
-                        float(ev['photostim_event_time'] + pd['duration'])])
+                        float(ev['photostim_event_time'] + pdat['duration'])])
 
         else:
             _ts.append([0, math.nan, math.nan, math.nan])
@@ -281,16 +340,39 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     task_pole_time = None  # NOQA no data
 
-    # task_cue_time
+    # task_sample_time - (sample period) - list of (onset, duration)
+    # -------------
+
+    print('... task_sample_time:', end='')
+
+    _tst, _tsd = (experiment.TrialEvent & {**insert_key, 'trial_event_type': 'sample'}).fetch(
+        'trial_event_time', 'duration')
+
+    edata['task_sample_time'] = np.array([_tst, _tsd]).astype(float)
+
+    print('ok.')
+
+    # task_delay_time - (delay period) - list of (onset, duration)
+    # -------------
+
+    print('... task_delay_time:', end='')
+
+    _tdt, _tdd = (experiment.TrialEvent & {**insert_key, 'trial_event_type': 'delay'}).fetch(
+        'trial_event_time', 'duration')
+
+    edata['task_delay_time'] = np.array([_tdt, _tdd]).astype(float)
+
+    print('ok.')
+
+    # task_cue_time - (response period) - list of (onset, duration)
     # -------------
 
     print('... task_cue_time:', end='')
 
-    _tct = (experiment.TrialEvent()
-            & {**insert_key, 'trial_event_type': 'go'}).fetch(
-                'trial_event_time')
+    _tct, _tcd = (experiment.TrialEvent & {**insert_key, 'trial_event_type': 'go'}).fetch(
+        'trial_event_time', 'duration')
 
-    edata['task_cue_time'] = np.array([float(i) for i in _tct])
+    edata['task_cue_time'] = np.array([_tct, _tct]).astype(float)
 
     print('ok.')
 
