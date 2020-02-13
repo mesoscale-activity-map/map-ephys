@@ -203,7 +203,12 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     # neuron_unit_quality_control
     # ----------------
-    #
+    # structure of all of the QC fields, each contains 1d array of length equals to the number of unit. E.g.:
+    # presence_ratio: (Nx1)
+    # unit_amp: (Nx1)
+    # unit_snr: (Nx1)
+    # ...
+
     q_qc = ephys.Unit.proj('unit_amp', 'unit_snr') * ephys.UnitStat * ephys.ClusterMetric * ephys.WaveformMetric
     qc_names = [n for n in q_qc.heading.names if n not in q_qc.primary_key]
 
@@ -219,7 +224,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     # ---------------
     print('... behavior_report:', end='')
 
-    behavior_report_map = {'hit': 1, 'miss': 0, 'ignore': -1}  # XXX: ignore ok?
+    behavior_report_map = {'hit': 1, 'miss': 0, 'ignore': -1}
     edata['behavior_report'] = np.array([
         behavior_report_map[i] for i in behav['outcome']])
 
@@ -335,7 +340,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     task_pole_time = None  # NOQA no data
 
-    # task_sample_time - (sample period)
+    # task_sample_time - (sample period) - list of (onset, duration)
     # -------------
 
     print('... task_sample_time:', end='')
@@ -347,7 +352,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     print('ok.')
 
-    # task_delay_time - (delay period)
+    # task_delay_time - (delay period) - list of (onset, duration)
     # -------------
 
     print('... task_delay_time:', end='')
@@ -359,7 +364,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     print('ok.')
 
-    # task_cue_time - (response period)
+    # task_cue_time - (response period) - list of (onset, duration)
     # -------------
 
     print('... task_cue_time:', end='')
