@@ -78,7 +78,10 @@ class SessionLevelReport(dj.Computed):
 
         for ax, stim_key in zip(axs.flatten()[3:], photostims):
             stim_loc = ' '.join([stim_key['stim_laterality'], stim_key['stim_brain_area']]).upper()
-            behavior_plot.plot_photostim_effect(key, stim_key, axs=ax, title=stim_loc)
+            try:
+                behavior_plot.plot_photostim_effect(key, stim_key, axs=ax, title=stim_loc)
+            except ValueError:
+                ax.remove()
             ax.axis('on')
 
         # ---- Save fig and insert ----
@@ -359,15 +362,22 @@ class ProbeLevelPhotostimEffectReport(dj.Computed):
         # ---- group_photostim ----
         stim_locs = (experiment.PhotostimBrainRegion & probe_insertion).proj(
             brain_region='CONCAT(stim_laterality, "_", stim_brain_area)').fetch('brain_region')
+
+        axs_to_be_removed = []
         fig1, axs = plt.subplots(1, 1 + len(stim_locs), figsize=(16, 6))
         for pos, stim_loc in enumerate(stim_locs):
-            unit_characteristic_plot.plot_psth_photostim_effect(units,
-                                                                condition_name_kw=[stim_loc.lower()],
-                                                                axs=np.array([axs[0], axs[pos + 1]]))
+            try:
+                unit_characteristic_plot.plot_psth_photostim_effect(units,
+                                                                    condition_name_kw=[stim_loc.lower()],
+                                                                    axs=np.array([axs[0], axs[pos + 1]]))
+            except ValueError:
+                axs_to_be_removed.append(axs[pos + 1])
+
             if pos < len(stim_locs) - 1:
                 axs[0].clear()
 
         [a.set_title(title.replace('_', ' ').upper()) for a, title in zip(axs, ['control'] + list(stim_locs))]
+        [a.remove() for a in axs_to_be_removed]
 
         # ---- Save fig and insert ----
         fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_'

@@ -440,6 +440,7 @@ def plot_psth_photostim_effect(units, condition_name_kw=['both_alm'], axs=None):
     psth_n_r = (psth.UnitPsth * psth.TrialCondition & units
                 & {'trial_condition_name': psth_n_r} & 'unit_psth is not NULL').fetch('unit_psth')
 
+    # with photostim
     psth_s_l = psth.TrialCondition.get_cond_name_from_keywords(condition_name_kw + ['_stim_left'])[0]
     psth_s_r = psth.TrialCondition.get_cond_name_from_keywords(condition_name_kw + ['_stim_right'])[0]
 
