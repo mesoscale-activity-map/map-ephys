@@ -204,7 +204,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     # neuron_unit_quality_control
     # ----------------
     #
-    q_qc = ephys.ClusterMetric * ephys.WaveformMetric
+    q_qc = ephys.Unit.proj('unit_amp', 'unit_snr') * ephys.UnitStat * ephys.ClusterMetric * ephys.WaveformMetric
     qc_names = [n for n in q_qc.heading.names if n not in q_qc.primary_key]
 
     if q_qc & insert_key:
@@ -219,7 +219,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     # ---------------
     print('... behavior_report:', end='')
 
-    behavior_report_map = {'hit': 1, 'miss': 0, 'ignore': 0}  # XXX: ignore ok?
+    behavior_report_map = {'hit': 1, 'miss': 0, 'ignore': -1}  # XXX: ignore ok?
     edata['behavior_report'] = np.array([
         behavior_report_map[i] for i in behav['outcome']])
 
