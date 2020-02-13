@@ -225,11 +225,6 @@ class BehaviorIngest(dj.Imported):
             log.info("note: session exists for {h2o} on {d}".format(
                 h2o=h2o, d=ymd))
 
-        trial = namedtuple(  # simple structure to track per-trial vars
-            'trial', ('ttype', 'stim', 'free', 'settings', 'state_times',
-                      'state_names', 'state_data', 'event_data',
-                      'event_times', 'trial_start'))
-
         if os.stat(path).st_size/1024 < 1000:
             log.info('skipping file {} - too small'.format(path))
             return
@@ -285,6 +280,17 @@ class BehaviorIngest(dj.Imported):
             AllFreeTrials = np.zeros(AllStateTimestamps.shape[0],
                                      dtype=np.uint8)
 
+        # Photostim Period: early-delay, late-delay (default is early-delay)
+        # Infer from filename for now, only applicable to Susu's sessions (i.e. "SC" in h2o)
+        # If RecordingRig3, then 'late-delay'
+        photostim_period = 'early-delay'
+        rig_name = re.search('Recording(Rig\d)_', path.as_posix())
+        if re.match('SC', h2o) and rig_name:
+            rig_name = rig_name.groups()[0]
+            if rig_name == "Rig3":
+                photostim_period = 'late-delay'
+        log.info('Photostim Period: {}'.format(photostim_period))
+
         trials = list(zip(AllTrialTypes, AllStimTrials, AllFreeTrials,
                           AllTrialSettings, AllStateTimestamps, AllStateNames,
                           AllStateData, AllEventData, AllEventTimestamps,
@@ -324,6 +330,11 @@ class BehaviorIngest(dj.Imported):
                                     'action_event', 'photostim',
                                     'photostim_location', 'photostim_trial',
                                     'photostim_trial_event')}
+
+        trial = namedtuple(  # simple structure to track per-trial vars
+            'trial', ('ttype', 'stim', 'free', 'settings', 'state_times',
+                      'state_names', 'state_data', 'event_data',
+                      'event_times', 'trial_start'))
 
         i = 0  # trial numbering starts at 1
         for t in trials:
@@ -654,14 +665,19 @@ class BehaviorIngest(dj.Imported):
             if t.stim:
                 log.debug('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
                 rows['photostim_trial'].append(tkey)
-                delay_period_idx = np.where(
-                    t.state_data == states['DelayPeriod'])[0][0]
+
+                if photostim_period == 'early-delay':  # same as the delay-onset
+                    delay_period_idx = np.where(t.state_data == states['DelayPeriod'])[0][0]
+                    stim_onset = t.state_times[delay_period_idx]
+                elif photostim_period == 'late-delay':  # 0.5 sec prior to the go-cue
+                    stim_onset = t.state_times[responseindex][0] - 0.5
+
                 rows['photostim_trial_event'].append(
                     dict(tkey,
                          photo_stim=t.stim,
                          photostim_event_id=len(
                              rows['photostim_trial_event']),
-                         photostim_event_time=t.state_times[delay_period_idx],
+                         photostim_event_time=stim_onset,
                          power=5.5))
 
             # end of trial loop.
