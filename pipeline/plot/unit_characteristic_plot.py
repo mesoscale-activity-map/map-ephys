@@ -11,7 +11,8 @@ from pipeline import experiment, ephys, psth, lab
 
 from pipeline.plot.util import (_plot_with_sem, _extract_one_stim_dur,
                                 _plot_stacked_psth_diff, _plot_avg_psth, _jointplot_w_hue)
-from pipeline.util import (_get_units_hemisphere, _get_trial_event_times, _get_clustering_method)
+from pipeline.util import (_get_units_hemisphere, _get_trial_event_times,
+                           _get_stim_onset_time, _get_clustering_method)
 
 _plt_xmin = -3
 _plt_xmax = 2
@@ -231,18 +232,16 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
                     & {'trial_condition_name':
                        'all_noearlylick_both_alm_stim'}).fetch1('KEY')
 
-    # get photostim duration
-    stim_durs = np.unique((experiment.Photostim & experiment.PhotostimEvent
-                           * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')
-                           & probe_insertion).fetch('duration'))
-    stim_dur = _extract_one_stim_dur(stim_durs)
-
     units = ephys.Unit & probe_insertion & {'clustering_method': clustering_method} & 'unit_quality != "all"'
 
     metrics = pd.DataFrame(columns=['unit', 'x', 'y', 'frate_change'])
 
-    _, cue_onset = _get_trial_event_times(['delay'], units, 'all_noearlylick_nostim')
-    cue_onset = cue_onset[0]
+    # get photostim onset and duration
+    stim_durs = np.unique((experiment.Photostim & experiment.PhotostimEvent
+                           * psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim')
+                           & probe_insertion).fetch('duration'))
+    stim_dur = _extract_one_stim_dur(stim_durs)
+    stim_time = _get_stim_onset_time(units, 'all_noearlylick_both_alm_stim')
 
     # XXX: could be done with 1x fetch+join
     for u_idx, unit in enumerate(units.fetch('KEY', order_by='unit')):
@@ -259,12 +258,12 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
         nostim_psths, nostim_edge = psth.compute_unit_psth(unit, nostim_trials.fetch('KEY'), per_trial=True)
         bistim_psths, bistim_edge = psth.compute_unit_psth(unit, bistim_trials.fetch('KEY'), per_trial=True)
 
-        # compute the firing rate difference between contra vs. ipsi within the stimulation duration
-        ctrl_frate = np.array([nostim_psth[np.logical_and(nostim_edge >= cue_onset,
-                                                          nostim_edge <= cue_onset + stim_dur)].mean()
+        # compute the firing rate difference between contra vs. ipsi within the stimulation time window
+        ctrl_frate = np.array([nostim_psth[np.logical_and(nostim_edge >= stim_time,
+                                                          nostim_edge <= stim_time + stim_dur)].mean()
                                for nostim_psth in nostim_psths])
-        stim_frate = np.array([bistim_psth[np.logical_and(bistim_edge >= cue_onset,
-                                                          bistim_edge <= cue_onset + stim_dur)].mean()
+        stim_frate = np.array([bistim_psth[np.logical_and(bistim_edge >= stim_time,
+                                                          bistim_edge <= stim_time + stim_dur)].mean()
                                for bistim_psth in bistim_psths])
 
         frate_change = (stim_frate.mean() - ctrl_frate.mean()) / ctrl_frate.mean()
@@ -452,12 +451,13 @@ def plot_psth_photostim_effect(units, condition_name_kw=['both_alm'], axs=None):
     # get event start times: sample, delay, response
     period_names, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], units, 'good_noearlylick_hit')
 
-    # get photostim duration
+    # get photostim onset and duration
     stim_trial_cond_name = psth.TrialCondition.get_cond_name_from_keywords(condition_name_kw + ['_stim'])[0]
     stim_durs = np.unique((experiment.Photostim & experiment.PhotostimEvent
                            * psth.TrialCondition().get_trials(stim_trial_cond_name)
                            & units).fetch('duration'))
     stim_dur = _extract_one_stim_dur(stim_durs)
+    stim_time = _get_stim_onset_time(units, stim_trial_cond_name)
 
     if hemi == 'left':
         psth_s_i = psth_s_l
@@ -482,7 +482,6 @@ def plot_psth_photostim_effect(units, condition_name_kw=['both_alm'], axs=None):
         ax.set_xlim([_plt_xmin, _plt_xmax])
 
     # add shaded bar for photostim
-    stim_time = period_starts[np.where(period_names == 'delay')[0][0]]
     axs[1].axvspan(stim_time, stim_time + stim_dur, alpha=0.3, color='royalblue')
 
     return fig
