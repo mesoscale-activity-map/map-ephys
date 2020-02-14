@@ -372,7 +372,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     _tct, _tcd = (experiment.TrialEvent & {**insert_key, 'trial_event_type': 'go'}).fetch(
         'trial_event_time', 'duration')
 
-    edata['task_cue_time'] = np.array([_tct, _tct]).astype(float)
+    edata['task_cue_time'] = np.array([_tct, _tcd]).astype(float)
 
     print('ok.')
 
