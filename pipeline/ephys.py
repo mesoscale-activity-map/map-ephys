@@ -354,3 +354,36 @@ class UnitCCF(dj.Computed):
     ---
     -> ccf.CCF
     """
+
+
+# ======== Archived Clustering ========
+
+@schema
+class ArchivedClustering(dj.Imported):
+    definition = """
+    -> ProbeInsertion
+    -> ClusteringMethod
+    clustering_time: datetime  # time of generation of this set of clustering results 
+    ---
+    archival_time: datetime  # time of archiving
+    quality_control: bool  # has this clustering results undergone quality control
+    manual_curation: bool  # is manual curation performed on this clustering result
+    clustering_note=null: varchar(2000)  
+    """
+
+    class Unit(dj.Part):
+        definition = """
+        -> master
+        unit: smallint
+        ---
+        unit_uid : int # unique across sessions/animals
+        -> UnitQualityType
+        -> lab.ElectrodeConfig.Electrode # site on the electrode for which the unit has the largest amplitude
+        unit_posx : double # (um) estimated x position of the unit relative to probe's tip (0,0)
+        unit_posy : double # (um) estimated y position of the unit relative to probe's tip (0,0)
+        spike_times : blob@archive_store  # (s) from the start of the first data point used in clustering
+        waveform : blob@archive_store     # average spike waveform  
+        unit_stat: blob@archive_store     # amp, snr, isi-violation, avg-firing-rate
+        cluster_metrics=null: blob@archive_store  # all metrics in ClusterMetric
+        waveform_metrics=null: blob@archive_store  # all metrics in WaveformMetric
+        """

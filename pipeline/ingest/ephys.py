@@ -25,7 +25,7 @@ from pipeline import ephys
 from pipeline import InsertBuffer, dict_to_hash
 from pipeline.ingest import behavior as behavior_ingest
 from .. import get_schema_name
-from . import ProbeInsertionError, ClusterMetricError, BitCodeError
+from . import ProbeInsertionError, ClusterMetricError, BitCodeError, IdenticalClusterResultError
 
 schema = dj.schema(get_schema_name('ingest_ephys'))
 
@@ -107,9 +107,10 @@ class EphysIngest(dj.Imported):
             log.warning(str(e) + '. Skipping...')
             return
 
-        for probe_no, (f, loader, npx_meta) in clustering_files.items():
+        for probe_no, (f, cluster_method, npx_meta) in clustering_files.items():
             try:
                 log.info('------ Start loading clustering results for probe: {} ------'.format(probe_no))
+                loader = cluster_loader_map[cluster_method]
                 self._load(loader(sinfo, *f), probe_no, npx_meta, rigpath)
             except (ProbeInsertionError, ClusterMetricError, FileNotFoundError) as e:
                 dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
@@ -422,6 +423,7 @@ def _gen_electrode_config(npx_meta):
     return e_config
 
 
+# ======== Loaders for clustering results ========
 def _decode_notes(fh, notes):
     '''
     dereference and decode unit notes, translate to local labels
@@ -741,6 +743,12 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
     return data
 
 
+cluster_loader_map = {'jrclust_v3': _load_jrclust_v3,
+                      'jrclust_v4': _load_jrclust_v4,
+                      'kilosort2': _load_kilosort2}
+
+
+# ======== Helpers for directory navigation ========
 def _get_sess_dir(rigpath, h2o, sess_datetime):
     dpath, dglob = None, None
     if pathlib.Path(rigpath, h2o, sess_datetime.date().strftime('%Y%m%d')).exists():
@@ -764,9 +772,9 @@ def _match_probe_to_ephys(h2o, dpath, dglob):
     Based on the identified spike sorted file(s), match the probe number (i.e. 1, 2, 3) to the cluster filepath, loader, and npx_meta
     Return a dict, e.g.:
     {
-     1: (cluster_fp, loader, npx_meta),
-     2: (cluster_fp, loader, npx_meta),
-     3: (cluster_fp, loader, npx_meta),
+     1: (cluster_fp, cluster_method, npx_meta),
+     2: (cluster_fp, cluster_method, npx_meta),
+     3: (cluster_fp, cluster_method, npx_meta),
     }
     """
     # npx ap.meta: '{}_*.imec.ap.meta'.format(h2o)
@@ -785,12 +793,12 @@ def _match_probe_to_ephys(h2o, dpath, dglob):
         probe_number = int(probe_number.replace('imec', '')) + 1 if 'imec' in probe_number else int(probe_number)
 
         # JRClust v3
-        v3files = [((f, ), _load_jrclust_v3) for f in probe_dir.glob(jrclustv3spec)]
+        v3files = [((f, ), 'jrclust_v3') for f in probe_dir.glob(jrclustv3spec)]
         # JRClust v4
-        v4files = [((f, ), _load_jrclust_v4) for f in probe_dir.glob(jrclustv4spec)]
+        v4files = [((f, ), 'jrclust_v4') for f in probe_dir.glob(jrclustv4spec)]
         # Kilosort
         ks2spec = ks2specs[0] if len(list(probe_dir.rglob(ks2specs[0]))) > 0 else ks2specs[1]
-        ks2files = [((f.parent, probe_dir), _load_kilosort2) for f in probe_dir.rglob(ks2spec)]
+        ks2files = [((f.parent, probe_dir), 'kilosort2') for f in probe_dir.rglob(ks2spec)]
 
         if len(ks2files) > 1:
             raise ValueError('Multiple Kilosort outputs found at: {}'.format([str(x[0]) for x in ks2files]))
@@ -1244,7 +1252,8 @@ def extend_ephys_ingest(session_key):
         log.warning(str(e) + '. Skipping...')
         return
 
-    for probe_no, (f, loader, npx_meta) in clustering_files.items():
+    for probe_no, (f, cluster_method, npx_meta) in clustering_files.items():
+        loader = cluster_loader_map[cluster_method]
         insertion_key = {'subject_id': sinfo['subject_id'],
                          'session': sinfo['session'],
                          'insertion_number': probe_no}
@@ -1261,3 +1270,54 @@ def extend_ephys_ingest(session_key):
             else:
                 log.warning('Error: {}'.format(str(e)))
             return
+
+
+def replace_ephys_ingest(session_key):
+    """
+    Extend ephys-ingestion for a particular session (defined by session_key) to update/replace clustering results
+    """
+    #
+    # Find Ephys Recording
+    #
+    key = (experiment.Session & session_key).fetch1()
+    sinfo = ((lab.WaterRestriction
+              * lab.Subject.proj()
+              * experiment.Session.proj(..., '-session_time')) & key).fetch1()
+
+    rigpaths = get_ephys_paths()
+    h2o = sinfo['water_restriction_number']
+
+    sess_time = (datetime.min + key['session_time']).time()
+    sess_datetime = datetime.combine(key['session_date'], sess_time)
+
+    for rigpath in rigpaths:
+        dpath, dglob = _get_sess_dir(rigpath, h2o, sess_datetime)
+        if dpath is not None:
+            break
+
+    if dpath is not None:
+        log.info('Found session folder: {}'.format(dpath))
+    else:
+        log.warning('Error - No session folder found for {}/{}'.format(h2o, key['session_date']))
+        return
+
+    try:
+        clustering_files = _match_probe_to_ephys(h2o, dpath, dglob)
+    except FileNotFoundError as e:
+        log.warning(str(e) + '. Skipping...')
+        return
+
+    # Inspect new clustering dir(s) -
+    identical_clustering_results = []
+    for probe_no, (f, cluster_method, npx_meta) in clustering_files.items():
+        cluster_output_dir = f[0] if f[0].is_dir() else f[0].parent
+        creation_time, _ = extract_clustering_info(cluster_output_dir, cluster_method)
+        existing_clustering_time = (ephys.ClusteringLabel & session_key & {'insertion_number': probe_no}).fetch('clustering_time', limit=1)[0]
+
+        if abs((existing_clustering_time - creation_time).total_seconds()) <= 1:
+            identical_clustering_results.append((probe_no, cluster_output_dir))
+
+    if identical_clustering_results:
+        raise IdenticalClusterResultError(identical_clustering_results)
+
+
