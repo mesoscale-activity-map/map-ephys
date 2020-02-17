@@ -1,6 +1,7 @@
 import logging
-import math
+import pickle
 import hashlib
+import collections
 
 from functools import partial
 from inspect import getmembers
@@ -22,16 +23,11 @@ log = logging.getLogger(__name__)
 # - rework Condition to TrialCondition funtion+arguments based schema
 
 
-def key_hash(key):
+def dict_to_hash(input_dict):
     """
-    Given a dictionary `key`, returns an md5 hash string of its values.
-
-    For use in building dictionary-keyed tables.
+    Given a dictionary, returns an md5 hash string of its ordered keys-values.
     """
-    hashed = hashlib.md5()
-    for k, v in sorted(key.items()):
-        hashed.update(str(v).encode())
-    return hashed.hexdigest()
+    return hashlib.md5(pickle.dumps(collections.OrderedDict({k: input_dict[k] for k in sorted(input_dict.keys())}))).hexdigest()
 
 
 @schema
