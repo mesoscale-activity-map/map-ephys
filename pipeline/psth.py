@@ -169,8 +169,8 @@ class TrialCondition(dj.Lookup):
                 contents_data.append(condition)
 
         return ({**d, 'trial_condition_hash':
-                 key_hash({'trial_condition_func': d['trial_condition_func'],
-                           **d['trial_condition_arg']})}
+            dict_to_hash({'trial_condition_func': d['trial_condition_func'],
+                          **d['trial_condition_arg']})}
                 for d in contents_data)
 
     @classmethod
