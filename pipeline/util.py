@@ -20,6 +20,14 @@ def _get_trial_event_times(events, units, trial_cond_name):
     return np.array(present_events), np.array(event_starts)
 
 
+def _get_stim_onset_time(units, trial_cond_name):
+    stim_onsets = (experiment.PhotostimEvent.proj('photostim_event_time')
+                   * (experiment.TrialEvent & 'trial_event_type="go"').proj(go_time='trial_event_time')
+                   & psth.TrialCondition().get_trials(trial_cond_name) & units).proj(
+        stim_onset_from_go='photostim_event_time - go_time').fetch('stim_onset_from_go')
+    return np.nanmean(stim_onsets.astype(float))
+
+
 def _get_units_hemisphere(units):
     ml_locations = np.unique((ephys.ProbeInsertion.InsertionLocation & units).fetch('ml_location'))
     if len(ml_locations) == 0:

@@ -1,5 +1,4 @@
 import logging
-import math
 import hashlib
 
 from functools import partial
@@ -22,15 +21,14 @@ log = logging.getLogger(__name__)
 # - rework Condition to TrialCondition funtion+arguments based schema
 
 
-def key_hash(key):
+def dict_to_hash(input_dict):
     """
-    Given a dictionary `key`, returns an md5 hash string of its values.
-
-    For use in building dictionary-keyed tables.
+    Given a dictionary, returns an md5 hash string of its ordered keys-values.
     """
     hashed = hashlib.md5()
-    for k, v in sorted(key.items()):
-        hashed.update(str(v).encode())
+    for k in sorted(input_dict.keys()):
+        hashed.update(str(k).encode())
+        hashed.update(str(input_dict[k]).encode())
     return hashed.hexdigest()
 
 
@@ -173,8 +171,8 @@ class TrialCondition(dj.Lookup):
                 contents_data.append(condition)
 
         return ({**d, 'trial_condition_hash':
-                 key_hash({'trial_condition_func': d['trial_condition_func'],
-                           **d['trial_condition_arg']})}
+            dict_to_hash({'trial_condition_func': d['trial_condition_func'],
+                          **d['trial_condition_arg']})}
                 for d in contents_data)
 
     @classmethod
