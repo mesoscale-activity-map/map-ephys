@@ -29,6 +29,8 @@ from . import ProbeInsertionError, ClusterMetricError, BitCodeError, IdenticalCl
 
 schema = dj.schema(get_schema_name('ingest_ephys'))
 
+os.environ['DJ_SUPPORT_FILEPATH_MANAGEMENT'] = "TRUE"
+
 log = logging.getLogger(__name__)
 
 npx_bit_volts = {'neuropixels 1.0': 2.34375, 'neuropixels 2.0': 0.763}  # uV per bit scaling factor for neuropixels probes
@@ -1263,7 +1265,7 @@ def extend_ephys_ingest(session_key):
                 continue
 
             try:
-                EphysIngest()._load(loader(sinfo, f), probe_no, npx_meta, rigpath)
+                EphysIngest()._load(loader(sinfo, *f), probe_no, npx_meta, rigpath)
             except (ProbeInsertionError, FileNotFoundError) as e:
                 dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
                 if isinstance(e, ProbeInsertionError):
@@ -1328,8 +1330,10 @@ def replace_ingested_clustering_results(session_key):
         for probe_no, (f, cluster_method, npx_meta) in clustering_files.items():
             loader = cluster_loader_map[cluster_method]
             try:
-                EphysIngest()._load(loader(sinfo, f), probe_no, npx_meta, rigpath)
-            except (ProbeInsertionError, FileNotFoundError) as e:
+                EphysIngest()._load(loader(sinfo, *f), probe_no, npx_meta, rigpath)
+            except ProbeInsertionError:
+                pass
+            except FileNotFoundError as e:
                 dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
                 if isinstance(e, ProbeInsertionError):
                     log.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
@@ -1356,7 +1360,7 @@ def archive_ingested_clustering_results(session_key):
         archived_clustering['archival_time'] = archival_time
 
         for unit_key in (ephys.Unit & insert_key).fetch('KEY'):
-            unit = (ephys.Unit * ephys.UnitCellType & unit_key).fetch1()
+            unit = (ephys.Unit.aggr(ephys.UnitCellType, ..., cell_type='cell_type', keep_all_rows=True) & unit_key).fetch1()
 
             # unit stat
             unit_stat = (ephys.UnitStat & unit_key).fetch1()
@@ -1371,13 +1375,14 @@ def archive_ingested_clustering_results(session_key):
             if (ephys.WaveformMetric & unit_key):
                 waveform_metrics = (ephys.WaveformMetric & unit_key).fetch1()
                 unit['waveform_metrics'] = {k: v for k, v in waveform_metrics.items() if k not in ephys.Unit.primary_key}
-            archived_units.append(unit)
+            archived_units.append({**archived_clustering, **unit})
 
         archived_clusterings.append(archived_clustering)
 
     def copy_and_delete():
-        ephys.ArchivedClustering.insert(archived_clusterings)
-        ephys.ArchivedClustering.Unit.insert(archived_units)
+        log.info('Archiving {} units from {} probe insertions'.format(len(archived_units), len(archived_clusterings)))
+        ephys.ArchivedClustering.insert(archived_clusterings, ignore_extra_fields=True, allow_direct_insert=True)
+        ephys.ArchivedClustering.Unit.insert(archived_units, ignore_extra_fields=True, allow_direct_insert=True)
         with dj.config(safemode=False):
             (ephys.Unit & session_key).delete()
 

@@ -378,7 +378,7 @@ class ArchivedClustering(dj.Imported):
         ---
         unit_uid : int # unique across sessions/animals
         -> UnitQualityType
-        -> CellType
+        -> [nullable] CellType
         -> lab.ElectrodeConfig.Electrode # site on the electrode for which the unit has the largest amplitude
         unit_posx : double # (um) estimated x position of the unit relative to probe's tip (0,0)
         unit_posy : double # (um) estimated y position of the unit relative to probe's tip (0,0)
