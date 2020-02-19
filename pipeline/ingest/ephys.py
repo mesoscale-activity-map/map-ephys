@@ -1252,33 +1252,32 @@ def extend_ephys_ingest(session_key):
         log.warning(str(e) + '. Skipping...')
         return
 
-    for probe_no, (f, cluster_method, npx_meta) in clustering_files.items():
-        loader = cluster_loader_map[cluster_method]
-        insertion_key = {'subject_id': sinfo['subject_id'],
-                         'session': sinfo['session'],
-                         'insertion_number': probe_no}
-        if insertion_key in ephys.ProbeInsertion.proj():
-            log.info('Probe {} exists, skipping...'.format(probe_no))
-            continue
+    with dj.conn().transaction:
+        for probe_no, (f, cluster_method, npx_meta) in clustering_files.items():
+            loader = cluster_loader_map[cluster_method]
+            insertion_key = {'subject_id': sinfo['subject_id'],
+                             'session': sinfo['session'],
+                             'insertion_number': probe_no}
+            if insertion_key in ephys.ProbeInsertion.proj():
+                log.info('Probe {} exists, skipping...'.format(probe_no))
+                continue
 
-        try:
-            EphysIngest()._load(loader(sinfo, f), probe_no, npx_meta, rigpath)
-        except (ProbeInsertionError, FileNotFoundError) as e:
-            dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
-            if isinstance(e, ProbeInsertionError):
-                log.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
-            else:
-                log.warning('Error: {}'.format(str(e)))
-            return
+            try:
+                EphysIngest()._load(loader(sinfo, f), probe_no, npx_meta, rigpath)
+            except (ProbeInsertionError, FileNotFoundError) as e:
+                dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
+                if isinstance(e, ProbeInsertionError):
+                    log.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
+                else:
+                    log.warning('Error: {}'.format(str(e)))
+                return
 
 
-def replace_ephys_ingest(session_key):
+def replace_ingested_clustering_results(session_key):
     """
     Extend ephys-ingestion for a particular session (defined by session_key) to update/replace clustering results
     """
-    #
-    # Find Ephys Recording
-    #
+    # =========== Find Ephys Recording ============
     key = (experiment.Session & session_key).fetch1()
     sinfo = ((lab.WaterRestriction
               * lab.Subject.proj()
@@ -1307,7 +1306,8 @@ def replace_ephys_ingest(session_key):
         log.warning(str(e) + '. Skipping...')
         return
 
-    # Inspect new clustering dir(s) -
+    # ============ Inspect new clustering dir(s) ============
+    # if all new clustering data has identical timestamps to ingested ones, throw error
     identical_clustering_results = []
     for probe_no, (f, cluster_method, npx_meta) in clustering_files.items():
         cluster_output_dir = f[0] if f[0].is_dir() else f[0].parent
@@ -1317,7 +1317,73 @@ def replace_ephys_ingest(session_key):
         if abs((existing_clustering_time - creation_time).total_seconds()) <= 1:
             identical_clustering_results.append((probe_no, cluster_output_dir))
 
-    if identical_clustering_results:
+    if len(identical_clustering_results) == len(ephys.ProbeInsertion & session_key):
         raise IdenticalClusterResultError(identical_clustering_results)
 
+    with dj.conn().transaction:
+    # ============ Archive ingested results ============
+        archive_ingested_clustering_results(session_key)
 
+    # ============ Ingest new results ============
+        for probe_no, (f, cluster_method, npx_meta) in clustering_files.items():
+            loader = cluster_loader_map[cluster_method]
+            try:
+                EphysIngest()._load(loader(sinfo, f), probe_no, npx_meta, rigpath)
+            except (ProbeInsertionError, FileNotFoundError) as e:
+                dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
+                if isinstance(e, ProbeInsertionError):
+                    log.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
+                else:
+                    log.warning('Error: {}'.format(str(e)))
+                return
+
+
+def archive_ingested_clustering_results(session_key):
+    """
+    1. Copy to ephys.ArchivedUnit
+    2. Delete ephys.Unit
+    """
+    archival_time = datetime.now()
+
+    archived_units = []
+    archived_clusterings = []
+    for insert_key in (ephys.ProbeInsertion & session_key).fetch('KEY'):
+        archived_clustering = (ephys.ProbeInsertion & insert_key).aggr(
+            ephys.ClusteringLabel * ephys.ClusteringMethod, ...,
+            clustering_method='clustering_method', clustering_time='clustering_time',
+            quality_control='quality_control', manual_curation='manual_curation',
+            clustering_note='clustering_note').fetch1()
+        archived_clustering['archival_time'] = archival_time
+
+        for unit_key in (ephys.Unit & insert_key).fetch('KEY'):
+            unit = (ephys.Unit * ephys.UnitCellType & unit_key).fetch1()
+
+            # unit stat
+            unit_stat = (ephys.UnitStat & unit_key).fetch1()
+            unit_stat['unit_amp'] = unit.pop('unit_amp')
+            unit_stat['unit_snr'] = unit.pop('unit_snr')
+            unit['unit_stat'] = {k: v for k, v in unit_stat.items() if k not in ephys.Unit.primary_key}
+            # cluster metric
+            if (ephys.ClusterMetric & unit_key):
+                cluster_metrics = (ephys.ClusterMetric & unit_key).fetch1()
+                unit['cluster_metrics'] = {k: v for k, v in cluster_metrics.items() if k not in ephys.Unit.primary_key}
+            # waveform metric
+            if (ephys.WaveformMetric & unit_key):
+                waveform_metrics = (ephys.WaveformMetric & unit_key).fetch1()
+                unit['waveform_metrics'] = {k: v for k, v in waveform_metrics.items() if k not in ephys.Unit.primary_key}
+            archived_units.append(unit)
+
+        archived_clusterings.append(archived_clustering)
+
+    def copy_and_delete():
+        ephys.ArchivedClustering.insert(archived_clusterings)
+        ephys.ArchivedClustering.Unit.insert(archived_units)
+        with dj.config(safemode=False):
+            (ephys.Unit & session_key).delete()
+
+    # the copy, delete part
+    if dj.conn().in_transaction:
+        copy_and_delete()
+    else:
+        with dj.conn().transaction:
+            copy_and_delete()
