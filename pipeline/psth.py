@@ -376,7 +376,7 @@ class PeriodSelectivity(dj.Computed):
     p_value:                    float  # all trial spike rate t-test p-value
     """
 
-    alpha = 0.05  # default alpha value
+    alpha = 0.01  # default alpha value
 
     key_source = experiment.Period * (ephys.Unit & ephys.ProbeInsertion.InsertionLocation & 'unit_quality != "all"')
 
@@ -423,7 +423,7 @@ class PeriodSelectivity(dj.Computed):
                 freq_c.append(spk_rate)
 
         # and testing for selectivity.
-        t_stat, pval = sc_stats.ttest_ind(freq_i, freq_c, equal_var=True)
+        t_stat, pval = sc_stats.mannwhitneyu(freq_i, freq_c, alternative='two-sided')
 
         freq_i_m = np.average(freq_i)
         freq_c_m = np.average(freq_c)
