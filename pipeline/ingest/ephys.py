@@ -1349,40 +1349,43 @@ def archive_ingested_clustering_results(session_key):
     """
     archival_time = datetime.now()
 
-    archived_units = []
-    archived_clusterings = []
+    archived_clusterings, archived_units, \
+    archived_units_stat, archived_cluster_metrics,\
+    archived_waveform_metrics = [], [], [], [], []
+
     for insert_key in (ephys.ProbeInsertion & session_key).fetch('KEY'):
-        archived_clustering = (ephys.ProbeInsertion & insert_key).aggr(
+        q_archived_clustering = (ephys.ProbeInsertion.proj() & insert_key).aggr(
             ephys.ClusteringLabel * ephys.ClusteringMethod, ...,
             clustering_method='clustering_method', clustering_time='clustering_time',
             quality_control='quality_control', manual_curation='manual_curation',
-            clustering_note='clustering_note').fetch1()
-        archived_clustering['archival_time'] = archival_time
+            clustering_note='clustering_note', archival_time='cast("{}" as datetime)'.format(archival_time))
 
-        for unit_key in (ephys.Unit & insert_key).fetch('KEY'):
-            unit = (ephys.Unit.aggr(ephys.UnitCellType, ..., cell_type='cell_type', keep_all_rows=True) & unit_key).fetch1()
+        q_units = (ephys.Unit & insert_key).aggr(ephys.UnitCellType, ..., cell_type='cell_type', keep_all_rows=True)
 
-            # unit stat
-            unit_stat = (ephys.UnitStat & unit_key).fetch1()
-            unit_stat['unit_amp'] = unit.pop('unit_amp')
-            unit_stat['unit_snr'] = unit.pop('unit_snr')
-            unit['unit_stat'] = {k: v for k, v in unit_stat.items() if k not in ephys.Unit.primary_key}
-            # cluster metric
-            if (ephys.ClusterMetric & unit_key):
-                cluster_metrics = (ephys.ClusterMetric & unit_key).fetch1()
-                unit['cluster_metrics'] = {k: v for k, v in cluster_metrics.items() if k not in ephys.Unit.primary_key}
-            # waveform metric
-            if (ephys.WaveformMetric & unit_key):
-                waveform_metrics = (ephys.WaveformMetric & unit_key).fetch1()
-                unit['waveform_metrics'] = {k: v for k, v in waveform_metrics.items() if k not in ephys.Unit.primary_key}
-            archived_units.append({**archived_clustering, **unit})
+        q_units_stat = q_units.proj('unit_amp', 'unit_snr').aggr(ephys.UnitStat, ...,
+                                                             isi_violation='isi_violation',
+                                                             avg_firing_rate='avg_firing_rate', keep_all_rows=True)
+        q_units_cluster_metrics = q_units.proj() * ephys.ClusterMetric
+        q_units_waveform_metrics = q_units.proj() * ephys.WaveformMetric
 
-        archived_clusterings.append(archived_clustering)
+        archived_clusterings.append(q_archived_clustering)
+        archived_units.append(q_archived_clustering * q_units)
+        archived_units_stat.append(q_archived_clustering * q_units_stat)
+        archived_cluster_metrics.append(q_archived_clustering * q_units_cluster_metrics)
+        archived_waveform_metrics.append(q_archived_clustering * q_units_waveform_metrics)
 
     def copy_and_delete():
-        log.info('Archiving {} units from {} probe insertions'.format(len(archived_units), len(archived_clusterings)))
-        ephys.ArchivedClustering.insert(archived_clusterings, ignore_extra_fields=True, allow_direct_insert=True)
-        ephys.ArchivedClustering.Unit.insert(archived_units, ignore_extra_fields=True, allow_direct_insert=True)
+        # server-side copy
+        log.info('Archiving {} units from {} probe insertions'.format(len(ephys.Unit & session_key), len(ephys.ProbeInsertion & session_key)))
+        insert_settings = dict(ignore_extra_fields=True, allow_direct_insert=True)
+        for clustering, units, units_stat, cluster_metrics, waveform_metrics in zip(
+                archived_clusterings, archived_units,
+                archived_units_stat, archived_cluster_metrics, archived_waveform_metrics):
+            ephys.ArchivedClustering.insert(clustering, **insert_settings)
+            ephys.ArchivedClustering.Unit.insert(units.fetch(as_dict=True), **insert_settings)
+            ephys.ArchivedClustering.UnitStat.insert(units_stat, **insert_settings)
+            ephys.ArchivedClustering.ClusterMetric.insert(cluster_metrics, **insert_settings)
+            ephys.ArchivedClustering.WaveformMetric.insert(waveform_metrics, **insert_settings)
         with dj.config(safemode=False):
             (ephys.Unit & session_key).delete()
 

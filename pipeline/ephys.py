@@ -376,7 +376,6 @@ class ArchivedClustering(dj.Imported):
         -> master
         unit: smallint
         ---
-        unit_uid : int # unique across sessions/animals
         -> UnitQualityType
         -> [nullable] CellType
         -> lab.ElectrodeConfig.Electrode # site on the electrode for which the unit has the largest amplitude
@@ -384,7 +383,49 @@ class ArchivedClustering(dj.Imported):
         unit_posy : double # (um) estimated y position of the unit relative to probe's tip (0,0)
         spike_times : blob@archive_store  # (s) from the start of the first data point used in clustering
         waveform : blob@archive_store     # average spike waveform  
-        unit_stat: blob@archive_store     # amp, snr, isi-violation, avg-firing-rate
-        cluster_metrics=null: blob@archive_store  # all metrics in ClusterMetric
-        waveform_metrics=null: blob@archive_store  # all metrics in WaveformMetric
+        """
+
+    class UnitStat(dj.Part):
+        definition = """
+        -> master
+        -> ArchivedClustering.Unit
+        ---
+        unit_amp : float
+        unit_snr : float
+        isi_violation=null: float    
+        avg_firing_rate=null: float  
+        """
+
+    class ClusterMetric(dj.Part):
+        definition = """ 
+        -> master
+        -> ArchivedClustering.Unit
+        epoch_name_quality_metrics: varchar(64)
+        ---
+        presence_ratio: float  # Fraction of epoch in which spikes are present
+        amplitude_cutoff: float  # Estimate of miss rate based on amplitude histogram
+        isolation_distance=null: float  # Distance to nearest cluster in Mahalanobis space
+        l_ratio=null: float  # 
+        d_prime=null: float  # Classification accuracy based on LDA
+        nn_hit_rate=null: float  # 
+        nn_miss_rate=null: float
+        silhouette_score=null: float  # Standard metric for cluster overlap
+        max_drift=null: float  # Maximum change in spike depth throughout recording
+        cumulative_drift=null: float  # Cumulative change in spike depth throughout recording 
+        """
+
+    class WaveformMetric(dj.Part):
+        definition = """
+        -> master
+        -> ArchivedClustering.Unit
+        epoch_name_waveform_metrics: varchar(64)
+        ---
+        duration=null: float
+        halfwidth=null: float
+        pt_ratio=null: float
+        repolarization_slope=null: float
+        recovery_slope=null: float
+        spread=null: float
+        velocity_above=null: float
+        velocity_below=null: float   
         """
