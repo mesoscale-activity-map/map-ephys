@@ -2,13 +2,6 @@ import datajoint as dj
 import pymysql.err
 
 
-def keep_conn_alive():
-    try:
-        dj.conn().ping()
-    except pymysql.err.Error:
-        dj.conn().connect()
-
-
 class ProbeInsertionError(Exception):
     """Raise when error encountered when ingesting probe insertion"""
     def __init__(self, msg=None):
