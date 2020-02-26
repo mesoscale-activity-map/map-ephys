@@ -25,7 +25,7 @@ from pipeline import ephys
 from pipeline import InsertBuffer, dict_to_hash
 from pipeline.ingest import behavior as behavior_ingest
 from .. import get_schema_name
-from . import keep_conn_alive, ProbeInsertionError, ClusterMetricError, BitCodeError, IdenticalClusterResultError
+from . import ProbeInsertionError, ClusterMetricError, BitCodeError, IdenticalClusterResultError
 
 schema = dj.schema(get_schema_name('ingest_ephys'))
 
@@ -113,7 +113,7 @@ class EphysIngest(dj.Imported):
             try:
                 log.info('------ Start loading clustering results for probe: {} ------'.format(probe_no))
                 loader = cluster_loader_map[cluster_method]
-                keep_conn_alive()
+                dj.conn().ping()
                 self._load(loader(sinfo, *f), probe_no, npx_meta, rigpath)
             except (ProbeInsertionError, ClusterMetricError, FileNotFoundError) as e:
                 dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
@@ -276,7 +276,7 @@ class EphysIngest(dj.Imported):
 
         # insert Unit.UnitTrial
         log.info('.. ephys.Unit.UnitTrial')
-        keep_conn_alive()
+        dj.conn().ping()
         with InsertBuffer(ephys.Unit.UnitTrial, 10000, skip_duplicates=True,
                           allow_direct_insert=True) as ib:
 
@@ -293,7 +293,7 @@ class EphysIngest(dj.Imported):
 
         # insert TrialSpikes
         log.info('.. ephys.Unit.TrialSpikes')
-        keep_conn_alive()
+        dj.conn().ping()
         with InsertBuffer(ephys.Unit.TrialSpikes, 10000, skip_duplicates=True,
                           allow_direct_insert=True) as ib:
             for i, u in enumerate(set(units)):
@@ -320,7 +320,7 @@ class EphysIngest(dj.Imported):
             metrics = dict(metrics.T)
 
             log.info('.. inserting cluster metrics and waveform metrics')
-            keep_conn_alive()
+            dj.conn().ping()
             ephys.ClusterMetric.insert([{**skey, 'insertion_number': probe,
                                          'clustering_method': method, 'unit': u, **metrics[u]}
                                         for u in set(units)],
@@ -335,7 +335,7 @@ class EphysIngest(dj.Imported):
                                     'avg_firing_rate': metrics[u]['firing_rate']} for u in set(units)],
                                   allow_direct_insert=True)
 
-        keep_conn_alive()
+        dj.conn().ping()
         log.info('.. inserting clustering timestamp and label')
 
         ephys.ClusteringLabel.insert([{**skey, 'insertion_number': probe,
@@ -697,7 +697,7 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
 
         # waveforms and SNR
         log.info('.... extracting waveforms - data dir: {}'.format(str(ks_dir)))
-        keep_conn_alive()
+        dj.conn().ping()
 
         unit_wfs = extract_ks_waveforms(npx_dir, ks, wf_win=[-int(ks.data['templates'].shape[1]/2),
                                                              int(ks.data['templates'].shape[1]/2)])

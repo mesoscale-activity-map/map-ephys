@@ -1,12 +1,3 @@
-import datajoint as dj
-import pymysql.err
-
-
-def keep_conn_alive():
-    try:
-        dj.conn().ping()
-    except pymysql.err.Error:
-        dj.conn().connect()
 
 
 class ProbeInsertionError(Exception):
