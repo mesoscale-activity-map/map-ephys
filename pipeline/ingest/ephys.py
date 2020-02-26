@@ -19,10 +19,9 @@ import numpy as np
 import datajoint as dj
 #import pdb
 
-from pipeline import lab
-from pipeline import experiment
-from pipeline import ephys
+from pipeline import lab, experiment, ephys, report
 from pipeline import InsertBuffer, dict_to_hash
+
 from pipeline.ingest import behavior as behavior_ingest
 from .. import get_schema_name
 from . import ProbeInsertionError, ClusterMetricError, BitCodeError, IdenticalClusterResultError
@@ -1383,6 +1382,11 @@ def archive_ingested_clustering_results(session_key):
         archived_cluster_metrics.append(q_archived_clustering * q_units_cluster_metrics)
         archived_waveform_metrics.append(q_archived_clustering * q_units_waveform_metrics)
 
+    # preparing spike_times and trial_spike
+    tr_no, tr_start = (experiment.SessionTrial & session_key).fetch(
+        'trial', 'start_time', order_by='trial')
+    tr_stop = np.append(tr_start[1:], np.inf)
+
     def copy_and_delete():
         # server-side copy
         log.info('Archiving {} units from {} probe insertions'.format(len(ephys.Unit & session_key),
@@ -1392,12 +1396,24 @@ def archive_ingested_clustering_results(session_key):
                 archived_clusterings, archived_units,
                 archived_units_stat, archived_cluster_metrics, archived_waveform_metrics):
             ephys.ArchivedClustering.insert(clustering, **insert_settings)
-            ephys.ArchivedClustering.Unit.insert(units.fetch(as_dict=True), **insert_settings)
+
+            # recompute trial_spike
+            units = units.fetch(as_dict=True)
+            for unit in units:
+                after_start = unit['spike_times'] >= tr_start[:, None]
+                before_stop = unit['spike_times'] <= tr_stop[:, None]
+                in_trial = ((after_start & before_stop) * tr_no[:, None]).sum(axis=0)
+                unit['trial_spike'] = np.where(in_trial == 0, np.nan, in_trial)
+            ephys.ArchivedClustering.Unit.insert(units, **insert_settings)
+
             ephys.ArchivedClustering.UnitStat.insert(units_stat, **insert_settings)
             ephys.ArchivedClustering.ClusterMetric.insert(cluster_metrics, **insert_settings)
             ephys.ArchivedClustering.WaveformMetric.insert(waveform_metrics, **insert_settings)
         with dj.config(safemode=False):
             (ephys.Unit & session_key).delete()
+            (report.SessionLevelCDReport & session_key).delete()
+            (report.ProbeLevelPhotostimEffectReport & session_key).delete()
+            (report.ProbeLevelReport & session_key).delete()
 
     # the copy, delete part
     if dj.conn().in_transaction:

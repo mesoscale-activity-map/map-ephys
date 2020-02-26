@@ -560,6 +560,5 @@ def delete_outdated_probe_tracks(project_name='MAP'):
                 # delete from external store
                 (schema.external['report_store'] & ext_key).delete(delete_external_files=True)
                 print('Outdated ProjectLevelProbeTrack deleted')
-
     else:
         print('ProjectLevelProbeTrack is up-to-date')

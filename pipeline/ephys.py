@@ -382,6 +382,7 @@ class ArchivedClustering(dj.Imported):
         unit_posx : double # (um) estimated x position of the unit relative to probe's tip (0,0)
         unit_posy : double # (um) estimated y position of the unit relative to probe's tip (0,0)
         spike_times : blob@archive_store  # (s) from the start of the first data point used in clustering
+        trial_spike : blob@archive_store  # array of trial numbering per spike - same size as spike_times
         waveform : blob@archive_store     # average spike waveform  
         """
 
@@ -392,7 +393,7 @@ class ArchivedClustering(dj.Imported):
         ---
         unit_amp : float
         unit_snr : float
-        isi_violation=null: float    
+        isi_violation=null: float     
         avg_firing_rate=null: float  
         """
 
