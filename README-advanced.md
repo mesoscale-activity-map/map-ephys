@@ -194,7 +194,7 @@ There are 2 reasons for performing manual ephys ingestion after the `mapshell.py
     + This is needed for a new version of curated clustering results to replace the ingested set of ephys results (or when quality controlled results become available)
     + There are 4 major steps taken in this routine:
         1. Search the specify data directory and verify the presence of new clustering results for the specified ***session***
-        2. Copy the ingested ephys data over to the ***ArchiveUnit*** table, with all meta info tracked
+        2. Copy the ingested ephys data over to the ***ArchiveUnit*** table, with all meta info tracked (this archived results will be stored externally on AWS S3 to reduce cost of storage)
         3. Delete the ingested data
         4. Re-ingest new version of the clustering results
 
@@ -211,14 +211,43 @@ session_key = (experiment.Session & 'subject_id=471324' & 'session=2').fetch1('K
 
 ephys_ingest.extend_ephys_ingest(session_key)
 
+# to archive and replace ephys result:
+
+ephys_ingest.replace_ingested_clustering_results(session_key)
 ```
+
+#####Setting up the external location for archiving previous ephys results
+
+The `replace_ingested_clustering_results()` routine involves archiving previous ephys results in AWS S3 storage, thus users are required to configure this external storage (known in DataJoint as "store").
+The configuration is as followed:
+
+```json
+{
+...
+    "stores": {
+        "archive_store":
+        {
+            "protocol": "s3",
+            "endpoint": "s3.amazonaws.com",
+            "access_key": "s3_access_key",
+            "secret_key": "s3_secret_key",
+            "bucket": "map-cluster-archive",
+            "location": "/cluster_archive",
+            "stage": "/map_data/cluster_archive"
+        }
+    }
+}    
+```
+
+*Note: if you don't have the ***access_key*** and ***secret_key*** to the AWS S3, contact your administrator for access request.
+It is crucial that these keys are kept private and protected (a common mistake is committing your `dj_local_conf.json` to a public github repository)*
 
 ## Raw Recording File Publication and Retrieval
 
 The map-ephys pipeline does *not* directly handle processing of raw reording
 files into the second-stage processed data used in later stages, however, some
 facility is provided for tracking raw data files and transferring them to/from
-the ANL [\'petrel\'](https://www.alcf.anl.gov/petrel) faclity using the [globus toolkit](http://toolkit.globus.org/toolkit/) and [Globus Python SDK](https://globus-sdk-python.readthedocs.io/en/stable/).
+the ANL [\'petrel\'](https://www.alcf.anl.gov/petrel) facility using the [globus toolkit](http://toolkit.globus.org/toolkit/) and [Globus Python SDK](https://globus-sdk-python.readthedocs.io/en/stable/).
 
 ### Globus Configuration
 
