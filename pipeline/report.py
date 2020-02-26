@@ -553,7 +553,7 @@ def delete_outdated_probe_tracks(project_name='MAP'):
         uuid_byte = (ProjectLevelProbeTrack & {'project_name': project_name}).proj(ub='(tracks_plot)').fetch1('ub')
         ext_key = {'hash': uuid.UUID(bytes=uuid_byte)}
 
-        with dj.config(safemode=False) as cfg:
+        with dj.config(safemode=False):
             with ProjectLevelProbeTrack.connection.transaction:
                 # delete the outdated Probe Tracks
                 (ProjectLevelProbeTrack & {'project_name': project_name}).delete()
