@@ -44,12 +44,12 @@ def get_ephys_paths():
       dj.config = {
         ...,
         'custom': {
-          'ephys_data_path': ['/path/string', '/path2/string']
+          'ephys_data_paths': ['/path/string', '/path2/string']
         }
         ...
       }
     """
-    return dj.config.get('custom', {}).get('ephys_data_path', None)
+    return dj.config.get('custom', {}).get('ephys_data_paths', None)
 
 
 @schema
