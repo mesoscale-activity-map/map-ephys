@@ -25,7 +25,7 @@ from pipeline import ephys
 from pipeline import InsertBuffer, dict_to_hash
 from pipeline.ingest import behavior as behavior_ingest
 from .. import get_schema_name
-from . import ProbeInsertionError, ClusterMetricError, BitCodeError, IdenticalClusterResultError
+from . import keep_conn_alive, ProbeInsertionError, ClusterMetricError, BitCodeError, IdenticalClusterResultError
 
 schema = dj.schema(get_schema_name('ingest_ephys'))
 
@@ -113,6 +113,7 @@ class EphysIngest(dj.Imported):
             try:
                 log.info('------ Start loading clustering results for probe: {} ------'.format(probe_no))
                 loader = cluster_loader_map[cluster_method]
+                keep_conn_alive()
                 self._load(loader(sinfo, *f), probe_no, npx_meta, rigpath)
             except (ProbeInsertionError, ClusterMetricError, FileNotFoundError) as e:
                 dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
@@ -275,7 +276,7 @@ class EphysIngest(dj.Imported):
 
         # insert Unit.UnitTrial
         log.info('.. ephys.Unit.UnitTrial')
-
+        keep_conn_alive()
         with InsertBuffer(ephys.Unit.UnitTrial, 10000, skip_duplicates=True,
                           allow_direct_insert=True) as ib:
 
@@ -292,9 +293,9 @@ class EphysIngest(dj.Imported):
 
         # insert TrialSpikes
         log.info('.. ephys.Unit.TrialSpikes')
+        keep_conn_alive()
         with InsertBuffer(ephys.Unit.TrialSpikes, 10000, skip_duplicates=True,
                           allow_direct_insert=True) as ib:
-
             for i, u in enumerate(set(units)):
                 for t in range(len(trials)):
                     ib.insert1({**skey,
@@ -319,6 +320,7 @@ class EphysIngest(dj.Imported):
             metrics = dict(metrics.T)
 
             log.info('.. inserting cluster metrics and waveform metrics')
+            keep_conn_alive()
             ephys.ClusterMetric.insert([{**skey, 'insertion_number': probe,
                                          'clustering_method': method, 'unit': u, **metrics[u]}
                                         for u in set(units)],
@@ -333,6 +335,7 @@ class EphysIngest(dj.Imported):
                                     'avg_firing_rate': metrics[u]['firing_rate']} for u in set(units)],
                                   allow_direct_insert=True)
 
+        keep_conn_alive()
         log.info('.. inserting clustering timestamp and label')
 
         ephys.ClusteringLabel.insert([{**skey, 'insertion_number': probe,
@@ -694,8 +697,10 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
 
         # waveforms and SNR
         log.info('.... extracting waveforms - data dir: {}'.format(str(ks_dir)))
+        keep_conn_alive()
+
         unit_wfs = extract_ks_waveforms(npx_dir, ks, wf_win=[-int(ks.data['templates'].shape[1]/2),
-                                                                       int(ks.data['templates'].shape[1]/2)])
+                                                             int(ks.data['templates'].shape[1]/2)])
         unit_wav = np.dstack([unit_wfs[u]['mean_wf']
                               for u in valid_units]).transpose((2, 1, 0))  # unit x channel x sample
         unit_snr = [unit_wfs[u]['snr'][np.where(ks.data['channel_map'] == u_site)[0][0]]
@@ -760,7 +765,10 @@ def _get_sess_dir(rigpath, h2o, sess_datetime):
         sess_dirs = list(pathlib.Path(rigpath, h2o).glob('*{}_{}_*'.format(
             h2o, sess_datetime.date().strftime('%m%d%y'))))
         for sess_dir in sess_dirs:
-            npx_meta = NeuropixelsMeta(next(sess_dir.rglob('{}_*.ap.meta'.format(h2o))))
+            try:
+                npx_meta = NeuropixelsMeta(next(sess_dir.rglob('{}_*.ap.meta'.format(h2o))))
+            except StopIteration:
+                continue
             # ensuring time difference between behavior-start and ephys-start is no more than 2 minutes - this is to handle multiple sessions in a day
             if abs((npx_meta.recording_time - sess_datetime).total_seconds()) <= 120:
                 dpath = sess_dir

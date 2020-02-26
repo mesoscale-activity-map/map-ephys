@@ -1,7 +1,5 @@
 import logging
-import pickle
 import hashlib
-import collections
 
 from functools import partial
 from inspect import getmembers
@@ -27,7 +25,11 @@ def dict_to_hash(input_dict):
     """
     Given a dictionary, returns an md5 hash string of its ordered keys-values.
     """
-    return hashlib.md5(pickle.dumps(collections.OrderedDict({k: input_dict[k] for k in sorted(input_dict.keys())}))).hexdigest()
+    hashed = hashlib.md5()
+    for k in sorted(input_dict.keys()):
+        hashed.update(str(k).encode())
+        hashed.update(str(input_dict[k]).encode())
+    return hashed.hexdigest()
 
 
 @schema
@@ -422,6 +424,10 @@ class PeriodSelectivity(dj.Computed):
 
         # and testing for selectivity.
         t_stat, pval = sc_stats.ttest_ind(freq_i, freq_c, equal_var=True)
+        # try:
+        #     _stat, pval = sc_stats.mannwhitneyu(freq_i, freq_c, alternative='two-sided')
+        # except ValueError:
+        #     pval = np.nan
 
         freq_i_m = np.average(freq_i)
         freq_c_m = np.average(freq_c)

@@ -124,7 +124,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
         loc = (ephys.ProbeInsertion & insert_key).aggr(ephys.ProbeInsertion.RecordableBrainRegion.proj(
             brain_region='CONCAT(hemisphere, " ", brain_area)'),
             brain_regions='GROUP_CONCAT(brain_region SEPARATOR ", ")').fetch1('brain_regions')
-    except dj.DataJointErro:
+    except dj.DataJointError:
         raise KeyError('Probe Insertion Location not yet available')
 
     clustering_method = _get_clustering_method(insert_key)
@@ -345,8 +345,9 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     print('... task_sample_time:', end='')
 
-    _tst, _tsd = (experiment.TrialEvent & {**insert_key, 'trial_event_type': 'sample'}).fetch(
-        'trial_event_time', 'duration')
+    _tst, _tsd = (experiment.BehaviorTrial & insert_key).aggr(experiment.TrialEvent & 'trial_event_type = "sample"',
+                                                              sample_time='trial_event_time', duration='duration').fetch(
+        'sample_time', 'duration', order_by='trial')
 
     edata['task_sample_time'] = np.array([_tst, _tsd]).astype(float)
 
@@ -357,8 +358,9 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     print('... task_delay_time:', end='')
 
-    _tdt, _tdd = (experiment.TrialEvent & {**insert_key, 'trial_event_type': 'delay'}).fetch(
-        'trial_event_time', 'duration')
+    _tdt, _tdd = (experiment.BehaviorTrial & insert_key).aggr(experiment.TrialEvent & 'trial_event_type = "delay"',
+                                                              delay_time='trial_event_time', duration='duration').fetch(
+        'delay_time', 'duration', order_by='trial')
 
     edata['task_delay_time'] = np.array([_tdt, _tdd]).astype(float)
 
@@ -369,8 +371,9 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     print('... task_cue_time:', end='')
 
-    _tct, _tcd = (experiment.TrialEvent & {**insert_key, 'trial_event_type': 'go'}).fetch(
-        'trial_event_time', 'duration')
+    _tct, _tcd = (experiment.BehaviorTrial & insert_key).aggr(experiment.TrialEvent & 'trial_event_type = "go"',
+                                                              go_time='trial_event_time', duration='duration').fetch(
+        'go_time', 'duration', order_by='trial')
 
     edata['task_cue_time'] = np.array([_tct, _tcd]).astype(float)
 
