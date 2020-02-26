@@ -90,68 +90,128 @@ the `notebook` portion of repository demonstrating usage of the pipeline.
 
 See the jupyter notebook `notebooks/Overview.ipynb` for more details.
 
-## Ingest Path Expectations
+## Data Ingestion
+With respect to the day-to-day research activity, ingestion of newly recorded data to the MAP pipeline comprises of 4 core components:
++ Behavior Ingest
+    + Creation of ***session(s)*** 
+    + Ingestion of the session-relevant behavioral data:
+        + session meta information (e.g. subject, session's datetime, etc.)
+        + trials and trial labels (e.g. type, response, photostim trial, etc.)
+        + trial event (e.g. onsets of sample/delay/response period, onset of photostim, etc.)
++ Tracking Ingest
+    + On a per-session basis, ingest tracking data (e.g. nose, tongue, jaw movements, from DLC)
++ Ephys Ingest
+    + On a per-session basis, identify and ingest ***probe insertion*** information
+    + Ingestion of clustering results per probe
+    + Ingestion of Quality Control results (if any)
++ Histology Ingest
+    + On a per-session basis, ingest electrode ccf location and probe track data
+    
+*Note: Behavior Ingest is required for Tracking/Ephys/Histology ingest to take place (can be ingested in any particular order)*
 
-### Behavior Files
+### Configure the data directory
+Users performing the ingestion should configure the data path properly. Configuration of the data path is done in the ***dj_local_conf.json*** file in the following format:
+```json
+{
+...
+    "custom": 
+    {
+        "behavior_data_paths":
+            [
+                ["RRig", "C:/data/behavior_data_searchpath_1", 0],
+                ["RRig2", "C:/data/behavior_data_searchpath_2", 1]
+            ],
+        "tracking_data_paths":
+            [
+                ["RRig", "C:/data/tracking_data_searchpath_1", 0],
+                ["RRig2", "C:/data/tracking_data_searchpath_2", 1]
+            ],
+        "ephys_data_paths": ["C:/data/ephys_data_searchpath_1", "C:/data/ephys_data_searchpath_2", "C:/data/ephys_data_searchpath_3"],
+        "histology_data_paths": ["C:/data/histology_data_searchpath_1"]
+    }
+}
+```
 
-The behavior ingest logic searches the rig_data_paths for behavior files.  The
-rig data paths are specified in specified dj_local_conf.json as:
+### Running the data ingestion
+Once the data paths are configured, executing the 4 ingestion routines above comes down to evoking the 4 corresponding commands:
+>python scripts/mapshell.py ingest-behavior
 
-    "rig_data_paths": [
-        ["RRig", "/Users/chris/src/djc/map/map-sharing/unittest/behavior", "0"]
-    ]
+>python scripts/mapshell.py ingest-tracking
 
-if this variable is not configured, hardcoded values in the code matching the
-experimental setup will be used.
+>python scripts/mapshell.py ingest-ephys
+
+>python scripts/mapshell.py ingest-histology
+
+*Note: make sure to navigate yourself to the root of this project directory (e.g. `cd map-ephys`)*
+
+### Path Expectations
+
+#### Behavior Files Ingestion
 
 File paths conform to the pattern:
 
-    dl7/TW_autoTrain/Session Data/dl7_TW_autoTrain_20180104_132813.mat
+    dl7_TW_autoTrain_20180104_132813.mat
 
 which is, more generally:
 
-    {h2o}/*/Session Data/{h2o}_{training protocol}_{YYYYMMDD}_{HHMMSS}.mat
+    {h2o}_*_*_{YYYYMMDD}_{HHMMSS}.mat
  
 where:
 
   - `h2o` is the water restriction ID of the subject (see also `lab.Subject`)
-  - `training protocol` is the training protocol used with this subject
-    (see also `experiment.TaskProtocol`)
   - `YYYYMMDD` and `HHMMSS` refer to the date and time of the session.
-
-It is assumed that each subject participates in at most 1 experimental session
-per day; sessions are determined during ingest based on the combination of date
-and water restricition number.
   
-### Ephys Files
+#### Ephys Files Ingestion
+Ephys Files are typically structured in a directory convention as followed:
 
-The ephys ingest logic searches the `ephys_data_paths` for processed ephys
-data files. These are specified in dj.config.json as:
+    {h2o}/{YYYYMMDD}/{probe_no}/ephys_file  
+or
 
-    "ephys_data_paths": [["/Users/chris/src/djc/map/map-sharing/unittest/ephys", "0"]]
+    {h20}/{h20}_{YYYYMMDD}_*/{h20}_{YYYYMMDD}_*_imec[0-9]/
+    
+Ephys Files can be:
++ JRClust v3 - e.g. "tw5ap_imec3_opt3_jrc.mat"
+    + `{h2o}_*_jrc.mat`
++ JRClust v4 - e.g. "tw5ap_imec3_opt3.ap_res.mat"
+    + `{h2o}_*.ap_res.mat`
++ Kilosort2 - *ks* folder with a set of ks output files (e.g. spike_times.npy, template.npy, etc.)
+    
+Some example ephys paths:
+    
+    dl40/20181022/1/dl40_g0_t50.imec.ap_imec3_opt3_jrc.mat
+    SC022/20190303/1/SC022_g0_t0.imec0.ap_res.mat
+    SC035/catgt_SC035_010720_g0/SC035_010720_g0_imec0/imec0_ks2
+    SC035/catgt_SC035_011020_g0/SC035_011020_g0_imec2/imec2_ks2_orig
+    
+### Manual session-based ephys ingest
+This section introduces additional manual routines for ephys ingest for any given behavior session after the main ephys ingestion (i.e. `mapshell.py ingest-ephys`) has been completed. 
+There are 2 reasons for performing manual ephys ingestion after the `mapshell.py ingest-ephys` routine:    
 
-if this variable is not configured, hardcoded values in the code matching
-the experimental setup will be used.
+1. Extending an ingested set of ephys results
+    + This is needed when not all data were available during the 1st ingestion run. For instance, clustering results for probe 3 was not available at the time of the 1st ingestion - thus only 2 probe ephys data were ingested in a 3-probe recording session
+    + This does not modify the already ingested ephys data, only extending it
+2. Replacing an ingested set of ephys results
+    + This is needed for a new version of curated clustering results to replace the ingested set of ephys results (or when quality controlled results become available)
+    + There are 4 major steps taken in this routine:
+        1. Search the specify data directory and verify the presence of new clustering results for the specified ***session***
+        2. Copy the ingested ephys data over to the ***ArchiveUnit*** table, with all meta info tracked
+        3. Delete the ingested data
+        4. Re-ingest new version of the clustering results
 
-File paths conform to the pattern:
+Example execution:
+```python
+from pipeline.ingest import ephys as ephys_ingest
+from pipeline import experiment
 
-    \2017-10-21-1\tw5ap_imec3_opt3_jrc.mat
+# obtain the session key for the session of interest
 
-which is, more generally:
+session_key = (experiment.Session & 'subject_id=471324' & 'session=2').fetch1('KEY')
 
-    \{YYYY}-{MM}-{DD}-{N}\{h2o}_ap_imec3_opt3_jrc.mat
+# to extend ephys result:
 
-Where:
+ephys_ingest.extend_ephys_ingest(session_key)
 
-    - YYYY: 4-Digit Year
-    - MM: 2-Digit Month
-    - DD: 2-Digit Month
-    - N: Probe number for this probe
-
-Older files matched the pattern:
-
-    {h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat
-    {h2o}_g0_t0.imec.ap_imec3_opt3_jrc.mat
+```
 
 ## Raw Recording File Publication and Retrieval
 
@@ -160,7 +220,7 @@ files into the second-stage processed data used in later stages, however, some
 facility is provided for tracking raw data files and transferring them to/from
 the ANL [\'petrel\'](https://www.alcf.anl.gov/petrel) faclity using the [globus toolkit](http://toolkit.globus.org/toolkit/) and [Globus Python SDK](https://globus-sdk-python.readthedocs.io/en/stable/).
 
-### Configuration
+### Globus Configuration
 
 To use this facility, a 'globus endpoint' should be configured and the
 following variables set in 'dj_local_conf.json' to match the configuration:
