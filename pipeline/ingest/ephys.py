@@ -1322,7 +1322,8 @@ def replace_ingested_clustering_results(session_key):
     for probe_no, (f, cluster_method, npx_meta) in clustering_files.items():
         cluster_output_dir = f[0] if f[0].is_dir() else f[0].parent
         creation_time, _ = extract_clustering_info(cluster_output_dir, cluster_method)
-        existing_clustering_time = (ephys.ClusteringLabel & session_key & {'insertion_number': probe_no}).fetch('clustering_time', limit=1)[0]
+        existing_clustering_time = (ephys.ClusteringLabel & session_key & {'insertion_number': probe_no}).fetch(
+            'clustering_time', limit=1)[0]
 
         if abs((existing_clustering_time - creation_time).total_seconds()) <= 1:
             identical_clustering_results.append((probe_no, cluster_output_dir))
@@ -1371,8 +1372,8 @@ def archive_ingested_clustering_results(session_key):
         q_units = (ephys.Unit & insert_key).aggr(ephys.UnitCellType, ..., cell_type='cell_type', keep_all_rows=True)
 
         q_units_stat = q_units.proj('unit_amp', 'unit_snr').aggr(ephys.UnitStat, ...,
-                                                             isi_violation='isi_violation',
-                                                             avg_firing_rate='avg_firing_rate', keep_all_rows=True)
+                                                                 isi_violation='isi_violation',
+                                                                 avg_firing_rate='avg_firing_rate', keep_all_rows=True)
         q_units_cluster_metrics = q_units.proj() * ephys.ClusterMetric
         q_units_waveform_metrics = q_units.proj() * ephys.WaveformMetric
 
@@ -1384,7 +1385,8 @@ def archive_ingested_clustering_results(session_key):
 
     def copy_and_delete():
         # server-side copy
-        log.info('Archiving {} units from {} probe insertions'.format(len(ephys.Unit & session_key), len(ephys.ProbeInsertion & session_key)))
+        log.info('Archiving {} units from {} probe insertions'.format(len(ephys.Unit & session_key),
+                                                                      len(ephys.ProbeInsertion & session_key)))
         insert_settings = dict(ignore_extra_fields=True, allow_direct_insert=True)
         for clustering, units, units_stat, cluster_metrics, waveform_metrics in zip(
                 archived_clusterings, archived_units,
