@@ -294,8 +294,8 @@ class ProbeType(dj.Lookup):
 
         # ---- 1.0 3A ----
         if probe_type == 'neuropixels 1.0 - 3A':
-            electrodes = build_electrodes(site_count = 960, col_spacing = 32, row_spacing = 20,
-                                          white_spacing = 16, col_count = 2)
+            electrodes = build_electrodes(site_count=960, col_spacing=32, row_spacing=20,
+                                          white_spacing=16, col_count=2)
 
             probe_type = {'probe_type': 'neuropixels 1.0 - 3A'}
             with ProbeType.connection.transaction:
@@ -304,8 +304,8 @@ class ProbeType(dj.Lookup):
 
         # ---- 1.0 3B ----
         if probe_type == 'neuropixels 1.0 - 3B':
-            electrodes = build_electrodes(site_count = 960, col_spacing = 32, row_spacing = 20,
-                                          white_spacing = 16, col_count = 2)
+            electrodes = build_electrodes(site_count=960, col_spacing=32, row_spacing=20,
+                                          white_spacing=16, col_count=2)
 
             probe_type = {'probe_type': 'neuropixels 1.0 - 3B'}
             with ProbeType.connection.transaction:
