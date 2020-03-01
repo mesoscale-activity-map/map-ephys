@@ -1398,8 +1398,9 @@ def archive_ingested_clustering_results(session_key):
             ephys.ArchivedClustering.insert(clustering, **insert_settings)
 
             # recompute trial_spike
+            log.info('Archiving {} units'.format(len(units)))
             units = units.fetch(as_dict=True)
-            for unit in units:
+            for unit in tqdm(units):
                 after_start = unit['spike_times'] >= tr_start[:, None]
                 before_stop = unit['spike_times'] <= tr_stop[:, None]
                 in_trial = ((after_start & before_stop) * tr_no[:, None]).sum(axis=0)

@@ -233,14 +233,14 @@ class ProbeType(dj.Lookup):
     class Electrode(dj.Part):
         definition = """
         -> master
-        electrode: int       # electrode index, starts at 0
+        electrode: int       # electrode index, starts at 1
         ---
-        shank: int           # shank index, starts at 0, advance left to right
-        shank_col: int       # column index, starts at 0, advance left to right
-        shank_row: int       # row index, starts at 0, advance tip to tail
-        x_coord=NULL: float  # (um) x coordinate of the electrode within the probe, (0, 0) is the tip of the probe
-        y_coord=NULL: float  # (um) y coordinate of the electrode within the probe, (0, 0) is the tip of the probe
-        z_coord=0: float     # (um) z coordinate of the electrode within the probe, (0, 0) is the tip of the probe
+        shank: int           # shank index, starts at 1, advance left to right
+        shank_col: int       # column index, starts at 1, advance left to right
+        shank_row: int       # row index, starts at 1, advance tip to tail
+        x_coord=NULL: float  # (um) x coordinate of the electrode within the probe, (0, 0) is the bottom left corner of the probe
+        y_coord=NULL: float  # (um) y coordinate of the electrode within the probe, (0, 0) is the bottom left corner of the probe
+        z_coord=0: float     # (um) z coordinate of the electrode within the probe, (0, 0) is the bottom left corner of the probe
         """
 
     @property
