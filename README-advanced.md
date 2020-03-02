@@ -142,7 +142,7 @@ Once the data paths are configured, executing the 4 ingestion routines above com
 
 >python scripts/mapshell.py ingest-histology
 
-*Note: make sure to navigate yourself to the root of this project directory (e.g. `cd map-ephys`)*
+*Note: make sure to navigate yourself to the root of this project directory (e.g. `cd map-ephys`) if you don't already have the pipeline installed (with `pip install .` - see "Installation and Setup" above.* 
 
 ### Path Expectations
 
