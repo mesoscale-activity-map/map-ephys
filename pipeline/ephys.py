@@ -354,3 +354,79 @@ class UnitCCF(dj.Computed):
     ---
     -> ccf.CCF
     """
+
+
+# ======== Archived Clustering ========
+
+@schema
+class ArchivedClustering(dj.Imported):
+    definition = """
+    -> ProbeInsertion
+    -> ClusteringMethod
+    clustering_time: datetime  # time of generation of this set of clustering results 
+    ---
+    archival_time: datetime  # time of archiving
+    quality_control: bool  # has this clustering results undergone quality control
+    manual_curation: bool  # is manual curation performed on this clustering result
+    clustering_note=null: varchar(2000)  
+    """
+
+    class Unit(dj.Part):
+        definition = """
+        -> master
+        unit: smallint
+        ---
+        -> UnitQualityType
+        -> [nullable] CellType
+        -> lab.ElectrodeConfig.Electrode # site on the electrode for which the unit has the largest amplitude
+        unit_posx : double # (um) estimated x position of the unit relative to probe's tip (0,0)
+        unit_posy : double # (um) estimated y position of the unit relative to probe's tip (0,0)
+        spike_times : blob@archive_store  # (s) from the start of the first data point used in clustering
+        trial_spike : blob@archive_store  # array of trial numbering per spike - same size as spike_times
+        waveform : blob@archive_store     # average spike waveform  
+        """
+
+    class UnitStat(dj.Part):
+        definition = """
+        -> master
+        -> ArchivedClustering.Unit
+        ---
+        unit_amp : float
+        unit_snr : float
+        isi_violation=null: float     
+        avg_firing_rate=null: float  
+        """
+
+    class ClusterMetric(dj.Part):
+        definition = """ 
+        -> master
+        -> ArchivedClustering.Unit
+        epoch_name_quality_metrics: varchar(64)
+        ---
+        presence_ratio: float  # Fraction of epoch in which spikes are present
+        amplitude_cutoff: float  # Estimate of miss rate based on amplitude histogram
+        isolation_distance=null: float  # Distance to nearest cluster in Mahalanobis space
+        l_ratio=null: float  # 
+        d_prime=null: float  # Classification accuracy based on LDA
+        nn_hit_rate=null: float  # 
+        nn_miss_rate=null: float
+        silhouette_score=null: float  # Standard metric for cluster overlap
+        max_drift=null: float  # Maximum change in spike depth throughout recording
+        cumulative_drift=null: float  # Cumulative change in spike depth throughout recording 
+        """
+
+    class WaveformMetric(dj.Part):
+        definition = """
+        -> master
+        -> ArchivedClustering.Unit
+        epoch_name_waveform_metrics: varchar(64)
+        ---
+        duration=null: float
+        halfwidth=null: float
+        pt_ratio=null: float
+        repolarization_slope=null: float
+        recovery_slope=null: float
+        spread=null: float
+        velocity_above=null: float
+        velocity_below=null: float   
+        """
