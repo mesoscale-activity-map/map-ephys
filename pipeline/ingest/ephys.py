@@ -1357,9 +1357,9 @@ def archive_ingested_clustering_results(session_key):
     """
     archival_time = datetime.now()
 
-    archived_clusterings, archived_units, \
-    archived_units_stat, archived_cluster_metrics,\
-    archived_waveform_metrics = [], [], [], [], []
+    q_archived_clusterings, q_archived_units, \
+    q_archived_units_stat, q_archived_cluster_metrics,\
+    q_archived_waveform_metrics = [], [], [], [], []
 
     for insert_key in (ephys.ProbeInsertion & session_key).fetch('KEY'):
         q_archived_clustering = (ephys.ProbeInsertion.proj() & insert_key).aggr(
@@ -1376,40 +1376,46 @@ def archive_ingested_clustering_results(session_key):
         q_units_cluster_metrics = q_units.proj() * ephys.ClusterMetric
         q_units_waveform_metrics = q_units.proj() * ephys.WaveformMetric
 
-        archived_clusterings.append(q_archived_clustering)
-        archived_units.append(q_archived_clustering * q_units)
-        archived_units_stat.append(q_archived_clustering * q_units_stat)
-        archived_cluster_metrics.append(q_archived_clustering * q_units_cluster_metrics)
-        archived_waveform_metrics.append(q_archived_clustering * q_units_waveform_metrics)
+        q_archived_clusterings.append(q_archived_clustering)
+        q_archived_units.append(q_archived_clustering * q_units)
+        q_archived_units_stat.append(q_archived_clustering * q_units_stat)
+        q_archived_cluster_metrics.append(q_archived_clustering * q_units_cluster_metrics)
+        q_archived_waveform_metrics.append(q_archived_clustering * q_units_waveform_metrics)
 
     # preparing spike_times and trial_spike
     tr_no, tr_start = (experiment.SessionTrial & session_key).fetch(
         'trial', 'start_time', order_by='trial')
     tr_stop = np.append(tr_start[1:], np.inf)
 
+    # units
+    archived_units = []
+    for units in q_archived_units:
+        # recompute trial_spike
+        log.info('Archiving {} units'.format(len(units)))
+        units = units.fetch(as_dict=True)
+        for unit in tqdm(units):
+            after_start = unit['spike_times'] >= tr_start[:, None]
+            before_stop = unit['spike_times'] <= tr_stop[:, None]
+            in_trial = ((after_start & before_stop) * tr_no[:, None]).sum(axis=0)
+            unit['trial_spike'] = np.where(in_trial == 0, np.nan, in_trial)
+        archived_units.extend(units)
+
     def copy_and_delete():
         # server-side copy
         log.info('Archiving {} units from {} probe insertions'.format(len(ephys.Unit & session_key),
                                                                       len(ephys.ProbeInsertion & session_key)))
         insert_settings = dict(ignore_extra_fields=True, allow_direct_insert=True)
-        for clustering, units, units_stat, cluster_metrics, waveform_metrics in zip(
-                archived_clusterings, archived_units,
-                archived_units_stat, archived_cluster_metrics, archived_waveform_metrics):
-            ephys.ArchivedClustering.insert(clustering, **insert_settings)
 
-            # recompute trial_spike
-            log.info('Archiving {} units'.format(len(units)))
-            units = units.fetch(as_dict=True)
-            for unit in tqdm(units):
-                after_start = unit['spike_times'] >= tr_start[:, None]
-                before_stop = unit['spike_times'] <= tr_stop[:, None]
-                in_trial = ((after_start & before_stop) * tr_no[:, None]).sum(axis=0)
-                unit['trial_spike'] = np.where(in_trial == 0, np.nan, in_trial)
-            ephys.ArchivedClustering.Unit.insert(units, **insert_settings)
+        [ephys.ArchivedClustering.insert(clustering, **insert_settings)
+         for clustering in q_archived_clusterings]
+        ephys.ArchivedClustering.Unit.insert(archived_units, **insert_settings)
+        [ephys.ArchivedClustering.UnitStat.insert(units_stat, **insert_settings)
+         for units_stat in q_archived_units_stat]
+        [ephys.ArchivedClustering.ClusterMetric.insert(cluster_metrics, **insert_settings)
+         for cluster_metrics in q_archived_cluster_metrics]
+        [ephys.ArchivedClustering.WaveformMetric.insert(waveform_metrics, **insert_settings)
+         for waveform_metrics in q_archived_waveform_metrics]
 
-            ephys.ArchivedClustering.UnitStat.insert(units_stat, **insert_settings)
-            ephys.ArchivedClustering.ClusterMetric.insert(cluster_metrics, **insert_settings)
-            ephys.ArchivedClustering.WaveformMetric.insert(waveform_metrics, **insert_settings)
         with dj.config(safemode=False):
             (ephys.Unit & session_key).delete()
             (report.SessionLevelCDReport & session_key).delete()
