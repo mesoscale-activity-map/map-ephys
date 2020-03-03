@@ -233,14 +233,14 @@ class ProbeType(dj.Lookup):
     class Electrode(dj.Part):
         definition = """
         -> master
-        electrode: int       # electrode index, starts at 0
+        electrode: int       # electrode index, starts at 1
         ---
-        shank: int           # shank index, starts at 0, advance left to right
-        shank_col: int       # column index, starts at 0, advance left to right
-        shank_row: int       # row index, starts at 0, advance tip to tail
-        x_coord=NULL: float  # (um) x coordinate of the electrode within the probe, (0, 0) is the tip of the probe
-        y_coord=NULL: float  # (um) y coordinate of the electrode within the probe, (0, 0) is the tip of the probe
-        z_coord=0: float     # (um) z coordinate of the electrode within the probe, (0, 0) is the tip of the probe
+        shank: int           # shank index, starts at 1, advance left to right
+        shank_col: int       # column index, starts at 1, advance left to right
+        shank_row: int       # row index, starts at 1, advance tip to tail
+        x_coord=NULL: float  # (um) x coordinate of the electrode within the probe, (0, 0) is the bottom left corner of the probe
+        y_coord=NULL: float  # (um) y coordinate of the electrode within the probe, (0, 0) is the bottom left corner of the probe
+        z_coord=0: float     # (um) z coordinate of the electrode within the probe, (0, 0) is the bottom left corner of the probe
         """
 
     @property
@@ -294,8 +294,8 @@ class ProbeType(dj.Lookup):
 
         # ---- 1.0 3A ----
         if probe_type == 'neuropixels 1.0 - 3A':
-            electrodes = build_electrodes(site_count = 960, col_spacing = 32, row_spacing = 20,
-                                          white_spacing = 16, col_count = 2)
+            electrodes = build_electrodes(site_count=960, col_spacing=32, row_spacing=20,
+                                          white_spacing=16, col_count=2)
 
             probe_type = {'probe_type': 'neuropixels 1.0 - 3A'}
             with ProbeType.connection.transaction:
@@ -304,8 +304,8 @@ class ProbeType(dj.Lookup):
 
         # ---- 1.0 3B ----
         if probe_type == 'neuropixels 1.0 - 3B':
-            electrodes = build_electrodes(site_count = 960, col_spacing = 32, row_spacing = 20,
-                                          white_spacing = 16, col_count = 2)
+            electrodes = build_electrodes(site_count=960, col_spacing=32, row_spacing=20,
+                                          white_spacing=16, col_count=2)
 
             probe_type = {'probe_type': 'neuropixels 1.0 - 3B'}
             with ProbeType.connection.transaction:

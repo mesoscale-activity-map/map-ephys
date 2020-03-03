@@ -30,12 +30,12 @@ def get_histology_paths():
       dj.config = {
         ...,
         'custom': {
-          'histology_data_path': ['/path/string', '/path2/string']
+          'histology_data_paths': ['/path/string', '/path2/string']
         }
         ...
       }
     """
-    return dj.config.get('custom', {}).get('histology_data_path', None)
+    return dj.config.get('custom', {}).get('histology_data_paths', None)
 
 
 @schema

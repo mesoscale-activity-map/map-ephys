@@ -1,4 +1,3 @@
-import datajoint as dj
 
 
 class ProbeInsertionError(Exception):
@@ -19,4 +18,13 @@ class BitCodeError(Exception):
     """Raise when error encountered when extracting information from bitcode file"""
     def __init__(self, msg=None):
         super().__init__('BitCode Error: \n{}'.format(msg))
+    pass
+
+
+class IdenticalClusterResultError(Exception):
+    """Raise when identical clustering time found between the existing clustering results and the replacement one"""
+    def __init__(self, identical_clustering_results, msg=''):
+        emsg = ['\treplacement clustering dir ({}) for probe insertion {}\n'.format(d, n)
+                for n, d in identical_clustering_results]
+        super().__init__('Identical clustering time found for:\n{}{}'.format(''.join(emsg), msg))
     pass

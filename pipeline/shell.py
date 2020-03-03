@@ -7,21 +7,10 @@ from code import interact
 import time
 import numpy as np
 import pandas as pd
-import datetime
 
 import datajoint as dj
 
-from pipeline import lab
-from pipeline import experiment
-from pipeline import ccf
-from pipeline import ephys
-from pipeline import histology
-from pipeline import tracking
-from pipeline import psth
-from pipeline import report
-from pipeline import export
-from pipeline import publication
-
+from pipeline import (lab, experiment, tracking, ephys, psth, ccf, histology, export, publication, get_schema_name)
 
 pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth]
 
@@ -236,6 +225,7 @@ def ccfload(*args):
 
 
 def erd(*args):
+    report = dj.create_virtual_module('report', get_schema_name('report'))
     mods = (ephys, lab, experiment, tracking, psth, ccf, histology,
             report, publication)
     for mod in mods:

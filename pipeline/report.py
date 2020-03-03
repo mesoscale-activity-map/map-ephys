@@ -487,6 +487,8 @@ class ProjectLevelProbeTrack(dj.Computed):
         vertices = vertices * um_per_px
 
         fig1 = plt.figure(figsize=(16, 12))
+        fig1.suptitle(f'{len(probe_tracks_list)} probe-tracks / {len(ephys.ProbeInsertion())} probe-insertions',
+                      fontsize=24, y=0.05)
 
         for axloc, elev, azim in zip((221, 222, 223, 224), (65, 0, 90, 0), (-15, 0, 0, 90)):
             ax = fig1.add_subplot(axloc, projection='3d')
@@ -496,12 +498,12 @@ class ProjectLevelProbeTrack(dj.Computed):
             ax.invert_zaxis()
 
             ax.plot_trisurf(vertices[:, 0], vertices[:, 1], faces, vertices[:, 2],
-                            alpha = 0.25, lw = 0)
+                            alpha=0.25, lw=0)
 
             for v in probe_tracks_list:
                 ax.plot(v[:, 0], v[:, 2], v[:, 1], 'r')
 
-            ax.set_title('Probe Track in CCF (um)')
+            ax.set_title('Probe Track in CCF (um)', fontsize=16)
 
         # ---- Save fig and insert ----
         fn_prefix = (experiment.Project & key).fetch1('project_name') + '_'
@@ -553,13 +555,12 @@ def delete_outdated_probe_tracks(project_name='MAP'):
         uuid_byte = (ProjectLevelProbeTrack & {'project_name': project_name}).proj(ub='(tracks_plot)').fetch1('ub')
         ext_key = {'hash': uuid.UUID(bytes=uuid_byte)}
 
-        with dj.config(safemode=False) as cfg:
+        with dj.config(safemode=False):
             with ProjectLevelProbeTrack.connection.transaction:
                 # delete the outdated Probe Tracks
                 (ProjectLevelProbeTrack & {'project_name': project_name}).delete()
                 # delete from external store
                 (schema.external['report_store'] & ext_key).delete(delete_external_files=True)
                 print('Outdated ProjectLevelProbeTrack deleted')
-
     else:
         print('ProjectLevelProbeTrack is up-to-date')

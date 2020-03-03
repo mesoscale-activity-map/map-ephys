@@ -424,6 +424,10 @@ class PeriodSelectivity(dj.Computed):
 
         # and testing for selectivity.
         t_stat, pval = sc_stats.ttest_ind(freq_i, freq_c, equal_var=True)
+        # try:
+        #     _stat, pval = sc_stats.mannwhitneyu(freq_i, freq_c, alternative='two-sided')
+        # except ValueError:
+        #     pval = np.nan
 
         freq_i_m = np.average(freq_i)
         freq_c_m = np.average(freq_c)
