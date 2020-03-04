@@ -390,10 +390,12 @@ class PeriodSelectivity(dj.Computed):
 
         # retrieving the spikes of interest,
         spikes_q = ((ephys.Unit.TrialSpikes & key)
-                    * (experiment.BehaviorTrial()
-                       & {'task': 'audio delay'}
-                       & {'early_lick': 'no early'}
-                       & {'outcome': 'hit'}) - experiment.PhotostimEvent)
+                    * (experiment.BehaviorTrial
+                       & {'task': 'audio delay',
+                          'early_lick': 'no early',
+                          'outcome': 'hit',
+                          'free_water': 0,
+                          'auto_water': 0}) - experiment.PhotostimEvent)
 
         if not spikes_q:  # no spikes found
             self.insert1({**key, 'period_selectivity': 'non-selective'})
