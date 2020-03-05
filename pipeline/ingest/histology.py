@@ -120,7 +120,7 @@ class HistologyIngest(dj.Imported):
             trk_ingested = self._load_histology_track()
         except FileNotFoundError as e:
             log.warning('Error: {}'.format(str(e)))
-            log.warning('Error: No histology without probe track. Skipping...')
+            log.warning('Error: No histology with probe track. Skipping...')
             return
         except HistologyFileError as e:
             log.warning('Error: {}'.format(str(e)))
@@ -182,7 +182,15 @@ class HistologyIngest(dj.Imported):
 
     def _load_histology_track(self):
 
+        log.info('... probe {} probe-track ingest.'.format(self.probe))
+
         trackpaths = self._search_histology_files('histology_file')
+
+        if trackpaths:
+            log.info('... found probe {} histology file {}'.format(
+                self.probe, trackpaths))
+        else:
+            raise FileNotFoundError
 
         conv = (('landmark_name', str), ('warp', lambda x: x.lower() == 'true'),
                 ('subj_x', float), ('subj_y', float), ('subj_z', float),
