@@ -23,7 +23,8 @@ class TrackingDevice(dj.Lookup):
     """
     contents = [
        ('Camera 0', 'side', 1/0.0034, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)'),
-       ('Camera 1', 'bottom', 1/0.0034, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)')]
+       ('Camera 1', 'bottom', 1/0.0034, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)'),
+        ('Camera 2', 'body', 1/0.0034, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)')]
 
 
 @schema

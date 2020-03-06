@@ -3,6 +3,7 @@ import os
 import logging
 import pathlib
 from glob import glob
+from datetime import datetime
 
 import numpy as np
 import datajoint as dj
@@ -58,47 +59,55 @@ class TrackingIngest(dj.Imported):
 
     key_source = experiment.Session - tracking.Tracking
 
+    camera_position_mapper = {'side': ('side', 'side_face'),
+                              'bottom': ('bottom', 'bottom_face'),
+                              'body': ('body', 'side_body')}
+
     def make(self, key):
         '''
         TrackingIngest .make() function
         '''
+        log.info('\n======================================================')
         log.info('TrackingIngest().make(): key: {k}'.format(k=key))
 
-        h2o = (lab.WaterRestriction() & key).fetch1('water_restriction_number')
-        session = (experiment.Session() & key).fetch1()
-        trials = (experiment.SessionTrial() & session).fetch('trial')
+        h2o = (lab.WaterRestriction & key).fetch1('water_restriction_number')
+        session = (experiment.Session & key).fetch1()
+        trials = (experiment.SessionTrial & session).fetch('trial')
 
         log.info('got session: {} ({} trials)'.format(session, len(trials)))
+        log.info('\n-----------')
 
-        sdate = session['session_date']
-        sdate_sml = "{}{:02d}{:02d}".format(sdate.year, sdate.month, sdate.day)
+        sess_time = (datetime.min + session['session_time']).time()
+        sess_datetime = datetime.combine(session['session_date'], sess_time)
 
         paths = get_tracking_paths()
-        devices = tracking.TrackingDevice().fetch(as_dict=True)
+        devices = tracking.TrackingDevice.fetch(as_dict=True)
 
         # paths like: <root>/<h2o>/YYYY-MM-DD/tracking
         tracking_files = []
         for p, d in ((p, d) for d in devices for p in paths):
 
             tdev = d['tracking_device']
-            tpos = d['tracking_position']
+            cam_pos = d['tracking_position']
             tdat = p[-1]
 
-            log.info('checking {} for tracking data'.format(tdat))
-
-            tpath = pathlib.Path(tdat, h2o, sdate.strftime('%Y%m%d'), 'tracking')
-
-            if not tpath.exists():
-                log.warning('tracking path {} n/a - skipping'.format(tpath))
+            try:
+                tpath, sdate_sml = _get_sess_tracking_dir(tdat, h2o, sess_datetime)
+            except FileNotFoundError as e:
+                log.warning('{} - skipping'.format(str(e)))
                 continue
 
-            camtrial = '{}_{}_{}.txt'.format(h2o, sdate_sml, tpos)
-            campath = tpath / camtrial
+            campath = None
+            for tpos_name in self.camera_position_mapper[cam_pos]:
+                camtrial_fn = '{}_{}_{}.txt'.format(h2o, sdate_sml, tpos_name)
+                log.info('trying camera position trial map: {}'.format(tpath / camtrial_fn))
+                if (tpath / camtrial_fn).exists():
+                    campath = tpath / camtrial_fn
+                    tpos = tpos_name
+                    break
 
-            log.info('trying camera position trial map: {}'.format(campath))
-
-            if not campath.exists():
-                log.info('skipping {} - does not exist'.format(campath))
+            if campath is None:
+                log.info('Video-Trial mapper file (.txt) not found - Skipping...')
                 continue
 
             tmap = self.load_campath(campath)  # file:trial
@@ -121,7 +130,7 @@ class TrackingIngest(dj.Imported):
                               .format(i, n_tmap, t, (i/n_tmap)*100))
 
                 # ex: dl59_side_1-0000.csv / h2o_position_tn-0000.csv
-                tfile = '{}_{}_{}-*.csv'.format(h2o, tpos, t)
+                tfile = '{}*_{}_{}-*.csv'.format(h2o, tpos, t)
                 tfull = list(tpath.glob(tfile))
 
                 if not tfull or len(tfull) > 1:
@@ -188,14 +197,15 @@ class TrackingIngest(dj.Imported):
                            if k in fmap}}, allow_direct_insert=True)
 
                 tracking_files.append({**key, 'trial': tmap[t], 'tracking_device': tdev,
-                     'tracking_file': str(tfull.relative_to(tdat))})
+                                       'tracking_file': str(tfull.relative_to(tdat))})
 
             log.info('... completed {}/{} items.'.format(i, n_tmap))
 
-        self.insert1(key)
-        self.TrackingFile.insert(tracking_files)
+        if tracking_files:
+            self.insert1(key)
+            self.TrackingFile.insert(tracking_files)
 
-        log.info('... done.')
+            log.info('... done.')
 
     @staticmethod
     def load_campath(campath):
@@ -244,3 +254,25 @@ class TrackingIngest(dj.Imported):
                         res[parts[i]][fields[i]].append(v)
 
         return res
+
+
+# ======== Helpers for directory navigation ========
+
+def _get_sess_tracking_dir(tracking_path, h2o, sess_datetime):
+    tracking_path = pathlib.Path(tracking_path)
+
+    if (tracking_path / h2o).exists():
+        log.info('Checking for tracking data at: {}'.format(tracking_path / h2o))
+    else:
+        raise FileNotFoundError('{} not found'.format(tracking_path / h2o))
+
+    dir_format = tracking_path / h2o / '{}_{}'.format(h2o, sess_datetime.date().strftime('%m%d%y'))
+    legacy_dir_format = tracking_path / h2o / sess_datetime.date().strftime('%Y%m%d') / 'tracking'
+
+    if dir_format.exists():
+        return dir_format, sess_datetime.date().strftime('%m%d%y')
+    elif legacy_dir_format.exists():
+        return legacy_dir_format, sess_datetime.date().strftime('%Y%m%d')
+    else:
+        raise FileNotFoundError('Neither ({}) nor ({}) found'.format(dir_format.relative_to(tracking_path),
+                                                                     legacy_dir_format.relative_to(tracking_path)))
