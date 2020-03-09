@@ -24,5 +24,5 @@ def update_delay_event_duration():
     incorrect_dur_events = new_durs != delay_durs
 
     log.info('Updating duration for {} events'.format(len(incorrect_dur_events)))
-    for ekey, next_ekey, dur in zip(np.array(ekeys)[incorrect_dur_events], np.array(next_ekeys)[incorrect_dur_events], new_durs[incorrect_dur_events]):
+    for ekey, dur in zip(np.array(ekeys)[incorrect_dur_events], new_durs[incorrect_dur_events]):
         (experiment.TrialEvent & ekey)._update('duration', dur)
