@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 
 
 def update_delay_event_duration():
-    delay_events = experiment.TrialEvent & (experiment.BehaviorTrial & 'early_lick = "no early"') & 'trial_event_type = "delay"'
+    delay_events = experiment.TrialEvent & 'trial_event_type = "delay"'
     next_events = experiment.TrialEvent & delay_events.proj(trial_event_id='trial_event_id + 1')
 
     ekeys, delay_onsets, delay_durs = delay_events.fetch('KEY', 'trial_event_time', 'duration')
