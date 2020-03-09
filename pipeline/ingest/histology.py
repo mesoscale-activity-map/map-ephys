@@ -91,8 +91,7 @@ class HistologyIngest(dj.Imported):
             log.warning('Missing BehaviorFile for session: {}. Skipping...'.format(self.session))
             return
 
-        behavior_file = (behavior_ingest.BehaviorIngest.BehaviorFile & key).fetch1('behavior_file')
-        self.behavior_time_str = re.search('_(\d{6}).mat', behavior_file).groups()[0]
+        self.q_behavior_file = (behavior_ingest.BehaviorIngest.BehaviorFile & key)
 
         self.directory = None
         for rigpath in rigpaths:
@@ -121,7 +120,7 @@ class HistologyIngest(dj.Imported):
             trk_ingested = self._load_histology_track()
         except FileNotFoundError as e:
             log.warning('Error: {}'.format(str(e)))
-            log.warning('Error: No histology without probe track. Skipping...')
+            log.warning('Error: No histology with probe track. Skipping...')
             return
         except HistologyFileError as e:
             log.warning('Error: {}'.format(str(e)))
@@ -183,7 +182,15 @@ class HistologyIngest(dj.Imported):
 
     def _load_histology_track(self):
 
+        log.info('... probe {} probe-track ingest.'.format(self.probe))
+
         trackpaths = self._search_histology_files('histology_file')
+
+        if trackpaths:
+            log.info('... found probe {} histology file {}'.format(
+                self.probe, trackpaths))
+        else:
+            raise FileNotFoundError
 
         conv = (('landmark_name', str), ('warp', lambda x: x.lower() == 'true'),
                 ('subj_x', float), ('subj_y', float), ('subj_z', float),
@@ -259,14 +266,18 @@ class HistologyIngest(dj.Imported):
             if session_time_str == '':
                 same_day_sess_count = len(experiment.Session & {'subject_id': self.session['subject_id'], 'session_date': self.session['session_date']})
                 if same_day_sess_count != 1:
-                    raise HistologyFileError('{} same-day sessions found - but only 1 histology file found ({}) with no "session_time" specified'.format(same_day_sess_count, histology_files[0].name))
+                    raise HistologyFileError('{} same-day sessions found - but only 1 histology file found ({}) with no "session_time" specified'.format(
+                        same_day_sess_count, histology_files[0].name))
             else:
-                if session_time_str != self.behavior_time_str:
-                    raise HistologyFileError('Only 1 histology file found ({}) with "session_time" ({}) different from "behavior_time" ({})'.format(histology_files[0].name, session_time_str, self.behavior_time_str))
+                behavior_time_str = re.search('_(\d{6}).mat', self.q_behavior_file.fetch1('behavior_file')).groups()[0]
+                if session_time_str != behavior_time_str:
+                    raise HistologyFileError('Only 1 histology file found ({}) with "session_time" ({}) different from "behavior_time" ({})'.format(
+                        histology_files[0].name, session_time_str, behavior_time_str))
 
         else:
+            behavior_time_str = re.search('_(\d{6}).mat', self.q_behavior_file.fetch1('behavior_file')).groups()[0]
             file_format = 'landmarks_{}_{}_{}_{}*{}'.format(self.water, self.session_date_str,
-                                                            self.behavior_time_str,
+                                                            behavior_time_str,
                                                             self.probe, file_format_map[file_type])
             histology_files = list(self.directory.glob(file_format))
             if len(histology_files) < 1:
