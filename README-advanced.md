@@ -162,7 +162,7 @@ where:
   - `YYYYMMDD` and `HHMMSS` refer to the date and time of the session.
   
 #### Ephys Files Ingestion
-Ephys Files are typically structured in a directory convention as followed:
+Ephys Files are typically structured in a directory convention as followed (*subsequent to the ***ephys_data_paths****):
 
     {h2o}/{YYYYMMDD}/{probe_no}/ephys_file  
 or
@@ -182,6 +182,15 @@ Some example ephys paths:
     SC022/20190303/1/SC022_g0_t0.imec0.ap_res.mat
     SC035/catgt_SC035_010720_g0/SC035_010720_g0_imec0/imec0_ks2
     SC035/catgt_SC035_011020_g0/SC035_011020_g0_imec2/imec2_ks2_orig
+    
+#### Tracking Files Ingestion
+Tracking files are expected to be found in the following directory structure (*subsequent to the ***tracking_data_paths****):
+
+    {h2o}/{YYYYMMDD}/tracking/
+
+or
+
+    {h2o}/{h2o}_{MMDDYY}/
     
 ### Manual session-based ephys ingest
 This section introduces additional manual routines for ephys ingest for any given behavior session after the main ephys ingestion (i.e. `mapshell.py ingest-ephys`) has been completed. 

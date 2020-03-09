@@ -231,39 +231,39 @@ class BehaviorIngest(dj.Imported):
 
         log.debug('loading file {}'.format(path))
 
-        mat = spio.loadmat(path, squeeze_me=True)
-        SessionData = mat['SessionData'].flatten()
+        mat = spio.loadmat(path, squeeze_me=True, struct_as_record=False)
+        SessionData = mat['SessionData']
 
         # parse session datetime
-        session_datetime_str = str('').join((
-            str(SessionData['Info'][0]['SessionDate']),
-            ' ', str(SessionData['Info'][0]['SessionStartTime_UTC'])))
-
+        session_datetime_str = str('').join((str(SessionData.Info.SessionDate), ' ',
+                                             str(SessionData.Info.SessionStartTime_UTC)))
         session_datetime = datetime.strptime(
             session_datetime_str, '%d-%b-%Y %H:%M:%S')
 
-        AllTrialTypes = SessionData['TrialTypes'][0]
-        AllTrialSettings = SessionData['TrialSettings'][0]
-        AllTrialStarts = SessionData['TrialStartTimestamp'][0]
+        AllTrialTypes = SessionData.TrialTypes
+        AllTrialSettings = SessionData.TrialSettings
+        AllTrialStarts = SessionData.TrialStartTimestamp
         AllTrialStarts = AllTrialStarts - AllTrialStarts[0]  # real 1st trial
 
-        RawData = SessionData['RawData'][0].flatten()
-        AllStateNames = RawData['OriginalStateNamesByNumber'][0]
-        AllStateData = RawData['OriginalStateData'][0]
-        AllEventData = RawData['OriginalEventData'][0]
-        AllStateTimestamps = RawData['OriginalStateTimestamps'][0]
-        AllEventTimestamps = RawData['OriginalEventTimestamps'][0]
+        RawData = SessionData.RawData
+        AllStateNames = RawData.OriginalStateNamesByNumber
+        AllStateData = RawData.OriginalStateData
+        AllEventData = RawData.OriginalEventData
+        AllStateTimestamps = RawData.OriginalStateTimestamps
+        AllEventTimestamps = RawData.OriginalEventTimestamps
+
+        AllRawEvents = SessionData.RawEvents.Trial
 
         # verify trial-related data arrays are all same length
         assert(all((x.shape[0] == AllStateTimestamps.shape[0] for x in
                     (AllTrialTypes, AllTrialSettings,
                      AllStateNames, AllStateData, AllEventData,
-                     AllEventTimestamps, AllTrialStarts, AllTrialStarts))))
+                     AllEventTimestamps, AllTrialStarts, AllTrialStarts, AllRawEvents))))
 
         # AllStimTrials optional special case
-        if 'StimTrials' in SessionData.dtype.fields:
+        if 'StimTrials' in SessionData._fieldnames:
             log.debug('StimTrials detected in session - will include')
-            AllStimTrials = SessionData['StimTrials'][0]
+            AllStimTrials = SessionData.StimTrials
             assert(AllStimTrials.shape[0] == AllStateTimestamps.shape[0])
         else:
             log.debug('StimTrials not detected in session - will skip')
@@ -271,9 +271,9 @@ class BehaviorIngest(dj.Imported):
                 None for _ in enumerate(range(AllStateTimestamps.shape[0]))])
 
         # AllFreeTrials optional special case
-        if 'FreeTrials' in SessionData.dtype.fields:
+        if 'FreeTrials' in SessionData._fieldnames:
             log.debug('FreeTrials detected in session - will include')
-            AllFreeTrials = SessionData['FreeTrials'][0]
+            AllFreeTrials = SessionData.FreeTrials
             assert(AllFreeTrials.shape[0] == AllStateTimestamps.shape[0])
         else:
             log.debug('FreeTrials not detected in session - synthesizing')
@@ -294,7 +294,7 @@ class BehaviorIngest(dj.Imported):
         trials = list(zip(AllTrialTypes, AllStimTrials, AllFreeTrials,
                           AllTrialSettings, AllStateTimestamps, AllStateNames,
                           AllStateData, AllEventData, AllEventTimestamps,
-                          AllTrialStarts))
+                          AllTrialStarts, AllRawEvents))
 
         if not trials:
             log.warning('skipping date {d}, no valid files'.format(d=date))
@@ -334,7 +334,7 @@ class BehaviorIngest(dj.Imported):
         trial = namedtuple(  # simple structure to track per-trial vars
             'trial', ('ttype', 'stim', 'free', 'settings', 'state_times',
                       'state_names', 'state_data', 'event_data',
-                      'event_times', 'trial_start'))
+                      'event_times', 'trial_start', 'trial_raw_events'))
 
         i = 0  # trial numbering starts at 1
         for t in trials:
@@ -371,7 +371,7 @@ class BehaviorIngest(dj.Imported):
                             .format(i=i, m=missing))
                 continue
 
-            gui = t.settings['GUI'].flatten()
+            gui = t.settings.GUI
 
             # ProtocolType - only ingest protocol >= 3
             #
@@ -379,15 +379,15 @@ class BehaviorIngest(dj.Imported):
             # 4 No autoassist 5 DelayEnforce 6 SampleEnforce 7 Fixed
             #
 
-            if 'ProtocolType' not in gui.dtype.names:
+            if 'ProtocolType' not in gui._fieldnames:
                 log.warning('skipping trial {i}; protocol undefined'
                             .format(i=i))
                 continue
 
-            protocol_type = gui['ProtocolType'][0]
-            if gui['ProtocolType'][0] < 3:
+            protocol_type = gui.ProtocolType
+            if gui.ProtocolType < 3:
                 log.warning('skipping trial {i}; protocol {n} < 3'
-                            .format(i=i, n=gui['ProtocolType'][0]))
+                            .format(i=i, n=gui.ProtocolType))
                 continue
 
             #
@@ -435,12 +435,12 @@ class BehaviorIngest(dj.Imported):
             # determine trial instruction
             trial_instruction = 'left'    # hard-coded here
 
-            if gui['Reversal'][0] == 1:
+            if gui.Reversal == 1:
                 if t.ttype == 1:
                     trial_instruction = 'left'
                 elif t.ttype == 0:
                     trial_instruction = 'right'
-            elif gui['Reversal'][0] == 2:
+            elif gui.Reversal == 2:
                 if t.ttype == 1:
                     trial_instruction = 'right'
                 elif t.ttype == 0:
@@ -478,7 +478,7 @@ class BehaviorIngest(dj.Imported):
             bkey['outcome'] = outcome
 
             # Determine free/autowater (Autowater 1 == enabled, 2 == disabled)
-            bkey['auto_water'] = True if gui['Autowater'][0] == 1 else False
+            bkey['auto_water'] = True if gui.Autowater == 1 else False
             bkey['free_water'] = t.free
 
             rows['behavior_trial'].append(bkey)
@@ -496,141 +496,37 @@ class BehaviorIngest(dj.Imported):
             #
             nkey = dict(tkey)
             nkey['trial_note_type'] = 'autolearn'
-            nkey['trial_note'] = str(gui['Autolearn'][0])
+            nkey['trial_note'] = str(gui.Autolearn)
             rows['trial_note'].append(nkey)
 
             #
             # Add 'bitcode' note
             #
-            if 'randomID' in gui.dtype.names:
+            if 'randomID' in gui._fieldnames:
                 nkey = dict(tkey)
                 nkey['trial_note_type'] = 'bitcode'
-                nkey['trial_note'] = str(gui['randomID'][0])
+                nkey['trial_note'] = str(gui.randomID)
                 rows['trial_note'].append(nkey)
 
-            #
-            # Add presample event
-            #
-            log.debug('BehaviorIngest.make(): presample')
+            # ==== TrialEvents ====
+            trial_event_types = [('PreSamplePeriod', 'presample'),
+                                 ('SamplePeriod', 'sample'),
+                                 ('DelayPeriod', 'delay'),
+                                 ('ResponseCue', 'go'),
+                                 ('TrialEnd', 'trialend')]
 
-            ekey = dict(tkey)
-            sampleindex = np.where(t.state_data == states['SamplePeriod'])[0]
+            for tr_state, trial_event_type in trial_event_types:
+                tr_events = getattr(t.trial_raw_events.States, tr_state)
+                tr_events = np.array([tr_events]) if tr_events.ndim < 2 else tr_events
+                for (s_start, s_end) in tr_events:
+                    ekey = dict(tkey)
+                    ekey['trial_event_id'] = len(rows['trial_event'])
+                    ekey['trial_event_type'] = trial_event_type
+                    ekey['trial_event_time'] = s_start
+                    ekey['duration'] = s_end - s_start
+                    rows['trial_event'].append(ekey)
 
-            ekey['trial_event_id'] = len(rows['trial_event'])
-            ekey['trial_event_type'] = 'presample'
-            ekey['trial_event_time'] = t.state_times[startindex][0]
-            ekey['duration'] = (t.state_times[sampleindex[0]]
-                                - t.state_times[startindex])[0]
-
-            if math.isnan(ekey['duration']):
-                log.debug('BehaviorIngest.make(): fixing presample duration')
-                ekey['duration'] = 0.0  # FIXDUR: lookup from previous trial
-
-            rows['trial_event'].append(ekey)
-
-            #
-            # Add other 'sample' events
-            #
-
-            log.debug('BehaviorIngest.make(): sample events')
-
-            last_dur = None
-
-            for s in sampleindex:  # in protocol > 6 ~-> n>1
-                # todo: batch events
-                ekey = dict(tkey)
-                ekey['trial_event_id'] = len(rows['trial_event'])
-                ekey['trial_event_type'] = 'sample'
-                ekey['trial_event_time'] = t.state_times[s]
-                ekey['duration'] = gui['SamplePeriod'][0]
-
-                if math.isnan(ekey['duration']) and last_dur is None:
-                    log.warning('... trial {} bad duration, no last_edur'
-                                .format(i, last_dur))
-                    ekey['duration'] = 0.0  # FIXDUR: cross-trial check
-                    rows['corrected_trial_event'].append(ekey)
-
-                elif math.isnan(ekey['duration']) and last_dur is not None:
-                    log.warning('... trial {} duration using last_edur {}'
-                                .format(i, last_dur))
-                    ekey['duration'] = last_dur
-                    rows['corrected_trial_event'].append(ekey)
-
-                else:
-                    last_dur = ekey['duration']  # only track 'good' values.
-
-                rows['trial_event'].append(ekey)
-
-            #
-            # Add 'delay' events
-            #
-
-            log.debug('BehaviorIngest.make(): delay events')
-
-            last_dur = None
-            delayindex = np.where(t.state_data == states['DelayPeriod'])[0]
-
-            for d in delayindex:  # protocol > 6 ~-> n>1
-                ekey = dict(tkey)
-                ekey['trial_event_id'] = len(rows['trial_event'])
-                ekey['trial_event_type'] = 'delay'
-                ekey['trial_event_time'] = t.state_times[d]
-                ekey['duration'] = gui['DelayPeriod'][0]
-
-                if math.isnan(ekey['duration']) and last_dur is None:
-                    log.warning('... {} bad duration, no last_edur'
-                                .format(i, last_dur))
-                    ekey['duration'] = 0.0  # FIXDUR: cross-trial check
-                    rows['corrected_trial_event'].append(ekey)
-
-                elif math.isnan(ekey['duration']) and last_dur is not None:
-                    log.warning('... {} duration using last_edur {}'
-                                .format(i, last_dur))
-                    ekey['duration'] = last_dur
-                    rows['corrected_trial_event'].append(ekey)
-
-                else:
-                    last_dur = ekey['duration']  # only track 'good' values.
-
-                log.debug('delay event duration: {}'.format(ekey['duration']))
-                rows['trial_event'].append(ekey)
-
-            #
-            # Add 'go' event
-            #
-            log.debug('BehaviorIngest.make(): go')
-
-            ekey = dict(tkey)
-            responseindex = np.where(t.state_data == states['ResponseCue'])[0]
-
-            ekey['trial_event_id'] = len(rows['trial_event'])
-            ekey['trial_event_type'] = 'go'
-            ekey['trial_event_time'] = t.state_times[responseindex][0]
-            ekey['duration'] = gui['AnswerPeriod'][0]
-
-            if math.isnan(ekey['duration']):
-                log.debug('BehaviorIngest.make(): fixing go duration')
-                ekey['duration'] = 0.0  # FIXDUR: lookup from previous trials
-                rows['corrected_trial_event'].append(ekey)
-
-            rows['trial_event'].append(ekey)
-
-            #
-            # Add 'trialEnd' events
-            #
-
-            log.debug('BehaviorIngest.make(): trialend events')
-
-            last_dur = None
-            trialendindex = np.where(t.state_data == states['TrialEnd'])[0]
-
-            ekey = dict(tkey)
-            ekey['trial_event_id'] = len(rows['trial_event'])
-            ekey['trial_event_type'] = 'trialend'
-            ekey['trial_event_time'] = t.state_times[trialendindex][0]
-            ekey['duration'] = 0.0
-
-            rows['trial_event'].append(ekey)
+            # ==== ActionEvents ====
 
             #
             # Add lick events
@@ -658,6 +554,8 @@ class BehaviorIngest(dj.Imported):
                          action_event_time=t.event_times[r]))
                     for idx, r in enumerate(lickright)]
 
+            # ==== PhotostimEvents ====
+
             #
             # Photostim Events
             #
@@ -665,12 +563,12 @@ class BehaviorIngest(dj.Imported):
             if t.stim:
                 log.debug('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
                 rows['photostim_trial'].append(tkey)
-
                 if photostim_period == 'early-delay':  # same as the delay-onset
-                    delay_period_idx = np.where(t.state_data == states['DelayPeriod'])[0][0]
-                    stim_onset = t.state_times[delay_period_idx]
+                    delay_periods = t.trial_raw_events.States.DelayPeriod
+                    delay_periods = np.array([delay_periods]) if delay_periods.ndim < 2 else delay_periods
+                    stim_onset = delay_periods[-1][0]
                 elif photostim_period == 'late-delay':  # 0.5 sec prior to the go-cue
-                    stim_onset = t.state_times[responseindex][0] - 0.5
+                    stim_onset = t.trial_raw_events.States.ResponseCue[0] - 0.5
 
                 rows['photostim_trial_event'].append(
                     dict(tkey,
@@ -712,11 +610,6 @@ class BehaviorIngest(dj.Imported):
         experiment.TrialEvent().insert(
             rows['trial_event'], ignore_extra_fields=True,
             allow_direct_insert=True, skip_duplicates=True)
-
-        log.info('BehaviorIngest.make(): ... CorrectedTrialEvents')
-        BehaviorIngest().CorrectedTrialEvents().insert(
-            rows['corrected_trial_event'], ignore_extra_fields=True,
-            allow_direct_insert=True)
 
         log.info('BehaviorIngest.make(): ... experiment.ActionEvent')
         experiment.ActionEvent().insert(

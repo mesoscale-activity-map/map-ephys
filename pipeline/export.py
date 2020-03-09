@@ -148,7 +148,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
                'task_trial_type', 'task_stimulation',
                'task_sample_time', 'task_delay_time', 'task_cue_time']
 
-    edata = {k: None for k in exports}
+    edata = {k: [] for k in exports}
 
     print('reshaping/processing for export')
 
@@ -217,8 +217,6 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
         qc_df = pd.DataFrame(qc).T
         qc_df.columns = qc_names
         edata['neuron_unit_quality_control'] = {n: qc_df.get(n).values for n in qc_names}
-    else:
-        edata['neuron_unit_quality_control'] = None
 
     # behavior_report
     # ---------------
