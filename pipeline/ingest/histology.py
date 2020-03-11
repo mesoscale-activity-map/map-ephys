@@ -108,12 +108,14 @@ class HistologyIngest(dj.Imported):
         prb_ingested, trk_ingested = False, False
 
         try:
-            prb_ingested = self._load_histology_probe()
+            prb_ingested = self._load_histology_ccf()
         except FileNotFoundError as e:
             log.warning('Error: {}'.format(str(e)))
-            pass
         except HistologyFileError as e:
             log.warning('Error: {}'.format(str(e)))
+
+        if not prb_ingested:
+            dj.conn().cancel_transaction()
             return
 
         try:
@@ -121,15 +123,16 @@ class HistologyIngest(dj.Imported):
         except FileNotFoundError as e:
             log.warning('Error: {}'.format(str(e)))
             log.warning('Error: No histology with probe track. Skipping...')
-            return
         except HistologyFileError as e:
             log.warning('Error: {}'.format(str(e)))
+
+        if not trk_ingested:
+            dj.conn().cancel_transaction()
             return
 
-        if prb_ingested or trk_ingested:
-            self.insert1(key)
+        self.insert1(key)
 
-    def _load_histology_probe(self):
+    def _load_histology_ccf(self):
 
         sz = 20   # 20um voxel size
 

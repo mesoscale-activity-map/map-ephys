@@ -131,7 +131,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
             if len(sess_key) == 1:
                 # case of single-session per day - ensuring session's datetime matches the filename
                 # session_datetime and datetime from filename should not be more than 3 hours apart
-                bf = (behav_ingest.BehaviorIngest.BehaviorFile & sess_key).fetch1('behavior_file')
+                bf = (behav_ingest.BehaviorIngest.BehaviorFile & sess_key).fetch('behavior_file')[0]
                 bf_datetime = re.search('(\d{8}_\d{6}).mat', bf).groups()[0]
                 bf_datetime = datetime.strptime(bf_datetime, '%Y%m%d_%H%M%S')
                 s_datetime = sess_key.proj(s_dt='cast(concat(session_date, " ", session_time) as datetime)').fetch1('s_dt')
