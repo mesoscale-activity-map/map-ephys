@@ -111,22 +111,23 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     insertion_locations = []
     recordable_brain_regions = []
     for i, row in df.iterrows():
-        sess_key = experiment.Session & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
+        sess_key = experiment.Session & (behav_ingest.BehaviorIngest.BehaviorFile
+                                         & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
+                                         & 'behavior_file LIKE "%{}%{}_{:06}%"'.format(
+                    row.water_restriction_number, row.session_date.date().strftime('%Y%m%d'), int(row.behaviour_time)))
+
         if not sess_key:
-            continue
-        elif len(sess_key) > 1:
-            sess_key = experiment.Session & (behav_ingest.BehaviorIngest.BehaviorFile
-                                             & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
-                                             & 'behavior_file LIKE "%{}%{}_{:06}%"'.format(
-                        row.water_restriction_number, row.session_date.date().strftime('%Y%m%d'), int(row.behaviour_time)))
-        else:
-            # case of single-session per day - ensuring session's datetime matches the filename
-            # session_datetime and datetime from filename should not be more than 3 hours apart
-            bf = (behav_ingest.BehaviorIngest.BehaviorFile & sess_key).fetch1('behavior_file')
-            bf_datetime = re.search('(\d{8}_\d{6}).mat', bf).groups()[0]
-            bf_datetime = datetime.strptime(bf_datetime, '%Y%m%d_%H%M%S')
-            s_datetime = sess_key.proj(s_dt='cast(concat(session_date, " ", session_time) as datetime)').fetch1('s_dt')
-            if abs((s_datetime - bf_datetime).total_seconds()) > 10800:  # no more than 3 hours
+            sess_key = experiment.Session & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
+            if len(sess_key) == 1:
+                # case of single-session per day - ensuring session's datetime matches the filename
+                # session_datetime and datetime from filename should not be more than 3 hours apart
+                bf = (behav_ingest.BehaviorIngest.BehaviorFile & sess_key).fetch1('behavior_file')
+                bf_datetime = re.search('(\d{8}_\d{6}).mat', bf).groups()[0]
+                bf_datetime = datetime.strptime(bf_datetime, '%Y%m%d_%H%M%S')
+                s_datetime = sess_key.proj(s_dt='cast(concat(session_date, " ", session_time) as datetime)').fetch1('s_dt')
+                if abs((s_datetime - bf_datetime).total_seconds()) > 10800:  # no more than 3 hours
+                    continue
+            else:
                 continue
 
         pinsert_key = dict(sess_key.fetch1('KEY'), insertion_number=row.insertion_number)
