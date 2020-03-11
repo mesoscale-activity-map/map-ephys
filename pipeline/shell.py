@@ -4,10 +4,11 @@ import os
 import sys
 import logging
 from code import interact
+from datetime import datetime
 import time
 import numpy as np
 import pandas as pd
-
+import re
 import datajoint as dj
 
 from pipeline import (lab, experiment, tracking, ephys, psth, ccf, histology, export, publication, get_schema_name)
@@ -118,6 +119,15 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
                                              & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
                                              & 'behavior_file LIKE "%{}%{}_{:06}%"'.format(
                         row.water_restriction_number, row.session_date.date().strftime('%Y%m%d'), int(row.behaviour_time)))
+        else:
+            # case of single-session per day - ensuring session's datetime matches the filename
+            # session_datetime and datetime from filename should not be more than 3 hours apart
+            bf = (behav_ingest.BehaviorIngest.BehaviorFile & sess_key).fetch1('behavior_file')
+            bf_datetime = re.search('(\d{8}_\d{6}).mat', bf).groups()[0]
+            bf_datetime = datetime.strptime(bf_datetime, '%Y%m%d_%H%M%S')
+            s_datetime = sess_key.proj(s_dt='cast(concat(session_date, " ", session_time) as datetime)').fetch1('s_dt')
+            if abs((s_datetime - bf_datetime).total_seconds()) > 10800:  # no more than 3 hours
+                continue
 
         pinsert_key = dict(sess_key.fetch1('KEY'), insertion_number=row.insertion_number)
         if pinsert_key in ephys.ProbeInsertion.proj():
