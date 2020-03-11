@@ -111,10 +111,20 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     insertion_locations = []
     recordable_brain_regions = []
     for i, row in df.iterrows():
-        sess_key = experiment.Session & (behav_ingest.BehaviorIngest.BehaviorFile
-                                         & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
-                                         & 'behavior_file LIKE "%{}%{}_{:06}%"'.format(
-                    row.water_restriction_number, row.session_date.date().strftime('%Y%m%d'), int(row.behaviour_time)))
+        try:
+            int(row.behaviour_time)
+            valid_btime = True
+        except ValueError:
+            log.debug('Invalid behaviour time: {} - try single-sess per day'.format(row.behaviour_time))
+            valid_btime = False
+
+        if valid_btime:
+            sess_key = experiment.Session & (behav_ingest.BehaviorIngest.BehaviorFile
+                                             & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
+                                             & 'behavior_file LIKE "%{}%{}_{:06}%"'.format(
+                        row.water_restriction_number, row.session_date.date().strftime('%Y%m%d'), int(row.behaviour_time)))
+        else:
+            sess_key = False
 
         if not sess_key:
             sess_key = experiment.Session & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
@@ -126,6 +136,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
                 bf_datetime = datetime.strptime(bf_datetime, '%Y%m%d_%H%M%S')
                 s_datetime = sess_key.proj(s_dt='cast(concat(session_date, " ", session_time) as datetime)').fetch1('s_dt')
                 if abs((s_datetime - bf_datetime).total_seconds()) > 10800:  # no more than 3 hours
+                    log.debug('Unmatched sess_dt ({}) and behavior_dt ({}). Skipping...'.format(s_datetime, bf_datetime))
                     continue
             else:
                 continue
