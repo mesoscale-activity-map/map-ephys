@@ -111,9 +111,11 @@ class HistologyIngest(dj.Imported):
             prb_ingested = self._load_histology_ccf()
         except FileNotFoundError as e:
             log.warning('Error: {}'.format(str(e)))
-            return
         except HistologyFileError as e:
             log.warning('Error: {}'.format(str(e)))
+
+        if not prb_ingested:
+            dj.conn().cancel_transaction()
             return
 
         try:
@@ -124,10 +126,11 @@ class HistologyIngest(dj.Imported):
         except HistologyFileError as e:
             log.warning('Error: {}'.format(str(e)))
 
-        if prb_ingested and trk_ingested:
-            self.insert1(key)
-        else:
+        if not trk_ingested:
             dj.conn().cancel_transaction()
+            return
+
+        self.insert1(key)
 
     def _load_histology_ccf(self):
 
