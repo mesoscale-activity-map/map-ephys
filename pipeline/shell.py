@@ -4,10 +4,11 @@ import os
 import sys
 import logging
 from code import interact
+from datetime import datetime
 import time
 import numpy as np
 import pandas as pd
-
+import re
 import datajoint as dj
 
 from pipeline import (lab, experiment, tracking, ephys, psth, ccf, histology, export, publication, get_schema_name)
@@ -110,20 +111,45 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     insertion_locations = []
     recordable_brain_regions = []
     for i, row in df.iterrows():
-        sess_key = experiment.Session & (behav_ingest.BehaviorIngest.BehaviorFile
-                                         & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
-                                         & 'behavior_file LIKE "%{}%{}_{:06}%"'.format(
-                    row.water_restriction_number, row.session_date.date().strftime('%Y%m%d'), int(row.behaviour_time)))
-        if sess_key:
-            pinsert_key = dict(sess_key.fetch1('KEY'), insertion_number=row.insertion_number)
-            if pinsert_key in ephys.ProbeInsertion.proj():
-                if not (ephys.ProbeInsertion.InsertionLocation & pinsert_key):
-                    insertion_locations.append(dict(pinsert_key, skull_reference=row.skull_reference,
-                                                    ap_location=row.ap_location, ml_location=row.ml_location,
-                                                    depth=row.depth, theta=row.theta, phi=row.phi, beta=row.beta))
-                if not (ephys.ProbeInsertion.RecordableBrainRegion & pinsert_key):
-                    recordable_brain_regions.append(dict(pinsert_key, brain_area=row.brain_area,
-                                                         hemisphere=row.hemisphere))
+        try:
+            int(row.behaviour_time)
+            valid_btime = True
+        except ValueError:
+            log.debug('Invalid behaviour time: {} - try single-sess per day'.format(row.behaviour_time))
+            valid_btime = False
+
+        if valid_btime:
+            sess_key = experiment.Session & (behav_ingest.BehaviorIngest.BehaviorFile
+                                             & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
+                                             & 'behavior_file LIKE "%{}%{}_{:06}%"'.format(
+                        row.water_restriction_number, row.session_date.date().strftime('%Y%m%d'), int(row.behaviour_time)))
+        else:
+            sess_key = False
+
+        if not sess_key:
+            sess_key = experiment.Session & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
+            if len(sess_key) == 1:
+                # case of single-session per day - ensuring session's datetime matches the filename
+                # session_datetime and datetime from filename should not be more than 3 hours apart
+                bf = (behav_ingest.BehaviorIngest.BehaviorFile & sess_key).fetch1('behavior_file')
+                bf_datetime = re.search('(\d{8}_\d{6}).mat', bf).groups()[0]
+                bf_datetime = datetime.strptime(bf_datetime, '%Y%m%d_%H%M%S')
+                s_datetime = sess_key.proj(s_dt='cast(concat(session_date, " ", session_time) as datetime)').fetch1('s_dt')
+                if abs((s_datetime - bf_datetime).total_seconds()) > 10800:  # no more than 3 hours
+                    log.debug('Unmatched sess_dt ({}) and behavior_dt ({}). Skipping...'.format(s_datetime, bf_datetime))
+                    continue
+            else:
+                continue
+
+        pinsert_key = dict(sess_key.fetch1('KEY'), insertion_number=row.insertion_number)
+        if pinsert_key in ephys.ProbeInsertion.proj():
+            if not (ephys.ProbeInsertion.InsertionLocation & pinsert_key):
+                insertion_locations.append(dict(pinsert_key, skull_reference=row.skull_reference,
+                                                ap_location=row.ap_location, ml_location=row.ml_location,
+                                                depth=row.depth, theta=row.theta, phi=row.phi, beta=row.beta))
+            if not (ephys.ProbeInsertion.RecordableBrainRegion & pinsert_key):
+                recordable_brain_regions.append(dict(pinsert_key, brain_area=row.brain_area,
+                                                     hemisphere=row.hemisphere))
 
     log.debug('InsertionLocation: {}'.format(insertion_locations))
     log.debug('RecordableBrainRegion: {}'.format(recordable_brain_regions))

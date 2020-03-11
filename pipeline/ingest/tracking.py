@@ -139,7 +139,11 @@ class TrackingIngest(dj.Imported):
                     continue
 
                 tfull = tfull[-1]
-                trk = self.load_tracking(tfull)
+                try:
+                    trk = self.load_tracking(tfull)
+                except Exception as e:
+                    log.warning('Error loading .csv: {}\n{}'.format(tfull, str(e)))
+                    raise e
 
                 recs = {}
                 rec_base = dict(key, trial=tmap[t], tracking_device=tdev)
@@ -245,13 +249,14 @@ class TrackingIngest(dj.Imported):
             fields = fields.rstrip().split(',')
 
             for l in f:
-                lv = l.rstrip().split(',')
-                for i, v in enumerate(lv):
-                    v = float(v)
-                    if i == 0:
-                        res['samples']['ts'].append(v)
-                    else:
-                        res[parts[i]][fields[i]].append(v)
+                if l.strip():
+                    lv = l.rstrip().split(',')
+                    for i, v in enumerate(lv):
+                        v = float(v)
+                        if i == 0:
+                            res['samples']['ts'].append(v)
+                        else:
+                            res[parts[i]][fields[i]].append(v)
 
         return res
 
