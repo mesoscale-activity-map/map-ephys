@@ -86,3 +86,12 @@ class Tracking(dj.Imported):
         right_paw_y:            longblob        # right_paw y location (px)
         right_paw_likelihood:   longblob        # right_paw location likelihood
         """
+
+
+# ---------- HELPER FUNCTIONS --------------
+
+tracking_feature_tables = {'NoseTracking': Tracking.NoseTracking,
+                           'TongueTracking': Tracking.TongueTracking,
+                           'JawTracking': Tracking.JawTracking,
+                           'LeftPawTracking': Tracking.LeftPawTracking,
+                           'RightPawTracking': Tracking.RightPawTracking}

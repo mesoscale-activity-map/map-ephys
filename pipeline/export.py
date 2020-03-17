@@ -10,11 +10,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from datetime import datetime
-from pipeline import lab
-from pipeline import experiment
-from pipeline import ephys
-from pipeline import histology
-from pipeline import psth
+from pipeline import lab, experiment, tracking, ephys, histology, psth, ccf
 from pipeline.util import _get_clustering_method
 
 '''
@@ -86,7 +82,7 @@ def export_recording(insert_keys, output_dir='./', filename=None, overwrite=Fals
                 _export_recording(insert_key, output_dir=output_dir, filename=filename, overwrite=overwrite)
             except Exception as e:
                 print(str(e))
-                print('Skipping...')
+                print('Skipping this export...')
                 pass
 
 
@@ -115,6 +111,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
         print('{} already exists, skipping...'.format(filepath))
         return
 
+    print('\n========================================================================')
     print('exporting {} to {}'.format(insert_key, filepath))
 
     print('fetching spike/behavior data')
@@ -146,7 +143,8 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
                'behavior_early_report', 'behavior_lick_times',
                'behavior_is_free_water', 'behavior_is_auto_water',
                'task_trial_type', 'task_stimulation',
-               'task_sample_time', 'task_delay_time', 'task_cue_time']
+               'task_sample_time', 'task_delay_time', 'task_cue_time',
+               'tracking', 'histology']
 
     edata = {k: [] for k in exports}
 
@@ -296,21 +294,17 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     _ts = []  # [[power, type, on-time, off-time], ...]
 
-    photostim = (experiment.Photostim * experiment.PhotostimBrainRegion.proj(
-        stim_brain_region='CONCAT(stim_laterality, " ", stim_brain_area)') & insert_key).fetch()
+    q_photostim = (experiment.Photostim * experiment.PhotostimBrainRegion.proj(
+        stim_brain_region='CONCAT(stim_laterality, " ", stim_brain_area)') & insert_key)
 
-    photostim_map = {}
-    photostim_dat = {}
-    photostim_keys = ['left ALM', 'right ALM', 'both ALM']
-    photostim_vals = [1, 2, 6]
+    photostim_keyval = {'left ALM': 1,
+                        'right ALM': 2,
+                        'both ALM': 6}
 
-    # XXX: we don't detect duplicate presence of photostim_keys in data
-    for fk, rk in zip(photostim_keys, photostim_vals):
-
-        i = np.where(photostim['stim_brain_region'] == fk)[0][0]
-        j = photostim[i]['photo_stim']
-        photostim_map[j] = rk
-        photostim_dat[j] = photostim[i]
+    photostim_map, photostim_dat = {}, {}
+    for pstim in q_photostim.fetch():
+        photostim_map[pstim['photo_stim']] = photostim_keyval[pstim['stim_brain_region']]
+        photostim_dat[pstim['photo_stim']] = pstim
 
     photostim_ev = (experiment.PhotostimEvent & insert_key).fetch()
 
@@ -376,6 +370,42 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     edata['task_cue_time'] = np.array([_tct, _tcd]).astype(float)
 
     print('ok.')
+
+    # tracking
+    # ----------------
+    tracking_struct = {}
+    for feature, feature_tbl in tracking.tracking_feature_tables.items():
+        ft_attrs = [n for n in feature_tbl.heading.names if n not in feature_tbl.primary_key]
+        trk_data = (tracking.Tracking * feature_tbl * tracking.TrackingDevice.proj(
+            fs='sampling_rate', camera='concat(tracking_device, "_", tracking_position)') & insert_key).fetch(
+            'camera', 'fs', 'tracking_samples', 'trial', *ft_attrs, order_by='trial', as_dict=True)
+
+        for trk_d in trk_data:
+            camera = trk_d['camera'].replace(' ', '_').lower()
+            if camera not in tracking_struct:
+                tracking_struct[camera] = {'fs': float(trk_d['fs']),
+                                           'Nframes': [],
+                                           'trialNum': []}
+            if trk_d['trial'] not in tracking_struct[camera]['trialNum']:
+                tracking_struct[camera]['trialNum'].append(trk_d['trial'])
+                tracking_struct[camera]['Nframes'].append(trk_d[ft_attrs[0]])
+            for ft in ft_attrs:
+                if ft not in tracking_struct[camera]:
+                    tracking_struct[camera][ft] = []
+                tracking_struct[camera][ft].append(trk_d[ft])
+
+    edata['tracking'] = tracking_struct
+
+    # histology - unit ccf
+    # ----------------
+    unit_ccfs = []
+    for ccf_tbl in (histology.ElectrodeCCFPosition.ElectrodePosition, histology.ElectrodeCCFPosition.ElectrodePositionError):
+        unit_ccf = (ephys.Unit * ccf_tbl * ccf.CCFAnnotation.proj('annotation') & insert_key
+                    & {'clustering_method': clustering_method}).fetch('unit', 'ccf_x', 'ccf_y', 'ccf_z', 'annotation')
+        unit_ccfs.extend(list(zip(*unit_ccf)))
+    unit_id, ccf_x, ccf_y, ccf_z, anno = zip(*sorted(unit_ccfs, key=lambda x: x[0]))
+
+    edata['histology'] = {'unit': unit_id, 'ccf_x': ccf_x, 'ccf_y': ccf_y, 'ccf_z': ccf_z, 'annotation': anno}
 
     # savemat
     # -------
