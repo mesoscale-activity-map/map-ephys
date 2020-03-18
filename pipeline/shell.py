@@ -43,7 +43,11 @@ def logsetup(*args):
     else:
         handlers = [logging.StreamHandler()]
 
-    logging.basicConfig(level=logging.ERROR, handlers=handlers)
+    datefmt='%Y-%m-%d %H:%M:%S'
+    msgfmt='%(asctime)s:%(levelname)s:%(module)s:%(funcName)s:%(message)s'
+
+    logging.basicConfig(format=msgfmt, datefmt=datefmt, level=logging.ERROR,
+                        handlers=handlers)
 
     log.setLevel(level)
 
