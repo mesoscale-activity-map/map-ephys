@@ -137,12 +137,12 @@ class HistologyIngest(dj.Imported):
         sz = 20   # 20um voxel size
 
         log.info('... probe {} position ingest.'.format(self.probe))
-        probefiles = self._search_histology_files('landmark_file')
+        probefiles, shanks = self._search_histology_files('landmark_file')
 
         log.info('... found probe {} histology file {}'.format(
             self.probe, probefiles))
 
-        for probepath in probefiles:
+        for probepath, shank_no in zip(probefiles, shanks):
             hist = scio.loadmat(probepath, struct_as_record=False, squeeze_me=True)['site']
 
             # probe CCF 3D positions
@@ -150,20 +150,27 @@ class HistologyIngest(dj.Imported):
                                  hist.warp.x, hist.warp.y, hist.warp.z]).T * sz
 
             # probe CCF regions
-            names = hist.ont.name
-            valid = [isinstance(n, (str,)) for n in names]
+            ont_ids = np.where(np.isnan(hist.ont.id), 0, hist.ont.id)
 
-            probe_electrodes = (lab.ProbeType.Electrode & (ephys.ProbeInsertion & self.egroup)).fetch(
-                'electrode', order_by='electrode asc')
+            probe_electrodes = (ephys.ProbeInsertion.proj() * lab.ProbeType.Electrode & self.egroup
+                                & {'shank': shank_no}).fetch(as_dict=True, order_by='electrode asc')
 
-            valid_electrodes = probe_electrodes[valid[:len(probe_electrodes)]]
-            valid_pos_xyz = pos_xyz[valid, :]
+            if len(ont_ids) < len(probe_electrodes):
+                raise HistologyFileError('Expecting at minimum {} electrodes - found {}'.format(
+                    len(probe_electrodes), len(ont_ids)))
+
+            ont_ids = ont_ids[:len(probe_electrodes)]
+            pos_xyz = pos_xyz[:len(probe_electrodes), :]
 
             inserted_electrodes = (ephys.ProbeInsertion.proj() * lab.ElectrodeConfig.Electrode.proj()
-                                   & self.egroup).fetch(order_by='electrode asc')
+                                   * lab.ProbeType.Electrode.proj('shank')
+                                   & self.egroup & {'shank': shank_no}).fetch('electrode', order_by='electrode asc')
 
-            recs = ((*electrode, ccf.CCFLabel.CCF_R3_20UM_ID, *electrode_pos) for electrode, electrode_pos in
-                    zip(inserted_electrodes, valid_pos_xyz) if electrode['electrode'] in valid_electrodes)
+            recs = ({**electrode, **self.egroup, 'ccf_label_id': ccf.CCFLabel.CCF_R3_20UM_ID,
+                     'ccf_x': ccf_x, 'ccf_y': ccf_y, 'ccf_z': ccf_z, 'mri_x': mri_x, 'mri_y': mri_y, 'mri_z': mri_z}
+                    for electrode, (ccf_x, ccf_y, ccf_z, mri_x, mri_y, mri_z), ont_id in
+                    zip(probe_electrodes, pos_xyz, ont_ids)
+                    if ont_id > 0 and electrode['electrode'] in inserted_electrodes)
 
             # ideally ElectrodePosition.insert(...) but some are outside of CCF...
             log.info('inserting channel ccf position')
@@ -187,7 +194,7 @@ class HistologyIngest(dj.Imported):
 
         log.info('... probe {} probe-track ingest.'.format(self.probe))
 
-        trackpaths = self._search_histology_files('histology_file')
+        trackpaths, _ = self._search_histology_files('histology_file')
 
         if trackpaths:
             log.info('... found probe {} histology file {}'.format(
@@ -260,6 +267,7 @@ class HistologyIngest(dj.Imported):
         if len(histology_files) < 1:
             raise FileNotFoundError('Probe {} histology file {} not found!'.format(self.probe, file_format))
         elif len(histology_files) == 1:
+            corresponding_shanks = [1]
             if len(self.shanks) != 1:
                 raise HistologyFileError('Only 1 file found ({}) for a {}-shank probe'.format(histology_files[0].name, len(self.shanks)))
 
@@ -289,7 +297,10 @@ class HistologyIngest(dj.Imported):
             if len(histology_files) != len(self.shanks):  # ensure 1 file per shank
                 raise HistologyFileError('{} files found for a {}-shank probe'.format(len(histology_files), len(self.shanks)))
 
-        return histology_files
+            corresponding_shanks = [int(re.search('landmarks_.*_(\d+){}'.format(file_format_map[file_type]),
+                                                  f.as_posix()).groups()[0]) for f in histology_files]
+
+        return histology_files, corresponding_shanks
 
 
 class HistologyFileError(Exception):

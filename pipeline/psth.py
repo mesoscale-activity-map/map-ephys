@@ -395,7 +395,9 @@ class PeriodSelectivity(dj.Computed):
                           'early_lick': 'no early',
                           'outcome': 'hit',
                           'free_water': 0,
-                          'auto_water': 0}) - experiment.PhotostimEvent)
+                          'auto_water': 0})
+                    & (experiment.TrialEvent & 'trial_event_type = "delay"' & 'duration = 1.2')
+                    - experiment.PhotostimEvent)
 
         if not spikes_q:  # no spikes found
             self.insert1({**key, 'period_selectivity': 'non-selective'})
@@ -427,7 +429,7 @@ class PeriodSelectivity(dj.Computed):
         # and testing for selectivity.
         t_stat, pval = sc_stats.ttest_ind(freq_i, freq_c, equal_var=True)
         # try:
-        #     _stat, pval = sc_stats.mannwhitneyu(freq_i, freq_c, alternative='two-sided')
+        #     _stat, pval = sc_stats.mannwhitneyu(freq_i, freq_c)
         # except ValueError:
         #     pval = np.nan
 

@@ -368,13 +368,12 @@ def plot_polar_histogram(data, ax=None, bin_counts=30):
     if ax is None:
         fig, ax = plt.subplots(1, 1, subplot_kw=dict(polar=True))
 
-    bottom = 2
     # theta = np.linspace(0.0, 2 * np.pi, bin_counts, endpoint=False)
     radii, tick = np.histogram(data, bins=bin_counts)
     # width of each bin on the plot
     width = (2 * np.pi) / bin_counts
     # make a polar plot
-    ax.bar(tick[1:], radii, width=width, bottom=bottom)
+    ax.bar(tick[1:], radii, width=width)
     # set the label starting from East
     ax.set_theta_zero_location("E")
     # clockwise
