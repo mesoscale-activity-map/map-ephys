@@ -198,7 +198,7 @@ class HistologyIngest(dj.Imported):
         trackpaths, _ = self._search_histology_files('histology_file')
 
         if trackpaths:
-            log.info('... found probe {} histology file {}'.format(
+            log.info('... found probe {} histology file(s): {}'.format(
                 self.probe, trackpaths))
         else:
             raise FileNotFoundError
