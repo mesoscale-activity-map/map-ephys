@@ -174,7 +174,8 @@ class HistologyIngest(dj.Imported):
 
             # ideally ElectrodePosition.insert(...) but some are outside of CCF...
             log.info('inserting channel ccf position')
-            histology.ElectrodeCCFPosition.insert1(self.egroup, ignore_extra_fields=True)
+            histology.ElectrodeCCFPosition.insert1(self.egroup, ignore_extra_fields=True,
+                                                   skip_duplicates=True)
 
             for r in recs:
                 log.debug('... adding probe/position: {}'.format(r))
@@ -197,7 +198,7 @@ class HistologyIngest(dj.Imported):
         trackpaths, _ = self._search_histology_files('histology_file')
 
         if trackpaths:
-            log.info('... found probe {} histology file {}'.format(
+            log.info('... found probe {} histology file(s): {}'.format(
                 self.probe, trackpaths))
         else:
             raise FileNotFoundError
