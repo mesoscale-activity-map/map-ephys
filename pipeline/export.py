@@ -374,7 +374,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     # tracking
     # ----------------
     tracking_struct = {}
-    for feature, feature_tbl in tracking.tracking_feature_tables.items():
+    for feature, feature_tbl in tracking.Tracking().tracking_features.items():
         ft_attrs = [n for n in feature_tbl.heading.names if n not in feature_tbl.primary_key]
         trk_data = (tracking.Tracking * feature_tbl * tracking.TrackingDevice.proj(
             fs='sampling_rate', camera='concat(tracking_device, "_", tracking_position)') & insert_key).fetch(
