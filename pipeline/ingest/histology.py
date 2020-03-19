@@ -240,7 +240,7 @@ class HistologyIngest(dj.Imported):
             top = {**self.egroup, 'labeling_date': None, 'dye_color': None}
 
             histology.LabeledProbeTrack.insert1(
-                top, ignore_extra_fields=True, allow_direct_insert=True)
+                top, ignore_extra_fields=True, allow_direct_insert=True, skip_duplicates=True)
 
             histology.LabeledProbeTrack.Point.insert(
                 ({**top, 'order': rec[0], **rec[1]} for rec in
