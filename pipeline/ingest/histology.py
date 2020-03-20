@@ -261,12 +261,16 @@ class HistologyIngest(dj.Imported):
                            'histology_file': '.csv'}
 
         # ---- probefile - landmarks_{water_res_number}_{session_date}_{session_time}_{probe_no}_{shank_no}.csv
-        file_format = 'landmarks_{}_{}*_{}*{}'.format(self.water, self.session_date_str,
-                                                      self.probe, file_format_map[file_type])
+        histology_files = [f for f in list(self.directory.glob('landmarks*')) if re.match(
+            'landmarks_{}_{}(_\d\d\d\d\d\d)?_{}(_\d)?{}'.format(self.water, self.session_date_str,
+                                                                self.probe, file_format_map[file_type]), f.name)]
 
-        histology_files = list(self.directory.glob(file_format))
         if len(histology_files) < 1:
-            raise FileNotFoundError('Probe {} histology file {} not found!'.format(self.probe, file_format))
+            raise FileNotFoundError('Probe {} histology file {} not found!'.format(self.probe,
+                                                                                   'landmarks_{}_{}*{}'.format(
+                                                                                       self.water,
+                                                                                       self.session_date_str,
+                                                                                       file_format_map[file_type])))
         elif len(histology_files) == 1:
             corresponding_shanks = [1]
             if len(self.shanks) != 1:
@@ -291,15 +295,18 @@ class HistologyIngest(dj.Imported):
             file_format = 'landmarks_{}_{}_{}_{}*{}'.format(self.water, self.session_date_str,
                                                             behavior_time_str,
                                                             self.probe, file_format_map[file_type])
-            histology_files = list(self.directory.glob(file_format))
+            histology_files = [f for f in list(self.directory.glob('landmarks*')) if re.match(
+                'landmarks_{}_{}_{}_{}(_\d)?{}'.format(self.water, self.session_date_str, behavior_time_str,
+                                                       self.probe, file_format_map[file_type]), f.name)]
+
             if len(histology_files) < 1:
                 raise FileNotFoundError('Probe {} histology file {} not found!'.format(self.probe, file_format))
 
             if len(histology_files) != len(self.shanks):  # ensure 1 file per shank
                 raise HistologyFileError('{} files found for a {}-shank probe'.format(len(histology_files), len(self.shanks)))
 
-            corresponding_shanks = [int(re.search('landmarks_.*_(\d+){}'.format(file_format_map[file_type]),
-                                                  f.as_posix()).groups()[0]) for f in histology_files]
+            corresponding_shanks = [int(re.search('landmarks_.*_(\d{1})_(\d{1}){}'.format(file_format_map[file_type]),
+                                                  f.as_posix()).groups()[2]) for f in histology_files]
 
         return histology_files, corresponding_shanks
 
