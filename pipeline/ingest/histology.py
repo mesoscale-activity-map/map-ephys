@@ -183,7 +183,7 @@ class HistologyIngest(dj.Imported):
                     histology.ElectrodeCCFPosition.ElectrodePosition.insert1(
                         r, ignore_extra_fields=True, allow_direct_insert=True)
                 except Exception as e:  # XXX: no way to be more precise in dj
-                    log.warning('... ERROR!: {}'.format(repr(e)))
+                    # log.warning('... ERROR!: {}'.format(repr(e)))
                     histology.ElectrodeCCFPosition.ElectrodePositionError.insert1(
                         r, ignore_extra_fields=True, allow_direct_insert=True)
 
@@ -195,7 +195,7 @@ class HistologyIngest(dj.Imported):
 
         log.info('... probe {} probe-track ingest.'.format(self.probe))
 
-        trackpaths, _ = self._search_histology_files('histology_file')
+        trackpaths, shanks = self._search_histology_files('histology_file')
 
         if trackpaths:
             log.info('... found probe {} histology file(s): {}'.format(
@@ -207,7 +207,7 @@ class HistologyIngest(dj.Imported):
                 ('subj_x', float), ('subj_y', float), ('subj_z', float),
                 ('ccf_x', float), ('ccf_y', float), ('ccf_z', float))
 
-        for trackpath in trackpaths:
+        for trackpath, shank_no in zip(trackpaths, shanks):
             recs = []
             with open(trackpath.as_posix(), newline='') as f:
                 rdr = csv.reader(f)
@@ -243,7 +243,7 @@ class HistologyIngest(dj.Imported):
                 top, ignore_extra_fields=True, allow_direct_insert=True, skip_duplicates=True)
 
             histology.LabeledProbeTrack.Point.insert(
-                ({**top, 'order': rec[0], **rec[1]} for rec in
+                ({**top, 'order': rec_order, 'shank': shank_no, **rec} for rec_order, rec in
                  enumerate((r for r in recs if r['warp'] is False))),
                 ignore_extra_fields=True, allow_direct_insert=True)
 
