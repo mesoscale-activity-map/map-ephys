@@ -475,8 +475,10 @@ class ProjectLevelProbeTrack(dj.Computed):
 
         sessions_probe_tracks = SessionLevelProbeTrack.fetch('probe_tracks')
 
-        probe_tracks_list = list(itertools.chain(*[[v for v in probe_tracks.values()]
-                                                   for probe_tracks in sessions_probe_tracks]))
+        probe_tracks_list = []
+        for probe_tracks in sessions_probe_tracks:
+            for shank_points in probe_tracks.values():
+                probe_tracks_list.extend([shank_points] if isinstance(shank_points, np.ndarray) else shank_points)
 
         # ---- plot ----
         um_per_px = 20

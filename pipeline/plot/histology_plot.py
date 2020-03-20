@@ -21,9 +21,13 @@ def plot_probe_tracks(session_key, ax=None):
 
     probe_tracks = {}
     for probe_insert in (ephys.ProbeInsertion & session_key).fetch('KEY'):
-        points = (histology.LabeledProbeTrack.Point & probe_insert).fetch(
-            'ccf_x', 'ccf_y', 'ccf_z', order_by='"order"')
-        probe_tracks[probe_insert['insertion_number']] = np.vstack(zip(*points))
+        shank_count = (ephys.ProbeInsertion & probe_insert).aggr(
+            histology.LabeledProbeTrack.Point, shank_count='COUNT(DISTINCT shank)').fetch1('shank_count')
+
+        all_shank_points = [(histology.LabeledProbeTrack.Point & probe_insert & {'shank': shank_no}).fetch(
+            'ccf_x', 'ccf_y', 'ccf_z', order_by='"order"') for shank_no in np.arange(shank_count) + 1]
+
+        probe_tracks[probe_insert['insertion_number']] = [np.vstack(zip(*points)) for points in all_shank_points]
 
     if ax is None:
         fig = plt.figure()
@@ -42,8 +46,9 @@ def plot_probe_tracks(session_key, ax=None):
                     alpha=0.25, lw=0)
 
     colors = ['r', 'g', 'y', 'b']
-    for (k, v), c in zip(probe_tracks.items(), colors):
-        ax.plot(v[:, 0], v[:, 2], v[:, 1], c, label=f'probe {k}')
+    for (k, shank_points), c in zip(probe_tracks.items(), colors):
+        for v in shank_points:
+            ax.plot(v[:, 0], v[:, 2], v[:, 1], c, label=f'probe {k}')
 
     ax.set_title('Probe Track in CCF (um)')
 

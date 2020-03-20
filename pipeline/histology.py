@@ -91,6 +91,7 @@ class LabeledProbeTrack(dj.Manual):
         definition = """
         -> master
         order: int
+        shank: int
         ---
         ccf_x: float  # (um)
         ccf_y: float  # (um)
