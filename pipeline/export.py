@@ -373,6 +373,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     # tracking
     # ----------------
+    print('... tracking:', end='')
     tracking_struct = {}
     for feature, feature_tbl in tracking.Tracking().tracking_features.items():
         ft_attrs = [n for n in feature_tbl.heading.names if n not in feature_tbl.primary_key]
@@ -395,18 +396,23 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
                 tracking_struct[camera][ft].append(trk_d[ft])
 
     edata['tracking'] = tracking_struct
+    print(' found {} tracking(s)'.format(len(tracking_struct)))
 
     # histology - unit ccf
     # ----------------
+    print('... histology:', end='')
     unit_ccfs = []
     for ccf_tbl in (histology.ElectrodeCCFPosition.ElectrodePosition, histology.ElectrodeCCFPosition.ElectrodePositionError):
         unit_ccf = (ephys.Unit * ccf_tbl * ccf.CCFAnnotation.proj('annotation') & insert_key
                     & {'clustering_method': clustering_method}).fetch('unit', 'ccf_x', 'ccf_y', 'ccf_z', 'annotation')
         unit_ccfs.extend(list(zip(*unit_ccf)))
-    unit_id, ccf_x, ccf_y, ccf_z, anno = zip(*sorted(unit_ccfs, key=lambda x: x[0]))
 
-    edata['histology'] = {'unit': unit_id, 'ccf_x': ccf_x, 'ccf_y': ccf_y, 'ccf_z': ccf_z, 'annotation': anno}
-
+    if unit_ccfs:
+        unit_id, ccf_x, ccf_y, ccf_z, anno = zip(*sorted(unit_ccfs, key=lambda x: x[0]))
+        edata['histology'] = {'unit': unit_id, 'ccf_x': ccf_x, 'ccf_y': ccf_y, 'ccf_z': ccf_z, 'annotation': anno}
+        print('ok.')
+    else:
+        print('n/a')
     # savemat
     # -------
 
