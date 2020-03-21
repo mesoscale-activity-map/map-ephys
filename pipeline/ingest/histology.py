@@ -139,7 +139,7 @@ class HistologyIngest(dj.Imported):
         log.info('... probe {} position ingest.'.format(self.probe))
         probefiles, shanks = self._search_histology_files('landmark_file')
 
-        log.info('... found probe {} histology file {}'.format(
+        log.info('... found probe {} histology file(s) {}'.format(
             self.probe, probefiles))
 
         for probepath, shank_no in zip(probefiles, shanks):
@@ -305,8 +305,8 @@ class HistologyIngest(dj.Imported):
             if len(histology_files) != len(self.shanks):  # ensure 1 file per shank
                 raise HistologyFileError('{} files found for a {}-shank probe'.format(len(histology_files), len(self.shanks)))
 
-            corresponding_shanks = [int(re.search('landmarks_.*_(\d{1})_(\d{1}){}'.format(file_format_map[file_type]),
-                                                  f.as_posix()).groups()[2]) for f in histology_files]
+            corresponding_shanks = [int(re.search('landmarks_.*_(\d)_(\d){}'.format(file_format_map[file_type]),
+                                                  f.as_posix()).groups()[1]) for f in histology_files]
 
         return histology_files, corresponding_shanks
 
