@@ -395,8 +395,11 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
                     tracking_struct[camera][ft] = []
                 tracking_struct[camera][ft].append(trk_d[ft])
 
-    edata['tracking'] = tracking_struct
-    print(' found {} tracking(s)'.format(len(tracking_struct)))
+    if tracking_struct:
+        edata['tracking'] = tracking_struct
+        print('ok.')
+    else:
+        print('n/a')
 
     # histology - unit ccf
     # ----------------
