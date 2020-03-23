@@ -295,18 +295,21 @@ class HistologyIngest(dj.Imported):
             file_format = 'landmarks_{}_{}_{}_{}*{}'.format(self.water, self.session_date_str,
                                                             behavior_time_str,
                                                             self.probe, file_format_map[file_type])
-            histology_files = [f for f in list(self.directory.glob('landmarks*')) if re.match(
+            histology_sesstime_files = [f for f in list(self.directory.glob('landmarks*')) if re.match(
                 'landmarks_{}_{}_{}_{}(_\d)?{}'.format(self.water, self.session_date_str, behavior_time_str,
                                                        self.probe, file_format_map[file_type]), f.name)]
 
-            if len(histology_files) < 1:
-                raise FileNotFoundError('Probe {} histology file {} not found!'.format(self.probe, file_format))
-
-            if len(histology_files) != len(self.shanks):  # ensure 1 file per shank
-                raise HistologyFileError('{} files found for a {}-shank probe'.format(len(histology_files), len(self.shanks)))
+            if len(histology_sesstime_files) < 1:  # case of no session-time in filename
+                if len(histology_files) != len(self.shanks):  # ensure 1 file per shank
+                    raise FileNotFoundError('Probe {} histology file {} not found!'.format(self.probe, file_format))
+                else:
+                    histology_sesstime_files = histology_files
+            elif len(histology_sesstime_files) != len(self.shanks):  # ensure 1 file per shank
+                raise HistologyFileError('{} files found for a {}-shank probe'.format(len(histology_sesstime_files),
+                                                                                      len(self.shanks)))
 
             corresponding_shanks = [int(re.search('landmarks_.*_(\d)_(\d){}'.format(file_format_map[file_type]),
-                                                  f.as_posix()).groups()[1]) for f in histology_files]
+                                                  f.as_posix()).groups()[1]) for f in histology_sesstime_files]
 
         return histology_files, corresponding_shanks
 
