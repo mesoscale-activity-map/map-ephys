@@ -142,7 +142,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
                'behavior_report',
                'behavior_early_report', 'behavior_lick_times',
                'behavior_is_free_water', 'behavior_is_auto_water',
-               'task_trial_type', 'task_stimulation',
+               'task_trial_type', 'task_stimulation', 'trial_end_time',
                'task_sample_time', 'task_delay_time', 'task_cue_time',
                'tracking', 'histology']
 
@@ -183,17 +183,18 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     # neuron_unit_info
     # ----------------
     #
-    # [[depth_in_um, cell_type, recording_location] ...]
+    # [[unit_id, unit_quality, unit_x_in_um, depth_in_um, associated_electrode, shank, cell_type, recording_location] ...]
     print('... neuron_unit_info:', end='')
 
     dv = float(insertion['depth']) if insertion['depth'] else np.nan
 
-    cell_types = {u['unit']: u['cell_type'] for u in (ephys.UnitCellType & insert_key).fetch(as_dict=True)}
+    cell_types = {u['unit']: u['cell_type'] for u in (ephys.UnitCellType & insert_key).fetch(as_dict=True, order_by='unit')}
 
     _ui = []
     for u in units:
         typ = cell_types[u['unit']] if u['unit'] in cell_types else 'unknown'
-        _ui.append([u['unit_posx'], u['unit_posy'] + dv, u['shank'], typ, loc])
+        _ui.append([u['unit'], u['unit_quality'], u['unit_posx'], u['unit_posy'] + dv,
+                    u['electrode'], u['shank'], typ, loc])
 
     edata['neuron_unit_info'] = np.array(_ui, dtype='O')
 
@@ -207,14 +208,21 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     # unit_snr: (Nx1)
     # ...
 
-    q_qc = ephys.Unit.proj('unit_amp', 'unit_snr') * ephys.UnitStat * ephys.ClusterMetric * ephys.WaveformMetric
+    q_qc = (ephys.Unit & insert_key).proj('unit_amp', 'unit_snr').aggr(
+        ephys.UnitStat, ..., **{n: n for n in ephys.UnitStat.heading.names if n not in ephys.UnitStat.heading.primary_key},
+        keep_all_rows=True).aggr(
+        ephys.ClusterMetric, ..., **{n: n for n in ephys.ClusterMetric.heading.names if n not in ephys.ClusterMetric.heading.primary_key},
+        keep_all_rows=True).aggr(
+        ephys.WaveformMetric, ..., **{n: n for n in ephys.WaveformMetric.heading.names if n not in ephys.WaveformMetric.heading.primary_key},
+        keep_all_rows=True)
     qc_names = [n for n in q_qc.heading.names if n not in q_qc.primary_key]
 
-    if q_qc & insert_key:
+    if q_qc:
         qc = (q_qc & insert_key).fetch(*qc_names, order_by='unit')
         qc_df = pd.DataFrame(qc).T
         qc_df.columns = qc_names
-        edata['neuron_unit_quality_control'] = {n: qc_df.get(n).values for n in qc_names}
+        edata['neuron_unit_quality_control'] = {n: qc_df.get(n).values for n in qc_names
+                                                if not np.all(np.isnan(qc_df.get(n).values))}
 
     # behavior_report
     # ---------------
@@ -368,6 +376,19 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
         'go_time', 'duration', order_by='trial')
 
     edata['task_cue_time'] = np.array([_tct, _tcd]).astype(float)
+
+    print('ok.')
+
+    # trial_end_time - list of (onset, duration)
+    # -------------
+
+    print('... trial_end_time:', end='')
+
+    _tet, _ted = (experiment.BehaviorTrial & insert_key).aggr(experiment.TrialEvent & 'trial_event_type = "trialend"',
+                                                              trialend_time='trial_event_time', duration='duration').fetch(
+        'trialend_time', 'duration', order_by='trial')
+
+    edata['trial_end_time'] = np.array([_tet, _ted]).astype(float)
 
     print('ok.')
 
