@@ -137,7 +137,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     trials = behav['trial']
 
-    exports = ['probe_insertion_info',
+    exports = ['probe_insertion_info', 'neuron_id',
                'neuron_single_units', 'neuron_unit_info', 'neuron_unit_quality_control',
                'behavior_report',
                'behavior_early_report', 'behavior_lick_times',
@@ -188,12 +188,12 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     dv = float(insertion['depth']) if insertion['depth'] else np.nan
 
-    cell_types = {u['unit']: u['cell_type'] for u in (ephys.UnitCellType & insert_key).fetch(as_dict=True)}
+    cell_types = {u['unit']: u['cell_type'] for u in (ephys.UnitCellType & insert_key).fetch(as_dict=True, order_by='unit')}
 
     _ui = []
     for u in units:
         typ = cell_types[u['unit']] if u['unit'] in cell_types else 'unknown'
-        _ui.append([u['unit_posx'], u['unit_posy'] + dv, u['shank'], typ, loc])
+        _ui.append([u['unit'], u['unit_posx'], u['unit_posy'] + dv, u['shank'], typ, loc])
 
     edata['neuron_unit_info'] = np.array(_ui, dtype='O')
 
