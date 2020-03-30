@@ -21,6 +21,9 @@ def plot_probe_tracks(session_key, ax=None):
 
     probe_tracks = {}
     for probe_insert in (ephys.ProbeInsertion & session_key).fetch('KEY'):
+        if not (histology.LabeledProbeTrack & probe_insert):
+            continue
+
         shank_count = (ephys.ProbeInsertion & probe_insert).aggr(
             histology.LabeledProbeTrack.Point, shank_count='COUNT(DISTINCT shank)').fetch1('shank_count')
 

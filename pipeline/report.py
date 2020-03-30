@@ -234,15 +234,11 @@ class SessionLevelProbeTrack(dj.Computed):
     -> experiment.Session
     ---
     session_tracks_plot: filepath@report_store
+    probe_track_count: int
     probe_tracks: longblob
     """
 
-    @property
-    def key_source(self):
-        # Only process Session with ProbeTrack histology available
-        sess_probes = experiment.Session.aggr(ephys.ProbeInsertion, probe_count='count(*)')
-        sess_probe_hist = experiment.Session.aggr(histology.LabeledProbeTrack, probe_hist_count='count(*)')
-        return sess_probes * sess_probe_hist & 'probe_count = probe_hist_count'
+    key_source = experiment.Session & histology.LabeledProbeTrack
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
@@ -261,7 +257,7 @@ class SessionLevelProbeTrack(dj.Computed):
         fig_dict = save_figs((fig1,), ('session_tracks_plot',), sess_dir, fn_prefix)
 
         plt.close('all')
-        self.insert1({**key, **fig_dict, 'probe_tracks': probe_tracks})
+        self.insert1({**key, **fig_dict, 'probe_track_count': len(probe_tracks), 'probe_tracks': probe_tracks})
 
 
 # ============================= PROBE LEVEL ====================================
@@ -463,7 +459,7 @@ class ProjectLevelProbeTrack(dj.Computed):
     -> experiment.Project
     ---
     tracks_plot: filepath@report_store
-    session_count: int
+    track_count: int
     """
 
     key_source = experiment.Project & 'project_name = "MAP"'
@@ -471,9 +467,8 @@ class ProjectLevelProbeTrack(dj.Computed):
     def make(self, key):
         proj_dir = store_stage
 
-        session_count = len(SessionLevelProbeTrack())
-
-        sessions_probe_tracks = SessionLevelProbeTrack.fetch('probe_tracks')
+        sessions_probe_tracks, sessions_track_count = SessionLevelProbeTrack.fetch('probe_tracks', 'probe_track_count')
+        track_count = sessions_track_count.sum().astype(int)
 
         probe_tracks_list = []
         for probe_tracks in sessions_probe_tracks:
@@ -489,7 +484,7 @@ class ProjectLevelProbeTrack(dj.Computed):
         vertices = vertices * um_per_px
 
         fig1 = plt.figure(figsize=(16, 12))
-        fig1.suptitle(f'{len(probe_tracks_list)} probe-tracks / {len(ephys.ProbeInsertion())} probe-insertions',
+        fig1.suptitle('{} probe-tracks / {} probe-insertions'.format(track_count, len(ephys.ProbeInsertion())),
                       fontsize=24, y=0.05)
 
         for axloc, elev, azim in zip((221, 222, 223, 224), (65, 0, 90, 0), (-15, 0, 0, 90)):
@@ -512,7 +507,7 @@ class ProjectLevelProbeTrack(dj.Computed):
         fig_dict = save_figs((fig1,), ('tracks_plot',), proj_dir, fn_prefix)
 
         plt.close('all')
-        self.insert1({**key, **fig_dict, 'session_count': session_count})
+        self.insert1({**key, **fig_dict, 'track_count': track_count})
 
 
 # ---------- HELPER FUNCTIONS --------------
@@ -546,14 +541,35 @@ def save_figs(figs, fig_names, dir2save, prefix):
     return fig_dict
 
 
+def delete_outdated_session_tracks():
+    sess_probe_hist = experiment.Session.aggr(histology.LabeledProbeTrack, probe_hist_count='count(*)')
+    oudated_sess_probe = SessionLevelProbeTrack * sess_probe_hist & 'probe_track_count != probe_hist_count'
+
+    uuid_bytes = (SessionLevelProbeTrack & oudated_sess_probe.proj()).proj(ub='(session_tracks_plot)').fetch('ub')
+
+    if uuid_bytes:
+        ext_keys = [{'hash': uuid.UUID(bytes=uuid_byte)} for uuid_byte in uuid_bytes]
+
+        with dj.config(safemode=False):
+            with SessionLevelProbeTrack.connection.transaction:
+                # delete the outdated Probe Tracks
+                (SessionLevelProbeTrack & oudated_sess_probe.proj()).delete()
+                # delete from external store
+                (schema.external['report_store'] & ext_keys).delete(delete_external_files=True)
+                print('{} outdated SessionLevelProbeTrack deleted'.format(len(uuid_bytes)))
+
+    else:
+        print('All SessionLevelProbeTrack are up-to-date')
+
+
 def delete_outdated_probe_tracks(project_name='MAP'):
     if {'project_name': project_name} not in ProjectLevelProbeTrack.proj():
         return
 
-    sess_count = (ProjectLevelProbeTrack & {'project_name': project_name}).fetch1('session_count')
-    latest_sess_count = len(SessionLevelProbeTrack())
+    plotted_track_count = (ProjectLevelProbeTrack & {'project_name': project_name}).fetch1('track_count')
+    latest_track_count = SessionLevelProbeTrack.fetch('probe_track_count').sum().astype(int)
 
-    if sess_count != latest_sess_count:
+    if plotted_track_count != latest_track_count:
         uuid_byte = (ProjectLevelProbeTrack & {'project_name': project_name}).proj(ub='(tracks_plot)').fetch1('ub')
         ext_key = {'hash': uuid.UUID(bytes=uuid_byte)}
 
