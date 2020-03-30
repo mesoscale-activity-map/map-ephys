@@ -274,6 +274,8 @@ def automate_computation():
         populate_psth(populate_settings)
         generate_report(populate_settings)
 
+        log.info('report.delete_outdated_session_tracks()')
+        report.delete_outdated_session_tracks()
         log.info('report.delete_outdated_probe_tracks()')
         report.delete_outdated_probe_tracks()
 
