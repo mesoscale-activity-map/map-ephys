@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 import re
 import datajoint as dj
+from pymysql.err import OperationalError
+
 
 from pipeline import (lab, experiment, tracking, ephys, psth, ccf, histology, export, publication, get_schema_name)
 
@@ -275,9 +277,16 @@ def automate_computation():
         generate_report(populate_settings)
 
         log.info('report.delete_outdated_session_tracks()')
-        report.delete_outdated_session_tracks()
+        try:
+            report.delete_outdated_session_tracks()
+        except OperationalError:  # in case of mysql deadlock
+            pass
+
         log.info('report.delete_outdated_probe_tracks()')
-        report.delete_outdated_probe_tracks()
+        try:
+            report.delete_outdated_probe_tracks()
+        except OperationalError:  # in case of mysql deadlock
+            pass
 
         # random sleep time between 5 to 10 minutes
         sleep_time = np.random.randint(300, 600)
