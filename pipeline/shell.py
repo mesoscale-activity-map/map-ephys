@@ -279,14 +279,16 @@ def automate_computation():
         log.info('report.delete_outdated_session_tracks()')
         try:
             report.delete_outdated_session_tracks()
-        except OperationalError:  # in case of mysql deadlock
-            pass
+        except OperationalError as e:  # in case of mysql deadlock - code: 1213
+            if e.args[0] == 1213:
+                pass
 
         log.info('report.delete_outdated_probe_tracks()')
         try:
             report.delete_outdated_probe_tracks()
-        except OperationalError:  # in case of mysql deadlock
-            pass
+        except OperationalError as e:  # in case of mysql deadlock - code: 1213
+            if e.args[0] == 1213:
+                pass
 
         # random sleep time between 5 to 10 minutes
         sleep_time = np.random.randint(300, 600)
