@@ -97,6 +97,7 @@ class SessionLevelCDReport(dj.Computed):
     definition = """
     -> experiment.Session
     ---
+    probe_count: int
     coding_direction: filepath@report_store
     """
 
@@ -225,7 +226,7 @@ class SessionLevelCDReport(dj.Computed):
         fig_dict = save_figs((fig1,), ('coding_direction',), sess_dir, fn_prefix)
 
         plt.close('all')
-        self.insert1({**key, **fig_dict})
+        self.insert1({**key, **fig_dict, 'probe_count': len(probe_keys)})
 
 
 @schema
@@ -541,7 +542,10 @@ def save_figs(figs, fig_names, dir2save, prefix):
     return fig_dict
 
 
-def delete_outdated_session_tracks():
+def delete_outdated_session_plots():
+
+    # ------------- SessionLevelProbeTrack ----------------
+
     sess_probe_hist = experiment.Session.aggr(histology.LabeledProbeTrack, probe_hist_count='count(*)')
     oudated_sess_probe = SessionLevelProbeTrack * sess_probe_hist & 'probe_track_count != probe_hist_count'
 
@@ -557,12 +561,31 @@ def delete_outdated_session_tracks():
                 # delete from external store
                 (schema.external['report_store'] & ext_keys).delete(delete_external_files=True)
                 print('{} outdated SessionLevelProbeTrack deleted'.format(len(uuid_bytes)))
-
     else:
         print('All SessionLevelProbeTrack are up-to-date')
 
+    # ------------- SessionLevelCDReport ----------------
 
-def delete_outdated_probe_tracks(project_name='MAP'):
+    sess_probe = experiment.Session.aggr(ephys.ProbeInsertion, current_probe_count='count(*)')
+    oudated_sess_probe = SessionLevelCDReport * sess_probe & 'probe_count != current_probe_count'
+
+    uuid_bytes = (SessionLevelCDReport & oudated_sess_probe.proj()).proj(ub='(coding_direction)').fetch('ub')
+
+    if uuid_bytes:
+        ext_keys = [{'hash': uuid.UUID(bytes=uuid_byte)} for uuid_byte in uuid_bytes]
+
+        with dj.config(safemode=False):
+            with SessionLevelCDReport.connection.transaction:
+                # delete the outdated Probe Tracks
+                (SessionLevelCDReport & oudated_sess_probe.proj()).delete()
+                # delete from external store
+                (schema.external['report_store'] & ext_keys).delete(delete_external_files=True)
+                print('{} outdated SessionLevelCDReport deleted'.format(len(uuid_bytes)))
+    else:
+        print('All SessionLevelCDReport are up-to-date')
+
+
+def delete_outdated_project_plots(project_name='MAP'):
     if {'project_name': project_name} not in ProjectLevelProbeTrack.proj():
         return
 
