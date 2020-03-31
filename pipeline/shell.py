@@ -276,16 +276,16 @@ def automate_computation():
         populate_psth(populate_settings)
         generate_report(populate_settings)
 
-        log.info('report.delete_outdated_session_tracks()')
+        log.info('report.delete_outdated_session_plots()')
         try:
-            report.delete_outdated_session_tracks()
+            report.delete_outdated_session_plots()
         except OperationalError as e:  # in case of mysql deadlock - code: 1213
             if e.args[0] == 1213:
                 pass
 
-        log.info('report.delete_outdated_probe_tracks()')
+        log.info('report.delete_outdated_project_plots()')
         try:
-            report.delete_outdated_probe_tracks()
+            report.delete_outdated_project_plots()
         except OperationalError as e:  # in case of mysql deadlock - code: 1213
             if e.args[0] == 1213:
                 pass
