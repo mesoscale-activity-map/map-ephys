@@ -97,7 +97,7 @@ class SessionLevelCDReport(dj.Computed):
     definition = """
     -> experiment.Session
     ---
-    probe_count: int
+    cd_probe_count: int
     coding_direction: filepath@report_store
     """
 
@@ -567,7 +567,7 @@ def delete_outdated_session_plots():
     # ------------- SessionLevelCDReport ----------------
 
     sess_probe = experiment.Session.aggr(ephys.ProbeInsertion, current_probe_count='count(*)')
-    oudated_sess_probe = SessionLevelCDReport * sess_probe & 'probe_count != current_probe_count'
+    oudated_sess_probe = SessionLevelCDReport * sess_probe & 'cd_probe_count != current_probe_count'
 
     uuid_bytes = (SessionLevelCDReport & oudated_sess_probe.proj()).proj(ub='(coding_direction)').fetch('ub')
 
