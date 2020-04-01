@@ -769,10 +769,14 @@ def _get_sess_dir(rigpath, h2o, sess_datetime):
             except StopIteration:
                 continue
             # ensuring time difference between behavior-start and ephys-start is no more than 2 minutes - this is to handle multiple sessions in a day
-            if abs((npx_meta.recording_time - sess_datetime).total_seconds()) <= 120:
+            start_time_difference = abs((npx_meta.recording_time - sess_datetime).total_seconds())
+            if start_time_difference <= 120:
                 dpath = sess_dir
                 dglob = '{}_{}_*_imec[0-9]'.format(h2o, sess_datetime.date().strftime('%m%d%y')) + '/{}'  # probe directory pattern
                 break
+            else:
+                log.info('Found {} - difference in behavior and ephys start-time: {} seconds (more than 2 minutes). Skipping...'.format(sess_dir, start_time_difference))
+
     return dpath, dglob
 
 

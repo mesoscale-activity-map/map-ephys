@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 import re
 import datajoint as dj
+from pymysql.err import OperationalError
+
 
 from pipeline import (lab, experiment, tracking, ephys, psth, ccf, histology, export, publication, get_schema_name)
 
@@ -274,8 +276,22 @@ def automate_computation():
         populate_psth(populate_settings)
         generate_report(populate_settings)
 
-        log.info('report.delete_outdated_probe_tracks()')
-        report.delete_outdated_probe_tracks()
+        log.info('report.delete_outdated_session_plots()')
+        try:
+            report.delete_outdated_session_plots()
+        except OperationalError as e:  # in case of mysql deadlock - code: 1213
+            if e.args[0] == 1213:
+                pass
+
+        log.info('report.delete_outdated_project_plots()')
+        try:
+            report.delete_outdated_project_plots()
+        except OperationalError as e:  # in case of mysql deadlock - code: 1213
+            if e.args[0] == 1213:
+                pass
+
+        log.info('Delete empty ingestion tables')
+        delete_empty_ingestion_tables()
 
         # random sleep time between 5 to 10 minutes
         sleep_time = np.random.randint(300, 600)
@@ -283,14 +299,36 @@ def automate_computation():
         time.sleep(sleep_time)
 
 
+def delete_empty_ingestion_tables():
+    from pipeline.ingest import ephys as ephys_ingest
+    from pipeline.ingest import tracking as tracking_ingest
+    from pipeline.ingest import histology as histology_ingest
+
+    with dj.config(safemode=False):
+        try:
+            (ephys_ingest.EphysIngest & (ephys_ingest.EphysIngest
+                                         - ephys.ProbeInsertion).fetch('KEY')).delete()
+            (tracking_ingest.TrackingIngest & (tracking_ingest.TrackingIngest
+                                               - tracking.Tracking).fetch('KEY')).delete()
+            (histology_ingest.HistologyIngest & (histology_ingest.HistologyIngest
+                                                 - histology.ElectrodeCCFPosition).fetch('KEY')).delete()
+        except OperationalError as e:  # in case of mysql deadlock - code: 1213
+            if e.args[0] == 1213:
+                pass
+
+
 def sync_and_external_cleanup():
     if dj.config['custom'].get('allow_external_cleanup', False):
         from pipeline import report
 
         while True:
+            log.info('Sync report')
             sync_report()
             log.info('Report "report_store" external cleanup')
             report.schema.external['report_store'].delete(delete_external_files=True)
+            log.info('Delete filepath-exists error jobs')
+            # This happens when workers attempt to regenerate the plots when the corresponding external files has not yet been deleted
+            (report.schema.jobs & 'error_message LIKE "DataJointError: A different version of%"').delete()
             time.sleep(1800)  # once every 30 minutes
     else:
         print("allow_external_cleanup disabled, set dj.config['custom']['allow_external_cleanup'] = True to enable")
