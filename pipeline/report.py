@@ -226,7 +226,7 @@ class SessionLevelCDReport(dj.Computed):
         fig_dict = save_figs((fig1,), ('coding_direction',), sess_dir, fn_prefix)
 
         plt.close('all')
-        self.insert1({**key, **fig_dict, 'probe_count': len(probe_keys)})
+        self.insert1({**key, **fig_dict, 'cd_probe_count': len(probe_keys)})
 
 
 @schema
