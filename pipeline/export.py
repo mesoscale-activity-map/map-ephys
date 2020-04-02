@@ -139,8 +139,8 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     exports = ['probe_insertion_info',
                'neuron_single_units', 'neuron_unit_info', 'neuron_unit_quality_control',
-               'behavior_report',
-               'behavior_early_report', 'behavior_lick_times',
+               'behavior_report', 'behavior_early_report',
+               'behavior_lick_times', 'behavior_left_lick_times', 'behavior_right_lick_times'
                'behavior_is_free_water', 'behavior_is_auto_water',
                'task_trial_type', 'task_stimulation', 'trial_end_time',
                'task_sample_time', 'task_delay_time', 'task_cue_time',
@@ -269,17 +269,30 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     # -------------------
     print('... behavior_lick_times:', end='')
 
-    _lt = []
+    _lt, _llt, _rlt = [], [], []
+
     licks = (experiment.ActionEvent() & insert_key
              & "action_event_type in ('left lick', 'right lick')").fetch()
+    left_licks = (experiment.ActionEvent() & insert_key
+                  & "action_event_type = 'left lick'").fetch()
+    right_licks = (experiment.ActionEvent() & insert_key
+                   & "action_event_type = 'right lick'").fetch()
 
     for t in trials:
 
         _lt.append([float(i) for i in   # decimal -> float
                     licks[licks['trial'] == t]['action_event_time']]
                    if t in licks['trial'] else [])
+        _llt.append([float(i) for i in   # decimal -> float
+                     left_licks[left_licks['trial'] == t]['action_event_time']]
+                    if t in left_licks['trial'] else [])
+        _rlt.append([float(i) for i in   # decimal -> float
+                     right_licks[right_licks['trial'] == t]['action_event_time']]
+                    if t in right_licks['trial'] else [])
 
     edata['behavior_lick_times'] = np.array(_lt)
+    edata['behavior_left_lick_times'] = np.array(_llt)
+    edata['behavior_right_lick_times'] = np.array(_rlt)
 
     behavior_whisker_angle = None  # NOQA no data
     behavior_whisker_dist2pol = None  # NOQA no data
