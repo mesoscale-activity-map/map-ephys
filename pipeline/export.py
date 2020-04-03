@@ -139,8 +139,8 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     exports = ['probe_insertion_info',
                'neuron_single_units', 'neuron_unit_info', 'neuron_unit_quality_control',
-               'behavior_report',
-               'behavior_early_report', 'behavior_lick_times',
+               'behavior_report', 'behavior_early_report',
+               'behavior_lick_times', 'behavior_lick_directions',
                'behavior_is_free_water', 'behavior_is_auto_water',
                'task_trial_type', 'task_stimulation', 'trial_end_time',
                'task_sample_time', 'task_delay_time', 'task_cue_time',
@@ -265,11 +265,13 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     behavior_touch_times = None  # NOQA no data (see ActionEventType())
 
-    # behavior_lick_times
+    # behavior_lick_times - 0: left lick; 1: right lick
     # -------------------
     print('... behavior_lick_times:', end='')
+    lick_direction_mapper = {'left lick': 0, 'right lick': 1}
 
-    _lt = []
+    _lt, _ld = [], []
+
     licks = (experiment.ActionEvent() & insert_key
              & "action_event_type in ('left lick', 'right lick')").fetch()
 
@@ -278,8 +280,12 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
         _lt.append([float(i) for i in   # decimal -> float
                     licks[licks['trial'] == t]['action_event_time']]
                    if t in licks['trial'] else [])
+        _ld.append([lick_direction_mapper[i] for i in   # decimal -> float
+                    licks[licks['trial'] == t]['action_event_type']]
+                   if t in licks['trial'] else [])
 
     edata['behavior_lick_times'] = np.array(_lt)
+    edata['behavior_lick_directions'] = np.array(_ld)
 
     behavior_whisker_angle = None  # NOQA no data
     behavior_whisker_dist2pol = None  # NOQA no data
@@ -340,53 +346,53 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     task_pole_time = None  # NOQA no data
 
-    # task_sample_time - (sample period) - list of (onset, duration)
+    # task_sample_time - (sample period) - list of (onset, duration) - the LAST "sample" event in a trial
     # -------------
 
     print('... task_sample_time:', end='')
 
-    _tst, _tsd = (experiment.BehaviorTrial & insert_key).aggr(experiment.TrialEvent & 'trial_event_type = "sample"',
-                                                              sample_time='trial_event_time', duration='duration').fetch(
-        'sample_time', 'duration', order_by='trial')
+    _tst, _tsd = ((experiment.BehaviorTrial & insert_key).aggr(
+        experiment.TrialEvent & 'trial_event_type = "sample"', trial_event_id='max(trial_event_id)')
+                  * experiment.TrialEvent).fetch('trial_event_time', 'duration', order_by='trial')
 
     edata['task_sample_time'] = np.array([_tst, _tsd]).astype(float)
 
     print('ok.')
 
-    # task_delay_time - (delay period) - list of (onset, duration)
+    # task_delay_time - (delay period) - list of (onset, duration) - the LAST "delay" event in a trial
     # -------------
 
     print('... task_delay_time:', end='')
 
-    _tdt, _tdd = (experiment.BehaviorTrial & insert_key).aggr(experiment.TrialEvent & 'trial_event_type = "delay"',
-                                                              delay_time='trial_event_time', duration='duration').fetch(
-        'delay_time', 'duration', order_by='trial')
+    _tdt, _tdd = ((experiment.BehaviorTrial & insert_key).aggr(
+        experiment.TrialEvent & 'trial_event_type = "delay"', trial_event_id='max(trial_event_id)')
+                  * experiment.TrialEvent).fetch('trial_event_time', 'duration', order_by='trial')
 
     edata['task_delay_time'] = np.array([_tdt, _tdd]).astype(float)
 
     print('ok.')
 
-    # task_cue_time - (response period) - list of (onset, duration)
+    # task_cue_time - (response period) - list of (onset, duration) - the LAST "go" event in a trial
     # -------------
 
     print('... task_cue_time:', end='')
 
-    _tct, _tcd = (experiment.BehaviorTrial & insert_key).aggr(experiment.TrialEvent & 'trial_event_type = "go"',
-                                                              go_time='trial_event_time', duration='duration').fetch(
-        'go_time', 'duration', order_by='trial')
+    _tct, _tcd = ((experiment.BehaviorTrial & insert_key).aggr(
+        experiment.TrialEvent & 'trial_event_type = "go"', trial_event_id='max(trial_event_id)')
+                  * experiment.TrialEvent).fetch('trial_event_time', 'duration', order_by='trial')
 
     edata['task_cue_time'] = np.array([_tct, _tcd]).astype(float)
 
     print('ok.')
 
-    # trial_end_time - list of (onset, duration)
+    # trial_end_time - list of (onset, duration) - the FIRST "trialend" event in a trial
     # -------------
 
     print('... trial_end_time:', end='')
 
-    _tet, _ted = (experiment.BehaviorTrial & insert_key).aggr(experiment.TrialEvent & 'trial_event_type = "trialend"',
-                                                              trialend_time='trial_event_time', duration='duration').fetch(
-        'trialend_time', 'duration', order_by='trial')
+    _tet, _ted = ((experiment.BehaviorTrial & insert_key).aggr(
+        experiment.TrialEvent & 'trial_event_type = "trialend"', trial_event_id='min(trial_event_id)')
+                  * experiment.TrialEvent).fetch('trial_event_time', 'duration', order_by='trial')
 
     edata['trial_end_time'] = np.array([_tet, _ted]).astype(float)
 
