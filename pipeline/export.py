@@ -140,7 +140,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     exports = ['probe_insertion_info',
                'neuron_single_units', 'neuron_unit_info', 'neuron_unit_quality_control',
                'behavior_report', 'behavior_early_report',
-               'behavior_lick_times', 'behavior_left_lick_times', 'behavior_right_lick_times'
+               'behavior_lick_times', 'behavior_lick_directions',
                'behavior_is_free_water', 'behavior_is_auto_water',
                'task_trial_type', 'task_stimulation', 'trial_end_time',
                'task_sample_time', 'task_delay_time', 'task_cue_time',
@@ -265,34 +265,27 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     behavior_touch_times = None  # NOQA no data (see ActionEventType())
 
-    # behavior_lick_times
+    # behavior_lick_times - 0: left lick; 1: right lick
     # -------------------
     print('... behavior_lick_times:', end='')
+    lick_direction_mapper = {'left lick': 0, 'right lick': 1}
 
-    _lt, _llt, _rlt = [], [], []
+    _lt, _ld = [], []
 
     licks = (experiment.ActionEvent() & insert_key
              & "action_event_type in ('left lick', 'right lick')").fetch()
-    left_licks = (experiment.ActionEvent() & insert_key
-                  & "action_event_type = 'left lick'").fetch()
-    right_licks = (experiment.ActionEvent() & insert_key
-                   & "action_event_type = 'right lick'").fetch()
 
     for t in trials:
 
         _lt.append([float(i) for i in   # decimal -> float
                     licks[licks['trial'] == t]['action_event_time']]
                    if t in licks['trial'] else [])
-        _llt.append([float(i) for i in   # decimal -> float
-                     left_licks[left_licks['trial'] == t]['action_event_time']]
-                    if t in left_licks['trial'] else [])
-        _rlt.append([float(i) for i in   # decimal -> float
-                     right_licks[right_licks['trial'] == t]['action_event_time']]
-                    if t in right_licks['trial'] else [])
+        _ld.append([lick_direction_mapper[i] for i in   # decimal -> float
+                    licks[licks['trial'] == t]['action_event_type']]
+                   if t in licks['trial'] else [])
 
     edata['behavior_lick_times'] = np.array(_lt)
-    edata['behavior_left_lick_times'] = np.array(_llt)
-    edata['behavior_right_lick_times'] = np.array(_rlt)
+    edata['behavior_lick_directions'] = np.array(_ld)
 
     behavior_whisker_angle = None  # NOQA no data
     behavior_whisker_dist2pol = None  # NOQA no data
