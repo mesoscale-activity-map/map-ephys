@@ -311,8 +311,13 @@ class ProbeLevelReport(dj.Computed):
 
         unit_characteristic_plot.plot_unit_selectivity(
             probe_insertion, clustering_method=key['clustering_method'], axs=axs[:3])
-        unit_characteristic_plot.plot_unit_bilateral_photostim_effect(
-            probe_insertion, clustering_method=key['clustering_method'], axs=axs[-1])
+
+        # if photostim performed in this session
+        if experiment.PhotostimTrial & probe_insertion:
+            unit_characteristic_plot.plot_unit_bilateral_photostim_effect(
+                probe_insertion, clustering_method=key['clustering_method'], axs=axs[-1])
+        else:
+            axs[-1].remove()
 
         # ---- group_psth ----
         fig3 = unit_characteristic_plot.plot_stacked_contra_ipsi_psth(units)
