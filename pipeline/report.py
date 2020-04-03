@@ -16,7 +16,7 @@ from PIL import Image
 import itertools
 
 from pipeline import experiment, ephys, psth, tracking, lab, histology, ccf
-from pipeline.plot import behavior_plot, unit_characteristic_plot, unit_psth, histology_plot
+from pipeline.plot import behavior_plot, unit_characteristic_plot, unit_psth, histology_plot, PhotostimError
 from pipeline import get_schema_name
 from pipeline.plot.util import _plot_with_sem, _jointplot_w_hue
 from pipeline.util import _get_trial_event_times
@@ -313,10 +313,10 @@ class ProbeLevelReport(dj.Computed):
             probe_insertion, clustering_method=key['clustering_method'], axs=axs[:3])
 
         # if photostim performed in this session
-        if experiment.PhotostimTrial & probe_insertion:
+        try:
             unit_characteristic_plot.plot_unit_bilateral_photostim_effect(
                 probe_insertion, clustering_method=key['clustering_method'], axs=axs[-1])
-        else:
+        except PhotostimError:
             axs[-1].remove()
 
         # ---- group_psth ----
