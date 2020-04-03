@@ -551,7 +551,7 @@ def delete_outdated_session_plots():
 
     uuid_bytes = (SessionLevelProbeTrack & oudated_sess_probe.proj()).proj(ub='(session_tracks_plot)').fetch('ub')
 
-    if uuid_bytes:
+    if len(uuid_bytes):
         ext_keys = [{'hash': uuid.UUID(bytes=uuid_byte)} for uuid_byte in uuid_bytes]
 
         with dj.config(safemode=False):
@@ -571,7 +571,7 @@ def delete_outdated_session_plots():
 
     uuid_bytes = (SessionLevelCDReport & oudated_sess_probe.proj()).proj(ub='(coding_direction)').fetch('ub')
 
-    if uuid_bytes:
+    if len(uuid_bytes):
         ext_keys = [{'hash': uuid.UUID(bytes=uuid_byte)} for uuid_byte in uuid_bytes]
 
         with dj.config(safemode=False):
