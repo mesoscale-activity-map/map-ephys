@@ -12,3 +12,10 @@ from .util import show_source
 #            group_psth, group_psth_ll]
 
 __all__ = [show_source]
+
+
+class PhotostimError(Exception):
+    """Raise when error encountered for photostim-related plots"""
+    def __init__(self, msg=None):
+        super().__init__('PhotostimError: \n{}'.format(msg))
+    pass
