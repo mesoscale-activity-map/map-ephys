@@ -89,7 +89,8 @@ def auto_ingest(*args):
     sheet = dj.config.get('custom', def_sheet).get('probe_spreadsheet', None)
     while True:
         log.info('running auto ingest loop')
-	load_insertion_location(sheet, sheet_name='Sheet1')
+        if sheet:
+            load_insertion_location(sheet, sheet_name='Sheet1')
         ingest_behavior(args)
         ingest_ephys(args)
         ingest_tracking(args)
@@ -124,6 +125,7 @@ def load_animal(excel_fp, sheet_name='Sheet1'):
 
 def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     from pipeline.ingest import behavior as behav_ingest
+    log.info('loading probe insertions from spreadsheet {}'.format(excel_fp))
 
     df = pd.read_excel(excel_fp, sheet_name)
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
