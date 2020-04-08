@@ -189,7 +189,7 @@ class EphysIngest(dj.Imported):
         if not np.all(np.equal(sync_ephys, sync_behav_range)):
             if trial_fix is not None:
                 log.info('ephys/bitcode trial mismatch - fix using "trialNum"')
-                trials = trial_fix[0]
+                trials = trial_fix
             else:
                 raise Exception('Bitcode Mismatch - Fix with "trialNum" not available')
         else:
@@ -869,7 +869,7 @@ def read_bitcode(bitcode_dir, h2o, skey):
     sync_ephys = bf['bitCodeS']  # ephys sync codes
     sync_behav = (experiment.TrialNote()  # behavior sync codes
                   & {**skey, 'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial')
-    trial_fix = bf['trialNum'] if 'trialNum' in bf else None
+    trial_fix = bf['trialNum'].flatten() if 'trialNum' in bf else None
 
     return sync_behav, sync_ephys, trial_fix, trial_go, trial_start
 
