@@ -85,8 +85,11 @@ def ingest_histology(*args):
 
 
 def auto_ingest(*args):
+    def_sheet = {'probe_spreadsheet': 'probes.xlsx'}
+    sheet = dj.config.get('custom', def_sheet).get('probe_spreadsheet', None)
     while True:
         log.info('running auto ingest loop')
+	load_insertion_location(sheet, sheet_name='Sheet1')
         ingest_behavior(args)
         ingest_ephys(args)
         ingest_tracking(args)
