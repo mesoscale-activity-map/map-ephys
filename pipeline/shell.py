@@ -84,6 +84,17 @@ def ingest_histology(*args):
     histology_ingest.HistologyIngest().populate(display_progress=True)
 
 
+def auto_ingest(*args):
+    while True:
+        log.info('running auto ingest loop')
+        ingest_behavior(args)
+        ingest_ephys(args)
+        ingest_tracking(args)
+        ingest_histology(args)
+        log.info('waiting 5 minutes...')
+        time.sleep(300)
+
+
 def load_animal(excel_fp, sheet_name='Sheet1'):
     df = pd.read_excel(excel_fp, sheet_name)
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
@@ -339,6 +350,7 @@ actions = {
     'ingest-ephys': ingest_ephys,
     'ingest-tracking': ingest_tracking,
     'ingest-histology': ingest_histology,
+    'auto-ingest': auto_ingest,
     'populate-psth': populate_psth,
     'publish': publish,
     'export-recording': export_recording,
