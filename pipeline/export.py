@@ -138,7 +138,8 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     trials = behav['trial']
 
     exports = ['probe_insertion_info',
-               'neuron_single_units', 'neuron_unit_info', 'neuron_unit_quality_control',
+               'neuron_single_units', 'neuron_unit_waveforms',
+               'neuron_unit_info', 'neuron_unit_quality_control',
                'behavior_report', 'behavior_early_report',
                'behavior_lick_times', 'behavior_lick_directions',
                'behavior_is_free_water', 'behavior_is_auto_water',
@@ -179,6 +180,11 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     edata['neuron_single_units'] = ndarray_object
 
     print('ok.')
+
+    # neuron_unit_waveforms
+    # -------------------
+
+    edata['neuron_unit_waveforms'] = np.array(units['waveform'], ndmin=2).T
 
     # neuron_unit_info
     # ----------------
