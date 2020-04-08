@@ -84,6 +84,25 @@ def ingest_histology(*args):
     histology_ingest.HistologyIngest().populate(display_progress=True)
 
 
+def auto_ingest(*args):
+
+    log.info('running auto ingest')
+
+    ingest_behavior(args)
+    ingest_ephys(args)
+    ingest_tracking(args)
+    ingest_histology(args)
+
+    def_sheet = {'recording_notes_spreadsheet': None,
+                 'recording_notes_sheet_name': None}
+
+    sfile = dj.config.get('custom', def_sheet).get('recording_notes_spreadsheet')
+    sname = dj.config.get('custom', def_sheet).get('recording_notes_sheet_name')
+
+    if sheet:
+        load_insertion_location(sfile, sheet_name=sname)
+
+
 def load_animal(excel_fp, sheet_name='Sheet1'):
     df = pd.read_excel(excel_fp, sheet_name)
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
@@ -110,6 +129,7 @@ def load_animal(excel_fp, sheet_name='Sheet1'):
 
 def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     from pipeline.ingest import behavior as behav_ingest
+    log.info('loading probe insertions from spreadsheet {}'.format(excel_fp))
 
     df = pd.read_excel(excel_fp, sheet_name)
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
@@ -339,6 +359,7 @@ actions = {
     'ingest-ephys': ingest_ephys,
     'ingest-tracking': ingest_tracking,
     'ingest-histology': ingest_histology,
+    'auto-ingest': auto_ingest,
     'populate-psth': populate_psth,
     'publish': publish,
     'export-recording': export_recording,
