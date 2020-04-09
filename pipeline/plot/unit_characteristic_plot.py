@@ -14,6 +14,8 @@ from pipeline.plot.util import (_plot_with_sem, _extract_one_stim_dur,
 from pipeline.util import (_get_units_hemisphere, _get_trial_event_times,
                            _get_stim_onset_time, _get_clustering_method)
 
+from . import PhotostimError
+
 _plt_xmin = -3
 _plt_xmax = 2
 
@@ -215,6 +217,9 @@ def plot_unit_selectivity(probe_insertion, clustering_method=None, axs=None):
 
 def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None, axs=None):
     probe_insertion = probe_insertion.proj()
+
+    if not (psth.TrialCondition().get_trials('all_noearlylick_both_alm_stim') & probe_insertion):
+        raise PhotostimError('No Bilateral ALM Photo-stimulation present')
 
     if clustering_method is None:
         try:

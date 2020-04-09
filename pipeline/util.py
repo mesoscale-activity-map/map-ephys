@@ -6,17 +6,25 @@ from . import (experiment, psth, ephys)
 def _get_trial_event_times(events, units, trial_cond_name):
     """
     Get median event start times from all unit-trials from the specified "trial_cond_name" and "units" - aligned to GO CUE
+    For trials with multiple events of the same type, use the one occurred last
     :param events: list of events
     """
     events = list(events) + ['go']
 
-    event_types, event_times = (psth.TrialCondition().get_trials(trial_cond_name)
-                                * (experiment.TrialEvent & [{'trial_event_type': eve} for eve in events])
-                                & units).fetch('trial_event_type', 'trial_event_time')
-    period_starts = [(event_type, np.nanmedian((event_times[event_types == event_type]
-                                                - event_times[event_types == 'go']).astype(float)))
-                     for event_type in events[:-1] if len(event_times[event_types == event_type])]
-    present_events, event_starts = list(zip(*period_starts))
+    tr_OI = (psth.TrialCondition().get_trials(trial_cond_name) & units).proj()
+    tr_events = {}
+    for eve in events:
+        if eve not in tr_events:
+            tr_events[eve] = (tr_OI.aggr(
+                experiment.TrialEvent & {'trial_event_type': eve}, trial_event_id='max(trial_event_id)')
+                              * experiment.TrialEvent).fetch('trial_event_time', order_by='trial')
+
+    present_events, event_starts = [], []
+    for etype, etime in tr_events.items():
+        if etype in events[:-1]:
+            present_events.append(etype)
+            event_starts.append(np.nanmedian(etime.astype(float) - tr_events["go"].astype(float)))
+
     return np.array(present_events), np.array(event_starts)
 
 

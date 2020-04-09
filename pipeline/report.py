@@ -16,7 +16,7 @@ from PIL import Image
 import itertools
 
 from pipeline import experiment, ephys, psth, tracking, lab, histology, ccf
-from pipeline.plot import behavior_plot, unit_characteristic_plot, unit_psth, histology_plot
+from pipeline.plot import behavior_plot, unit_characteristic_plot, unit_psth, histology_plot, PhotostimError
 from pipeline import get_schema_name
 from pipeline.plot.util import _plot_with_sem, _jointplot_w_hue
 from pipeline.util import _get_trial_event_times
@@ -226,7 +226,7 @@ class SessionLevelCDReport(dj.Computed):
         fig_dict = save_figs((fig1,), ('coding_direction',), sess_dir, fn_prefix)
 
         plt.close('all')
-        self.insert1({**key, **fig_dict, 'probe_count': len(probe_keys)})
+        self.insert1({**key, **fig_dict, 'cd_probe_count': len(probe_keys)})
 
 
 @schema
@@ -311,8 +311,13 @@ class ProbeLevelReport(dj.Computed):
 
         unit_characteristic_plot.plot_unit_selectivity(
             probe_insertion, clustering_method=key['clustering_method'], axs=axs[:3])
-        unit_characteristic_plot.plot_unit_bilateral_photostim_effect(
-            probe_insertion, clustering_method=key['clustering_method'], axs=axs[-1])
+
+        # if photostim performed in this session
+        try:
+            unit_characteristic_plot.plot_unit_bilateral_photostim_effect(
+                probe_insertion, clustering_method=key['clustering_method'], axs=axs[-1])
+        except PhotostimError:
+            axs[-1].remove()
 
         # ---- group_psth ----
         fig3 = unit_characteristic_plot.plot_stacked_contra_ipsi_psth(units)
@@ -551,7 +556,7 @@ def delete_outdated_session_plots():
 
     uuid_bytes = (SessionLevelProbeTrack & oudated_sess_probe.proj()).proj(ub='(session_tracks_plot)').fetch('ub')
 
-    if uuid_bytes:
+    if len(uuid_bytes):
         ext_keys = [{'hash': uuid.UUID(bytes=uuid_byte)} for uuid_byte in uuid_bytes]
 
         with dj.config(safemode=False):
@@ -571,7 +576,7 @@ def delete_outdated_session_plots():
 
     uuid_bytes = (SessionLevelCDReport & oudated_sess_probe.proj()).proj(ub='(coding_direction)').fetch('ub')
 
-    if uuid_bytes:
+    if len(uuid_bytes):
         ext_keys = [{'hash': uuid.UUID(bytes=uuid_byte)} for uuid_byte in uuid_bytes]
 
         with dj.config(safemode=False):
