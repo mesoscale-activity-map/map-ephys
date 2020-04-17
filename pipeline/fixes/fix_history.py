@@ -20,4 +20,3 @@ class FixHistory(dj.Manual):
         -> FixHistory
         -> experiment.Session
         """
-
