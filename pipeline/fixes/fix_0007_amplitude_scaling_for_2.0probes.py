@@ -5,6 +5,7 @@ import logging
 import datajoint as dj
 import re
 import numpy as np
+from tqdm import tqdm
 
 from pipeline import lab, experiment, ephys, report
 from pipeline import get_schema_name
@@ -24,6 +25,7 @@ class FixedAmpUnit(dj.Manual):
     -> ephys.Unit
     ---
     fixed: bool
+    scale: float
     """
 
 
@@ -45,12 +47,13 @@ def apply_amplitude_scaling():
     # safety check, no jrclust results
     assert len(units2fix & 'clustering_method LIKE "jrclust%"') == 0
 
-    for unit in units2fix.proj('unit_amp', 'waveform').fetch(as_dict=True):
+    for unit in tqdm(units2fix.proj('unit_amp', 'waveform').fetch(as_dict=True)):
         amp = unit.pop('unit_amp')
         wf = unit.pop('waveform')
-        (ephys.Unit & unit)._update('unit_amp', amp * amp_scale)
-        (ephys.Unit & unit)._update('waveform', wf * amp_scale)
-        FixedAmpUnit.insert1(dict(unit, fixed=True))
+        with dj.conn().transaction:
+            (ephys.Unit & unit)._update('unit_amp', amp * amp_scale)
+            (ephys.Unit & unit)._update('waveform', wf * amp_scale)
+            FixedAmpUnit.insert1(dict(unit, fixed=True, scale=amp_scale))
 
     # delete cluster_quality figures and remake figures with updated unit_amp
     with dj.config(safemode=False):
