@@ -10,7 +10,7 @@ from tqdm import tqdm
 from datetime import datetime
 
 from pipeline import lab, experiment, ephys, report
-from . import schema, FixHistory
+from pipeline.fixes import schema, FixHistory
 
 log = logging.getLogger(__name__)
 
@@ -39,12 +39,15 @@ def apply_amplitude_scaling():
     Future version of quality control pipeline will apply this scaling.
     """
 
-    amp_scale = 3.01
+    amp_scale = 1/3.01
 
     npx2_inserts = ephys.ProbeInsertion & 'probe_type LIKE "neuropixels 2.0%"'
 
     units2fix = ephys.Unit * ephys.ClusteringLabel & npx2_inserts.proj() & 'quality_control = 1'
     units2fix = units2fix - (FixedAmpUnit & 'fixed=1')  # exclude those that were already fixed
+
+    if not units2fix:
+        return
 
     # safety check, no jrclust results
     assert len(units2fix & 'clustering_method LIKE "jrclust%"') == 0
