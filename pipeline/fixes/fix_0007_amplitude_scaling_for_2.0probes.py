@@ -31,7 +31,7 @@ class FixedAmpUnit(dj.Manual):
     """
 
 
-def apply_amplitude_scaling():
+def apply_amplitude_scaling(insertion_keys={}):
     """
     This is a one-time operation only - April 2020
     Kilosort2 results from neuropixels probe 2.0 requires an additionally scaling factor of 3.01 applied
@@ -39,9 +39,9 @@ def apply_amplitude_scaling():
     Future version of quality control pipeline will apply this scaling.
     """
 
-    amp_scale = 1/3.01
+    amp_scale = 3.01
 
-    npx2_inserts = ephys.ProbeInsertion & 'probe_type LIKE "neuropixels 2.0%"'
+    npx2_inserts = ephys.ProbeInsertion & insertion_keys & 'probe_type LIKE "neuropixels 2.0%"'
 
     units2fix = ephys.Unit * ephys.ClusteringLabel & npx2_inserts.proj() & 'quality_control = 1'
     units2fix = units2fix - (FixedAmpUnit & 'fixed=1')  # exclude those that were already fixed
