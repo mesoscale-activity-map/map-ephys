@@ -117,7 +117,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     print('fetching spike/behavior data')
 
     try:
-        insertion = (ephys.ProbeInsertion.InsertionLocation & insert_key).fetch1()
+        insertion = (ephys.ProbeInsertion.InsertionLocation * ephys.ProbeInsertion.proj('probe_type') & insert_key).fetch1()
         loc = (ephys.ProbeInsertion & insert_key).aggr(ephys.ProbeInsertion.RecordableBrainRegion.proj(
             brain_region='CONCAT(hemisphere, " ", brain_area)'),
             brain_regions='GROUP_CONCAT(brain_region SEPARATOR ", ")').fetch1('brain_regions')
