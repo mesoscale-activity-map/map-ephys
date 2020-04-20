@@ -52,9 +52,9 @@ def apply_amplitude_scaling(insertion_keys={}):
     # safety check, no jrclust results
     assert len(units2fix & 'clustering_method LIKE "jrclust%"') == 0
 
-    fix_key = {'fix_name': pathlib.Path(__file__).name,
+    fix_hist_key = {'fix_name': pathlib.Path(__file__).name,
                'fix_timestamp': datetime.now()}
-    FixHistory.insert1(fix_key)
+    FixHistory.insert1(fix_hist_key)
 
     for unit in tqdm(units2fix.proj('unit_amp', 'waveform').fetch(as_dict=True)):
         amp = unit.pop('unit_amp')
@@ -62,7 +62,7 @@ def apply_amplitude_scaling(insertion_keys={}):
         with dj.conn().transaction:
             (ephys.Unit & unit)._update('unit_amp', amp * amp_scale)
             (ephys.Unit & unit)._update('waveform', wf * amp_scale)
-            FixedAmpUnit.insert1({**fix_key, **unit, 'fixed': True, 'scale': amp_scale})
+            FixedAmpUnit.insert1({**fix_hist_key, **unit, 'fixed': True, 'scale': amp_scale})
 
     # delete cluster_quality figures and remake figures with updated unit_amp
     with dj.config(safemode=False):
