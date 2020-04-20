@@ -116,7 +116,7 @@ def update_waveform(session_keys={}):
                         log.warning('Error: {}'.format(str(e)))
                     return
 
-            with dj.config(safemode=True):
+            with dj.config(safemode=False):
                 (ephys.UnitCellType & key).delete()
 
             FixedWaveformUnit.insert([{**fix_hist_key, **ukey, 'fixed': 1} for ukey in (ephys.Unit & key).fetch('KEY')])
