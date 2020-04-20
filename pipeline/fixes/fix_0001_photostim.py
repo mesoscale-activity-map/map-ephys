@@ -543,6 +543,7 @@ def fix_0001_photostim():
     for s in q.fetch('KEY'):
         fix_session(s)
         verify_session(s)
+        # "FixHistorySession" table is obsolete now (by fix_0007), but this fix is no longer needed
         fix_history.FixHistory.FixHistorySession.insert1({**fh, **s})
 
     fix_history.schema.connection.commit_transaction()

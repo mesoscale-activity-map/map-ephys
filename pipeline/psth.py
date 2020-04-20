@@ -294,9 +294,7 @@ class UnitPsth(dj.Computed):
             self.insert1(key)
             return
 
-        # compute psth & store.
-        # XXX: xmin, xmax+bins (149 here vs 150 in matlab)..
-        #   See also [:1] slice in plots..
+        # compute psth & store
         unit_psth = self.compute_psth(spikes)
 
         self.insert1({**key, 'unit_psth': unit_psth})
@@ -306,10 +304,10 @@ class UnitPsth(dj.Computed):
         spikes = np.concatenate(session_unit_spikes)
 
         xmin, xmax, bins = UnitPsth.psth_params.values()
-        psth = list(np.histogram(spikes, bins=np.arange(xmin, xmax, bins)))
-        psth[0] = psth[0] / len(session_unit_spikes) / bins
+        psth, edges = np.histogram(spikes, bins=np.arange(xmin, xmax, bins))
+        psth = psth / len(session_unit_spikes) / bins
 
-        return np.array(psth)
+        return np.array([psth, edges[1:]])
 
     @classmethod
     def get_plotting_data(cls, unit_key, condition_key):
@@ -331,11 +329,9 @@ class UnitPsth(dj.Computed):
 
         trials = TrialCondition.get_func(condition_key)()
 
-        unit_psth = (UnitPsth & {**condition_key, **unit_key}).fetch1()['unit_psth']
+        unit_psth = (UnitPsth & {**condition_key, **unit_key}).fetch1('unit_psth')
         if unit_psth is None:
             raise Exception('No spikes found for this unit and trial-condition')
-
-        psth, edges = unit_psth
 
         spikes, trials = (ephys.Unit.TrialSpikes & trials & unit_key).fetch(
             'spike_times', 'trial', order_by='trial asc')
@@ -344,7 +340,7 @@ class UnitPsth(dj.Computed):
                   np.concatenate([[t] * len(s)
                                   for s, t in zip(spikes, trials)])]
 
-        return dict(trials=trials, spikes=spikes, psth=(psth, edges[1:]), raster=raster)
+        return dict(trials=trials, spikes=spikes, psth=unit_psth, raster=raster)
 
 
 @schema
