@@ -5,6 +5,7 @@ import sys
 import logging
 from code import interact
 from datetime import datetime
+from textwrap import dedent
 import time
 import numpy as np
 import pandas as pd
@@ -21,9 +22,21 @@ log = logging.getLogger(__name__)
 
 
 def usage_exit():
-    print("usage: {p} [{c}] <args>"
-          .format(p=os.path.basename(sys.argv[0]),
-                  c='|'.join(list(actions.keys()))))
+    print(dedent(
+        '''
+        usage: {} cmd args
+
+        where 'cmd' is one of:
+
+        {}
+        ''').lstrip().rstrip().format(
+            os.path.basename(sys.argv[0]),
+            str().join("  - {}: {}\n".format(k,v[1])
+                       for k,v in actions.items())))
+
+    # print("usage: {p} [{c}] <args>"
+    #       .format(p=os.path.basename(sys.argv[0]),
+    #               c='|'.join(list(actions.keys()))))
     sys.exit(0)
 
 
@@ -355,21 +368,24 @@ def sync_and_external_cleanup():
 
 
 actions = {
-    'ingest-behavior': ingest_behavior,
-    'ingest-ephys': ingest_ephys,
-    'ingest-tracking': ingest_tracking,
-    'ingest-histology': ingest_histology,
-    'auto-ingest': auto_ingest,
-    'populate-psth': populate_psth,
-    'publish': publish,
-    'export-recording': export_recording,
-    'generate-report': generate_report,
-    'sync-report': sync_report,
-    'shell': shell,
-    'erd': erd,
-    'ccfload': ccfload,
-    'automate-computation': automate_computation,
-    'automate-sync-and-cleanup': sync_and_external_cleanup,
-    'load-insertion-location': load_insertion_location,
-    'load-animal': load_animal
+    'ingest-behavior': (ingest_behavior, 'ingest behavior data'),
+    'ingest-ephys': (ingest_ephys, 'ingest ephys data'),
+    'ingest-tracking': (ingest_tracking, 'ingest tracking data'),
+    'ingest-histology': (ingest_histology, 'ingest histology data'),
+    'auto-ingest': (auto_ingest, 'run auto ingest job (load all types)'),
+    'populate-psth': (populate_psth, 'populate psth schema'),
+    'publish': (publish, 'run raw data globus publication'),
+    'export-recording': (export_recording, 'export data to .mat'),
+    'generate-report': (generate_report, 'run report generation logic'),
+    'sync-report': (sync_report, 'sync report data locally'),
+    'shell': (shell, 'interactive shell'),
+    'erd': (erd, 'write DataJoint ERDs to files'),
+    'ccfload': (ccfload, 'load CCF reference atlas'),
+    'automate-computation': (automate_computation,
+                             'run report worker job'),
+    'automate-sync-and-cleanup': (sync_and_external_cleanup,
+                                  'run report cleanup job' ),
+    'load-insertion-location': (load_insertion_location,
+                                'load ProbeInsertions from .xlsx'),
+    'load-animal': (load_animal, 'load subject data from .xlsx')
 }
