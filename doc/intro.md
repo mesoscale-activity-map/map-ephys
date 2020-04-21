@@ -1,27 +1,27 @@
 
 # Map Docs v2 (work in progress)
 
-  * intro
+  * intro (TODO: thinh)
 
-  * schema description
+  * schema description (TODO: thinh)
 
     * reference docs for schemas/tables for all users
 
-  * data flow
+  * data flow (TODO: thinh)
 
     * population steps / dependences, for all users
 
-  * ingestion instructions
+  * ingestion instructions (TODO: chris)
 
     * strictly setup to do data flow/ingest, for experimenters
 
-  * petrel archive
+  * petrel archive (TODO: chris)
 
-  * analysis/plotting/data export library
+  * analysis/plotting/data export library (TODO: thinh)
 
     * describe available plotting / utility functions
 
-  * system mgmt
+  * system mgmt (TODO: chris)
 
     * worker setup
     * navigator setup
