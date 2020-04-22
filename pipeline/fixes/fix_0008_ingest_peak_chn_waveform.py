@@ -98,7 +98,7 @@ def _update_one_session(key):
     if dpath is not None:
         log.info('Found session folder: {}'.format(dpath))
     else:
-        log.warning('Error - No session folder found for {}/{}'.format(h2o, key['session_date']))
+        log.warning('Error - No session folder found for {}/{}. Skipping...'.format(h2o, key['session_date']))
         return False
 
     try:
