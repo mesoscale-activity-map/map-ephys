@@ -169,17 +169,19 @@ class GlobusStorageManager:
         ep, path = self.ep_parts(ep_path)
 
         stack = []
-        stack.append(path)
+        stack.append(path.rstrip('/') if len(path) > 1 else path)
 
         while len(stack):
 
             u = stack.pop()
             e = self.ls('{}:{}'.format(ep, u))
 
-            yield (ep, u, e)
+            yield (ep, u.rstrip('/') if len(u) > 1 else u, e)
+
             for ei in e['DATA']:
+
                 if ei['type'] == 'dir':
-                    stack.append('{}/{}'.format(u, ei['name']))
+                    stack.append('{}/{}'.format(u, ei['name'].lstrip('/')))
                 else:
                     yield (ep, u, ei)
 

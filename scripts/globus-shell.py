@@ -58,20 +58,19 @@ class GlobusShell:
 
     def find(self, ep=None, path=None):
 
-        # FIXME: cwd interpoloate
-
         ep = ep if ep else self._cep
         path = path if path else self._cwd
         path = '/' if path is None else path
 
-        for ep, dirname, node in self._gsm.fts('{}:/{}'.format(ep, path)):
+        for ep, dirname, node in self._gsm.fts('{}:{}'.format(ep, path)):
 
             if node['DATA_TYPE'] == 'file':
                 t, basename = 'f', node['name']
             else:
-                t, basename = 'd', node['path']
+                t, basename = 'd', None # node['path']
 
-            print('{}: {}:{}/{}'.format(t, ep, dirname, basename))
+            print('{}: {}:{}/{}'.format(t, ep, dirname, basename)
+                  if t == 'f' else '{}: {}:{}'.format(t, ep, dirname))
 
     def mv(self, ep1, path1, ep2, path2):
 
@@ -146,7 +145,7 @@ class GlobusShell:
 
             cmd, args = data[0], data[1:]
 
-            print('cmd input: {} -> ({}, {}'.format(data, cmd, args))
+            log.debug('cmd input: {} -> ({}, {}'.format(data, cmd, args))
 
             if not cmd or cmd.startswith('#'):
                 continue
