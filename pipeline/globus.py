@@ -181,9 +181,12 @@ class GlobusStorageManager:
             for ei in e['DATA']:
 
                 if ei['type'] == 'dir':
-                    stack.append('{}/{}'.format(u, ei['name'].lstrip('/')))
+                    stack.append('{}/{}'.format(u, ei['name'])
+                                 if u != '/' else '/{}'.format(ei['name']))
                 else:
                     yield (ep, u, ei)
+
+
 
     def mkdir(self, ep_path):
         ''' create a directory at ep_path '''

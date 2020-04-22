@@ -67,7 +67,7 @@ class GlobusShell:
             if node['DATA_TYPE'] == 'file':
                 t, basename = 'f', node['name']
             else:
-                t, basename = 'd', None # node['path']
+                t, basename = 'd', None
 
             print('{}: {}:{}/{}'.format(t, ep, dirname, basename)
                   if t == 'f' else '{}: {}:{}'.format(t, ep, dirname))
