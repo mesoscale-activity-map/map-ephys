@@ -260,7 +260,7 @@ class EphysIngest(dj.Imported):
                 if method in ['jrclust_v3', 'jrclust_v4']:
                     wf_chn_idx = 0
                 elif method in ['kilosort2']:
-                    wf_chn_idx = vmax_unit_site[i]
+                    wf_chn_idx = np.where(data['ks_channel_map'] == vmax_unit_site[i])[0][0]
 
                 ib.insert1({**skey, **insertion_key,
                             **site2electrode_map[vmax_unit_site[i]],
@@ -748,7 +748,8 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
         'trial_fix': trial_fix,
         'metrics': metrics,
         'creation_time': creation_time,
-        'clustering_label': clustering_label
+        'clustering_label': clustering_label,
+        'ks_channel_map': ks.data['channel_map'] + 1,  # channel numbering in this pipeline is 1-based indexed
     }
 
     return data
