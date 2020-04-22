@@ -64,62 +64,68 @@ def update_waveform(session_keys={}):
 
     fix_hist_key = {'fix_name': pathlib.Path(__file__).name,
                     'fix_timestamp': datetime.now()}
-    FixHistory.insert1(fix_hist_key)
 
     for key in sessions_2_update.fetch('KEY'):
-        log.info('\n======================================================')
-        log.info('Waveform update for key: {k}'.format(k=key))
-
-        #
-        # Find Ephys Recording
-        #
-        key = (experiment.Session & key).fetch1()
-        sinfo = ((lab.WaterRestriction
-                  * lab.Subject.proj()
-                  * experiment.Session.proj(..., '-session_time')) & key).fetch1()
-
-        rigpaths = get_ephys_paths()
-        h2o = sinfo['water_restriction_number']
-
-        sess_time = (datetime.min + key['session_time']).time()
-        sess_datetime = datetime.combine(key['session_date'], sess_time)
-
-        for rigpath in rigpaths:
-            dpath, dglob = _get_sess_dir(rigpath, h2o, sess_datetime)
-            if dpath is not None:
-                break
-
-        if dpath is not None:
-            log.info('Found session folder: {}'.format(dpath))
-        else:
-            log.warning('Error - No session folder found for {}/{}'.format(h2o, key['session_date']))
-            return
-
-        try:
-            clustering_files = _match_probe_to_ephys(h2o, dpath, dglob)
-        except FileNotFoundError as e:
-            log.warning(str(e) + '. Skipping...')
-            return
-
-        with ephys.Unit.connection.transaction:
-            for probe_no, (f, cluster_method, npx_meta) in clustering_files.items():
-                try:
-                    log.info('------ Start loading clustering results for probe: {} ------'.format(probe_no))
-                    loader = cluster_loader_map[cluster_method]
-                    dj.conn().ping()
-                    _wf_update(loader(sinfo, *f), probe_no, npx_meta, rigpath)
-                except (ProbeInsertionError, ClusterMetricError, FileNotFoundError) as e:
-                    dj.conn().cancel_transaction()  # either successful fix of all probes, or none at all
-                    if isinstance(e, ProbeInsertionError):
-                        log.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
-                    else:
-                        log.warning('Error: {}'.format(str(e)))
-                    return
-
-            with dj.config(safemode=False):
-                (ephys.UnitCellType & key).delete()
-
+        success = _update_one_session(key)
+        if success:
+            FixHistory.insert1(fix_hist_key, skip_duplicates=True)
             FixedWaveformUnit.insert([{**fix_hist_key, **ukey, 'fixed': 1} for ukey in (ephys.Unit & key).fetch('KEY')])
+
+
+def _update_one_session(key):
+    log.info('\n======================================================')
+    log.info('Waveform update for key: {k}'.format(k=key))
+
+    #
+    # Find Ephys Recording
+    #
+    key = (experiment.Session & key).fetch1()
+    sinfo = ((lab.WaterRestriction
+              * lab.Subject.proj()
+              * experiment.Session.proj(..., '-session_time')) & key).fetch1()
+
+    rigpaths = get_ephys_paths()
+    h2o = sinfo['water_restriction_number']
+
+    sess_time = (datetime.min + key['session_time']).time()
+    sess_datetime = datetime.combine(key['session_date'], sess_time)
+
+    for rigpath in rigpaths:
+        dpath, dglob = _get_sess_dir(rigpath, h2o, sess_datetime)
+        if dpath is not None:
+            break
+
+    if dpath is not None:
+        log.info('Found session folder: {}'.format(dpath))
+    else:
+        log.warning('Error - No session folder found for {}/{}. Skipping...'.format(h2o, key['session_date']))
+        return False
+
+    try:
+        clustering_files = _match_probe_to_ephys(h2o, dpath, dglob)
+    except FileNotFoundError as e:
+        log.warning(str(e) + '. Skipping...')
+        return False
+
+    with ephys.Unit.connection.transaction:
+        for probe_no, (f, cluster_method, npx_meta) in clustering_files.items():
+            try:
+                log.info('------ Start loading clustering results for probe: {} ------'.format(probe_no))
+                loader = cluster_loader_map[cluster_method]
+                dj.conn().ping()
+                _wf_update(loader(sinfo, *f), probe_no, npx_meta, rigpath)
+            except (ProbeInsertionError, ClusterMetricError, FileNotFoundError) as e:
+                dj.conn().cancel_transaction()  # either successful fix of all probes, or none at all
+                if isinstance(e, ProbeInsertionError):
+                    log.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
+                else:
+                    log.warning('Error: {}'.format(str(e)))
+                return False
+
+        with dj.config(safemode=False):
+            (ephys.UnitCellType & key).delete()
+
+    return True
 
 
 def _wf_update(data, probe, npx_meta, rigpath):
@@ -164,7 +170,8 @@ def _wf_update(data, probe, npx_meta, rigpath):
 
     # _update() on waveform
     for i, u in enumerate(set(units)):
-        wf = unit_wav[i][vmax_unit_site[i]]
+        wf_chn_idx = np.where(data['ks_channel_map'] == vmax_unit_site[i])[0][0]
+        wf = unit_wav[i][wf_chn_idx]
         (ephys.Unit & {**skey, **insertion_key, 'clustering_method': method,
                        'unit': u})._update('waveform', wf)
 
@@ -557,7 +564,8 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
         'trial_fix': trial_fix,
         'metrics': metrics,
         'creation_time': creation_time,
-        'clustering_label': clustering_label
+        'clustering_label': clustering_label,
+        'ks_channel_map': ks.data['channel_map'] + 1,  # channel numbering in this pipeline is 1-based indexed
     }
 
     return data
