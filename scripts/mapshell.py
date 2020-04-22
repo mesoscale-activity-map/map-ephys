@@ -19,4 +19,4 @@ if __name__ == '__main__':
                        dj.config.get('loglevel', 'INFO')))
 
     action = sys.argv[1]
-    shell.actions[action][1](*sys.argv[2:])
+    shell.actions[action][0](*sys.argv[2:])
