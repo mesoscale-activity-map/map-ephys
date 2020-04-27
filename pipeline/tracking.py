@@ -87,10 +87,36 @@ class Tracking(dj.Imported):
         right_paw_likelihood:   longblob        # right_paw location likelihood
         """
 
+    class WhiskerTracking(dj.Part):
+        definition = """
+        -> Tracking
+        whisker_id:           uuid
+        ---
+        whisker_name:         varchar(36)
+        unique index (whisker_name)
+        whisker_x:            longblob        # whisker x location (px)
+        whisker_y:            longblob        # whisker y location (px)
+        whisker_likelihood:   longblob        # whisker location likelihood
+        """
+
     @property
     def tracking_features(self):
         return {'NoseTracking': Tracking.NoseTracking,
                 'TongueTracking': Tracking.TongueTracking,
                 'JawTracking': Tracking.JawTracking,
                 'LeftPawTracking': Tracking.LeftPawTracking,
-                'RightPawTracking': Tracking.RightPawTracking}
+                'RightPawTracking': Tracking.RightPawTracking,
+                'WhiskerTracking': Tracking.WhiskerTracking}
+
+
+@schema
+class TrackedWhisker(dj.Manual):
+    definition = """
+    -> Tracking.WhiskerTracking
+    """
+
+    class Whisker(dj.Part):
+        definition = """
+        -> master
+        lab.Whisker
+        """

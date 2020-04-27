@@ -4,6 +4,7 @@ import logging
 import pathlib
 from glob import glob
 from datetime import datetime
+import uuid
 
 import numpy as np
 import datajoint as dj
@@ -107,10 +108,10 @@ class TrackingIngest(dj.Imported):
                     break
 
             if campath is None:
-                log.info('Video-Trial mapper file (.txt) not found - Skipping...')
-                continue
-
-            tmap = self.load_campath(campath)  # file:trial
+                log.info('Video-Trial mapper file (.txt) not found - Using one-to-one trial mapping')
+                tmap = {tr: tr for tr in trials}
+            else:
+                tmap = self.load_campath(campath)  # file:trial
 
             n_tmap = len(tmap)
             log.info('loading tracking data for {} trials'.format(n_tmap))
@@ -199,6 +200,11 @@ class TrackingIngest(dj.Imported):
                            if k not in fmap},
                         **{fmap[k]: v for k, v in recs['paw_right'].items()
                            if k in fmap}}, allow_direct_insert=True)
+
+                # special handling for whisker(s)
+                whisker_keys = [k for k in recs if 'whisker' in k]
+                tracking.Tracking.WhiskerTracking.insert([{**recs[k], 'whisker_id': uuid.uuid4(), 'whisker_name': k}
+                                                          for k in whisker_keys], allow_direct_insert=True)
 
                 tracking_files.append({**key, 'trial': tmap[t], 'tracking_device': tdev,
                                        'tracking_file': str(tfull.relative_to(tdat))})
