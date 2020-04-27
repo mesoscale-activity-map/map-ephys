@@ -5,7 +5,7 @@ MAP Motion Tracking Schema
 
 import datajoint as dj
 
-from . import experiment
+from . import experiment, lab
 from . import get_schema_name
 
 schema = dj.schema(get_schema_name('tracking'))
@@ -118,5 +118,5 @@ class TrackedWhisker(dj.Manual):
     class Whisker(dj.Part):
         definition = """
         -> master
-        lab.Whisker
+        -> lab.Whisker
         """
