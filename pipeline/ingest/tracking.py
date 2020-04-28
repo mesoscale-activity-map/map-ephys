@@ -4,6 +4,7 @@ import logging
 import pathlib
 from glob import glob
 from datetime import datetime
+import uuid
 
 import numpy as np
 import datajoint as dj
@@ -98,19 +99,32 @@ class TrackingIngest(dj.Imported):
                 continue
 
             campath = None
+            tpos = None
             for tpos_name in self.camera_position_mapper[cam_pos]:
                 camtrial_fn = '{}_{}_{}.txt'.format(h2o, sdate_sml, tpos_name)
                 log.info('trying camera position trial map: {}'.format(tpath / camtrial_fn))
                 if (tpath / camtrial_fn).exists():
                     campath = tpath / camtrial_fn
                     tpos = tpos_name
+                    log.info('Matched! Using {}'.format(tpos))
                     break
 
             if campath is None:
-                log.info('Video-Trial mapper file (.txt) not found - Skipping...')
-                continue
+                log.info('Video-Trial mapper file (.txt) not found - Using one-to-one trial mapping')
+                tmap = {tr: tr for tr in trials}  # one-to-one map
+                for tpos_name in self.camera_position_mapper[cam_pos]:
+                    camtrial_fn = '{}*_{}_*-*.csv'.format(h2o, tpos_name)
+                    log.info('trying camera position trial map: {}'.format(tpath / camtrial_fn))
+                    if list(tpath.glob(camtrial_fn)):
+                        tpos = tpos_name
+                        log.info('Matched! Using {}'.format(tpos))
+                        break
+            else:
+                tmap = self.load_campath(campath)  # file:trial
 
-            tmap = self.load_campath(campath)  # file:trial
+            if tpos is None:
+                log.warning('No tracking data for camera: {}.. skipping'.format(cam_pos))
+                continue
 
             n_tmap = len(tmap)
             log.info('loading tracking data for {} trials'.format(n_tmap))
@@ -199,6 +213,11 @@ class TrackingIngest(dj.Imported):
                            if k not in fmap},
                         **{fmap[k]: v for k, v in recs['paw_right'].items()
                            if k in fmap}}, allow_direct_insert=True)
+
+                # special handling for whisker(s)
+                whisker_keys = [k for k in recs if 'whisker' in k]
+                tracking.Tracking.WhiskerTracking.insert([{**recs[k], 'whisker_id': uuid.uuid4(), 'whisker_name': k}
+                                                          for k in whisker_keys], allow_direct_insert=True)
 
                 tracking_files.append({**key, 'trial': tmap[t], 'tracking_device': tdev,
                                        'tracking_file': str(tfull.relative_to(tdat))})
