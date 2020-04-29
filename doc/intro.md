@@ -15,7 +15,7 @@ distributed batch computations. The pipeline is hosted in the [Amazon
 Cloud](https://aws.amazon.com) and administered by [Vathes
 LLC](https://www.vathes.com/).
 
-![MAP Data Architecture](doc/map-data-arch.png)
+![MAP Data Architecture](./static/map-data-arch.png)
 
 The first part of the pipeline deals with entering manual data, and ingesting
 and preprocessing the raw acquired data.  Static information like subject
@@ -53,7 +53,7 @@ using DataJoint and also via more casual interfaces under development. Cloud
 hosting also allows centralizing the project data into a single data repository
 which facilitates easier long-term data stewardship and maintenance.
  
-![MAP Data Architecture](./doc/static/map-data-arch.png)
+![MAP Workflow Diagram](./static/MAP_workflow_diagram.svg)
  
 When possible, DataJoint schemas are consistent and compatible with the
 [Neurodata Without Borders (NWB)](https://www.nwb.org/) data format, a data
