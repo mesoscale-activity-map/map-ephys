@@ -53,7 +53,7 @@ using DataJoint and also via more casual interfaces under development. Cloud
 hosting also allows centralizing the project data into a single data repository
 which facilitates easier long-term data stewardship and maintenance.
  
-![MAP Workflow Diagram](./static/MAP_workflow_diagram.svg)
+![MAP Workflow Diagram](./static/map_workflow_diagram.png)
  
 When possible, DataJoint schemas are consistent and compatible with the
 [Neurodata Without Borders (NWB)](https://www.nwb.org/) data format, a data
