@@ -383,3 +383,13 @@ class PhotostimDevice(dj.Lookup):
        ('LaserGem473', 473, 'Laser (Laser Quantum, Gem 473)'),
        ('LED470', 470, 'LED (Thor Labs, M470F3 - 470 nm, 17.2 mW (Min) Fiber-Coupled LED)'),
        ('OBIS470', 473, 'OBIS 473nm LX 50mW Laser System: Fiber Pigtail (Coherent Inc)')]
+
+
+@schema
+class Whisker(dj.Lookup):
+    definition = """
+    whisker: varchar(32)
+    """
+    contents = zip(['B1', 'B2', 'B3',
+                    'C1', 'C2', 'C3',
+                    'D1', 'D2', 'D3'])
