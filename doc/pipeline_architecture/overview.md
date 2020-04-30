@@ -25,12 +25,12 @@ separation into multiple schemas is merely for logical grouping and ogranization
 
 ## lab *schema*
 
-### The "Animal" part
+### animal
 
 ![lab Animal](./static/lab_subject.svg)
 
 
-### The "Probe" part
+### probe
 
 ![lab Probe](./static/lab_probe.svg)
 
@@ -39,7 +39,7 @@ Accompanying `lab.ProbeType` is a part-table `lab.ProbeType.Electrode`,
 describing full electrode geometry (e.g. site location)
  and organization (e.g. shank, shank column/row) for all the electrode sites of this probe (e.g. 960 sites for Neuropixels 1.0)
  
-Whereas `lab.Probe` represents one physical probe, identified by a unique number (e.g. serial number).
+Whereas `lab.Probe` represents one physical probe, identified by a unique ID (e.g. serial number).
 
 `lab.ElectrodeConfig` specifies one Electrode Configuration used for the recording, 
 particularly which subset of the electrode sites used for recording (e.g. which 384 electrodes from Neuropixels 1.0 probe)
@@ -47,7 +47,7 @@ particularly which subset of the electrode sites used for recording (e.g. which 
 
 ## experiment *schema*
 
-### The session/trial part
+### session/trial
 
 ![experiment session](./static/experiment_session.svg)
 
@@ -79,7 +79,7 @@ as the parent table. Each of the part-table contains time-series data of the tra
 
 ## ephys *schema*
 
-### The probe insertion part
+### probe-insertion
 
 ![ephys probe_insertion](./static/ephys_probe_insertion.svg)
 
@@ -99,7 +99,7 @@ The `ephys.ProbeInsertion.RecordableBrainRegion` records the one or multiple bra
   The exact insertion location is determined using histology data, stored in the `histology` schema.
 
 
-### The spike-sorting part
+### spike-sorting 
 
 ![ephys unit](./static/ephys_unit.svg)
 
@@ -168,6 +168,26 @@ Tables in the `report` schema are at the leaf level of this pipeline, computing 
 
 As shown in the diagram, report figures are categorized into 4 levels:
 + Project-level
+
+<img src="./static/project_tracks_plot.png" alt="project_tracks_plot" width="200" height="200">
+
 + Session-level
+
+|<img src="./static/session_tracks_plot.png" alt="session_tracks_plot" width="200" height="200">
+|<img src="./static/session_behav_perf.png" alt="session_behav_perf" width="200" height="200">
+|<img src="./static/session_CD.png" alt="session_CD" width="200" height="200">
+
 + Probe-level
+
+<img src="./static/probe_clustering_quality.png" alt="probe_clustering_quality" width="100" height="100">
+
+![probe_clustering_quality](./static/probe_clustering_quality.png)
+![probe_unit_characteristic](./static/probe_unit_characteristic.png)
+![probe_group_psth](./static/probe_group_psth.png)
+![probe_group_photostim](./static/probe_group_photostim.png)
+
 + Unit-level
+
+![unit_unit_psth](./static/unit_unit_psth.png)
+![unit_unit_behavior](./static/unit_unit_behavior.png)
+
