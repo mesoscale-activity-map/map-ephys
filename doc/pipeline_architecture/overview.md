@@ -168,28 +168,29 @@ Tables in the `report` schema are at the leaf level of this pipeline, computing 
 
 As shown in the diagram, report figures are categorized into 4 levels.
 
-### Project-level
+#### project-level
 
 <img src="./static/project_tracks_plot.png" alt="project_tracks_plot" width="200" height="200">
 
-### Session-level
+#### session-level
 
 |`report.SessionLevelProbeTrack`|`report.SessionLevelReport`|`report.SessionLevelCDReport`
 |:---------------------------:|:---------------------------:|:---------------------------:
 |<img src="./static/session_tracks_plot.png" alt="session_tracks_plot" width="200" height="200">|<img src="./static/session_behav_perf.png" alt="session_behav_perf" width="200" height="200">|<img src="./static/session_CD.png" alt="session_CD" width="200" height="200">
 
-### Probe-level
+#### probe-level
 
 `report.ProbeLevelReport`
 
-|<img src="./static/probe_clustering_quality.png" alt="probe_clustering_quality" width="200" height="200">|<img src="./static/probe_unit_characteristic.png" alt="probe_unit_characteristic" width="200" height="200">|<img src="./static/probe_group_psth.png" alt="probe_group_psth" width="200" height="200">
+<img src="./static/probe_clustering_quality.png" alt="probe_clustering_quality" width="200" height="200">
+<img src="./static/probe_unit_characteristic.png" alt="probe_unit_characteristic" width="200" height="200">
+<img src="./static/probe_group_psth.png" alt="probe_group_psth" width="600" height="300">
 
 `report.ProbeLevelPhotostimEffectReport`
 
 <img src="./static/probe_group_photostim.png" alt="probe_group_photostim" width="600" height="150">
 
-
-### Unit-level
+#### unit-level
 
 |`report.UnitLevelEphysReport`|`report.UnitLevelTrackingReport`
 |:---------------------------:|:---------------------------:|
