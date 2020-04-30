@@ -27,12 +27,12 @@ separation into multiple schemas is merely for logical grouping and ogranization
 
 ### The "Animal" part
 
-![lab Animal](./static/lab_subject.PNG)
+![lab Animal](./static/lab_subject.svg)
 
 
 ### The "Probe" part
 
-![lab Probe](./static/lab_probe.PNG)
+![lab Probe](./static/lab_probe.svg)
 
 In the above ***Probe*** design, `lab.ProbeType` represents a type of probe: Tetrode, Neuropixels 1.0, 2.0, multi-shank, single-shank,
 Accompanying `lab.ProbeType` is a part-table `lab.ProbeType.Electrode`, 

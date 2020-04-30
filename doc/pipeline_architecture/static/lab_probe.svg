@@ -1,0 +1,90 @@
+<svg height="224pt" viewBox="0.00 0.00 362.50 224.00" width="363pt" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g class="graph" id="graph0" transform="scale(1 1) rotate(0) translate(4 220)">
+<title>%3</title>
+<polygon fill="#ffffff" points="-4,4 -4,-220 358.5,-220 358.5,4 -4,4" stroke="transparent"/>
+<!-- lab.ElectrodeConfig.ElectrodeGroup -->
+<g class="node" id="node1">
+<title>lab.ElectrodeConfig.ElectrodeGroup</title>
+<g id="a_node1"><a xlink:title="→ lab.ElectrodeConfigelectrode_group      ">
+<polygon fill="transparent" points="354.5,-74 182.5,-74 182.5,-55 354.5,-55 354.5,-74" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="190.5" y="-63">lab.ElectrodeConfig.ElectrodeGroup</text>
+</a>
+</g>
+</g>
+<!-- lab.ElectrodeConfig.Electrode -->
+<g class="node" id="node3">
+<title>lab.ElectrodeConfig.Electrode</title>
+<g id="a_node3"><a xlink:title="→ lab.ElectrodeConfig.ElectrodeGroup→ lab.ProbeType.Electrode------------------------------is_used              ">
+<polygon fill="transparent" points="238.5,-19 92.5,-19 92.5,0 238.5,0 238.5,-19" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="middle" x="165.5" y="-7">lab.ElectrodeConfig.Electrode</text>
+</a>
+</g>
+</g>
+<!-- lab.ElectrodeConfig.ElectrodeGroup&#45;&gt;lab.ElectrodeConfig.Electrode -->
+<g class="edge" id="edge1">
+<title>lab.ElectrodeConfig.ElectrodeGroup-&gt;lab.ElectrodeConfig.Electrode</title>
+<path d="M250.5588,-54.9197C231.7691,-44.8864 202.4231,-29.2162 183.5812,-19.155" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.ProbeType -->
+<g class="node" id="node2">
+<title>lab.ProbeType</title>
+<g id="a_node2"><a xlink:title="probe_type           ">
+<polygon fill="#000000" fill-opacity="0.125490" points="101,-216 22,-216 22,-181 101,-181 101,-216" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="30" y="-197">lab.ProbeType</text>
+</a>
+</g>
+</g>
+<!-- lab.ProbeType.Electrode -->
+<g class="node" id="node4">
+<title>lab.ProbeType.Electrode</title>
+<g id="a_node4"><a xlink:title="→ lab.ProbeTypeelectrode            ------------------------------shank                shank_col            shank_row            x_coord=null         y_coord=null         z_coord=0            ">
+<polygon fill="transparent" points="123,-137 0,-137 0,-118 123,-118 123,-137" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="8" y="-126">lab.ProbeType.Electrode</text>
+</a>
+</g>
+</g>
+<!-- lab.ProbeType&#45;&gt;lab.ProbeType.Electrode -->
+<g class="edge" id="edge2">
+<title>lab.ProbeType-&gt;lab.ProbeType.Electrode</title>
+<path d="M61.5,-180.9494C61.5,-167.1517 61.5,-148.4447 61.5,-137.2141" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.Probe -->
+<g class="node" id="node5">
+<title>lab.Probe</title>
+<g id="a_node5"><a xlink:title="probe                ------------------------------→ lab.ProbeTypeprobe_comment=&quot;&quot;     ">
+<polygon fill="#000000" fill-opacity="0.125490" points="199.5,-145 141.5,-145 141.5,-110 199.5,-110 199.5,-145" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="149.5" y="-126">lab.Probe</text>
+</a>
+</g>
+</g>
+<!-- lab.ProbeType&#45;&gt;lab.Probe -->
+<g class="edge" id="edge3">
+<title>lab.ProbeType-&gt;lab.Probe</title>
+<path d="M88.4438,-180.9494C105.2133,-170.0262 126.7062,-156.0262 143.4884,-145.0947" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.ElectrodeConfig -->
+<g class="node" id="node6">
+<title>lab.ElectrodeConfig</title>
+<g id="a_node6"><a xlink:title="→ lab.ProbeTypeelectrode_config_name ------------------------------electrode_config_hash UNIQUE INDEX (electrode_config_hash)">
+<polygon fill="#000000" fill-opacity="0.125490" points="319,-145 218,-145 218,-110 319,-110 319,-145" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="226" y="-126">lab.ElectrodeConfig</text>
+</a>
+</g>
+</g>
+<!-- lab.ProbeType&#45;&gt;lab.ElectrodeConfig -->
+<g class="edge" id="edge4">
+<title>lab.ProbeType-&gt;lab.ElectrodeConfig</title>
+<path d="M101.4117,-184.8105C134.5422,-173.4469 181.8653,-157.2153 217.6965,-144.9254" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.ProbeType.Electrode&#45;&gt;lab.ElectrodeConfig.Electrode -->
+<g class="edge" id="edge5">
+<title>lab.ProbeType.Electrode-&gt;lab.ElectrodeConfig.Electrode</title>
+<path d="M70.0108,-117.8436C89.5127,-95.7164 137.2568,-41.5452 156.8716,-19.2899" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.ElectrodeConfig&#45;&gt;lab.ElectrodeConfig.ElectrodeGroup -->
+<g class="edge" id="edge6">
+<title>lab.ElectrodeConfig-&gt;lab.ElectrodeConfig.ElectrodeGroup</title>
+<path d="M268.5,-109.951C268.5,-98.4459 268.5,-83.8292 268.5,-74.3243" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+</g>
+</svg>
