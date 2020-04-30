@@ -132,6 +132,30 @@ The histology data in the MAP pipeline consists of 2 types:
  - provides the x, y, z of the electrode site in CCF coordinate
 + Probe tracks, the manually annotated points of the probe tracks, stored in `histology.LabeledProbeTrack`
 
-A unit's CCF location can be indirectly acquired by cross check the electrode site associated with that unit
+A unit's CCF location can be indirectly determined by cross checking the electrode site associated with that unit
  and the CCF location of the electrode site.
+
+
+## psth *schema*
+
+![psth](./static/psth_all.svg)
+
+For each `ephys.Unit`, unit PSTHs are computed from the trial spike times (`ephys.Unit.TrialSpikes`),
+ for different trial conditions. Hence, a `psth.TrialCondition` table is defined to store different condition criteria:
+
+Some example trial-condition includes:
++ "good_noearlylick_hit": no early-lick with correct response trials
++ "good_noearlylick_left_hit": no early-lick with correct response left-lick instructed trials
++ "good_noearlylick_right_miss": no early-lick with incorrect response right-lick instructed trials
++ "all_noearlylick_nostim": no early-lick with no photostim trials
++ "all_noearlylick_left_alm_stim": no early-lick with left-ALM photostim trials
+
+The `psth.PeriodSelectivity` table perform the selectivity computation and store the results
+ for each unit at each period as defined in the `experiment.Period` table. There are 3 periods defined:
++ Sample
++ Delay
++ Response
+
+The `psth.UnitSelectivity` table aggregates the 3 period-selectivity for each unit, computed in `psth.PeriodSelectivity`,
+ and computes the overall selectivity for that unit. 
 
