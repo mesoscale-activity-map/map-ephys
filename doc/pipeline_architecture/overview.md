@@ -176,9 +176,7 @@ As shown in the diagram, report figures are categorized into 4 levels.
 
 |`report.SessionLevelProbeTrack`|`report.SessionLevelReport`|`report.SessionLevelCDReport`
 |:---------------------------:|:---------------------------:|:---------------------------:
-|<img src="./static/session_tracks_plot.png" alt="session_tracks_plot" width="200" height="200">
-|<img src="./static/session_behav_perf.png" alt="session_behav_perf" width="200" height="200">
-|<img src="./static/session_CD.png" alt="session_CD" width="200" height="200">
+|<img src="./static/session_tracks_plot.png" alt="session_tracks_plot" width="200" height="200">|<img src="./static/session_behav_perf.png" alt="session_behav_perf" width="200" height="200">|<img src="./static/session_CD.png" alt="session_CD" width="200" height="200">
 
 ### Probe-level
 
@@ -197,6 +195,5 @@ As shown in the diagram, report figures are categorized into 4 levels.
 
 |`report.UnitLevelEphysReport`|`report.UnitLevelTrackingReport`
 |:---------------------------:|:---------------------------:|
-|<img src="./static/unit_unit_psth.png" alt="unit_unit_psth" width="200" height="200">
-|<img src="./static/unit_unit_behavior.png" alt="unit_unit_behavior" width="200" height="200">
+|<img src="./static/unit_unit_psth.png" alt="unit_unit_psth" width="200" height="200">|<img src="./static/unit_unit_behavior.png" alt="unit_unit_behavior" width="200" height="200">
 
