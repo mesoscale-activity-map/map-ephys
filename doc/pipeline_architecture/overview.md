@@ -173,21 +173,36 @@ As shown in the diagram, report figures are categorized into 4 levels:
 
 + Session-level
 
+|`report.SessionLevelProbeTrack`
+|`report.SessionLevelReport`
+|`report.SessionLevelCDReport`
+|:---------------------------:
+|:---------------------------:
+|:---------------------------:
 |<img src="./static/session_tracks_plot.png" alt="session_tracks_plot" width="200" height="200">
 |<img src="./static/session_behav_perf.png" alt="session_behav_perf" width="200" height="200">
 |<img src="./static/session_CD.png" alt="session_CD" width="200" height="200">
 
 + Probe-level
 
-<img src="./static/probe_clustering_quality.png" alt="probe_clustering_quality" width="100" height="100">
+`report.ProbeLevelReport`
 
-![probe_clustering_quality](./static/probe_clustering_quality.png)
-![probe_unit_characteristic](./static/probe_unit_characteristic.png)
-![probe_group_psth](./static/probe_group_psth.png)
-![probe_group_photostim](./static/probe_group_photostim.png)
+|<img src="./static/probe_clustering_quality.png" alt="probe_clustering_quality" width="200" height="200">
+|<img src="./static/probe_unit_characteristic.png" alt="probe_unit_characteristic" width="200" height="200">
+|<img src="./static/probe_group_psth.png" alt="probe_group_psth" width="200" height="200">
+
+`report.ProbeLevelPhotostimEffectReport`
+
+<img src="./static/probe_group_photostim.png" alt="probe_group_photostim" width="200" height="200">
+
 
 + Unit-level
 
-![unit_unit_psth](./static/unit_unit_psth.png)
-![unit_unit_behavior](./static/unit_unit_behavior.png)
+`report.UnitLevelEphysReport`
+
+<img src="./static/unit_unit_psth.png" alt="unit_unit_psth" width="200" height="200">
+
+`report.UnitLevelTrackingReport`
+
+<img src="./static/unit_unit_behavior.png" alt="unit_unit_behavior" width="200" height="200">
 
