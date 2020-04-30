@@ -166,43 +166,37 @@ The `psth.UnitSelectivity` table aggregates the 3 period-selectivity for each un
 Tables in the `report` schema are at the leaf level of this pipeline, computing and storing the figures
  used for visualization and reporting (via the [MAP Web GUI](http://map-navigator.datajoint.io/))
 
-As shown in the diagram, report figures are categorized into 4 levels:
-+ Project-level
+As shown in the diagram, report figures are categorized into 4 levels.
+
+### Project-level
 
 <img src="./static/project_tracks_plot.png" alt="project_tracks_plot" width="200" height="200">
 
-+ Session-level
+### Session-level
 
-|`report.SessionLevelProbeTrack`
-|`report.SessionLevelReport`
-|`report.SessionLevelCDReport`
-|:---------------------------:
-|:---------------------------:
-|:---------------------------:
+|`report.SessionLevelProbeTrack`|`report.SessionLevelReport`|`report.SessionLevelCDReport`
+|:---------------------------:|:---------------------------:|:---------------------------:
 |<img src="./static/session_tracks_plot.png" alt="session_tracks_plot" width="200" height="200">
 |<img src="./static/session_behav_perf.png" alt="session_behav_perf" width="200" height="200">
 |<img src="./static/session_CD.png" alt="session_CD" width="200" height="200">
 
-+ Probe-level
+### Probe-level
 
 `report.ProbeLevelReport`
 
 |<img src="./static/probe_clustering_quality.png" alt="probe_clustering_quality" width="200" height="200">
 |<img src="./static/probe_unit_characteristic.png" alt="probe_unit_characteristic" width="200" height="200">
-|<img src="./static/probe_group_psth.png" alt="probe_group_psth" width="200" height="200">
+|<img src="./static/probe_group_psth.png" alt="probe_group_psth" width="400" height="200">
 
 `report.ProbeLevelPhotostimEffectReport`
 
-<img src="./static/probe_group_photostim.png" alt="probe_group_photostim" width="200" height="200">
+<img src="./static/probe_group_photostim.png" alt="probe_group_photostim" width="600" height="150">
 
 
-+ Unit-level
+### Unit-level
 
-`report.UnitLevelEphysReport`
-
-<img src="./static/unit_unit_psth.png" alt="unit_unit_psth" width="200" height="200">
-
-`report.UnitLevelTrackingReport`
-
-<img src="./static/unit_unit_behavior.png" alt="unit_unit_behavior" width="200" height="200">
+|`report.UnitLevelEphysReport`|`report.UnitLevelTrackingReport`
+|:---------------------------:|:---------------------------:|
+|<img src="./static/unit_unit_psth.png" alt="unit_unit_psth" width="200" height="200">
+|<img src="./static/unit_unit_behavior.png" alt="unit_unit_behavior" width="200" height="200">
 
