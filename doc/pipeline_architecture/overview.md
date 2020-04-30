@@ -184,7 +184,7 @@ As shown in the diagram, report figures are categorized into 4 levels.
 
 |clustering_quality|unit_characteristic|group_psth
 |:---------------------------:|:---------------------------:|:---------------------------:
-|<img src="./static/probe_clustering_quality.png" alt="probe_clustering_quality" width="200" height="200">|<img src="./static/probe_unit_characteristic.png" alt="probe_unit_characteristic" width="200" height="200">|<img src="./static/probe_group_psth.png" alt="probe_group_psth" width="600" height="300">
+|<img src="./static/probe_clustering_quality.png" alt="probe_clustering_quality" width="200" height="200">|<img src="./static/probe_unit_characteristic.png" alt="probe_unit_characteristic" width="200" height="200">|<img src="./static/probe_group_psth.png" alt="probe_group_psth" width="400" height="200">
 
 `report.ProbeLevelPhotostimEffectReport`
 
