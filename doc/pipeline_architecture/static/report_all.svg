@@ -1,0 +1,164 @@
+<svg height="247pt" viewBox="0.00 0.00 911.00 247.00" width="911pt" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g class="graph" id="graph0" transform="scale(1 1) rotate(0) translate(4 243)">
+<title>%3</title>
+<polygon fill="#ffffff" points="-4,4 -4,-243 907,-243 907,4 -4,4" stroke="transparent"/>
+<!-- report.ProjectLevelProbeTrack -->
+<g class="node" id="node1">
+<title>report.ProjectLevelProbeTrack</title>
+<g id="a_node1"><a xlink:title="→ experiment.Project------------------------------tracks_plot          track_count          INDEX (tracks_plot)">
+<ellipse cx="89.5" cy="-150.5" fill="#ff0000" fill-opacity="0.125490" rx="13" ry="13" stroke="#ff0000" stroke-opacity="0.125490"/>
+<text fill="#7f0000" font-family="arial" font-size="12.00" text-anchor="middle" x="89.5" y="-147.4">report.ProjectLevelProbeTrack</text>
+</a>
+</g>
+</g>
+<!-- ephys.ProbeInsertion -->
+<g class="node" id="node2">
+<title>ephys.ProbeInsertion</title>
+<g id="a_node2"><a xlink:title="→ experiment.Sessioninsertion_number     ------------------------------→ lab.Probe→ lab.ElectrodeConfig">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="327.5,-168 197.5,-168 197.5,-133 327.5,-133 327.5,-168" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="205.5" y="-148.4">ephys.ProbeInsertion</text>
+</a>
+</g>
+</g>
+<!-- report.ProbeLevelReport -->
+<g class="node" id="node6">
+<title>report.ProbeLevelReport</title>
+<g id="a_node6"><a xlink:title="→ ephys.ProbeInsertion→ ephys.ClusteringMethod------------------------------clustering_quality   unit_characteristic  group_psth           INDEX (clustering_quality)INDEX (unit_characteristic)INDEX (group_psth)">
+<ellipse cx="124.5" cy="-79.5" fill="#ff0000" fill-opacity="0.125490" rx="13" ry="13" stroke="#ff0000" stroke-opacity="0.125490"/>
+<text fill="#7f0000" font-family="arial" font-size="12.00" text-anchor="middle" x="124.5" y="-76.4">report.ProbeLevelReport</text>
+</a>
+</g>
+</g>
+<!-- ephys.ProbeInsertion&#45;&gt;report.ProbeLevelReport -->
+<g class="edge" id="edge1">
+<title>ephys.ProbeInsertion-&gt;report.ProbeLevelReport</title>
+<path d="M228.3876,-132.9494C198.3768,-117.5091 156.4171,-95.9211 136.2435,-85.5419" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- ephys.Unit -->
+<g class="node" id="node9">
+<title>ephys.Unit</title>
+<g id="a_node9"><a xlink:title="→ ephys.ProbeInsertion→ ephys.ClusteringMethodunit                 ------------------------------unit_uid             → ephys.UnitQualityType→ lab.ElectrodeConfig.Electrodeunit_posx            unit_posy            spike_times          unit_amp             unit_snr             waveform             ">
+<ellipse cx="262.5" cy="-79.5" fill="#00007f" fill-opacity="0.250980" rx="46.5014" ry="17.5" stroke="#00007f" stroke-opacity="0.250980"/>
+<text fill="#00007f" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="233.5" y="-77.4">ephys.Unit</text>
+</a>
+</g>
+</g>
+<!-- ephys.ProbeInsertion&#45;&gt;ephys.Unit -->
+<g class="edge" id="edge2">
+<title>ephys.ProbeInsertion-&gt;ephys.Unit</title>
+<path d="M262.5,-132.9494C262.5,-122.1083 262.5,-108.2366 262.5,-97.3418" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- report.ProbeLevelPhotostimEffectReport -->
+<g class="node" id="node10">
+<title>report.ProbeLevelPhotostimEffectReport</title>
+<g id="a_node10"><a xlink:title="→ ephys.ProbeInsertion→ ephys.ClusteringMethod------------------------------group_photostim      INDEX (group_photostim)">
+<ellipse cx="442.5" cy="-79.5" fill="#ff0000" fill-opacity="0.125490" rx="13" ry="13" stroke="#ff0000" stroke-opacity="0.125490"/>
+<text fill="#7f0000" font-family="arial" font-size="12.00" text-anchor="middle" x="442.5" y="-76.4">report.ProbeLevelPhotostimEffectReport</text>
+</a>
+</g>
+</g>
+<!-- ephys.ProbeInsertion&#45;&gt;report.ProbeLevelPhotostimEffectReport -->
+<g class="edge" id="edge3">
+<title>ephys.ProbeInsertion-&gt;report.ProbeLevelPhotostimEffectReport</title>
+<path d="M306.9944,-132.9494C347.8046,-116.8521 405.5551,-94.0727 430.3838,-84.2792" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- report.SessionLevelReport -->
+<g class="node" id="node3">
+<title>report.SessionLevelReport</title>
+<g id="a_node3"><a xlink:title="→ experiment.Session------------------------------behavior_performance INDEX (behavior_performance)">
+<ellipse cx="425.5" cy="-150.5" fill="#ff0000" fill-opacity="0.125490" rx="13" ry="13" stroke="#ff0000" stroke-opacity="0.125490"/>
+<text fill="#7f0000" font-family="arial" font-size="12.00" text-anchor="middle" x="425.5" y="-147.4">report.SessionLevelReport</text>
+</a>
+</g>
+</g>
+<!-- report.SessionLevelProbeTrack -->
+<g class="node" id="node4">
+<title>report.SessionLevelProbeTrack</title>
+<g id="a_node4"><a xlink:title="→ experiment.Session------------------------------session_tracks_plot  probe_track_count=0  probe_tracks         INDEX (session_tracks_plot)">
+<ellipse cx="615.5" cy="-150.5" fill="#ff0000" fill-opacity="0.125490" rx="13" ry="13" stroke="#ff0000" stroke-opacity="0.125490"/>
+<text fill="#7f0000" font-family="arial" font-size="12.00" text-anchor="middle" x="615.5" y="-147.4">report.SessionLevelProbeTrack</text>
+</a>
+</g>
+</g>
+<!-- report.SessionLevelCDReport -->
+<g class="node" id="node5">
+<title>report.SessionLevelCDReport</title>
+<g id="a_node5"><a xlink:title="→ experiment.Session------------------------------cd_probe_count=1     coding_direction     INDEX (coding_direction)">
+<ellipse cx="814.5" cy="-150.5" fill="#ff0000" fill-opacity="0.125490" rx="13" ry="13" stroke="#ff0000" stroke-opacity="0.125490"/>
+<text fill="#7f0000" font-family="arial" font-size="12.00" text-anchor="middle" x="814.5" y="-147.4">report.SessionLevelCDReport</text>
+</a>
+</g>
+</g>
+<!-- report.UnitLevelTrackingReport -->
+<g class="node" id="node7">
+<title>report.UnitLevelTrackingReport</title>
+<g id="a_node7"><a xlink:title="→ ephys.Unit------------------------------unit_behavior        INDEX (unit_behavior)">
+<ellipse cx="165.5" cy="-13" fill="#ff0000" fill-opacity="0.125490" rx="13" ry="13" stroke="#ff0000" stroke-opacity="0.125490"/>
+<text fill="#7f0000" font-family="arial" font-size="12.00" text-anchor="middle" x="165.5" y="-9.9">report.UnitLevelTrackingReport</text>
+</a>
+</g>
+</g>
+<!-- experiment.Session -->
+<g class="node" id="node8">
+<title>experiment.Session</title>
+<g id="a_node8"><a xlink:title="→ lab.Subjectsession              ------------------------------session_date         session_time         → lab.Person→ lab.Rig">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="581.5,-239 459.5,-239 459.5,-204 581.5,-204 581.5,-239" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="467.5" y="-219.4">experiment.Session</text>
+</a>
+</g>
+</g>
+<!-- experiment.Session&#45;&gt;ephys.ProbeInsertion -->
+<g class="edge" id="edge4">
+<title>experiment.Session-&gt;ephys.ProbeInsertion</title>
+<path d="M459.3576,-204.674C419.2734,-193.6431 366.9693,-179.2493 326.3504,-168.0712" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- experiment.Session&#45;&gt;report.SessionLevelReport -->
+<g class="edge" id="edge5">
+<title>experiment.Session-&gt;report.SessionLevelReport</title>
+<path d="M497.0168,-203.9494C477.4562,-189.3304 450.5216,-169.2003 435.9242,-158.2907" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- experiment.Session&#45;&gt;report.SessionLevelProbeTrack -->
+<g class="edge" id="edge6">
+<title>experiment.Session-&gt;report.SessionLevelProbeTrack</title>
+<path d="M543.9832,-203.9494C563.5438,-189.3304 590.4784,-169.2003 605.0758,-158.2907" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- experiment.Session&#45;&gt;report.SessionLevelCDReport -->
+<g class="edge" id="edge7">
+<title>experiment.Session-&gt;report.SessionLevelCDReport</title>
+<path d="M581.7742,-206.7025C652.623,-189.5927 764.3095,-162.6208 801.7725,-153.5737" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- ephys.Unit&#45;&gt;report.UnitLevelTrackingReport -->
+<g class="edge" id="edge8">
+<title>ephys.Unit-&gt;report.UnitLevelTrackingReport</title>
+<path d="M240.0024,-64.0764C219.9665,-50.3404 191.5248,-30.8417 176.228,-20.3548" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- report.UnitLevelEphysReport -->
+<g class="node" id="node11">
+<title>report.UnitLevelEphysReport</title>
+<g id="a_node11"><a xlink:title="→ ephys.Unit------------------------------unit_psth            INDEX (unit_psth)">
+<ellipse cx="360.5" cy="-13" fill="#ff0000" fill-opacity="0.125490" rx="13" ry="13" stroke="#ff0000" stroke-opacity="0.125490"/>
+<text fill="#7f0000" font-family="arial" font-size="12.00" text-anchor="middle" x="360.5" y="-9.9">report.UnitLevelEphysReport</text>
+</a>
+</g>
+</g>
+<!-- ephys.Unit&#45;&gt;report.UnitLevelEphysReport -->
+<g class="edge" id="edge9">
+<title>ephys.Unit-&gt;report.UnitLevelEphysReport</title>
+<path d="M285.2295,-64.0764C305.472,-50.3404 334.2069,-30.8417 349.6614,-20.3548" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- experiment.Project -->
+<g class="node" id="node12">
+<title>experiment.Project</title>
+<g id="a_node12"><a xlink:title="project_name         ------------------------------project_desc=&quot;&quot;      publication=&quot;&quot;       ">
+<polygon fill="#000000" fill-opacity="0.125490" points="138.5,-239 40.5,-239 40.5,-204 138.5,-204 138.5,-239" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="48.5" y="-220">experiment.Project</text>
+</a>
+</g>
+</g>
+<!-- experiment.Project&#45;&gt;report.ProjectLevelProbeTrack -->
+<g class="edge" id="edge10">
+<title>experiment.Project-&gt;report.ProjectLevelProbeTrack</title>
+<path d="M89.5,-203.9494C89.5,-191.4658 89.5,-174.9634 89.5,-163.6156" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+</g>
+</svg>

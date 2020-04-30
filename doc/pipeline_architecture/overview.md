@@ -159,3 +159,15 @@ The `psth.PeriodSelectivity` table perform the selectivity computation and store
 The `psth.UnitSelectivity` table aggregates the 3 period-selectivity for each unit, computed in `psth.PeriodSelectivity`,
  and computes the overall selectivity for that unit. 
 
+## report *schema*
+
+![report](./static/report_all.svg)
+
+Tables in the `report` schema are at the leaf level of this pipeline, computing and storing the figures
+ used for visualization and reporting (via the [MAP Web GUI](http://map-navigator.datajoint.io/))
+
+As shown in the diagram, report figures are categorized into 4 levels:
++ Project-level
++ Session-level
++ Probe-level
++ Unit-level
