@@ -295,7 +295,7 @@ class UnitStat(dj.Computed):
                     num_spikes = len(np.hstack(processed_trial_spikes))
                     avg_firing_rate = num_spikes / float(sum(tr_stop - tr_start))
 
-                    num_violations = sum(isis < self.isi_violation_thresh)
+                    num_violations = sum(isis < self.isi_threshold)
                     violation_time = 2 * num_spikes * (self.isi_threshold - self.min_isi)
                     violation_rate = num_violations / violation_time
                     fpRate = violation_rate / avg_firing_rate
