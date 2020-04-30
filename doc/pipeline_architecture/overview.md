@@ -168,17 +168,17 @@ Tables in the `report` schema are at the leaf level of this pipeline, computing 
 
 As shown in the diagram, report figures are categorized into 4 levels.
 
-#### project-level
+### project-level
 
 <img src="./static/project_tracks_plot.png" alt="project_tracks_plot" width="200" height="200">
 
-#### session-level
+### session-level
 
 |`report.SessionLevelProbeTrack`|`report.SessionLevelReport`|`report.SessionLevelCDReport`
 |:---------------------------:|:---------------------------:|:---------------------------:
 |<img src="./static/session_tracks_plot.png" alt="session_tracks_plot" width="200" height="200">|<img src="./static/session_behav_perf.png" alt="session_behav_perf" width="200" height="200">|<img src="./static/session_CD.png" alt="session_CD" width="200" height="200">
 
-#### probe-level
+### probe-level
 
 `report.ProbeLevelReport`
 
@@ -190,7 +190,7 @@ As shown in the diagram, report figures are categorized into 4 levels.
 
 <img src="./static/probe_group_photostim.png" alt="probe_group_photostim" width="600" height="150">
 
-#### unit-level
+### unit-level
 
 |`report.UnitLevelEphysReport`|`report.UnitLevelTrackingReport`
 |:---------------------------:|:---------------------------:|
