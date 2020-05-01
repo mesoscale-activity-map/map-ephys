@@ -94,7 +94,8 @@ The insertion of new ephys data triggers several analysis routines.
     + period selectivity per unit, in `psth.PeriodSelectivity`
     + overall selectivity per unit, in `psth.UnitSelectivity`
 
-Automatic generation of report figures
+Automatic generation of report figures based on availability of upstream results
+
     + `report.ProjectLevelProbeTrack`
         + figure regeneration triggered upon changes in the total count of `histology.LabeledProbeTrack`
     + `report.SessionLevelProbeTrack`
