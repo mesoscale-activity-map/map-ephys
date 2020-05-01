@@ -1,0 +1,160 @@
+<svg height="169pt" viewBox="0.00 0.00 871.12 169.00" width="871pt" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g class="graph" id="graph0" transform="scale(1 1) rotate(0) translate(4 165)">
+<title>%3</title>
+<polygon fill="#ffffff" points="-4,4 -4,-165 867.125,-165 867.125,4 -4,4" stroke="transparent"/>
+<!-- ephys.ProbeInsertion -->
+<g class="node" id="node1">
+<title>ephys.ProbeInsertion</title>
+<g id="a_node1"><a xlink:title="→ experiment.Sessioninsertion_number     ------------------------------→ lab.Probe→ lab.ElectrodeConfig">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="504.125,-161 374.125,-161 374.125,-126 504.125,-126 504.125,-161" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="382.125" y="-141.4">ephys.ProbeInsertion</text>
+</a>
+</g>
+</g>
+<!-- histology.ElectrodeCCFPosition -->
+<g class="node" id="node3">
+<title>histology.ElectrodeCCFPosition</title>
+<g id="a_node3"><a xlink:title="→ ephys.ProbeInsertion">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="631.625,-90 444.625,-90 444.625,-55 631.625,-55 631.625,-90" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="middle" x="538.125" y="-69.4">histology.ElectrodeCCFPosition</text>
+</a>
+</g>
+</g>
+<!-- ephys.ProbeInsertion&#45;&gt;histology.ElectrodeCCFPosition -->
+<g class="edge" id="edge1">
+<title>ephys.ProbeInsertion-&gt;histology.ElectrodeCCFPosition</title>
+<path d="M463.5969,-125.9494C478.8279,-115.0262 498.349,-101.0262 513.5915,-90.0947" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- histology_ingest.HistologyIngest -->
+<g class="node" id="node5">
+<title>histology_ingest.HistologyIngest</title>
+<g id="a_node5"><a xlink:title="→ ephys.ProbeInsertion">
+<ellipse cx="118.125" cy="-72.5" fill="#00007f" fill-opacity="0.250980" rx="118.2501" ry="17.5" stroke="#00007f" stroke-opacity="0.250980"/>
+<text fill="#00007f" font-family="arial" font-size="12.00" text-anchor="middle" x="118.125" y="-69.4">histology_ingest.HistologyIngest</text>
+</a>
+</g>
+</g>
+<!-- ephys.ProbeInsertion&#45;&gt;histology_ingest.HistologyIngest -->
+<g class="edge" id="edge2">
+<title>ephys.ProbeInsertion-&gt;histology_ingest.HistologyIngest</title>
+<path d="M373.7789,-129.0465C318.4188,-116.8017 239.4203,-99.3286 183.93,-87.055" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- histology.LabeledProbeTrack -->
+<g class="node" id="node7">
+<title>histology.LabeledProbeTrack</title>
+<g id="a_node7"><a xlink:title="→ ephys.ProbeInsertion------------------------------labeling_date=null   dye_color=null       ">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="426.125,-90 254.125,-90 254.125,-55 426.125,-55 426.125,-90" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="middle" x="340.125" y="-69.4">histology.LabeledProbeTrack</text>
+</a>
+</g>
+</g>
+<!-- ephys.ProbeInsertion&#45;&gt;histology.LabeledProbeTrack -->
+<g class="edge" id="edge3">
+<title>ephys.ProbeInsertion-&gt;histology.LabeledProbeTrack</title>
+<path d="M414.6531,-125.9494C399.4221,-115.0262 379.901,-101.0262 364.6585,-90.0947" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- ephys.Unit -->
+<g class="node" id="node10">
+<title>ephys.Unit</title>
+<g id="a_node10"><a xlink:title="→ ephys.ProbeInsertion→ ephys.ClusteringMethodunit                 ------------------------------unit_uid             → ephys.UnitQualityType→ lab.ElectrodeConfig.Electrodeunit_posx            unit_posy            spike_times          unit_amp             unit_snr             waveform             ">
+<ellipse cx="696.125" cy="-72.5" fill="#00007f" fill-opacity="0.250980" rx="46.5014" ry="17.5" stroke="#00007f" stroke-opacity="0.250980"/>
+<text fill="#00007f" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="667.125" y="-70.4">ephys.Unit</text>
+</a>
+</g>
+</g>
+<!-- ephys.ProbeInsertion&#45;&gt;ephys.Unit -->
+<g class="edge" id="edge4">
+<title>ephys.ProbeInsertion-&gt;ephys.Unit</title>
+<path d="M504.3946,-127.0809C544.0669,-116.8858 595.671,-103.2419 641.125,-90 647.5707,-88.1222 654.4097,-86.0286 660.9948,-83.9609" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- histology.LabeledProbeTrack.Point -->
+<g class="node" id="node2">
+<title>histology.LabeledProbeTrack.Point</title>
+<g id="a_node2"><a xlink:title="→ histology.LabeledProbeTrackorder                ------------------------------ccf_x                ccf_y                ccf_z                shank=1              ">
+<polygon fill="transparent" points="423.625,-19 256.625,-19 256.625,0 423.625,0 423.625,-19" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="264.625" y="-8">histology.LabeledProbeTrack.Point</text>
+</a>
+</g>
+</g>
+<!-- histology.ElectrodeCCFPosition.ElectrodePosition -->
+<g class="node" id="node9">
+<title>histology.ElectrodeCCFPosition.ElectrodePosition</title>
+<g id="a_node9"><a xlink:title="→ histology.ElectrodeCCFPosition→ lab.ElectrodeConfig.Electrode→ ccf.CCFmri_x                mri_y                mri_z                ">
+<polygon fill="transparent" points="674.625,-19 441.625,-19 441.625,0 674.625,0 674.625,-19" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="449.625" y="-8">histology.ElectrodeCCFPosition.ElectrodePosition</text>
+</a>
+</g>
+</g>
+<!-- histology.ElectrodeCCFPosition&#45;&gt;histology.ElectrodeCCFPosition.ElectrodePosition -->
+<g class="edge" id="edge5">
+<title>histology.ElectrodeCCFPosition-&gt;histology.ElectrodeCCFPosition.ElectrodePosition</title>
+<path d="M543.6961,-54.951C547.3485,-43.4459 551.9888,-28.8292 555.0062,-19.3243" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.ElectrodeConfig.Electrode -->
+<g class="node" id="node4">
+<title>lab.ElectrodeConfig.Electrode</title>
+<g id="a_node4"><a xlink:title="→ lab.ElectrodeConfig.ElectrodeGroup→ lab.ProbeType.Electrode------------------------------is_used              ">
+<polygon fill="transparent" points="769.125,-153 623.125,-153 623.125,-134 769.125,-134 769.125,-153" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="middle" x="696.125" y="-141">lab.ElectrodeConfig.Electrode</text>
+</a>
+</g>
+</g>
+<!-- lab.ElectrodeConfig.Electrode&#45;&gt;histology.ElectrodeCCFPosition.ElectrodePosition -->
+<g class="edge" id="edge6">
+<title>lab.ElectrodeConfig.Electrode-&gt;histology.ElectrodeCCFPosition.ElectrodePosition</title>
+<path d="M709.8159,-133.9957C732.255,-117.2693 772.3468,-81.8066 751.125,-55 737.2626,-37.4894 687.8737,-26.0407 642.5316,-19.0072" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.ElectrodeConfig.Electrode&#45;&gt;ephys.Unit -->
+<g class="edge" id="edge7">
+<title>lab.ElectrodeConfig.Electrode-&gt;ephys.Unit</title>
+<path d="M696.125,-133.9246C696.125,-122.7206 696.125,-103.9414 696.125,-90.0905" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- histology_ingest.HistologyIngest.HistologyFile -->
+<g class="node" id="node6">
+<title>histology_ingest.HistologyIngest.HistologyFile</title>
+<g id="a_node6"><a xlink:title="→ histology_ingest.HistologyIngesthistology_file       ">
+<polygon fill="transparent" points="226.625,-19 9.625,-19 9.625,0 226.625,0 226.625,-19" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="17.625" y="-8">histology_ingest.HistologyIngest.HistologyFile</text>
+</a>
+</g>
+</g>
+<!-- histology_ingest.HistologyIngest&#45;&gt;histology_ingest.HistologyIngest.HistologyFile -->
+<g class="edge" id="edge8">
+<title>histology_ingest.HistologyIngest-&gt;histology_ingest.HistologyIngest.HistologyFile</title>
+<path d="M118.125,-54.951C118.125,-43.4459 118.125,-28.8292 118.125,-19.3243" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- histology.LabeledProbeTrack&#45;&gt;histology.LabeledProbeTrack.Point -->
+<g class="edge" id="edge9">
+<title>histology.LabeledProbeTrack-&gt;histology.LabeledProbeTrack.Point</title>
+<path d="M340.125,-54.951C340.125,-43.4459 340.125,-28.8292 340.125,-19.3243" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- ccf.CCF -->
+<g class="node" id="node8">
+<title>ccf.CCF</title>
+<g id="a_node8"><a xlink:title="→ ccf.CCFLabelccf_x                ccf_y                ccf_z                ">
+<polygon fill="#000000" fill-opacity="0.125490" points="851.625,-90 798.625,-90 798.625,-55 851.625,-55 851.625,-90" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="806.625" y="-71">ccf.CCF</text>
+</a>
+</g>
+</g>
+<!-- ccf.CCF&#45;&gt;histology.ElectrodeCCFPosition.ElectrodePosition -->
+<g class="edge" id="edge10">
+<title>ccf.CCF-&gt;histology.ElectrodeCCFPosition.ElectrodePosition</title>
+<path d="M798.5138,-60.2128C793.7831,-58.2968 788.8554,-56.4687 784.125,-55 731.1856,-38.5633 669.3785,-26.5938 623.7942,-19.0689" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- ccf.CCFLabel -->
+<g class="node" id="node11">
+<title>ccf.CCFLabel</title>
+<g id="a_node11"><a xlink:title="ccf_label_id         ------------------------------ccf_version          ccf_resolution       ccf_description      ">
+<polygon fill="#000000" fill-opacity="0.125490" points="863.125,-161 787.125,-161 787.125,-126 863.125,-126 863.125,-161" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="795.125" y="-142">ccf.CCFLabel</text>
+</a>
+</g>
+</g>
+<!-- ccf.CCFLabel&#45;&gt;ccf.CCF -->
+<g class="edge" id="edge11">
+<title>ccf.CCFLabel-&gt;ccf.CCF</title>
+<path d="M825.125,-125.9494C825.125,-115.1083 825.125,-101.2366 825.125,-90.3418" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+</g>
+</svg>

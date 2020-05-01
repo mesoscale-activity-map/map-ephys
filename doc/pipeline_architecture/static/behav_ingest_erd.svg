@@ -1,0 +1,277 @@
+<svg height="398pt" viewBox="0.00 0.00 1163.12 398.00" width="1163pt" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g class="graph" id="graph0" transform="scale(1 1) rotate(0) translate(4 394)">
+<title>%3</title>
+<polygon fill="#ffffff" points="-4,4 -4,-394 1159.125,-394 1159.125,4 -4,4" stroke="transparent"/>
+<!-- experiment.Outcome -->
+<g class="node" id="node1">
+<title>experiment.Outcome</title>
+<g id="a_node1"><a xlink:title="outcome              ">
+<polygon fill="#000000" fill-opacity="0.125490" points="107,-177 0,-177 0,-142 107,-142 107,-177" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="8" y="-158">experiment.Outcome</text>
+</a>
+</g>
+</g>
+<!-- experiment.BehaviorTrial -->
+<g class="node" id="node11">
+<title>experiment.BehaviorTrial</title>
+<g id="a_node11"><a xlink:title="→ experiment.SessionTrial------------------------------→ experiment.TaskProtocol→ experiment.TrialInstruction→ experiment.EarlyLick→ experiment.Outcomeauto_water=null      free_water=null      ">
+<ellipse cx="300.5" cy="-88.5" fill="#00007f" fill-opacity="0.250980" rx="93.5007" ry="17.5" stroke="#00007f" stroke-opacity="0.250980"/>
+<text fill="#00007f" font-family="arial" font-size="12.00" text-anchor="middle" x="300.5" y="-85.4">experiment.BehaviorTrial</text>
+</a>
+</g>
+</g>
+<!-- experiment.Outcome&#45;&gt;experiment.BehaviorTrial -->
+<g class="edge" id="edge1">
+<title>experiment.Outcome-&gt;experiment.BehaviorTrial</title>
+<path d="M107.0953,-144.0941C149.2349,-131.9811 207.5649,-115.2142 249.1222,-103.2685" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- behavior_ingest.BehaviorIngest -->
+<g class="node" id="node2">
+<title>behavior_ingest.BehaviorIngest</title>
+<g id="a_node2"><a xlink:title="→ experiment.Session">
+<ellipse cx="1039.5" cy="-159.5" fill="#00007f" fill-opacity="0.250980" rx="115.7501" ry="17.5" stroke="#00007f" stroke-opacity="0.250980"/>
+<text fill="#00007f" font-family="arial" font-size="12.00" text-anchor="middle" x="1039.5" y="-156.4">behavior_ingest.BehaviorIngest</text>
+</a>
+</g>
+</g>
+<!-- behavior_ingest.BehaviorIngest.BehaviorFile -->
+<g class="node" id="node9">
+<title>behavior_ingest.BehaviorIngest.BehaviorFile</title>
+<g id="a_node9"><a xlink:title="→ behavior_ingest.BehaviorIngestbehavior_file        ">
+<polygon fill="transparent" points="1144.5,-98 934.5,-98 934.5,-79 1144.5,-79 1144.5,-98" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="942.5" y="-87">behavior_ingest.BehaviorIngest.BehaviorFile</text>
+</a>
+</g>
+</g>
+<!-- behavior_ingest.BehaviorIngest&#45;&gt;behavior_ingest.BehaviorIngest.BehaviorFile -->
+<g class="edge" id="edge2">
+<title>behavior_ingest.BehaviorIngest-&gt;behavior_ingest.BehaviorIngest.BehaviorFile</title>
+<path d="M1039.5,-141.9494C1039.5,-128.1517 1039.5,-109.4447 1039.5,-98.2141" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- experiment.Session -->
+<g class="node" id="node3">
+<title>experiment.Session</title>
+<g id="a_node3"><a xlink:title="→ lab.Subjectsession              ------------------------------session_date         session_time         → lab.Person→ lab.Rig">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="911.5,-248 789.5,-248 789.5,-213 911.5,-213 911.5,-248" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="797.5" y="-228.4">experiment.Session</text>
+</a>
+</g>
+</g>
+<!-- experiment.Session&#45;&gt;behavior_ingest.BehaviorIngest -->
+<g class="edge" id="edge3">
+<title>experiment.Session-&gt;behavior_ingest.BehaviorIngest</title>
+<path d="M897.2191,-212.9494C927.4988,-201.5745 966.6603,-186.8631 996.2303,-175.7547" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- experiment.SessionTrial -->
+<g class="node" id="node6">
+<title>experiment.SessionTrial</title>
+<g id="a_node6"><a xlink:title="→ experiment.Sessiontrial                ------------------------------trial_uid            start_time           stop_time            ">
+<ellipse cx="669.5" cy="-159.5" fill="#00007f" fill-opacity="0.250980" rx="91.5007" ry="17.5" stroke="#00007f" stroke-opacity="0.250980"/>
+<text fill="#00007f" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="604.5" y="-157.4">experiment.SessionTrial</text>
+</a>
+</g>
+</g>
+<!-- experiment.Session&#45;&gt;experiment.SessionTrial -->
+<g class="edge" id="edge4">
+<title>experiment.Session-&gt;experiment.SessionTrial</title>
+<path d="M805.7584,-212.9494C776.3416,-201.4102 738.1716,-186.4375 709.7172,-175.2758" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- experiment.Photostim -->
+<g class="node" id="node8">
+<title>experiment.Photostim</title>
+<g id="a_node8"><a xlink:title="→ experiment.Sessionphoto_stim           ------------------------------→ lab.PhotostimDeviceduration=null        waveform=null        ">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="916.5,-106 784.5,-106 784.5,-71 916.5,-71 916.5,-106" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="792.5" y="-86.4">experiment.Photostim</text>
+</a>
+</g>
+</g>
+<!-- experiment.Session&#45;&gt;experiment.Photostim -->
+<g class="edge" id="edge5">
+<title>experiment.Session-&gt;experiment.Photostim</title>
+<path d="M850.5,-212.8027C850.5,-185.5918 850.5,-133.7651 850.5,-106.4203" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- experiment.TrialEvent -->
+<g class="node" id="node4">
+<title>experiment.TrialEvent</title>
+<g id="a_node4"><a xlink:title="→ experiment.BehaviorTrialtrial_event_id       ------------------------------→ experiment.TrialEventTypetrial_event_time     duration             ">
+<ellipse cx="189.5" cy="-17.5" fill="#00007f" fill-opacity="0.250980" rx="83.2502" ry="17.5" stroke="#00007f" stroke-opacity="0.250980"/>
+<text fill="#00007f" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="131" y="-15.4">experiment.TrialEvent</text>
+</a>
+</g>
+</g>
+<!-- experiment.TrialEventType -->
+<g class="node" id="node5">
+<title>experiment.TrialEventType</title>
+<g id="a_node5"><a xlink:title="trial_event_type     ">
+<polygon fill="#000000" fill-opacity="0.125490" points="189,-106 56,-106 56,-71 189,-71 189,-106" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="64" y="-87">experiment.TrialEventType</text>
+</a>
+</g>
+</g>
+<!-- experiment.TrialEventType&#45;&gt;experiment.TrialEvent -->
+<g class="edge" id="edge6">
+<title>experiment.TrialEventType-&gt;experiment.TrialEvent</title>
+<path d="M139.0618,-70.9494C149.4471,-59.9441 162.7797,-45.8155 173.1287,-34.8487" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- experiment.PhotostimTrial -->
+<g class="node" id="node10">
+<title>experiment.PhotostimTrial</title>
+<g id="a_node10"><a xlink:title="→ experiment.SessionTrial">
+<ellipse cx="669.5" cy="-88.5" fill="#00007f" fill-opacity="0.250980" rx="96.7502" ry="17.5" stroke="#00007f" stroke-opacity="0.250980"/>
+<text fill="#00007f" font-family="arial" font-size="12.00" text-anchor="middle" x="669.5" y="-85.4">experiment.PhotostimTrial</text>
+</a>
+</g>
+</g>
+<!-- experiment.SessionTrial&#45;&gt;experiment.PhotostimTrial -->
+<g class="edge" id="edge7">
+<title>experiment.SessionTrial-&gt;experiment.PhotostimTrial</title>
+<path d="M669.5,-141.9494C669.5,-131.1083 669.5,-117.2366 669.5,-106.3418" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- experiment.SessionTrial&#45;&gt;experiment.BehaviorTrial -->
+<g class="edge" id="edge8">
+<title>experiment.SessionTrial-&gt;experiment.BehaviorTrial</title>
+<path d="M604.8029,-147.0515C537.7305,-134.146 433.4426,-114.0797 366.055,-101.1136" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- experiment.TaskProtocol -->
+<g class="node" id="node7">
+<title>experiment.TaskProtocol</title>
+<g id="a_node7"><a xlink:title="→ experiment.Tasktask_protocol        ------------------------------task_protocol_description ">
+<polygon fill="#000000" fill-opacity="0.125490" points="250,-177 125,-177 125,-142 250,-142 250,-177" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="133" y="-158">experiment.TaskProtocol</text>
+</a>
+</g>
+</g>
+<!-- experiment.TaskProtocol&#45;&gt;experiment.BehaviorTrial -->
+<g class="edge" id="edge9">
+<title>experiment.TaskProtocol-&gt;experiment.BehaviorTrial</title>
+<path d="M215.4326,-141.9494C233.2096,-130.7798 256.1068,-116.3931 273.6669,-105.3598" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- experiment.PhotostimEvent -->
+<g class="node" id="node13">
+<title>experiment.PhotostimEvent</title>
+<g id="a_node13"><a xlink:title="→ experiment.PhotostimTrialphotostim_event_id   ------------------------------→ experiment.Photostimphotostim_event_time power                ">
+<ellipse cx="699.5" cy="-17.5" fill="#00007f" fill-opacity="0.250980" rx="101.7502" ry="17.5" stroke="#00007f" stroke-opacity="0.250980"/>
+<text fill="#00007f" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="626" y="-15.4">experiment.PhotostimEvent</text>
+</a>
+</g>
+</g>
+<!-- experiment.Photostim&#45;&gt;experiment.PhotostimEvent -->
+<g class="edge" id="edge10">
+<title>experiment.Photostim-&gt;experiment.PhotostimEvent</title>
+<path d="M813.1741,-70.9494C789.1571,-59.6566 758.1461,-45.0753 734.5829,-33.9959" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- experiment.PhotostimTrial&#45;&gt;experiment.PhotostimEvent -->
+<g class="edge" id="edge11">
+<title>experiment.PhotostimTrial-&gt;experiment.PhotostimEvent</title>
+<path d="M676.9157,-70.9494C681.4965,-60.1083 687.3578,-46.2366 691.9612,-35.3418" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- experiment.BehaviorTrial&#45;&gt;experiment.TrialEvent -->
+<g class="edge" id="edge12">
+<title>experiment.BehaviorTrial-&gt;experiment.TrialEvent</title>
+<path d="M274.1945,-71.674C256.5003,-60.356 233.2714,-45.4979 215.6166,-34.2052" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- experiment.ActionEvent -->
+<g class="node" id="node12">
+<title>experiment.ActionEvent</title>
+<g id="a_node12"><a xlink:title="→ experiment.BehaviorTrialaction_event_id      ------------------------------→ experiment.ActionEventTypeaction_event_time    ">
+<ellipse cx="453.5" cy="-17.5" fill="#00007f" fill-opacity="0.250980" rx="89.2502" ry="17.5" stroke="#00007f" stroke-opacity="0.250980"/>
+<text fill="#00007f" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="390" y="-15.4">experiment.ActionEvent</text>
+</a>
+</g>
+</g>
+<!-- experiment.BehaviorTrial&#45;&gt;experiment.ActionEvent -->
+<g class="edge" id="edge13">
+<title>experiment.BehaviorTrial-&gt;experiment.ActionEvent</title>
+<path d="M335.6013,-72.2112C360.4805,-60.6659 393.7195,-45.2413 418.562,-33.713" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.Rig -->
+<g class="node" id="node14">
+<title>lab.Rig</title>
+<g id="a_node14"><a xlink:title="rig                  ------------------------------room                 rig_description      ">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="794,-319 739,-319 739,-284 794,-284 794,-319" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="747" y="-299.4">lab.Rig</text>
+</a>
+</g>
+</g>
+<!-- lab.Rig&#45;&gt;experiment.Session -->
+<g class="edge" id="edge14">
+<title>lab.Rig-&gt;experiment.Session</title>
+<path d="M787.2641,-283.9494C800.1873,-273.0262 816.7507,-259.0262 829.6837,-248.0947" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- experiment.TrialInstruction -->
+<g class="node" id="node15">
+<title>experiment.TrialInstruction</title>
+<g id="a_node15"><a xlink:title="trial_instruction    ">
+<polygon fill="#000000" fill-opacity="0.125490" points="400.5,-177 268.5,-177 268.5,-142 400.5,-142 400.5,-177" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="276.5" y="-158">experiment.TrialInstruction</text>
+</a>
+</g>
+</g>
+<!-- experiment.TrialInstruction&#45;&gt;experiment.BehaviorTrial -->
+<g class="edge" id="edge15">
+<title>experiment.TrialInstruction-&gt;experiment.BehaviorTrial</title>
+<path d="M326.0955,-141.9494C320.904,-131.1083 314.2612,-117.2366 309.044,-106.3418" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- experiment.ActionEventType -->
+<g class="node" id="node16">
+<title>experiment.ActionEventType</title>
+<g id="a_node16"><a xlink:title="action_event_type    ------------------------------action_event_description ">
+<polygon fill="#000000" fill-opacity="0.125490" points="554.5,-106 412.5,-106 412.5,-71 554.5,-71 554.5,-106" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="420.5" y="-87">experiment.ActionEventType</text>
+</a>
+</g>
+</g>
+<!-- experiment.ActionEventType&#45;&gt;experiment.ActionEvent -->
+<g class="edge" id="edge16">
+<title>experiment.ActionEventType-&gt;experiment.ActionEvent</title>
+<path d="M476.0843,-70.9494C471.5035,-60.1083 465.6422,-46.2366 461.0388,-35.3418" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- experiment.EarlyLick -->
+<g class="node" id="node17">
+<title>experiment.EarlyLick</title>
+<g id="a_node17"><a xlink:title="early_lick           ------------------------------early_lick_description ">
+<polygon fill="#000000" fill-opacity="0.125490" points="526.5,-177 418.5,-177 418.5,-142 526.5,-142 526.5,-177" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="426.5" y="-158">experiment.EarlyLick</text>
+</a>
+</g>
+</g>
+<!-- experiment.EarlyLick&#45;&gt;experiment.BehaviorTrial -->
+<g class="edge" id="edge17">
+<title>experiment.EarlyLick-&gt;experiment.BehaviorTrial</title>
+<path d="M429.9831,-141.9494C402.228,-130.4924 366.2729,-115.6505 339.2962,-104.5147" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.Person -->
+<g class="node" id="node18">
+<title>lab.Person</title>
+<g id="a_node18"><a xlink:title="username             ------------------------------fullname             ">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="920.5,-390 846.5,-390 846.5,-355 920.5,-355 920.5,-390" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="854.5" y="-370.4">lab.Person</text>
+</a>
+</g>
+</g>
+<!-- lab.Person&#45;&gt;experiment.Session -->
+<g class="edge" id="edge18">
+<title>lab.Person-&gt;experiment.Session</title>
+<path d="M891.8699,-354.6634C899.225,-336.3942 907.4706,-307.4313 898.5,-284 893.1907,-270.1321 882.4456,-257.5967 872.4655,-248.1516" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.Subject -->
+<g class="node" id="node19">
+<title>lab.Subject</title>
+<g id="a_node19"><a xlink:title="subject_id           ------------------------------→ [nullable] lab.Personcage_number          date_of_birth        sex                  → [nullable] lab.AnimalSource">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="889,-319 812,-319 812,-284 889,-284 889,-319" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="820" y="-299.4">lab.Subject</text>
+</a>
+</g>
+</g>
+<!-- lab.Person&#45;&gt;lab.Subject -->
+<g class="edge" id="edge19">
+<title>lab.Person-&gt;lab.Subject</title>
+<path d="M875.3427,-354.9494C870.3039,-344.1083 863.8564,-330.2366 858.7927,-319.3418" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.Subject&#45;&gt;experiment.Session -->
+<g class="edge" id="edge20">
+<title>lab.Subject-&gt;experiment.Session</title>
+<path d="M850.5,-283.9494C850.5,-273.1083 850.5,-259.2366 850.5,-248.3418" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+</g>
+</svg>
