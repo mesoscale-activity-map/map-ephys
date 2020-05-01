@@ -96,20 +96,20 @@ The insertion of new ephys data triggers several analysis routines.
 
 Automatic generation of report figures based on availability of upstream results
 
-    + `report.ProjectLevelProbeTrack`
-        + figure regeneration triggered upon changes in the total count of `histology.LabeledProbeTrack`
-    + `report.SessionLevelProbeTrack`
-        + figure regeneration triggered upon changes in the count of `histology.LabeledProbeTrack` for any particular session
-    + `report.SessionLevelReport`
-    + `report.SessionLevelCDReport`
-        + Only process Session with ***UnitSelectivity*** computation fully completed, and has ***RecordableBrainRegion*** present for all probe insertions
-    + `report.ProbeLevelReport`
-        + Only process ***ProbeInsertion*** with ***UnitSelectivity*** computation fully completed 
-    + `report.ProbeLevelPhotostimEffectReport`
-        + Only process ProbeInsertion with UnitPSTH computation (for all TrialCondition) fully completed
-    + `report.UnitLevelEphysReport`
-        + Only process Units from probe that has ***InsertionLocation*** present
-        + Ignore units of `unit_quality` of type "all"
-    + `report.UnitLevelTrackingReport`
-        + Only process Units from session with tracking available
-        + Ignore units of `unit_quality` of type "all"
++ `report.ProjectLevelProbeTrack`
+    + figure regeneration triggered upon changes in the total count of `histology.LabeledProbeTrack`
++ `report.SessionLevelProbeTrack`
+    + figure regeneration triggered upon changes in the count of `histology.LabeledProbeTrack` for any particular session
++ `report.SessionLevelReport`
++ `report.SessionLevelCDReport`
+    + Only process Session with ***UnitSelectivity*** computation fully completed, and has ***RecordableBrainRegion*** present for all probe insertions
++ `report.ProbeLevelReport`
+    + Only process ***ProbeInsertion*** with ***UnitSelectivity*** computation fully completed 
++ `report.ProbeLevelPhotostimEffectReport`
+    + Only process ProbeInsertion with UnitPSTH computation (for all TrialCondition) fully completed
++ `report.UnitLevelEphysReport`
+    + Only process Units from probe that has ***InsertionLocation*** present
+    + Ignore units of `unit_quality` of type "all"
++ `report.UnitLevelTrackingReport`
+    + Only process Units from session with tracking available
+    + Ignore units of `unit_quality` of type "all"
