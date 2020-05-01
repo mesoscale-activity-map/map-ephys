@@ -170,6 +170,8 @@ As shown in the diagram, report figures are categorized into 4 levels.
 
 ### project-level
 
+`report.ProjectLevelProbeTrack`
+
 <img src="./static/project_tracks_plot.png" alt="project_tracks_plot" width="300" height="300">
 
 ### session-level
