@@ -1,0 +1,127 @@
+<svg height="169pt" viewBox="0.00 0.00 658.00 169.00" width="658pt" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g class="graph" id="graph0" transform="scale(1 1) rotate(0) translate(4 165)">
+<title>%3</title>
+<polygon fill="#ffffff" points="-4,4 -4,-165 654,-165 654,4 -4,4" stroke="transparent"/>
+<!-- lab.ElectrodeConfig -->
+<g class="node" id="node1">
+<title>lab.ElectrodeConfig</title>
+<g id="a_node1"><a xlink:title="→ lab.ProbeTypeelectrode_config_name ------------------------------electrode_config_hash UNIQUE INDEX (electrode_config_hash)">
+<polygon fill="#000000" fill-opacity="0.125490" points="247,-161 146,-161 146,-126 247,-126 247,-161" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="154" y="-142">lab.ElectrodeConfig</text>
+</a>
+</g>
+</g>
+<!-- ephys.ProbeInsertion -->
+<g class="node" id="node2">
+<title>ephys.ProbeInsertion</title>
+<g id="a_node2"><a xlink:title="→ experiment.Sessioninsertion_number     ------------------------------→ lab.Probe→ lab.ElectrodeConfig">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="391.5,-90 261.5,-90 261.5,-55 391.5,-55 391.5,-90" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="269.5" y="-70.4">ephys.ProbeInsertion</text>
+</a>
+</g>
+</g>
+<!-- lab.ElectrodeConfig&#45;&gt;ephys.ProbeInsertion -->
+<g class="edge" id="edge1">
+<title>lab.ElectrodeConfig-&gt;ephys.ProbeInsertion</title>
+<path d="M228.6348,-125.9494C248.6351,-115.0262 274.2689,-101.0262 294.2843,-90.0947" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- ephys.ProbeInsertion.RecordingSystemSetup -->
+<g class="node" id="node4">
+<title>ephys.ProbeInsertion.RecordingSystemSetup</title>
+<g id="a_node4"><a xlink:title="→ ephys.ProbeInsertion------------------------------sampling_rate        ">
+<polygon fill="transparent" points="215,-19 0,-19 0,0 215,0 215,-19" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="middle" x="107.5" y="-7">ephys.ProbeInsertion.RecordingSystemSetup</text>
+</a>
+</g>
+</g>
+<!-- ephys.ProbeInsertion&#45;&gt;ephys.ProbeInsertion.RecordingSystemSetup -->
+<g class="edge" id="edge2">
+<title>ephys.ProbeInsertion-&gt;ephys.ProbeInsertion.RecordingSystemSetup</title>
+<path d="M265.4963,-54.951C225.1227,-43.3367 173.7262,-28.5514 140.7149,-19.055" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- ephys.ProbeInsertion.RecordableBrainRegion -->
+<g class="node" id="node7">
+<title>ephys.ProbeInsertion.RecordableBrainRegion</title>
+<g id="a_node7"><a xlink:title="→ ephys.ProbeInsertion→ lab.BrainArea→ lab.Hemisphere">
+<polygon fill="transparent" points="650,-19 437,-19 437,0 650,0 650,-19" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="middle" x="543.5" y="-7">ephys.ProbeInsertion.RecordableBrainRegion</text>
+</a>
+</g>
+</g>
+<!-- ephys.ProbeInsertion&#45;&gt;ephys.ProbeInsertion.RecordableBrainRegion -->
+<g class="edge" id="edge3">
+<title>ephys.ProbeInsertion-&gt;ephys.ProbeInsertion.RecordableBrainRegion</title>
+<path d="M386.9466,-54.951C426.9515,-43.3367 477.8786,-28.5514 510.5884,-19.055" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- ephys.ProbeInsertion.InsertionLocation -->
+<g class="node" id="node9">
+<title>ephys.ProbeInsertion.InsertionLocation</title>
+<g id="a_node9"><a xlink:title="→ ephys.ProbeInsertion------------------------------→ lab.SkullReferenceap_location          ml_location          depth                theta                phi                  beta                 ">
+<polygon fill="transparent" points="419.5,-19 233.5,-19 233.5,0 419.5,0 419.5,-19" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="middle" x="326.5" y="-7">ephys.ProbeInsertion.InsertionLocation</text>
+</a>
+</g>
+</g>
+<!-- ephys.ProbeInsertion&#45;&gt;ephys.ProbeInsertion.InsertionLocation -->
+<g class="edge" id="edge4">
+<title>ephys.ProbeInsertion-&gt;ephys.ProbeInsertion.InsertionLocation</title>
+<path d="M326.5,-54.951C326.5,-43.4459 326.5,-28.8292 326.5,-19.3243" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- lab.BrainArea -->
+<g class="node" id="node3">
+<title>lab.BrainArea</title>
+<g id="a_node3"><a xlink:title="brain_area           ------------------------------description=null     ">
+<polygon fill="#000000" fill-opacity="0.125490" points="533,-90 458,-90 458,-55 533,-55 533,-90" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="466" y="-71">lab.BrainArea</text>
+</a>
+</g>
+</g>
+<!-- lab.BrainArea&#45;&gt;ephys.ProbeInsertion.RecordableBrainRegion -->
+<g class="edge" id="edge5">
+<title>lab.BrainArea-&gt;ephys.ProbeInsertion.RecordableBrainRegion</title>
+<path d="M508.8707,-54.951C517.6365,-43.4459 528.773,-28.8292 536.0148,-19.3243" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- experiment.Session -->
+<g class="node" id="node5">
+<title>experiment.Session</title>
+<g id="a_node5"><a xlink:title="→ lab.Subjectsession              ------------------------------session_date         session_time         → lab.Person→ lab.Rig">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="387.5,-161 265.5,-161 265.5,-126 387.5,-126 387.5,-161" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="273.5" y="-141.4">experiment.Session</text>
+</a>
+</g>
+</g>
+<!-- experiment.Session&#45;&gt;ephys.ProbeInsertion -->
+<g class="edge" id="edge6">
+<title>experiment.Session-&gt;ephys.ProbeInsertion</title>
+<path d="M326.5,-125.9494C326.5,-115.1083 326.5,-101.2366 326.5,-90.3418" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.Hemisphere -->
+<g class="node" id="node6">
+<title>lab.Hemisphere</title>
+<g id="a_node6"><a xlink:title="hemisphere           ">
+<polygon fill="#000000" fill-opacity="0.125490" points="634.5,-90 550.5,-90 550.5,-55 634.5,-55 634.5,-90" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="558.5" y="-71">lab.Hemisphere</text>
+</a>
+</g>
+</g>
+<!-- lab.Hemisphere&#45;&gt;ephys.ProbeInsertion.RecordableBrainRegion -->
+<g class="edge" id="edge7">
+<title>lab.Hemisphere-&gt;ephys.ProbeInsertion.RecordableBrainRegion</title>
+<path d="M578.8508,-54.951C569.9024,-43.4459 558.5338,-28.8292 551.1411,-19.3243" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.Probe -->
+<g class="node" id="node8">
+<title>lab.Probe</title>
+<g id="a_node8"><a xlink:title="probe                ------------------------------→ lab.ProbeTypeprobe_comment=&quot;&quot;     ">
+<polygon fill="#000000" fill-opacity="0.125490" points="463.5,-161 405.5,-161 405.5,-126 463.5,-126 463.5,-161" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="413.5" y="-142">lab.Probe</text>
+</a>
+</g>
+</g>
+<!-- lab.Probe&#45;&gt;ephys.ProbeInsertion -->
+<g class="edge" id="edge8">
+<title>lab.Probe-&gt;ephys.ProbeInsertion</title>
+<path d="M407.8034,-125.9494C391.1878,-115.0262 369.892,-101.0262 353.2638,-90.0947" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+</g>
+</svg>

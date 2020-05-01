@@ -1,0 +1,126 @@
+<svg height="176pt" viewBox="0.00 0.00 407.50 176.00" width="408pt" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g class="graph" id="graph0" transform="scale(1 1) rotate(0) translate(4 172)">
+<title>%3</title>
+<polygon fill="#ffffff" points="-4,4 -4,-172 403.5,-172 403.5,4 -4,4" stroke="transparent"/>
+<!-- 736 -->
+<g class="node" id="node1">
+<title>736</title>
+<ellipse cx="122.5" cy="-79.5" fill="#ff8800" fill-opacity="0.501961" rx="2" ry="2" stroke="#ff8800" stroke-opacity="0.501961"/>
+<text fill="#ff8800" font-family="arial" font-size="1.00" text-anchor="middle" x="122.5" y="-79.2">736</text>
+</g>
+<!-- psth.PeriodSelectivity -->
+<g class="node" id="node8">
+<title>psth.PeriodSelectivity</title>
+<g id="a_node8"><a xlink:title="→ ephys.Unit→ experiment.Period------------------------------→ psth.Selectivity.proj(period_selectivity=&quot;selectivity&quot;)ipsi_firing_rate     contra_firing_rate   p_value              ">
+<ellipse cx="84.5" cy="-13" fill="#ff0000" fill-opacity="0.125490" rx="13" ry="13" stroke="#ff0000" stroke-opacity="0.125490"/>
+<text fill="#7f0000" font-family="arial" font-size="12.00" text-anchor="middle" x="84.5" y="-9.9">psth.PeriodSelectivity</text>
+</a>
+</g>
+</g>
+<!-- 736&#45;&gt;psth.PeriodSelectivity -->
+<g class="edge" id="edge1">
+<title>736-&gt;psth.PeriodSelectivity</title>
+<path d="M121.4037,-77.5815C116.9986,-69.8725 100.3747,-40.7806 91.0122,-24.3963" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- 737 -->
+<g class="node" id="node2">
+<title>737</title>
+<ellipse cx="159.5" cy="-79.5" fill="#ff8800" fill-opacity="0.501961" rx="2" ry="2" stroke="#ff8800" stroke-opacity="0.501961"/>
+<text fill="#ff8800" font-family="arial" font-size="1.00" text-anchor="middle" x="159.5" y="-79.2">737</text>
+</g>
+<!-- psth.UnitSelectivity -->
+<g class="node" id="node9">
+<title>psth.UnitSelectivity</title>
+<g id="a_node9"><a xlink:title="→ ephys.Unit------------------------------→ psth.Selectivity.proj(unit_selectivity=&quot;selectivity&quot;)">
+<ellipse cx="228.5" cy="-13" fill="#ff0000" fill-opacity="0.125490" rx="13" ry="13" stroke="#ff0000" stroke-opacity="0.125490"/>
+<text fill="#7f0000" font-family="arial" font-size="12.00" text-anchor="middle" x="228.5" y="-9.9">psth.UnitSelectivity</text>
+</a>
+</g>
+</g>
+<!-- 737&#45;&gt;psth.UnitSelectivity -->
+<g class="edge" id="edge2">
+<title>737-&gt;psth.UnitSelectivity</title>
+<path d="M160.9412,-78.1111C168.3339,-70.9861 202.3023,-38.2485 219.0753,-22.0832" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- experiment.Period -->
+<g class="node" id="node3">
+<title>experiment.Period</title>
+<g id="a_node3"><a xlink:title="period               ------------------------------→ experiment.TrialEventType.proj(start_event_type=&quot;trial_event_type&quot;)start_time_shift     → experiment.TrialEventType.proj(end_event_type=&quot;trial_event_type&quot;)end_time_shift       ">
+<polygon fill="#000000" fill-opacity="0.125490" points="95,-97 0,-97 0,-62 95,-62 95,-97" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="8" y="-78">experiment.Period</text>
+</a>
+</g>
+</g>
+<!-- experiment.Period&#45;&gt;psth.PeriodSelectivity -->
+<g class="edge" id="edge3">
+<title>experiment.Period-&gt;psth.PeriodSelectivity</title>
+<path d="M57.4153,-61.6792C64.0084,-49.8296 72.4705,-34.6206 78.1671,-24.3822" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- psth.Selectivity -->
+<g class="node" id="node4">
+<title>psth.Selectivity</title>
+<g id="a_node4"><a xlink:title="selectivity          ">
+<polygon fill="#000000" fill-opacity="0.125490" points="182.5,-168 98.5,-168 98.5,-133 182.5,-133 182.5,-168" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="106.5" y="-149">psth.Selectivity</text>
+</a>
+</g>
+</g>
+<!-- psth.Selectivity&#45;&gt;736 -->
+<g class="edge" id="edge4">
+<title>psth.Selectivity-&gt;736</title>
+<path d="M136.0506,-132.9494C131.5531,-115.2095 124.9983,-89.3543 123.0597,-81.7077" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- psth.Selectivity&#45;&gt;737 -->
+<g class="edge" id="edge5">
+<title>psth.Selectivity-&gt;737</title>
+<path d="M145.1966,-132.9494C149.9439,-115.2095 156.8629,-89.3543 158.9092,-81.7077" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- psth.TrialCondition -->
+<g class="node" id="node5">
+<title>psth.TrialCondition</title>
+<g id="a_node5"><a xlink:title="trial_condition_name ------------------------------trial_condition_hash trial_condition_func trial_condition_arg  UNIQUE INDEX (trial_condition_hash)">
+<polygon fill="#000000" fill-opacity="0.125490" points="399.5,-97 301.5,-97 301.5,-62 399.5,-62 399.5,-97" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="309.5" y="-78">psth.TrialCondition</text>
+</a>
+</g>
+</g>
+<!-- psth.UnitPsth -->
+<g class="node" id="node6">
+<title>psth.UnitPsth</title>
+<g id="a_node6"><a xlink:title="→ psth.TrialCondition→ ephys.Unit------------------------------unit_psth=null       ">
+<ellipse cx="350.5" cy="-13" fill="#ff0000" fill-opacity="0.125490" rx="13" ry="13" stroke="#ff0000" stroke-opacity="0.125490"/>
+<text fill="#7f0000" font-family="arial" font-size="12.00" text-anchor="middle" x="350.5" y="-9.9">psth.UnitPsth</text>
+</a>
+</g>
+</g>
+<!-- psth.TrialCondition&#45;&gt;psth.UnitPsth -->
+<g class="edge" id="edge6">
+<title>psth.TrialCondition-&gt;psth.UnitPsth</title>
+<path d="M350.5,-61.6792C350.5,-50.4451 350.5,-36.1917 350.5,-26.0168" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- ephys.Unit -->
+<g class="node" id="node7">
+<title>ephys.Unit</title>
+<g id="a_node7"><a xlink:title="→ ephys.ProbeInsertion→ ephys.ClusteringMethodunit                 ------------------------------unit_uid             → ephys.UnitQualityType→ lab.ElectrodeConfig.Electrodeunit_posx            unit_posy            spike_times          unit_amp             unit_snr             waveform             ">
+<ellipse cx="233.5" cy="-79.5" fill="#00007f" fill-opacity="0.250980" rx="46.5014" ry="17.5" stroke="#00007f" stroke-opacity="0.250980"/>
+<text fill="#00007f" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="204.5" y="-77.4">ephys.Unit</text>
+</a>
+</g>
+</g>
+<!-- ephys.Unit&#45;&gt;psth.UnitPsth -->
+<g class="edge" id="edge7">
+<title>ephys.Unit-&gt;psth.UnitPsth</title>
+<path d="M259.1761,-64.9063C284.0651,-50.76 320.674,-29.9524 339.066,-19.4988" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- ephys.Unit&#45;&gt;psth.PeriodSelectivity -->
+<g class="edge" id="edge8">
+<title>ephys.Unit-&gt;psth.PeriodSelectivity</title>
+<path d="M203.3476,-66.0427C170.5239,-51.3932 119.6422,-28.6843 96.5868,-18.3944" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- ephys.Unit&#45;&gt;psth.UnitSelectivity -->
+<g class="edge" id="edge9">
+<title>ephys.Unit-&gt;psth.UnitSelectivity</title>
+<path d="M232.1601,-61.6792C231.3154,-50.4451 230.2437,-36.1917 229.4787,-26.0168" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+</g>
+</svg>

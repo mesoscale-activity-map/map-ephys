@@ -1,0 +1,221 @@
+<svg height="366pt" viewBox="0.00 0.00 1074.00 366.00" width="1074pt" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g class="graph" id="graph0" transform="scale(1 1) rotate(0) translate(4 362)">
+<title>%3</title>
+<polygon fill="#ffffff" points="-4,4 -4,-362 1070,-362 1070,4 -4,4" stroke="transparent"/>
+<!-- experiment.SessionTrial -->
+<g class="node" id="node1">
+<title>experiment.SessionTrial</title>
+<g id="a_node1"><a xlink:title="→ experiment.Sessiontrial                ------------------------------trial_uid            start_time           stop_time            ">
+<ellipse cx="603.5" cy="-269.5" fill="#00007f" fill-opacity="0.250980" rx="91.5007" ry="17.5" stroke="#00007f" stroke-opacity="0.250980"/>
+<text fill="#00007f" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="538.5" y="-267.4">experiment.SessionTrial</text>
+</a>
+</g>
+</g>
+<!-- tracking.Tracking -->
+<g class="node" id="node10">
+<title>tracking.Tracking</title>
+<g id="a_node10"><a xlink:title="→ experiment.SessionTrial→ tracking.TrackingDevice------------------------------tracking_samples     ">
+<ellipse cx="518.5" cy="-198.5" fill="#00007f" fill-opacity="0.250980" rx="66.7502" ry="17.5" stroke="#00007f" stroke-opacity="0.250980"/>
+<text fill="#00007f" font-family="arial" font-size="12.00" text-anchor="middle" x="518.5" y="-195.4">tracking.Tracking</text>
+</a>
+</g>
+</g>
+<!-- experiment.SessionTrial&#45;&gt;tracking.Tracking -->
+<g class="edge" id="edge1">
+<title>experiment.SessionTrial-&gt;tracking.Tracking</title>
+<path d="M582.9239,-252.3129C569.4615,-241.0678 551.9576,-226.4469 538.5933,-215.2838" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- tracking_ingest.TrackingIngest.TrackingFile -->
+<g class="node" id="node11">
+<title>tracking_ingest.TrackingIngest.TrackingFile</title>
+<g id="a_node11"><a xlink:title="→ tracking_ingest.TrackingIngest→ experiment.SessionTrial→ tracking.TrackingDevice------------------------------tracking_file        ">
+<polygon fill="transparent" points="927.5,-208 721.5,-208 721.5,-189 927.5,-189 927.5,-208" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="middle" x="824.5" y="-196">tracking_ingest.TrackingIngest.TrackingFile</text>
+</a>
+</g>
+</g>
+<!-- experiment.SessionTrial&#45;&gt;tracking_ingest.TrackingIngest.TrackingFile -->
+<g class="edge" id="edge2">
+<title>experiment.SessionTrial-&gt;tracking_ingest.TrackingIngest.TrackingFile</title>
+<path d="M650.3684,-254.4427C693.9547,-240.4399 757.5777,-219.9999 794.6375,-208.0938" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- tracking.TrackingDevice -->
+<g class="node" id="node2">
+<title>tracking.TrackingDevice</title>
+<g id="a_node2"><a xlink:title="tracking_device      ------------------------------tracking_position    sampling_rate        tracking_device_description ">
+<polygon fill="#000000" fill-opacity="0.125490" points="494.5,-287 372.5,-287 372.5,-252 494.5,-252 494.5,-287" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="380.5" y="-268">tracking.TrackingDevice</text>
+</a>
+</g>
+</g>
+<!-- tracking.TrackingDevice&#45;&gt;tracking.Tracking -->
+<g class="edge" id="edge3">
+<title>tracking.TrackingDevice-&gt;tracking.Tracking</title>
+<path d="M454.5112,-251.9494C467.8833,-240.7798 485.1069,-226.3931 498.3158,-215.3598" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- tracking.TrackingDevice&#45;&gt;tracking_ingest.TrackingIngest.TrackingFile -->
+<g class="edge" id="edge4">
+<title>tracking.TrackingDevice-&gt;tracking_ingest.TrackingIngest.TrackingFile</title>
+<path d="M494.5174,-253.941C497.5498,-253.2634 500.5566,-252.6122 503.5,-252 590.8963,-233.8227 692.6883,-217.7037 757.8152,-208.0265" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- tracking.Tracking.NoseTracking -->
+<g class="node" id="node3">
+<title>tracking.Tracking.NoseTracking</title>
+<g id="a_node3"><a xlink:title="→ tracking.Tracking------------------------------nose_x               nose_y               nose_likelihood      ">
+<polygon fill="transparent" points="155,-145 0,-145 0,-126 155,-126 155,-145" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="middle" x="77.5" y="-133">tracking.Tracking.NoseTracking</text>
+</a>
+</g>
+</g>
+<!-- tracking.Tracking.TongueTracking -->
+<g class="node" id="node4">
+<title>tracking.Tracking.TongueTracking</title>
+<g id="a_node4"><a xlink:title="→ tracking.Tracking------------------------------tongue_x             tongue_y             tongue_likelihood    ">
+<polygon fill="transparent" points="337.5,-145 173.5,-145 173.5,-126 337.5,-126 337.5,-145" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="middle" x="255.5" y="-133">tracking.Tracking.TongueTracking</text>
+</a>
+</g>
+</g>
+<!-- tracking.TrackedWhisker -->
+<g class="node" id="node5">
+<title>tracking.TrackedWhisker</title>
+<g id="a_node5"><a xlink:title="→ tracking.Tracking.WhiskerTracking">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="680.5,-90 532.5,-90 532.5,-55 680.5,-55 680.5,-90" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="middle" x="606.5" y="-69.4">tracking.TrackedWhisker</text>
+</a>
+</g>
+</g>
+<!-- tracking.TrackedWhisker.Whisker -->
+<g class="node" id="node6">
+<title>tracking.TrackedWhisker.Whisker</title>
+<g id="a_node6"><a xlink:title="→ tracking.TrackedWhisker→ lab.Whisker">
+<polygon fill="transparent" points="687.5,-19 525.5,-19 525.5,0 687.5,0 687.5,-19" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="middle" x="606.5" y="-7">tracking.TrackedWhisker.Whisker</text>
+</a>
+</g>
+</g>
+<!-- tracking.TrackedWhisker&#45;&gt;tracking.TrackedWhisker.Whisker -->
+<g class="edge" id="edge5">
+<title>tracking.TrackedWhisker-&gt;tracking.TrackedWhisker.Whisker</title>
+<path d="M606.5,-54.951C606.5,-43.4459 606.5,-28.8292 606.5,-19.3243" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- tracking.Tracking.JawTracking -->
+<g class="node" id="node7">
+<title>tracking.Tracking.JawTracking</title>
+<g id="a_node7"><a xlink:title="→ tracking.Tracking------------------------------jaw_x                jaw_y                jaw_likelihood       ">
+<polygon fill="transparent" points="505,-145 356,-145 356,-126 505,-126 505,-145" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="middle" x="430.5" y="-133">tracking.Tracking.JawTracking</text>
+</a>
+</g>
+</g>
+<!-- lab.Whisker -->
+<g class="node" id="node8">
+<title>lab.Whisker</title>
+<g id="a_node8"><a xlink:title="whisker              ">
+<polygon fill="#000000" fill-opacity="0.125490" points="766.5,-90 698.5,-90 698.5,-55 766.5,-55 766.5,-90" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="706.5" y="-71">lab.Whisker</text>
+</a>
+</g>
+</g>
+<!-- lab.Whisker&#45;&gt;tracking.TrackedWhisker.Whisker -->
+<g class="edge" id="edge6">
+<title>lab.Whisker-&gt;tracking.TrackedWhisker.Whisker</title>
+<path d="M698.4026,-55.4513C675.0804,-43.7902 645.0115,-28.7558 625.7395,-19.1198" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- tracking.Tracking.WhiskerTracking -->
+<g class="node" id="node9">
+<title>tracking.Tracking.WhiskerTracking</title>
+<g id="a_node9"><a xlink:title="→ tracking.Trackingwhisker_id           ------------------------------whisker_name         whisker_x            whisker_y            whisker_likelihood   UNIQUE INDEX (whisker_name)">
+<polygon fill="transparent" points="690,-145 523,-145 523,-126 690,-126 690,-145" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="531" y="-134">tracking.Tracking.WhiskerTracking</text>
+</a>
+</g>
+</g>
+<!-- tracking.Tracking.WhiskerTracking&#45;&gt;tracking.TrackedWhisker -->
+<g class="edge" id="edge7">
+<title>tracking.Tracking.WhiskerTracking-&gt;tracking.TrackedWhisker</title>
+<path d="M606.5,-125.9317C606.5,-116.4312 606.5,-101.6468 606.5,-90.0359" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- tracking.Tracking&#45;&gt;tracking.Tracking.NoseTracking -->
+<g class="edge" id="edge8">
+<title>tracking.Tracking-&gt;tracking.Tracking.NoseTracking</title>
+<path d="M459.4824,-190.0689C377.5707,-178.3672 229.8457,-157.2637 144.0884,-145.0126" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- tracking.Tracking&#45;&gt;tracking.Tracking.TongueTracking -->
+<g class="edge" id="edge9">
+<title>tracking.Tracking-&gt;tracking.Tracking.TongueTracking</title>
+<path d="M469.0317,-186.6502C418.7379,-174.6026 341.7892,-156.17 295.2967,-145.0331" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- tracking.Tracking&#45;&gt;tracking.Tracking.JawTracking -->
+<g class="edge" id="edge10">
+<title>tracking.Tracking-&gt;tracking.Tracking.JawTracking</title>
+<path d="M495.379,-181.9475C478.9816,-170.2084 457.5479,-154.8639 443.8982,-145.0919" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- tracking.Tracking&#45;&gt;tracking.Tracking.WhiskerTracking -->
+<g class="edge" id="edge11">
+<title>tracking.Tracking-&gt;tracking.Tracking.WhiskerTracking</title>
+<path d="M541.621,-181.9475C558.0184,-170.2084 579.4521,-154.8639 593.1018,-145.0919" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- tracking.Tracking.RightPawTracking -->
+<g class="node" id="node14">
+<title>tracking.Tracking.RightPawTracking</title>
+<g id="a_node14"><a xlink:title="→ tracking.Tracking------------------------------right_paw_x          right_paw_y          right_paw_likelihood ">
+<polygon fill="transparent" points="881,-145 708,-145 708,-126 881,-126 881,-145" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="middle" x="794.5" y="-133">tracking.Tracking.RightPawTracking</text>
+</a>
+</g>
+</g>
+<!-- tracking.Tracking&#45;&gt;tracking.Tracking.RightPawTracking -->
+<g class="edge" id="edge12">
+<title>tracking.Tracking-&gt;tracking.Tracking.RightPawTracking</title>
+<path d="M569.1227,-186.9448C621.8788,-174.9027 703.5772,-156.2541 752.7642,-145.0266" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- tracking.Tracking.LeftPawTracking -->
+<g class="node" id="node15">
+<title>tracking.Tracking.LeftPawTracking</title>
+<g id="a_node15"><a xlink:title="→ tracking.Tracking------------------------------left_paw_x           left_paw_y           left_paw_likelihood  ">
+<polygon fill="transparent" points="1066,-145 899,-145 899,-126 1066,-126 1066,-145" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="middle" x="982.5" y="-133">tracking.Tracking.LeftPawTracking</text>
+</a>
+</g>
+</g>
+<!-- tracking.Tracking&#45;&gt;tracking.Tracking.LeftPawTracking -->
+<g class="edge" id="edge13">
+<title>tracking.Tracking-&gt;tracking.Tracking.LeftPawTracking</title>
+<path d="M578.21,-190.3928C663.8773,-178.7613 821.3462,-157.3808 912.4181,-145.0154" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- tracking_ingest.TrackingIngest -->
+<g class="node" id="node12">
+<title>tracking_ingest.TrackingIngest</title>
+<g id="a_node12"><a xlink:title="→ experiment.Session">
+<ellipse cx="824.5" cy="-269.5" fill="#00007f" fill-opacity="0.250980" rx="111.7501" ry="17.5" stroke="#00007f" stroke-opacity="0.250980"/>
+<text fill="#00007f" font-family="arial" font-size="12.00" text-anchor="middle" x="824.5" y="-266.4">tracking_ingest.TrackingIngest</text>
+</a>
+</g>
+</g>
+<!-- tracking_ingest.TrackingIngest&#45;&gt;tracking_ingest.TrackingIngest.TrackingFile -->
+<g class="edge" id="edge14">
+<title>tracking_ingest.TrackingIngest-&gt;tracking_ingest.TrackingIngest.TrackingFile</title>
+<path d="M824.5,-251.9494C824.5,-238.1517 824.5,-219.4447 824.5,-208.2141" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- experiment.Session -->
+<g class="node" id="node13">
+<title>experiment.Session</title>
+<g id="a_node13"><a xlink:title="→ lab.Subjectsession              ------------------------------session_date         session_time         → lab.Person→ lab.Rig">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="774.5,-358 652.5,-358 652.5,-323 774.5,-323 774.5,-358" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="660.5" y="-338.4">experiment.Session</text>
+</a>
+</g>
+</g>
+<!-- experiment.Session&#45;&gt;experiment.SessionTrial -->
+<g class="edge" id="edge15">
+<title>experiment.Session-&gt;experiment.SessionTrial</title>
+<path d="M686.309,-322.9494C669.004,-311.7798 646.7146,-297.3931 629.6208,-286.3598" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- experiment.Session&#45;&gt;tracking_ingest.TrackingIngest -->
+<g class="edge" id="edge16">
+<title>experiment.Session-&gt;tracking_ingest.TrackingIngest</title>
+<path d="M740.9382,-322.9494C758.2721,-311.862 780.562,-297.6045 797.7604,-286.6037" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+</g>
+</svg>
