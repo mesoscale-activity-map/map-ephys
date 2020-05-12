@@ -172,13 +172,13 @@ As shown in the diagram, report figures are categorized into 4 levels.
 
 `report.ProjectLevelProbeTrack`
 
-<img src="./static/project_tracks_plot.png" alt="project_tracks_plot" width="300" height="300">
+<img src="static/pipeline_architecture/project_tracks_plot.png" alt="project_tracks_plot" width="300" height="300">
 
 ### session-level
 
 |`report.SessionLevelProbeTrack`|`report.SessionLevelReport`|`report.SessionLevelCDReport`
 |:---------------------------:|:---------------------------:|:---------------------------:
-|<img src="./static/session_tracks_plot.png" alt="session_tracks_plot" width="200" height="200">|<img src="./static/session_behav_perf.png" alt="session_behav_perf" width="200" height="200">|<img src="./static/session_CD.png" alt="session_CD" width="200" height="200">
+|<img src="static/pipeline_architecture/session_tracks_plot.png" alt="session_tracks_plot" width="200" height="200">|<img src="static/pipeline_architecture/session_behav_perf.png" alt="session_behav_perf" width="200" height="200">|<img src="static/pipeline_architecture/session_CD.png" alt="session_CD" width="200" height="200">
 
 ### probe-level
 
@@ -186,15 +186,15 @@ As shown in the diagram, report figures are categorized into 4 levels.
 
 |clustering_quality|unit_characteristic|group_psth
 |:---------------------------:|:---------------------------:|:---------------------------:
-|<img src="./static/probe_clustering_quality.png" alt="probe_clustering_quality" width="200" height="200">|<img src="./static/probe_unit_characteristic.png" alt="probe_unit_characteristic" width="200" height="200">|<img src="./static/probe_group_psth.png" alt="probe_group_psth" width="400" height="200">
+|<img src="static/pipeline_architecture/probe_clustering_quality.png" alt="probe_clustering_quality" width="200" height="200">|<img src="static/pipeline_architecture/probe_unit_characteristic.png" alt="probe_unit_characteristic" width="200" height="200">|<img src="static/pipeline_architecture/probe_group_psth.png" alt="probe_group_psth" width="400" height="200">
 
 `report.ProbeLevelPhotostimEffectReport`
 
-<img src="./static/probe_group_photostim.png" alt="probe_group_photostim" width="600" height="150">
+<img src="static/pipeline_architecture/probe_group_photostim.png" alt="probe_group_photostim" width="600" height="150">
 
 ### unit-level
 
 |`report.UnitLevelEphysReport`|`report.UnitLevelTrackingReport`
 |:---------------------------:|:---------------------------:|
-|<img src="./static/unit_unit_psth.png" alt="unit_unit_psth" width="200" height="200">|<img src="./static/unit_unit_behavior.png" alt="unit_unit_behavior" width="200" height="200">
+|<img src="static/pipeline_architecture/unit_unit_psth.png" alt="unit_unit_psth" width="200" height="200">|<img src="static/pipeline_architecture/unit_unit_behavior.png" alt="unit_unit_behavior" width="200" height="200">
 
