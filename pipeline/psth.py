@@ -521,7 +521,7 @@ def compute_coding_direction(contra_psths, ipsi_psths, time_period=None):
     and ipsi-trials firing rate per unit, within the specified time period
     :param contra_psths: unit# x (trial-ave psth, psth_edge)
     :param ipsi_psths: unit# x (trial-ave psth, psth_edge)
-    :param time_period: (time_from, time_to) in seconds
+    :param time_period: (time_from, time_to) in seconds, relative to go-cue
     """
     if not time_period:
         contra_tmin, contra_tmax = zip(*((k[1].min(), k[1].max()) for k in contra_psths))
@@ -545,7 +545,7 @@ def compute_CD_projected_psth(units, time_period=None):
     Coding Direction is calculated in the specified time_period
     Unit PSTH are computed over no early-lick, correct-response trials
     :param: unit_keys - list of unit_keys
-    :param time_period: (time_from, time_to) in seconds
+    :param time_period: (time_from, time_to) in seconds, relative to go-cue
     :return: coding direction unit-vector,
              contra-trials CD projected trial-psth,
              ipsi-trials CD projected trial-psth
