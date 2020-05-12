@@ -77,7 +77,7 @@ The goal is for users to reuse and extend on the available library, avoiding "re
 # Visualization library
 
 The MAP project provides a library of plotting functions,
- which are used to generate all the result figures presented in [`report schema`](pipeline_architecture.md)
+ which are used to generate all the result figures in the `report` schema, as presented [here](pipeline_architecture.md)
  
 Detailed descriptions and demonstrations of this plotting library are presented in the following 3 notebooks:
 
