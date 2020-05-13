@@ -10,7 +10,7 @@ Visit [here](doc/intro.md) for full documentation of this project
 ## The MAP Navigator
 
 A website dedicated for data browsing and results visualization for MAP project can be accessed at
- [https://map-navigator.datajoint.io/](https://map-navigator.datajoint.io/)
+ [https://map-navigator.datajoint.io/](http://map-navigator.datajoint.io/)
 
 
 ## Access via Jupyter Hub
