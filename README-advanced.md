@@ -162,10 +162,15 @@ where:
   - `YYYYMMDD` and `HHMMSS` refer to the date and time of the session.
   
 #### Ephys Files Ingestion
-Ephys Files are typically structured in a directory convention as followed (*subsequent to the ***ephys_data_paths****):
 
-    {h2o}/{YYYYMMDD}/{probe_no}/ephys_file  
+Ephys Files stored within 'ephys_data_paths' are expected to be in the
+following structure:
+
+    {h2o}/{YYYYMMDD}/{probe_no}/ephys_file
 or
+
+# TODO: is this correct, or is it:
+# 
 
     {h20}/{h20}_{YYYYMMDD}_*/{h20}_{YYYYMMDD}_*_imec[0-9]/
     
