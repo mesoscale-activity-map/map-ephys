@@ -44,8 +44,12 @@ class GlobusStorageLocation(dj.Lookup):
         if custom and 'globus.storage_locations' in custom:  # test config
             return custom['globus.storage_locations']
 
-        return (('raw-ephys', '5b875fda-4185-11e8-bb52-0ac6873fc732', '/'),
-                ('raw-video', '5b875fda-4185-11e8-bb52-0ac6873fc732', '/'),)
+        return (('raw-ephys',
+                 '5b875fda-4185-11e8-bb52-0ac6873fc732',
+                 '/4ElectrodeRig_Ephys'),  # TODO: updated/final path
+                ('raw-video',
+                 '5b875fda-4185-11e8-bb52-0ac6873fc732',
+                 '/'))
 
     @classmethod
     def local_endpoint(cls, globus_alias=None):
@@ -85,10 +89,14 @@ class DataSetType(dj.Lookup):
     dataset_type: varchar(64)
     """
 
-    contents = zip(['ephys-raw-trialized',
-                    'ephys-raw-continuous',
-                    'ephys-sorted',
+    # contents = zip(['ephys-raw-trialized',
+    #                 'ephys-raw-continuous',
+    #                 'ephys-sorted',
+    #                 'tracking-video'])
+    contents = zip(['ephys-raw',
                     'tracking-video'])
+
+
 
 
 @schema
@@ -102,8 +110,25 @@ class FileType(dj.Lookup):
 
     @property
     def contents(self):
+        '''
+        FileType values.
 
-        data = [('ephys-raw-3a-ap-trial',
+        A list of 3-tuples of file_type, file_glob, file_descr.
+
+        Should be kept 
+        '''
+
+        data = [('unknown',
+                 '',  # deliberately non-matching pattern for manual tagging
+                 '''
+                 Unknown File Type
+                 '''),
+                ('ephys-raw-unknown',
+                 '',  # deliberately non-matching pattern for manual tagging
+                 '''
+                 Unknown Raw-Ephys File Type
+                 '''),
+                 ('ephys-raw-3a-ap-trial',
                  '*_g0_t[0-9]*.imec.ap.bin',
                  '''
                  3A Probe per-trial AP channels high pass filtered at
@@ -175,6 +200,11 @@ class FileType(dj.Lookup):
                  3B Probe concatenated AP channels low pass filtered at
                  300Hz and sampled at 2.5kHz - file metadata
                  '''),
+                ('tracking-video-unknown',
+                 '',  # deliberately non-matching pattern for manual tagging
+                 '''
+                 Unknown Tracking Video File Type
+                 '''),
                 ('tracking-video-trial',
                  '*_*_[0-9]*-*.[am][vp][i4]',
                  '''
@@ -188,6 +218,45 @@ class FileType(dj.Lookup):
 
         return [[dedent(i).replace('\n', ' ').strip(' ') for i in r]
                 for r in data]
+
+    @classmethod
+    def fnmatch(cls, fname, file_type_filter=''):
+        '''
+        Get file type match for a given file name.
+
+        The optional keyword argument 'file_type_filter' will be used
+        to restrict the subset of possible matched and unkown filetype names.
+
+        For example:
+
+          >>> FileType.fnmatch('myfilename', 'ephys')
+
+        Will return the specific 'ephys*' FileType record if its file_glob
+        matches 'myfilename', and if not, an 'unknown' FileType
+        matching 'ephys' (e.g. 'ephys-unknown') if one and only one is present.
+
+        If no file_glob matches any file type, and a single 'unknown' 
+        FileType cannot be found matching file_type_filter, the 
+        generic 'unknown' filetype data will be returned.
+        '''
+        self = cls()
+
+        ftmap = {t['file_type']: t for t in (
+            self & "file_type like '{}%%'".format(file_type_filter)) }
+
+        unknown, isknown = {}, {}  # unknown filetypes, known filetype matches.
+
+        for k, v in ftmap.items():
+            if 'unknown' in k and file_type_filter in k:
+                unknown[k] = v  # a file_type_filter matching unknown file type
+            if fnmatch(fname, v['file_glob']):
+                isknown[k] = v  # a file_glob matching file name
+
+        # return type match or unknown type
+        return (list(isknown.values())[0] if len(isknown) == 1 else (
+            list(unknown.values())[0] if len(unknown) == 1 else (
+                ftmap['unknown'] if 'unknown' in ftmap else (
+                    self & {'file_type': 'unknown'}).fetch1())))
 
 
 @schema
@@ -211,23 +280,15 @@ class DataSet(dj.Manual):
 @schema
 class ArchivedRawEphys(dj.Imported):
     definition = """
-    -> ArchivedSession
+    -> experiment.Session
     -> DataSet
-    probe_folder:               tinyint
     """
 
-    key_source = experiment.Session
+    # FIXME: full key source
+    # key_source = experiment.Session & ephys.Unit
+    key_source = experiment.Session & ephys.Unit & {'subject_id': 440956, 'session': 1}
 
     gsm = None  # for GlobusStorageManager
-
-    class RawEphysTrial(dj.Part):
-        """ file:trial mapping if applicable """
-
-        definition = """
-        -> master
-        -> experiment.SessionTrial
-        -> DataSet.PhysicalFile
-        """
 
     def get_gsm(self):
         log.debug('ArchivedRawEphysTrial.get_gsm()')
@@ -242,179 +303,86 @@ class ArchivedRawEphys(dj.Imported):
         """
         Discover files on globus and attempt to register them.
         """
+        def build_session(self, key):
+            log.debug('discover: build_session {}'.format(key))
+
+            gsm = self.get_gsm()
+            globus_alias = 'raw-ephys'
+
+            ra, rep, rep_sub = (
+                GlobusStorageLocation() & {'globus_alias': globus_alias}
+            ).fetch1().values()
+
+            sdate = key['session_date']
+            sdate_mdy = sdate.strftime('%m%d%g')
+
+            h2o = (lab.WaterRestriction & lab.Subject.proj() & key).fetch1()
+
+            h2o_num = h2o['water_restriction_number']
+
+            # session: <root>/<h2o>/catgt_<h2o>_<mdy>_g0/
+            # probe: <root>/<h2o>/catgt_<h2o>_<mdy>_g0/<h2o>_<mdy>_imecN
+
+            rpath = '/'.join([rep_sub, h2o_num,
+                              'catgt_{}_{}_g0'.format(h2o_num, sdate_mdy)])
+
+            rep_tgt = '{}:{}'.format(rep, rpath)
+
+            if not gsm.ls(rep_tgt):
+                log.info('no globus data found for {} session {}'.format(
+                    h2o_num, key['session']))
+                return None
+
+            dskey = {'globus_alias': globus_alias,
+                     'dataset_name': '{}-{}'.format(h2o_num, key['session'])}
+
+            dsrec = {**dskey, 'dataset_type': 'ephys-raw'}
+
+            dsfiles = []
+
+            for f in (f for f in gsm.fts(rep_tgt) if type(f[2]) == dict):
+
+                dirname, basename = f[1], f[2]['name']
+
+                ftype = FileType.fnmatch(basename, dsrec['dataset_type'])
+
+                dsfile = {'file_subpath': '{}/{}'.format(dirname, basename),
+                          'file_type': ftype['file_type']}
+
+                log.debug('.. file: {}'.format(dsfile))
+
+                dsfiles.append({**dskey, **dsfile})
+
+            return dsrec, dsfiles
+
+        def commit_session(self, key, data):
+            log.debug('discover: commit_session {}'.format(key))
+
+            DataSet.insert1(data[0])
+            DataSet.PhysicalFile.insert(data[1])
+
+            self.insert1({**key, **data[0]})
+
         self = cls()
+        keys = self.key_source - self
 
-        globus_alias = 'raw-ephys'
+        log.info('attempting discovery for {} sessions'.format(len(keys)))
 
-        ra, rep, rep_sub = (GlobusStorageLocation()
-                            & {'globus_alias': globus_alias}).fetch1().values()
+        for key in keys:
 
-        smap = {'{}/{}'.format(s['water_restriction_number'],
-                               s['session_date']).replace('-', ''): s
-                for s in (experiment.Session()
-                          * (lab.WaterRestriction() * lab.Subject.proj()))}
+            log.info('.. inspecting {} {}'.format(
+                key['subject_id'], key['session']))
 
-        ftmap = {t['file_type']: t for t
-                 in (FileType() & "file_type like 'ephys%%'")}
+            data = build_session(self, key)
 
-        skey = None
-        sskip = set()
-        sfiles = []  # {file_subpath:, trial:, file_type:,}
-
-        def commit(skey, sfiles):
-            log.info('commit. skey: {}, sfiles: {}'.format(skey, sfiles))
-
-            if not sfiles:
-                log.info('skipping. no files in set')
-                return
-
-            h2o, sdate, ftypes = set(), set(), set()
-            ptmap = defaultdict(lambda: defaultdict(list))  # probe:trial:file
-
-            for s in sfiles:
-                ptmap[s['probe']][s['trial']].append(s)
-                h2o.add(s['water_restriction_number'])
-                sdate.add(s['session_date'])
-                ftypes.add(s['file_type'])
-
-            if len(h2o) != 1 or len(sdate) != 1:
-                log.info('skipping. bad h2o {} or session date {}'.format(
-                    h2o, sdate))
-                return
-
-            h2o, sdate = next(iter(h2o)), next(iter(sdate))
-
-            {k: {kk: vv for kk, vv in v.items()} for k, v in ptmap.items()}
-
-            if all('trial' in f for f in ftypes):
-
-                # DataSet
-                ds_type = 'ephys-raw-trialized'
-                ds_name = '{}_{}_{}'.format(h2o, sdate, ds_type)
-                ds_key = {'dataset_name': ds_name,
-                          'globus_alias': globus_alias}
-
-                if (DataSet & ds_key):
-                    log.info('DataSet: {} already exists. Skipping.'.format(
-                        ds_key))
-                    return
-
-                DataSet.insert1({**ds_key, 'dataset_type': ds_type},
-                                allow_direct_insert=True)
-
-                # ArchivedSession
-                as_key = {k: v for k, v in smap[skey].items()
-                          if k in ArchivedSession.primary_key}
-
-                ArchivedSession.insert1(
-                    {**as_key, 'globus_alias': globus_alias},
-                    allow_direct_insert=True,
-                    skip_duplicates=True)
-
-                for p in ptmap:
-
-                    # ArchivedRawEphys
-                    ep_key = {**as_key, **ds_key, 'probe_folder': p}
-
-                    ArchivedRawEphys.insert1(ep_key, allow_direct_insert=True)
-
-                    for t in ptmap[p]:
-                        for f in ptmap[p][t]:
-
-                            DataSet.PhysicalFile.insert1(
-                                {**ds_key, **f}, allow_direct_insert=True,
-                                ignore_extra_fields=True)
-
-                            ArchivedRawEphys.RawEphysTrial.insert1(
-                                {**ep_key, **ds_key,
-                                 'trial': t,
-                                 'file_subpath': f['file_subpath']},
-                                allow_direct_insert=True)
-
-            elif all('concat' in f for f in ftypes):
-                raise NotImplementedError('concatenated not yet implemented')
-            else:
-                log.info('skipping. mixed filetypes detected')
-                return
-
-        gsm = self.get_gsm()
-        gsm.activate_endpoint(rep)
-        for ep, dirname, node in gsm.fts('{}:{}'.format(rep, rep_sub)):
-
-            log.debug('checking: {}:{}/{}'.format(
-                ep, dirname, node.get('name', '')))
-
-            edir = re.match('([a-z]+[0-9]+)/([0-9]{8})/([0-9]+)', dirname)
-
-            if not edir or node['DATA_TYPE'] != 'file':
-                continue
-
-            log.debug('dir match: {}'.format(dirname))
-
-            h2o, sdate, probe = edir[1], edir[2], edir[3]
-
-            skey_i = '{}/{}'.format(h2o, sdate)
-
-            if skey_i != skey:
-                if skey and skey in smap:
-                    with dj.conn().transaction:
-                        try:
-                            commit(skey, sfiles)
-                        except Exception as e:
-                            log.error(
-                                'Exception {} committing {}. files: {}'.format(
-                                    repr(e), skey, sfiles))
-
-                skey, sfiles = skey_i, []
-
-            if skey not in smap:
-                if skey not in sskip:
-                    log.debug('session {} not known. skipping.'.format(skey))
-                    sskip.add(skey)
-
-                continue
-
-            fname = node['name']
-
-            log.debug('found file {}'.format(fname))
-
-            if '.' not in fname:
-                log.debug('skipping {} - no dot in fname'.format(fname))
-                continue
-
-            froot, fext = fname.split('.', 1)
-            ftype = {g['file_type']: g for g in ftmap.values()
-                     if fnmatch(fname, g['file_glob'])}
-
-            if len(ftype) != 1:
-                log.debug('skipping {} - incorrect type matches: {}'.format(
-                    fname, ftype))
-                continue
-
-            ftype = next(iter(ftype.values()))['file_type']
-
-            trial = None
-            if 'trial' in ftype:
-                trial = int(froot.split('_t')[1])
-
-            file_subpath = '{}/{}'.format(dirname, fname)
-
-            sfiles.append({'water_restriction_number': h2o,
-                           'session_date': '{}-{}-{}'.format(
-                               sdate[:4], sdate[4:6], sdate[6:]),
-                           'probe': int(probe),
-                           'trial': int(trial),
-                           'file_subpath': file_subpath,
-                           'file_type': ftype})
-
-        if skey:
-            with dj.conn().transaction:
-                commit(skey, sfiles)
+            if data:
+                commit_session(self, key, data)
 
     def make(self, key):
         """
         discover files in local endpoint and transfer/register
         """
+        raise NotImplementedError('need adjustment to new layout')
 
         log.debug(key)
         globus_alias = 'raw-ephys'
@@ -686,9 +654,7 @@ class ArchivedTrackingVideo(dj.Imported):
     '''
 
     definition = """
-    -> ArchivedSession
-    -> tracking.TrackingDevice
-    ---
+    -> experiment.Session
     -> DataSet
     """
 
@@ -696,14 +662,6 @@ class ArchivedTrackingVideo(dj.Imported):
 
     ingest = None  # ingest module reference
     gsm = None  # for GlobusStorageManager
-
-    class TrialVideo(dj.Part):
-        definition = """
-        -> master
-        -> experiment.SessionTrial
-        ---
-        -> DataSet.PhysicalFile
-        """
 
     @classmethod
     def get_ingest(cls):
@@ -1058,42 +1016,3 @@ class ArchivedTrackingVideo(dj.Imported):
 
             tv_rec = {**vt_key, **trk_key, **pf_key}
             self.TrialVideo.insert1({**tv_rec})
-
-
-def test_flist(fname='globus-index-full.txt'):
-    '''
-    spoof tester for discover methods
-
-    expects:
-
-    f: ep:/path/to/file
-    d: ep:/path/to/direct
-
-    etc. (aka: globus-shell 'find' output)
-
-    replace the line:
-
-      for ep, dirname, node in gsm.fts('{}:{}'.format(rep, rep_sub)):
-
-    with:
-
-      for ep, dirname, node in test_flist('globus-list.txt'):
-
-    to test against the file 'globus-list.txt'
-    '''
-    with open(fname, 'r') as infile:
-        for l in infile:
-            try:
-                t, fp = l.split(' ')
-
-                fp = fp.split(':')[1].lstrip('/').rstrip('\n')
-                dn, bn = os.path.split(fp)
-
-                if t == 'f:':
-                    yield ('ep', dn, {'DATA_TYPE': 'file', 'name': bn})
-                else:
-                    yield ('ep', dn, {'DATA_TYPE': 'dunno', 'path': bn})
-
-            except ValueError as e:
-                if 'too many values' in repr(e):
-                    pass
