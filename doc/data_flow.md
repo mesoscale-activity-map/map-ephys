@@ -2,8 +2,6 @@
 
 This document captures the sequence of data import, preprocessing, analysis, and
  figure generation implemented in the MAP pipeline. 
-
-## `dj.Lookup` data
  
 
 ## Data Ingestion
@@ -33,7 +31,7 @@ The ingestion of behavior data is performed by the `BehaviorIngest`'s `make()` f
 `BehaviorIngest` performs ingestion on a ***per-session*** basis,
  populating data into the tables outlined in red in the diagram below.
 
-![behavior_ingest](./pipeline_architecture/static/MAP_ingestion_diagram-behavior_ingest.svg)
+![behavior_ingest](static/pipeline_architecture/MAP_ingestion_diagram-behavior_ingest.svg)
 
 
 ### Tracking Ingestion
@@ -41,7 +39,7 @@ The ingestion of behavior data is performed by the `BehaviorIngest`'s `make()` f
 Similarly, `TrackingIngest` performs ingestion on a ***per-session*** basis,
  populating data into the tables outlined in red in the diagram below.
 
-![tracking_ingest](./pipeline_architecture/static/MAP_ingestion_diagram-tracking_ingest.svg)
+![tracking_ingest](static/pipeline_architecture/MAP_ingestion_diagram-tracking_ingest.svg)
 
 The association of whisker tracking time series and the tracked whisker(s) are to be done as follow up manual insertion step.
 
@@ -52,7 +50,7 @@ The association of whisker tracking time series and the tracked whisker(s) are t
  search for all Probe and Ephys data associated with that session,
  and populate data into the tables outlined in red in the diagram below.
 
-![ephys_ingest](./pipeline_architecture/static/MAP_ingestion_diagram-ephys_ingest.svg)
+![ephys_ingest](static/pipeline_architecture/MAP_ingestion_diagram-ephys_ingest.svg)
 
 The detailed steps are as followed:
 1. Search data directory for clustering folder per probe - e.g. kilosort or jrclust
@@ -75,7 +73,7 @@ The detailed steps are as followed:
 
 `HistologyIngest` performs ingestion on a ***per-probe*** basis, populating electrodes' CCF locations and probe tracks.
 
-![histology_ingest](./pipeline_architecture/static/MAP_ingestion_diagram-histology_ingest.svg)
+![histology_ingest](static/pipeline_architecture/MAP_ingestion_diagram-histology_ingest.svg)
 
 
 ## Analysis routine

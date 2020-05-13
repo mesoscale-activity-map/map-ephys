@@ -66,7 +66,7 @@ This section describes the architecture of this pipeline, including schema and t
 
 This is particularly important for downstream users to query and perform further analysis on the data and analysis results. 
 
-[Redirect to Pipeline Architecture](./pipeline_architecture/pipeline_architecture.md)
+[Redirect to Pipeline Architecture](./pipeline_architecture.md)
 
 ## Data Flow
 

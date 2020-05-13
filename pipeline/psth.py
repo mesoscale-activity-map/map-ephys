@@ -492,6 +492,8 @@ def compute_unit_psth(unit_key, trial_keys, per_trial=False):
     """
     Compute unit-level psth for the specified unit and trial-set - return (time,)
     If per_trial == True, compute trial-level psth - return ((trial x time), time_vec)
+    :param unit_key: key of a single unit to compute the PSTH for
+    :param trial_keys: list of all the trial keys to compute the PSTH over
     """
     q = (ephys.Unit.TrialSpikes & unit_key & trial_keys)
     if not q:
@@ -519,6 +521,7 @@ def compute_coding_direction(contra_psths, ipsi_psths, time_period=None):
     and ipsi-trials firing rate per unit, within the specified time period
     :param contra_psths: unit# x (trial-ave psth, psth_edge)
     :param ipsi_psths: unit# x (trial-ave psth, psth_edge)
+    :param time_period: (time_from, time_to) in seconds, relative to go-cue
     """
     if not time_period:
         contra_tmin, contra_tmax = zip(*((k[1].min(), k[1].max()) for k in contra_psths))
@@ -540,7 +543,9 @@ def compute_CD_projected_psth(units, time_period=None):
     """
     Routine for Coding Direction computation on all the units in the specified unit_keys
     Coding Direction is calculated in the specified time_period
+    Unit PSTH are computed over no early-lick, correct-response trials
     :param: unit_keys - list of unit_keys
+    :param time_period: (time_from, time_to) in seconds, relative to go-cue
     :return: coding direction unit-vector,
              contra-trials CD projected trial-psth,
              ipsi-trials CD projected trial-psth
