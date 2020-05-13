@@ -66,7 +66,7 @@ This section describes the architecture of this pipeline, including schema and t
 
 This is particularly important for downstream users to query and perform further analysis on the data and analysis results. 
 
-[Redirect to Pipeline Architecture](./pipeline_architecture/pipeline_architecture.md)
+[Redirect to Pipeline Architecture](./pipeline_architecture.md)
 
 ## Data Flow
 
@@ -112,3 +112,11 @@ This section is dedicated for the running and management of this pipeline, inclu
 + AWS resource management
 
 [Redirect to System Management](./system_management.md)
+
+## Developer Guide
+
+This section contains notes related to pipeline development and testing,
+such as development specific configuration and tests.
+
+[Redirect to Developer Guide](./developer_setup.md)
+

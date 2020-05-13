@@ -27,12 +27,12 @@ separation into multiple schemas is merely for logical grouping and ogranization
 
 ### animal
 
-![lab Animal](./static/lab_subject.svg)
+![lab Animal](static/pipeline_architecture/lab_subject.svg)
 
 
 ### probe
 
-![lab Probe](./static/lab_probe.svg)
+![lab Probe](static/pipeline_architecture/lab_probe.svg)
 
 In the above ***Probe*** design, `lab.ProbeType` represents a type of probe: Tetrode, Neuropixels 1.0, 2.0, multi-shank, single-shank,
 Accompanying `lab.ProbeType` is a part-table `lab.ProbeType.Electrode`, 
@@ -49,7 +49,7 @@ particularly which subset of the electrode sites used for recording (e.g. which 
 
 ### session/trial
 
-![experiment session](./static/experiment_session.svg)
+![experiment session](static/pipeline_architecture/experiment_session.svg)
 
 The hierarchical organization of session and trial, depicted above, is as followed:
 + `experiment.Session` stores the session(s) per subject
@@ -70,7 +70,7 @@ The hierarchical organization of session and trial, depicted above, is as follow
 
 ## tracking *schema*
 
-![tracking trialtracking](./static/tracking_tracking.svg)
+![tracking trialtracking](static/pipeline_architecture/tracking_tracking.svg)
 
 The `tracking.Tracking` stores the tracking data on a per-trial basis, referencing the `experiment.BehaviorTrial` 
 as the parent table. Each of the part-table contains time-series data of the tracked (using DeepLabCut) feature
@@ -81,7 +81,7 @@ as the parent table. Each of the part-table contains time-series data of the tra
 
 ### probe-insertion
 
-![ephys probe_insertion](./static/ephys_probe_insertion.svg)
+![ephys probe_insertion](static/pipeline_architecture/ephys_probe_insertion.svg)
 
 The `ephys.ProbeInsertion` represents both the surgical insertion of the probe into the animal for a particular session, 
 as well as the extracellular electrophysiology recording performed on that probe for that session.
@@ -101,7 +101,7 @@ The `ephys.ProbeInsertion.RecordableBrainRegion` records the one or multiple bra
 
 ### spike-sorting 
 
-![ephys unit](./static/ephys_unit.svg)
+![ephys unit](static/pipeline_architecture/ephys_unit.svg)
 
 The set of units for each `ephys.ProbeInsertion` represents the results of a spike-sorting analysis routine,
  with the specific method (e.g. Kilosort, JRClust, etc.) specified in the `ephys.ClusteringMethod`.
@@ -125,7 +125,7 @@ Each unit in the `ephys.Unit` includes:
 
 ## histology *schema*
 
-![ephys histology_probe_unit](./static/histology_probe_unit.svg)
+![ephys histology_probe_unit](static/pipeline_architecture/histology_probe_unit.svg)
 
 The histology data in the MAP pipeline consists of 2 types:
 + Electrode CCF location, in `histology.ElectrodeCCFPosition.ElectrodePosition`
@@ -138,7 +138,7 @@ A unit's CCF location can be indirectly determined by cross checking the electro
 
 ## psth *schema*
 
-![psth](./static/psth_all.svg)
+![psth](static/pipeline_architecture/psth_all.svg)
 
 For each `ephys.Unit`, unit PSTHs are computed from the trial spike times (`ephys.Unit.TrialSpikes`),
  for different trial conditions. Hence, a `psth.TrialCondition` table is defined to store different condition criteria:
@@ -161,7 +161,7 @@ The `psth.UnitSelectivity` table aggregates the 3 period-selectivity for each un
 
 ## report *schema*
 
-![report](./static/report_all.svg)
+![report](static/pipeline_architecture/report_all.svg)
 
 Tables in the `report` schema are at the leaf level of this pipeline, computing and storing the figures
  used for visualization and reporting (via the [MAP Web GUI](http://map-navigator.datajoint.io/))
@@ -172,13 +172,13 @@ As shown in the diagram, report figures are categorized into 4 levels.
 
 `report.ProjectLevelProbeTrack`
 
-<img src="./static/project_tracks_plot.png" alt="project_tracks_plot" width="300" height="300">
+<img src="static/pipeline_architecture/project_tracks_plot.png" alt="project_tracks_plot" width="300" height="300">
 
 ### session-level
 
 |`report.SessionLevelProbeTrack`|`report.SessionLevelReport`|`report.SessionLevelCDReport`
 |:---------------------------:|:---------------------------:|:---------------------------:
-|<img src="./static/session_tracks_plot.png" alt="session_tracks_plot" width="200" height="200">|<img src="./static/session_behav_perf.png" alt="session_behav_perf" width="200" height="200">|<img src="./static/session_CD.png" alt="session_CD" width="200" height="200">
+|<img src="static/pipeline_architecture/session_tracks_plot.png" alt="session_tracks_plot" width="200" height="200">|<img src="static/pipeline_architecture/session_behav_perf.png" alt="session_behav_perf" width="200" height="200">|<img src="static/pipeline_architecture/session_CD.png" alt="session_CD" width="200" height="200">
 
 ### probe-level
 
@@ -186,15 +186,15 @@ As shown in the diagram, report figures are categorized into 4 levels.
 
 |clustering_quality|unit_characteristic|group_psth
 |:---------------------------:|:---------------------------:|:---------------------------:
-|<img src="./static/probe_clustering_quality.png" alt="probe_clustering_quality" width="200" height="200">|<img src="./static/probe_unit_characteristic.png" alt="probe_unit_characteristic" width="200" height="200">|<img src="./static/probe_group_psth.png" alt="probe_group_psth" width="400" height="200">
+|<img src="static/pipeline_architecture/probe_clustering_quality.png" alt="probe_clustering_quality" width="200" height="200">|<img src="static/pipeline_architecture/probe_unit_characteristic.png" alt="probe_unit_characteristic" width="200" height="200">|<img src="static/pipeline_architecture/probe_group_psth.png" alt="probe_group_psth" width="400" height="200">
 
 `report.ProbeLevelPhotostimEffectReport`
 
-<img src="./static/probe_group_photostim.png" alt="probe_group_photostim" width="600" height="150">
+<img src="static/pipeline_architecture/probe_group_photostim.png" alt="probe_group_photostim" width="600" height="150">
 
 ### unit-level
 
 |`report.UnitLevelEphysReport`|`report.UnitLevelTrackingReport`
 |:---------------------------:|:---------------------------:|
-|<img src="./static/unit_unit_psth.png" alt="unit_unit_psth" width="200" height="200">|<img src="./static/unit_unit_behavior.png" alt="unit_unit_behavior" width="200" height="200">
+|<img src="static/pipeline_architecture/unit_unit_psth.png" alt="unit_unit_psth" width="200" height="200">|<img src="static/pipeline_architecture/unit_unit_behavior.png" alt="unit_unit_behavior" width="200" height="200">
 
