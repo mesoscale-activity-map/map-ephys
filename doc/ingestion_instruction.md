@@ -12,7 +12,7 @@ Campus.
 ## Installation and Setup
 
 Regular users who will be using the code for querying/analysis should
-checkout the source code from git and install the package using pythons's `pip`
+checkout the source code from git and install the package using python's `pip`
 command. For example:
 
     $ git clone https://github.com/mesoscale-activity-map/map-ephys.git
@@ -20,7 +20,7 @@ command. For example:
     $ pip install -e .
 
 This will make the MAP pipeline package available to your python interpreter 
-as 'pipeline'. For exaple, to import the MAP experiment module, users can
+as 'pipeline'. For example, to import the MAP experiment module, users can
 import pipeline.experiment:
 
     >>> from pipeline import experiment
@@ -38,13 +38,13 @@ machines - this can be done directly via pip:
 The python module pipeline/shell.py contains utility functions to
 trigger file ingest for behavior and ephys ingest, a facility to
 launch a basic python environment with the various schema modules
-loaded, and a utlity to generate ERD diagrams from the current code,
+loaded, and a utility to generate ERD diagrams from the current code,
 and other administrative tasks.
 
 These functions are also made available in the `mapshell.py` script
 which can be used as a command line utility for common tasks.
 
-Account setup, test & usage synopsys using the shell is as follows:
+Account setup, test & usage synopsis using the shell is as follows:
 
     $ mapshell.py shell
     Connecting chris@localhost:3306
@@ -143,7 +143,7 @@ main pipeline documentation.
 
      - Ingestion of ***probe insertion*** information
      - Ingestion of clustering results
-     - Ingestion of quality controle results (if available)
+     - Ingestion of quality control results (if available)
 
    If needed, users can additionally configure a dj.config['custom']
    variable to adjust local data paths for ephys data:
@@ -179,7 +179,7 @@ main pipeline documentation.
      - probe track data
 
    In addition to session behavior data, Histology data load is
-   dependant on loading the reference CCF volume data. The reference
+   dependent on loading the reference CCF volume data. The reference
    volume used in the MAP pipeline is the Allen Institute CCF r3
    20 uM Dataset tiff stack. This is done manually once prior to
    ingest of any histology data:
