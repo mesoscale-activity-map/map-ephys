@@ -14,7 +14,7 @@ import datajoint as dj
 from pymysql.err import OperationalError
 
 
-from pipeline import (lab, experiment, tracking, ephys, psth, ccf, histology, export, publication, get_schema_name)
+from pipeline import (lab, experiment, tracking, ephys, psth, ccf, histology, export, publication, globus, get_schema_name)
 
 pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth]
 
@@ -97,7 +97,7 @@ def ingest_histology(*args):
     histology_ingest.HistologyIngest().populate(display_progress=True)
 
 
-def auto_ingest(*args):
+def ingest_all(*args):
 
     log.info('running auto ingest')
 
@@ -199,6 +199,10 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     log.info('load_insertion_location - Number of insertions: {}'.format(len(insertion_locations)))
 
 
+def load_ccf(*args):
+    ccf.CCFAnnotation.load_ccf_r3_20um()
+
+
 def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': True}):
 
     log.info('experiment.PhotostimBrainRegion.populate()')
@@ -260,10 +264,32 @@ def nuke_all():
         m.schema.drop()
 
 
-def publish(*args):
-    from pipeline import publication  # triggers ingest, so skipped
+def publication_login(*args):
+    cfgname = args[0] if len(args) else 'local'
+
+    if 'custom' in dj.config and 'globus.token' in dj.config['custom']:
+        del dj.config['custom']['globus.token']
+
+    from pipeline.globus import GlobusStorageManager
+
+    gsm = GlobusStorageManager()
+
+    if cfgname == 'local':
+        dj.config.save_local()
+    elif cfgname == 'global':
+        dj.config.save_global()
+    else:
+        log.warning('unknown configuration {}. not saving'.format(cfgname))
+
+
+def publication_publish(*args):
     publication.ArchivedRawEphys.populate()
     publication.ArchivedTrackingVideo.populate()
+
+
+def publication_discovery(*args):
+    publication.ArchivedRawEphys.discover()
+    # publication.ArchivedTrackingVideo.populate()
 
 
 def export_recording(*args):
@@ -285,8 +311,6 @@ def shell(*args):
              local=globals())
 
 
-def ccfload(*args):
-    ccf.CCFAnnotation.load_ccf_r3_20um()
 
 
 def erd(*args):
@@ -372,15 +396,20 @@ actions = {
     'ingest-ephys': (ingest_ephys, 'ingest ephys data'),
     'ingest-tracking': (ingest_tracking, 'ingest tracking data'),
     'ingest-histology': (ingest_histology, 'ingest histology data'),
-    'auto-ingest': (auto_ingest, 'run auto ingest job (load all types)'),
+    'ingest-all': (ingest_all, 'run auto ingest job (load all types)'),
     'populate-psth': (populate_psth, 'populate psth schema'),
-    'publish': (publish, 'run raw data globus publication'),
+    'publication-login': (publication_login,
+                            'login to globus'),
+    'publication-publish': (publication_publish,
+                            'run raw data globus publication'),
+    'publication-discovery': (publication_discovery,
+                              'run globus publication discovery',),
     'export-recording': (export_recording, 'export data to .mat'),
     'generate-report': (generate_report, 'run report generation logic'),
     'sync-report': (sync_report, 'sync report data locally'),
     'shell': (shell, 'interactive shell'),
     'erd': (erd, 'write DataJoint ERDs to files'),
-    'ccfload': (ccfload, 'load CCF reference atlas'),
+    'load-ccf': (load_ccf, 'load CCF reference atlas'),
     'automate-computation': (automate_computation,
                              'run report worker job'),
     'automate-sync-and-cleanup': (sync_and_external_cleanup,
