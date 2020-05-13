@@ -12,6 +12,7 @@ from globus_sdk import RefreshTokenAuthorizer
 from globus_sdk import TransferClient
 from globus_sdk import DeleteData
 from globus_sdk import TransferData
+from globus_sdk import TransferAPIError
 
 
 DEFAULT_GLOBUS_WAIT_TIMEOUT = 60
@@ -39,6 +40,7 @@ class GlobusStorageManager:
             self.refresh()
         else:
             self.login()
+            self.refresh()
 
     # authentication methods
 
@@ -129,6 +131,7 @@ class GlobusStorageManager:
     # transfer methods
 
     def ls(self, endpoint_path):
+        # TODO? separate 'stat' call?
         '''
         returns:
             {
@@ -160,7 +163,18 @@ class GlobusStorageManager:
             }
         '''
         ep, path = self.ep_parts(endpoint_path)
-        return self.xfer_client.operation_ls(ep, path=path)
+
+        res = None
+
+        try:
+            res = self.xfer_client.operation_ls(ep, path=path)
+        except TransferAPIError as e:
+            if e.http_status == 404:
+                res = None
+            else:
+                raise
+
+        return res
 
     def fts(self, ep_path):
         '''
