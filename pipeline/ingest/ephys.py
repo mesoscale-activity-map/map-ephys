@@ -1490,7 +1490,7 @@ def archive_ingested_clustering_results(session_key):
         with dj.config(safemode=False):
             log.info('Delete clustering data and associated analysis results')
             (ephys.Unit & session_key).delete()
-            (EphysIngest.EphysFile & session_key).delete()
+            (EphysIngest.EphysFile & session_key).delete(force=True)
             (report.SessionLevelCDReport & session_key).delete()
             (report.ProbeLevelPhotostimEffectReport & session_key).delete()
             (report.ProbeLevelReport & session_key).delete()
