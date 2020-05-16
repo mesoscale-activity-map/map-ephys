@@ -1430,7 +1430,7 @@ def archive_ingested_clustering_results(session_key):
         q_units_waveform_metrics = q_units.proj() * ephys.WaveformMetric
 
         q_archived_clusterings.append(q_archived_clustering)
-        q_ephys_files.append(q_files)
+        q_ephys_files.append(q_archived_clustering * q_files)
         q_archived_units.append(q_archived_clustering * q_units)
         q_archived_units_stat.append(q_archived_clustering * q_units_stat)
         q_archived_cluster_metrics.append(q_archived_clustering * q_units_cluster_metrics)
@@ -1454,17 +1454,17 @@ def archive_ingested_clustering_results(session_key):
             # recompute trial_spike
             log.info('Archiving {} units'.format(len(units)))
             units = units.fetch(as_dict=True)
-            # for unit in tqdm(units):
-            #     after_start = unit['spike_times'] >= tr_start[:, None]
-            #     before_stop = unit['spike_times'] <= tr_stop[:, None]
-            #     in_trial = ((after_start & before_stop) * tr_no[:, None]).sum(axis=0)
-            #     unit['trial_spike'] = np.where(in_trial == 0, np.nan, in_trial)
             for unit in tqdm(units):
-                trial_spike = np.full_like(unit['spike_times'], np.nan)
-                for tr, tstart, tstop in zip(tr_no, tr_start, tr_stop):
-                    trial_idx = np.where((unit['spike_times'] >= tstart) & (unit['spike_times'] <= tstop))
-                    trial_spike[trial_idx] = tr
-                unit['trial_spike'] = trial_spike
+                after_start = unit['spike_times'] >= tr_start[:, None]
+                before_stop = unit['spike_times'] <= tr_stop[:, None]
+                in_trial = ((after_start & before_stop) * tr_no[:, None]).sum(axis=0)
+                unit['trial_spike'] = np.where(in_trial == 0, np.nan, in_trial)
+            # for unit in tqdm(units):
+            #     trial_spike = np.full_like(unit['spike_times'], np.nan)
+            #     for tr, tstart, tstop in zip(tr_no, tr_start, tr_stop):
+            #         trial_idx = np.where((unit['spike_times'] >= tstart) & (unit['spike_times'] <= tstop))
+            #         trial_spike[trial_idx] = tr
+            #     unit['trial_spike'] = trial_spike
             archived_units.extend(units)
 
     def copy_and_delete():
