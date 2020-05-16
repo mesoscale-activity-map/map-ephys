@@ -418,6 +418,9 @@ def do_ephys_ingest(session_key, replace=False, prb_insert_exists=False, into_ar
         return
 
     if replace:
+        if len(ephys.Unit & session_key) == 0:  # sanity check
+            raise ValueError('No units exist for this session. Cannot handle "replace=True"')
+
         prb_insert_exists = True
         # ============ Inspect new clustering dir(s) ============
         # if all new clustering data has identical timestamps to ingested ones, throw error
@@ -433,9 +436,6 @@ def do_ephys_ingest(session_key, replace=False, prb_insert_exists=False, into_ar
 
         if len(identical_clustering_results) == len(ephys.ProbeInsertion & session_key):
             raise IdenticalClusterResultError(identical_clustering_results)
-    else:
-        if len(ephys.Unit & session_key) == 0:
-            raise ValueError('No units exist for this session. Cannot handle "replace=True"')
 
     def do_insert():
         # do the insertion per probe
