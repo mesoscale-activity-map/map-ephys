@@ -367,9 +367,9 @@ class PeriodSelectivity(dj.Computed):
     -> experiment.Period
     ---
     -> Selectivity.proj(period_selectivity='selectivity')
-    ipsi_firing_rate:           float  # mean firing rate of all ipsi-trials
-    contra_firing_rate:         float  # mean firing rate of all contra-trials
-    p_value:                    float  # all trial spike rate t-test p-value
+    ipsi_firing_rate=0:           float  # mean firing rate of all ipsi-trials
+    contra_firing_rate=0:         float  # mean firing rate of all contra-trials
+    p_value=1:                    float  # all trial spike rate t-test p-value
     """
 
     alpha = 0.05  # default alpha value
