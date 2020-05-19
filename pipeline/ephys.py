@@ -371,6 +371,12 @@ class ArchivedClustering(dj.Imported):
     clustering_note=null: varchar(2000)  
     """
 
+    class EphysFile(dj.Part):
+        definition = """
+        -> master
+        ephys_file: varchar(255)    # rig file/dir subpath
+        """
+
     class Unit(dj.Part):
         definition = """
         -> master
