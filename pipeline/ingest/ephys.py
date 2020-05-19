@@ -78,7 +78,7 @@ class EphysIngest(dj.Imported):
 
         do_ephys_ingest(key)
 
-    def _load(self, data, probe, npx_meta, rigpath, prb_insert_exists=False, ininto_archive=False):
+    def _load(self, data, probe, npx_meta, rigpath, prb_insert_exists=False, into_archive=False):
 
         sinfo = data['sinfo']
         ef_path = data['ef_path']
@@ -109,7 +109,7 @@ class EphysIngest(dj.Imported):
         assert len(trial_start) == len(trial_go)
 
         # create probe insertion records
-        if ininto_archive:
+        if into_archive:
             prb_insert_exists = True
         try:
             insertion_key, e_config_key = _gen_probe_insert(sinfo, probe, npx_meta, prb_insert_exists=prb_insert_exists)
@@ -210,7 +210,7 @@ class EphysIngest(dj.Imported):
                                                     'shank_col': shank_col + 1,
                                                     'shank_row': shank_row + 1}).fetch1('KEY')
 
-        if ininto_archive:
+        if into_archive:
             log.info('.. inserting clustering timestamp and label')
             archival_time = datetime.now()
 
@@ -445,7 +445,7 @@ def do_ephys_ingest(session_key, replace=False, prb_insert_exists=False, into_ar
                 loader = cluster_loader_map[cluster_method]
                 dj.conn().ping()
                 EphysIngest()._load(loader(sinfo, *f), probe_no, npx_meta, rigpath,
-                                    prb_insert_exists=prb_insert_exists, ininto_archive =into_archive)
+                                    prb_insert_exists=prb_insert_exists, into_archive =into_archive)
             except (ProbeInsertionError, ClusterMetricError, FileNotFoundError) as e:
                 dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
                 if isinstance(e, ProbeInsertionError):
@@ -487,7 +487,8 @@ def _gen_probe_insert(sinfo, probe, npx_meta, prb_insert_exists=False):
                      'insertion_number': probe}
 
     if prb_insert_exists:
-        assert insertion_key in ephys.ProbeInsertion.proj()
+        if insertion_key not in ephys.ProbeInsertion.proj():
+            raise RuntimeError(f'ProbeInsertion key not present. Expecting: {insertion_key}')
     else:
         # add probe insertion
         log.info('.. creating probe insertion')
