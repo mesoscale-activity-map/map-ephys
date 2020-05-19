@@ -78,7 +78,7 @@ class EphysIngest(dj.Imported):
 
         do_ephys_ingest(key)
 
-    def _load(self, data, probe, npx_meta, rigpath, prb_insert_exists=False, into_archive=False):
+    def _load(self, data, probe, npx_meta, rigpath, probe_insertion_exists=False, into_archive=False):
 
         sinfo = data['sinfo']
         ef_path = data['ef_path']
@@ -110,9 +110,9 @@ class EphysIngest(dj.Imported):
 
         # create probe insertion records
         if into_archive:
-            prb_insert_exists = True
+            probe_insertion_exists = True
         try:
-            insertion_key, e_config_key = _gen_probe_insert(sinfo, probe, npx_meta, prb_insert_exists=prb_insert_exists)
+            insertion_key, e_config_key = _gen_probe_insert(sinfo, probe, npx_meta, probe_insertion_exists=probe_insertion_exists)
         except (NotImplementedError, dj.DataJointError) as e:
             raise ProbeInsertionError(str(e))
 
@@ -382,7 +382,7 @@ class EphysIngest(dj.Imported):
             log.info('-- ephys ingest for {} - probe {} complete'.format(skey, probe))
 
 
-def do_ephys_ingest(session_key, replace=False, prb_insert_exists=False, into_archive=False):
+def do_ephys_ingest(session_key, replace=False, probe_insertion_exists=False, into_archive=False):
     """
     Perform ephys-ingestion for a particular session (defined by session_key) to either
         + fresh ingest of new probe insertion and clustering results
@@ -421,7 +421,7 @@ def do_ephys_ingest(session_key, replace=False, prb_insert_exists=False, into_ar
         if len(ephys.Unit & session_key) == 0:  # sanity check
             raise ValueError('No units exist for this session. Cannot handle "replace=True"')
 
-        prb_insert_exists = True
+        probe_insertion_exists = True
         # ============ Inspect new clustering dir(s) ============
         # if all new clustering data has identical timestamps to ingested ones, throw error
         identical_clustering_results = []
@@ -445,7 +445,7 @@ def do_ephys_ingest(session_key, replace=False, prb_insert_exists=False, into_ar
                 loader = cluster_loader_map[cluster_method]
                 dj.conn().ping()
                 EphysIngest()._load(loader(sinfo, *f), probe_no, npx_meta, rigpath,
-                                    prb_insert_exists=prb_insert_exists, into_archive =into_archive)
+                                    probe_insertion_exists=probe_insertion_exists, into_archive =into_archive)
             except (ProbeInsertionError, ClusterMetricError, FileNotFoundError) as e:
                 dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
                 if isinstance(e, ProbeInsertionError):
@@ -466,7 +466,7 @@ def do_ephys_ingest(session_key, replace=False, prb_insert_exists=False, into_ar
             do_insert()
 
 
-def _gen_probe_insert(sinfo, probe, npx_meta, prb_insert_exists=False):
+def _gen_probe_insert(sinfo, probe, npx_meta, probe_insertion_exists=False):
     '''
     generate probe insertion for session / probe - for neuropixels recording
 
@@ -486,7 +486,7 @@ def _gen_probe_insert(sinfo, probe, npx_meta, prb_insert_exists=False):
                      'session': sinfo['session'],
                      'insertion_number': probe}
 
-    if prb_insert_exists:
+    if probe_insertion_exists:
         if insertion_key not in ephys.ProbeInsertion.proj():
             raise RuntimeError(f'ProbeInsertion key not present. Expecting: {insertion_key}')
     else:
