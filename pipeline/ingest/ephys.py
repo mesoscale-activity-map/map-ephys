@@ -87,6 +87,7 @@ class EphysIngest(dj.Imported):
         hz = data['hz'] if data['hz'] else npx_meta.meta['imSampRate']
         spikes = data['spikes']
         spike_sites = data['spike_sites']
+        spike_depths = data['spike_depths']
         units = data['units']
         unit_wav = data['unit_wav']  # (unit x channel x sample)
         unit_notes = data['unit_notes']
@@ -127,8 +128,8 @@ class EphysIngest(dj.Imported):
 
         # remove noise clusters
         if method in ['jrclust_v3', 'jrclust_v4']:
-            units, spikes, spike_sites = (v[i] for v, i in zip(
-                (units, spikes, spike_sites), repeat((units > 0))))
+            units, spikes, spike_sites, spike_depths = (v[i] for v, i in zip(
+                (units, spikes, spike_sites, spike_depths), repeat((units > 0))))
 
         # scale amplitudes by uV/bit scaling factor (for kilosort2)
         if method in ['kilosort2']:
@@ -210,6 +211,10 @@ class EphysIngest(dj.Imported):
                                                     'shank_col': shank_col + 1,
                                                     'shank_row': shank_row + 1}).fetch1('KEY')
 
+        spike_sites = np.array([site2electrode_map[s]['electrode'] for s in spike_sites])
+        unit_spike_sites = np.array([spike_sites[np.where(units == u)] for u in set(units)])
+        unit_spike_depths = np.array([spike_depths[np.where(units == u)] for u in set(units)])
+
         if into_archive:
             log.info('.. inserting clustering timestamp and label')
             archival_time = datetime.now()
@@ -242,6 +247,8 @@ class EphysIngest(dj.Imported):
                                 'unit_posx': unit_xpos[i],
                                 'unit_posy': unit_ypos[i],
                                 'spike_times': unit_spikes[i],
+                                'spike_sites': unit_spike_sites[i],
+                                'spike_depths': unit_spike_depths[i],
                                 'trial_spike': unit_spike_trial_num[i],
                                 'waveform': unit_wav[i][wf_chn_idx]})
                     if ib.flush():
@@ -296,6 +303,8 @@ class EphysIngest(dj.Imported):
                                 'unit_amp': unit_amp[i],
                                 'unit_snr': unit_snr[i],
                                 'spike_times': unit_spikes[i],
+                                'spike_sites': unit_spike_sites[i],
+                                'spike_depths': unit_spike_depths[i],
                                 'waveform': unit_wav[i][wf_chn_idx]})
 
                     if ib.flush():
@@ -599,6 +608,7 @@ def _load_jrclust_v3(sinfo, fpath):
 
     spikes = ef['viTime_spk'][0]                    # spike times
     spike_sites = ef['viSite_spk'][0]               # spike electrode
+    spike_depths = ef['mrPos_spk'][1]               # spike depths
 
     units = ef['S_clu']['viClu'][0]                 # spike:unit id
     unit_wav = ef['S_clu']['trWav_raw_clu']         # waveform (unit x channel x sample)
@@ -627,6 +637,7 @@ def _load_jrclust_v3(sinfo, fpath):
         'hz': hz,
         'spikes': spikes,
         'spike_sites': spike_sites,
+        'spike_depths': spike_depths,
         'units': units,
         'unit_wav': unit_wav,
         'unit_notes': unit_notes,
@@ -682,6 +693,7 @@ def _load_jrclust_v4(sinfo, fpath):
 
     spikes = ef['spikeTimes'][0]                    # spikes times
     spike_sites = ef['spikeSites'][0]               # spike electrode
+    spike_depths = ef['spikePositions'][0]           # spike depths
 
     units = ef['spikeClusters'][0]                  # spike:unit id
     unit_wav = ef['meanWfLocalRaw']                 # waveform
@@ -710,6 +722,7 @@ def _load_jrclust_v4(sinfo, fpath):
         'hz': hz,
         'spikes': spikes,
         'spike_sites': spike_sites,
+        'spike_depths': spike_depths,
         'units': units,
         'unit_wav': unit_wav,
         'unit_notes': unit_notes,
@@ -757,12 +770,8 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
     spike_times = ks.data[spk_time_key]
 
     # ---- Spike-level results ----
-    # -- spike_sites --
-    # reimplemented from: https://github.com/JaneliaSciComp/JRCLUST/blob/master/%2Bjrclust/%2Bimport/kilosort.m
-    spike_sites = np.full(spike_times.shape, np.nan)
-    for template_idx, template in enumerate(ks.data['templates']):
-        site_idx = np.abs(np.abs(template).max(axis=0)).argmax()
-        spike_sites[ks.data['spike_templates'] == template_idx] = ks.data['channel_map'][site_idx]
+    # -- spike_sites and spike_depths
+    ks.extract_spike_depths()
 
     # ---- Unit-level results ----
     # -- Remove 0-spike units
@@ -843,7 +852,8 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
         'method': 'kilosort2',
         'hz': hz,
         'spikes': spike_times.astype(int),
-        'spike_sites': spike_sites + 1,  # channel numbering in this pipeline is 1-based indexed
+        'spike_sites': ks.data['spike_sites'] + 1,  # channel numbering in this pipeline is 1-based indexed
+        'spike_depths': ks.data['spike_depths'],
         'units': ks.data['spike_clusters'],
         'unit_wav': unit_wav,
         'unit_notes': valid_unit_labels,
@@ -1227,6 +1237,26 @@ class Kilosort:
             self._data['cluster_ids'] = np.array(df['cluster_id'].values)
         else:
             raise FileNotFoundError('Neither cluster_groups.csv nor cluster_KSLabel.tsv found!')
+
+    def extract_spike_depths(self):
+        """ Reimplemented from https://github.com/cortex-lab/spikes/blob/master/analysis/ksDriftmap.m """
+        ycoords = self.data['channel_positions'][:, 1]
+        pc_features = self.data['pc_features'][:, 0, :]  # 1st PC only
+        pc_features = np.where(pc_features < 0, 0, pc_features)
+
+        # ---- compute center of mass of these features (spike depths) ----
+
+        # which channels for each spike?
+        spk_feature_ind = self.data['pc_feature_ind'][self.data['spike_templates'], :]
+        # ycoords of those channels?
+        spk_feature_ycoord = ycoords[spk_feature_ind]
+        # center of mass is sum(coords.*features)/sum(features)
+        self._data['spike_depths'] = np.sum(spk_feature_ycoord * pc_features**2, axis=1) / np.sum(pc_features**2, axis=1)
+
+        # ---- extract spike sites ----
+        max_site_ind = np.argmax(np.abs(self.data['templates']).max(axis=1), axis=1)
+        spike_site_ind = max_site_ind[self.data['spike_templates']]
+        self._data['spike_sites'] = self.data['channel_map'][spike_site_ind]
 
 
 def extract_ks_waveforms(npx_dir, ks, n_wf=500, wf_win=(-41, 41), bit_volts=None):
