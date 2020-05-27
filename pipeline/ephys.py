@@ -137,6 +137,8 @@ class Unit(dj.Imported):
     unit_posx : double # (um) estimated x position of the unit relative to probe's tip (0,0)
     unit_posy : double # (um) estimated y position of the unit relative to probe's tip (0,0)
     spike_times : longblob  # (s) from the start of the first data point used in clustering
+    spike_sites : longblob  # array of electrode associated with each spike
+    spike_depths : longblob # (um) array of depths associated with each spike
     unit_amp : double
     unit_snr : double
     waveform : blob # average spike waveform
@@ -388,6 +390,8 @@ class ArchivedClustering(dj.Imported):
         unit_posx : double # (um) estimated x position of the unit relative to probe's tip (0,0)
         unit_posy : double # (um) estimated y position of the unit relative to probe's tip (0,0)
         spike_times : blob@archive_store  # (s) from the start of the first data point used in clustering
+        spike_sites : blob@archive_store  # array of electrode associated with each spike
+        spike_depths : blob@archive_store # (um) array of depths associated with each spike
         trial_spike : blob@archive_store  # array of trial numbering per spike - same size as spike_times
         waveform : blob@archive_store     # average spike waveform  
         """
