@@ -388,6 +388,20 @@ class ProbeLevelPhotostimEffectReport(dj.Computed):
         plt.close('all')
         self.insert1({**key, **fig_dict})
 
+
+@schema
+class ProbeLevelDriftMap(dj.Computed):
+    definition = """
+    -> ephys.ProbeInsertion
+    -> ephys.ClusteringMethod
+    ---
+    driftmap: filepath@report_store
+    """
+
+    def make(self, key):
+        pass
+
+
 # ============================= UNIT LEVEL ====================================
 
 

@@ -306,6 +306,86 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
     return fig
 
 
+def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
+    probe_insertion = probe_insertion.proj()
+
+    if clustering_method is None:
+        try:
+            clustering_method = _get_clustering_method(probe_insertion)
+        except ValueError as e:
+            raise ValueError(str(e) + '\nPlease specify one with the kwarg "clustering_method"')
+
+    units = ephys.Unit & probe_insertion & {'clustering_method': clustering_method} & 'unit_quality != "all"'
+    units = units * lab.ElectrodeConfig.Electrode * lab.ProbeType.Electrode.proj('shank') & {'shank': shank_no}
+
+    spike_times, spike_depths = units.fetch('spike_times', 'spike_depths', order_by='unit')
+
+    spike_times = np.hstack(spike_times)
+    spike_depths = np.hstack(spike_depths)
+
+    # histogram
+    # time_res = 10    # time resolution: 1sec
+    # depth_res = 10  # depth resolution: 10um
+    #
+    # spike_bins = np.arange(0, spike_times.max() + time_res, time_res)
+    # depth_bins = np.arange(spike_depths.min() - depth_res, spike_depths.max() + depth_res, depth_res)
+
+    # histogram
+    time_bin_count = 1000
+    depth_bin_count = 200
+
+    spike_bins = np.linspace(0, spike_times.max(), time_bin_count)
+    depth_bins = np.linspace(np.nanmin(spike_depths), np.nanmax(spike_depths), depth_bin_count)
+
+    spk_count, spk_edges, depth_edges = np.histogram2d(spike_times, spike_depths, bins=[spike_bins, depth_bins])
+    spk_rates = spk_count / np.mean(np.diff(spike_bins))
+    spk_edges = spk_edges[1:]
+    depth_edges = depth_edges[1:]
+
+    # canvas setup
+    fig = plt.figure(figsize=(16, 8))
+    grid = plt.GridSpec(12, 5, wspace=0.1, hspace=0.2)
+
+    ax_main = plt.subplot(grid[1:, 0:3])
+    ax_cbar = plt.subplot(grid[0, 0:3])
+    ax_spkcount = plt.subplot(grid[1:, 3])
+    # ax_anno = plt.subplot(grid[1:, 4])
+
+    # -- plot main --
+    sns.heatmap(spk_rates.T, cmap='gray_r', ax=ax_main, cbar_ax=ax_cbar,
+                cbar_kws={'orientation': 'horizontal'})
+    # cosmetic
+    ax_main.invert_yaxis()
+
+    xticks = np.arange(0, len(spk_edges), time_bin_count/5).astype(int)
+    ax_main.set_xticks(xticks)
+    ax_main.set_xticklabels(spk_edges[xticks].astype(int), rotation=0)
+    yticks = np.arange(0, len(depth_edges), depth_bin_count/5).astype(int)
+    ax_main.set_yticks(yticks)
+    ax_main.set_yticklabels(depth_edges[yticks].astype(int))
+
+    ax_main.set_xlabel('Time (sec)')
+    ax_main.set_ylabel('Distance from tip sites (um)')
+    ax_main.set_ylim(0, len(depth_edges))
+
+    ax_cbar.xaxis.tick_top()
+    ax_cbar.set_xlabel('Firing rate (Hz)')
+    ax_cbar.xaxis.set_label_position('top')
+
+    # -- plot spikecount --
+    ax_spkcount.plot(spk_count.sum(axis=0) / 10e3, depth_edges, 'k')
+    ax_spkcount.set_xlabel('Spike count (x$10^3$)')
+    ax_spkcount.set_yticks([])
+    ax_spkcount.set_ylim(depth_edges[0], depth_edges[-1])
+
+    ax_spkcount.spines['right'].set_visible(False)
+    ax_spkcount.spines['top'].set_visible(False)
+    ax_spkcount.spines['bottom'].set_visible(False)
+    ax_spkcount.spines['left'].set_visible(False)
+
+    return fig
+
+
 def plot_stacked_contra_ipsi_psth(units, axs=None):
     units = units.proj()
 
