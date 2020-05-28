@@ -1,9 +1,8 @@
-
-
 import csv
 import logging
 
 import numpy as np
+import pandas as pd
 import datajoint as dj
 import pathlib
 import scipy.io as scio
@@ -61,14 +60,16 @@ class CCFAnnotation(dj.Manual):
     -> CCF
     -> AnnotationType
     ---
+    ontology_region_id: int  
     annotation  : varchar(1024)
     index (annotation)
+    color_code: varchar(6) # hexcode of the color code of this region
     """
 
     @classmethod
     def get_ccf_r3_20um_ontology_regions(cls):
         return [c for c in csv.reader(ccf_ontology.splitlines())
-                if len(c) == 2]
+                if len(c) == 3]
 
     @classmethod
     def load_ccf_r3_20um(cls):
@@ -82,7 +83,7 @@ class CCFAnnotation(dj.Manual):
 
         self = cls()  # Instantiate self,
         stack_path = dj.config['custom']['ccf.r3_20um_path']
-        stack = imread(stack_path)  # load reference stack,
+        stack = imread(stack_path)  # load reference stack
 
         log.info('.. loaded stack of shape {} from {}'
                  .format(stack.shape, stack_path))
@@ -93,23 +94,23 @@ class CCFAnnotation(dj.Manual):
         chunksz, ib_args = 50000, {'skip_duplicates': True,
                                    'allow_direct_insert': True}
 
-        for num, txt in regions:
+        for region_id, region_name, color_hexcode in regions:
 
             region += 1
-            num = int(num)
+            region_id = int(region_id)
 
             log.info('.. loading region {} ({}/{}) ({})'
-                     .format(num, region, nregions, txt))
+                     .format(region_id, region, nregions, region_name))
 
             # extracting filled volumes from stack in scaled [[x,y,z]] shape,
-            vol = np.array(np.where(stack == num)).T[:, [2, 1, 0]] * 20
+            vol = np.array(np.where(stack == region_id)).T[:, [2, 1, 0]] * 20
 
             if not vol.shape[0]:
                 log.info('.. region {} volume: shape {} - skipping'
-                         .format(num, vol.shape))
+                         .format(region_id, vol.shape))
                 continue
 
-            log.info('.. region {} volume: shape {}'.format(num, vol.shape))
+            log.info('.. region {} volume: shape {}'.format(region_id, vol.shape))
 
             with dj.conn().transaction:
                 with InsertBuffer(CCF, chunksz, **ib_args) as buf:
@@ -119,8 +120,12 @@ class CCFAnnotation(dj.Manual):
 
                 with InsertBuffer(cls, chunksz, **ib_args) as buf:
                     for vox in vol:
-                        buf.insert1((CCFLabel.CCF_R3_20UM_ID, *vox,
-                                     CCFLabel.CCF_R3_20UM_TYPE, txt))
+                        buf.insert1({'ccf_label_id': CCFLabel.CCF_R3_20UM_ID,
+                                     'ccf_x': vox[0], 'ccf_y': vox[1], 'ccf_z': vox[2],
+                                     'annotation_type': CCFLabel.CCF_R3_20UM_TYPE,
+                                     'ontology_region_id': region_id,
+                                     'annotation': region_name,
+                                     'color_code': color_hexcode})
                         buf.flush()
 
         log.info('.. done.')
