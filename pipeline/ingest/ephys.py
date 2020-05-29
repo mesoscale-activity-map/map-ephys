@@ -204,7 +204,7 @@ class EphysIngest(dj.Imported):
 
         q_electrodes = lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode & e_config_key
         site2electrode_map = {}
-        for recorded_site in np.unique(vmax_unit_site):
+        for recorded_site in np.unique(spike_sites):
             shank, shank_col, shank_row, _ = npx_meta.shankmap['data'][recorded_site - 1]  # subtract 1 because npx_meta shankmap is 0-indexed
             site2electrode_map[recorded_site] = (q_electrodes
                                                  & {'shank': shank + 1,  # this is a 1-indexed pipeline
