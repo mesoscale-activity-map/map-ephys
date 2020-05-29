@@ -22,14 +22,14 @@ log = logging.getLogger(__name__)
 
 
 @schema
-class AddSpikeSitesAndDepths(dj.Manual):
+class ArchivedSpikeSitesAndDepths(dj.Manual):
     """
-    This table accompanies fix_0010, keeping track of the units with spike sites and spike depths added.
-    This tracking is not extremely important, as a rerun of this fix_0010 will still yield the correct results
+    This table accompanies fix_0012, keeping track of the units with spike sites and spike depths added to the ArchivedClustering.Unit.
+    This tracking is not extremely important, as a rerun of this fix_0012 will still yield the correct results
     """
-    definition = """ # This table accompanies fix_0010
+    definition = """ # This table accompanies fix_0012
     -> FixHistory
-    -> ephys.Unit
+    -> ephys.ArchivedClustering.Unit
     ---
     fixed: bool
     """
@@ -41,8 +41,8 @@ def update_spike_sites_and_depths(session_keys={}):
         and not from the 1-st channel as before
     Applicable to only kilosort2 clustering results and not jrclust
     """
-    sessions_2_update = experiment.Session & ephys.Unit & session_keys
-    sessions_2_update = sessions_2_update - AddSpikeSitesAndDepths
+    sessions_2_update = experiment.Session & ephys.ArchivedClustering.Unit & session_keys
+    sessions_2_update = sessions_2_update - ArchivedSpikeSitesAndDepths
 
     if not sessions_2_update:
         return
@@ -54,7 +54,8 @@ def update_spike_sites_and_depths(session_keys={}):
         success = _update_one_session(key)
         if success:
             FixHistory.insert1(fix_hist_key, skip_duplicates=True)
-            AddSpikeSitesAndDepths.insert([{**fix_hist_key, **ukey, 'fixed': 1} for ukey in (ephys.Unit & key).fetch('KEY')])
+            ArchivedSpikeSitesAndDepths.insert([{**fix_hist_key, **ukey, 'fixed': 1}
+                                                for ukey in (ephys.ArchivedClustering.Unit & key).fetch('KEY')])
 
 
 def _update_one_session(key):
@@ -122,6 +123,7 @@ def _add_spike_sites_and_depths(data, probe, npx_meta, rigpath):
     units = data['units']
     spike_sites = data['spike_sites']
     spike_depths = data['spike_depths']
+    creation_time = data['creation_time']
 
     clustering_label = data['clustering_label']
 
@@ -149,12 +151,20 @@ def _add_spike_sites_and_depths(data, probe, npx_meta, rigpath):
     unit_spike_sites = np.array([spike_sites[np.where(units == u)] for u in set(units)])
     unit_spike_depths = np.array([spike_depths[np.where(units == u)] for u in set(units)])
 
-    # _update() on spike_sites and spike_depths
+    archive_key = {**skey, 'insertion_number': probe,
+                   'clustering_method': method, 'clustering_time': creation_time}
+
+    # delete and reinsert with spike_sites and spike_depths
     for i, u in enumerate(set(units)):
-        (ephys.Unit & {**skey, **insertion_key, 'clustering_method': method,
-                       'unit': u})._update('spike_sites', unit_spike_sites[i])
-        (ephys.Unit & {**skey, **insertion_key, 'clustering_method': method,
-                       'unit': u})._update('spike_depths', unit_spike_depths[i])
+        ukey = {**archive_key, 'unit': u}
+        unit_data = (ephys.ArchivedClustering.Unit.proj(..., '-spike_sites', '-spike_depths') & ukey).fetch1()
+
+        with dj.config(safemode=False):
+            (ephys.ArchivedClustering.Unit & ukey).delete()
+
+        ephys.ArchivedClustering.Unit.insert1({**unit_data,
+                                               'spike_sites': unit_spike_sites[i],
+                                               'spike_depths': unit_spike_depths[i]})
 
 
 if __name__ == '__main__':
