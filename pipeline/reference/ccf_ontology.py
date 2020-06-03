@@ -1,5 +1,5 @@
 
-# Mouse CCF Ontology IDs/Names:
+# Mouse CCF Ontology IDs/Names/hexcode:
 ccf_ontology = '''
 997,root,FFFFFF
 8,Basic cell groups and regions,BFDAE3
