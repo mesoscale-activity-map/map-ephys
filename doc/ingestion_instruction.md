@@ -182,11 +182,7 @@ main pipeline documentation.
    dependent on loading the reference CCF volume data. The reference
    volume used in the MAP pipeline is the Allen Institute CCF r3
    20 uM Dataset tiff stack. This is done manually once prior to
-   ingest of any histology data:
-
-       >>> from pipeline import ccf
-       >>> dj.config['custom']['ccf.r3_20um_path'] = '/data/ccfstack.tiff'
-       >>> ccf.CCFAnnotation.load_ccf_r3_20um()
+   ingest of any histology data, see section (5) below.
    
    If needed, users can additionally configure a dj.config['custom']
    variable to adjust local data paths for session histology data:
@@ -204,3 +200,23 @@ main pipeline documentation.
    each session without ephys data and attempt to load any ephys data which
    is available.
 
+5) CCF Ingest
+    
+    New ingestion of CCF is rarely need, typically only applicable when a
+     new CCF Annotation version is available and the `ccf.CCFBrainRegion` and `ccf.CCFAnnotation` 
+     tables are required to be updated.
+     
+    To do CCF ingestion, set up `dj_local_conf.json` to contain 
+    
+       >>> from pipeline import ccf
+       >>> dj.config['custom']['ccf_data_paths'] = {'version_name': 'CCF_2017',
+                                                    'region_csv': '/data/ccf/mousebrainontology_2.csv',
+                                                    'hexcode_csv': '/data/ccf/hexcode.csv',
+                                                    'annotation_tif': '/data/ccf/Annotation_new_10_ds222_32bit.tif'}
+       >>> ccf.CCFBrainRegion.load_regions()
+       >>> ccf.CCFAnnotation.load_ccf_annotation()
+       
+    Or users can setup the `ccf_data_paths` in `dj_local_conf.json` as above and run:
+    
+        & mapshell.py ccfload
+        

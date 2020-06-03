@@ -273,7 +273,8 @@ def shell(*args):
 
 
 def ccfload(*args):
-    ccf.CCFAnnotation.load_ccf_r3_20um()
+    ccf.CCFBrainRegion.load_regions()
+    ccf.CCFAnnotation.load_ccf_annotation()
 
 
 def erd(*args):

@@ -68,10 +68,11 @@ class CCFBrainRegion(dj.Lookup):
     def load_regions(cls):
         version_name = dj.config['custom']['ccf_data_paths']['version_name']
         regions = get_ontology_regions()
-        cls.insert(dict(annotation_version=version_name,
-                        region_id=region_id,
-                        region_name=r.region_name,
-                        color_code=r.hexcode) for region_id, r in regions.iterrows())
+        cls.insert([dict(annotation_version=version_name,
+                         region_id=region_id,
+                         region_name=r.region_name,
+                         color_code=r.hexcode) for region_id, r in regions.iterrows()],
+                   skip_duplicates=True)
 
 
 @schema
