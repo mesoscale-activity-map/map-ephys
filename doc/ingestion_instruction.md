@@ -202,7 +202,7 @@ main pipeline documentation.
 
 5) CCF Ingest
     
-    New ingestion of CCF is rarely need, typically only applicable when a
+    New ingestion of CCF is rarely needed, typically only applicable when a
      new CCF Annotation version is available and the `ccf.CCFBrainRegion` and `ccf.CCFAnnotation` 
      tables are required to be updated.
      
