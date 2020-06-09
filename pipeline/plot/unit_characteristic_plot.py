@@ -355,8 +355,9 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
     depth_edges = depth_edges[1:]
 
     # region colorcode, by depths
+    bin_downsample_factor = 2
     binned_hexcodes = []
-    for s, e in zip(depth_bins[:-1], depth_bins[1:]):
+    for s, e in zip(depth_bins[:-1:bin_downsample_factor], depth_bins[1::bin_downsample_factor]):
         hexcodes = color_code[np.logical_and(pos_y > s, pos_y <= e)]
         if len(hexcodes):
             binned_hexcodes.append(Counter(hexcodes).most_common()[0][0])
@@ -370,10 +371,10 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
     fig = plt.figure(figsize=(16, 8))
     grid = plt.GridSpec(12, 12)
 
-    ax_main = plt.subplot(grid[1:, 0:8])
-    ax_cbar = plt.subplot(grid[0, 0:8])
-    ax_spkcount = plt.subplot(grid[1:, 8:10])
-    ax_anno = plt.subplot(grid[1:, 10:])
+    ax_main = plt.subplot(grid[1:, 0:9])
+    ax_cbar = plt.subplot(grid[0, 0:9])
+    ax_spkcount = plt.subplot(grid[1:, 9:11])
+    ax_anno = plt.subplot(grid[1:, 11:])
 
     # -- plot main --
     sns.heatmap(spk_rates.T, cmap='gray_r', ax=ax_main, cbar_ax=ax_cbar,
@@ -408,7 +409,7 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
     ax_spkcount.spines['left'].set_visible(False)
 
     # -- plot colored region annotation
-    ax_anno.imshow(region_rgb)
+    ax_anno.imshow(region_rgb, aspect='auto')
     ax_anno.invert_yaxis()
 
     ax_anno.spines['top'].set_visible(False)
@@ -420,9 +421,9 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
     ax_anno.set_ylabel('Depth in the brain (mm)')
     ax_anno.yaxis.set_label_position('right')
 
-    yticks = np.arange(0, len(depth_edges), depth_bin_count / 5).astype(int)
+    yticks = np.arange(0, len(depth_bins[::2]), depth_bin_count / (5*bin_downsample_factor)).astype(int)
     ax_anno.set_yticks(yticks)
-    ax_anno.set_yticklabels(np.round((depth_edges[yticks] + dv_loc) / 1000, 1))
+    ax_anno.set_yticklabels(np.round((depth_bins[::2][yticks] + dv_loc) / 1000, 1))
 
     return fig
 
