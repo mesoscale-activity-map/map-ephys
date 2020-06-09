@@ -397,7 +397,7 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
     cb.ax.xaxis.tick_top()
     cb.set_label('Firing rate (Hz)')
     cb.ax.xaxis.set_label_position('top')
-    
+
     # -- plot spikecount --
     ax_spkcount.plot(spk_count.sum(axis=0) / 10e3, depth_edges, 'k')
     ax_spkcount.set_xlabel('Spike count (x$10^3$)')
