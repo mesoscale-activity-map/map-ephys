@@ -90,10 +90,8 @@ class Tracking(dj.Imported):
     class WhiskerTracking(dj.Part):
         definition = """
         -> Tracking
-        whisker_id:           uuid
-        ---
         whisker_name:         varchar(36)
-        unique index (whisker_name)
+        ---
         whisker_x:            longblob        # whisker x location (px)
         whisker_y:            longblob        # whisker y location (px)
         whisker_likelihood:   longblob        # whisker location likelihood

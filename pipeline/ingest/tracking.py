@@ -216,7 +216,7 @@ class TrackingIngest(dj.Imported):
 
                 # special handling for whisker(s)
                 whisker_keys = [k for k in recs if 'whisker' in k]
-                tracking.Tracking.WhiskerTracking.insert([{**recs[k], 'whisker_id': uuid.uuid4(), 'whisker_name': k}
+                tracking.Tracking.WhiskerTracking.insert([{**recs[k], 'whisker_name': k}
                                                           for k in whisker_keys], allow_direct_insert=True)
 
                 tracking_files.append({**key, 'trial': tmap[t], 'tracking_device': tdev,
