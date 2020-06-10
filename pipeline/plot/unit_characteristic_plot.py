@@ -361,7 +361,7 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
     binned_hexcodes = []
 
     y_spacing = np.abs(np.nanmedian(np.where(np.diff(pos_y)==0, np.nan, np.diff(pos_y))))
-    anno_depth_bins = np.arange(0, pos_y.max(), y_spacing)
+    anno_depth_bins = np.arange(0, depth_bins[-1], y_spacing)
     for s, e in zip(anno_depth_bins[:-1], anno_depth_bins[1:]):
         hexcodes = color_code[np.logical_and(pos_y > s, pos_y <= e)]
         if len(hexcodes):
@@ -383,7 +383,7 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
 
     # -- plot main --
     im = ax_main.imshow(spk_rates.T, aspect='auto', cmap='gray_r',
-                        extent=[spike_bins[0], spike_bins[-1], depth_bins[0], depth_bins[-1]])
+                        extent=[spike_bins[0], spike_bins[-1], depth_bins[-1], depth_bins[0]])
     # cosmetic
     ax_main.invert_yaxis()
     ax_main.set_xlabel('Time (sec)')
@@ -412,6 +412,7 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
     # -- plot colored region annotation
     ax_anno.imshow(region_rgb, aspect='auto',
                    extent=[0, 10, (anno_depth_bins[-1] + dv_loc) / 1000, (anno_depth_bins[0] + dv_loc) / 1000])
+
     ax_anno.invert_yaxis()
 
     ax_anno.spines['right'].set_visible(False)
