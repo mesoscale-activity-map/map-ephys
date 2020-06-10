@@ -1,5 +1,7 @@
 import numpy as np
 import datajoint as dj
+from PIL import ImageColor
+from collections import Counter
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -307,9 +309,6 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
 
 
 def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
-    from PIL import ImageColor
-    from collections import Counter
-
     probe_insertion = probe_insertion.proj()
 
     if clustering_method is None:
