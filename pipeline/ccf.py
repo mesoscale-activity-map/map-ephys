@@ -58,7 +58,7 @@ class AnnotationVersion(dj.Lookup):
 class CCFBrainRegion(dj.Lookup):
     definition = """
     -> AnnotationVersion
-    region_name : varchar(1024)
+    region_name : varchar(128)
     ---
     region_id: int
     color_code: varchar(6) # hexcode of the color code of this region
