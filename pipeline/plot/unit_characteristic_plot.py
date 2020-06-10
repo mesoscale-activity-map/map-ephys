@@ -383,7 +383,7 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
 
     # -- plot main --
     im = ax_main.imshow(spk_rates.T, aspect='auto', cmap='gray_r',
-                        extent=[spike_bins.min(), spike_bins.max(), depth_bins.min(), depth_bins.max()])
+                        extent=[spike_bins[0], spike_bins[-1], depth_bins[0], depth_bins[-1]])
     # cosmetic
     ax_main.invert_yaxis()
     ax_main.set_xlabel('Time (sec)')
