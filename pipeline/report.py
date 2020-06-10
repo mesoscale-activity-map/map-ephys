@@ -394,13 +394,32 @@ class ProbeLevelDriftMap(dj.Computed):
     definition = """
     -> ephys.ProbeInsertion
     -> ephys.ClusteringMethod
+    shank: int
     ---
     driftmap: filepath@report_store
     """
 
-    def make(self, key):
-        pass
+    # Only process ProbeInsertion with Histology and InsertionLocation known
+    key_source = ephys.ProbeInsertion * ephys.ClusteringMethod & ephys.ProbeInsertion.InsertionLocation & histology.ElectrodeCCFPosition
 
+    def make(self, key):
+        water_res_num, sess_date = get_wr_sessdate(key)
+        probe_dir = store_stage / water_res_num / sess_date / str(key['insertion_number'])
+        probe_dir.mkdir(parents=True, exist_ok=True)
+
+        probe_insertion = ephys.ProbeInsertion & key
+
+        shanks = probe_insertion.aggr(lab.ElectrodeConfig.Electrode * lab.ProbeType.Electrode,
+                                      shanks='GROUP_CONCAT(DISTINCT shank SEPARATOR ", ")').fetch1('shanks')
+        shanks = np.array(shanks.split(', ')).astype(int)
+
+        for shank in shanks:
+            fig = unit_characteristic_plot.plot_driftmap(probe_insertion, shank_no=shank)
+            # ---- Save fig and insert ----
+            fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_{shank}'
+            fig_dict = save_figs((fig,), ('driftmap',), probe_dir, fn_prefix)
+            plt.close('all')
+            self.insert1({**key, **fig_dict})
 
 # ============================= UNIT LEVEL ====================================
 
@@ -539,7 +558,8 @@ report_tables = [SessionLevelReport,
                  UnitLevelTrackingReport,
                  SessionLevelCDReport,
                  SessionLevelProbeTrack,
-                 ProjectLevelProbeTrack]
+                 ProjectLevelProbeTrack,
+                 ProbeLevelDriftMap]
 
 
 def get_wr_sessdate(key):

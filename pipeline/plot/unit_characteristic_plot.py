@@ -1,5 +1,7 @@
 import numpy as np
 import datajoint as dj
+from PIL import ImageColor
+from collections import Counter
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -7,7 +9,7 @@ import seaborn as sns
 import itertools
 import pandas as pd
 
-from pipeline import experiment, ephys, psth, lab
+from pipeline import experiment, ephys, psth, lab, histology, ccf
 
 from pipeline.plot.util import (_plot_with_sem, _extract_one_stim_dur,
                                 _plot_stacked_psth_diff, _plot_avg_psth, _jointplot_w_hue)
@@ -315,9 +317,21 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
         except ValueError as e:
             raise ValueError(str(e) + '\nPlease specify one with the kwarg "clustering_method"')
 
-    units = ephys.Unit & probe_insertion & {'clustering_method': clustering_method} & 'unit_quality != "all"'
-    units = units * lab.ElectrodeConfig.Electrode * lab.ProbeType.Electrode.proj('shank') & {'shank': shank_no}
+    units = (ephys.Unit * lab.ElectrodeConfig.Electrode & probe_insertion & {'clustering_method': clustering_method} & 'unit_quality != "all"')
+    units = (units.proj('spike_times', 'spike_depths', 'unit_posy') * ephys.ProbeInsertion.proj() * lab.ElectrodeConfig.Electrode
+             * lab.ProbeType.Electrode.proj('shank') & {'shank': shank_no})
 
+    dv_loc = float((ephys.ProbeInsertion.InsertionLocation & probe_insertion).fetch1('depth'))
+
+    # ---- ccf region ----
+    annotated_electrodes = (lab.ElectrodeConfig.Electrode * lab.ProbeType.Electrode
+                            * ephys.ProbeInsertion
+                            * histology.ElectrodeCCFPosition.ElectrodePosition
+                            * ccf.CCFAnnotation * ccf.CCFBrainRegion.proj(..., annotation = 'region_name')
+                            & probe_insertion & {'shank': shank_no})
+    pos_y, ccf_z, color_code = annotated_electrodes.fetch('y_coord', 'ccf_z', 'color_code', order_by='y_coord DESC')
+
+    # ---- spikes ----
     spike_times, spike_depths = units.fetch('spike_times', 'spike_depths', order_by='unit')
 
     spike_times = np.hstack(spike_times)
@@ -330,47 +344,58 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
     # spike_bins = np.arange(0, spike_times.max() + time_res, time_res)
     # depth_bins = np.arange(spike_depths.min() - depth_res, spike_depths.max() + depth_res, depth_res)
 
-    # histogram
+    # time-depth 2D histogram
     time_bin_count = 1000
     depth_bin_count = 200
 
     spike_bins = np.linspace(0, spike_times.max(), time_bin_count)
-    depth_bins = np.linspace(np.nanmin(spike_depths), np.nanmax(spike_depths), depth_bin_count)
+    depth_bins = np.linspace(0, np.nanmax(spike_depths), depth_bin_count)
 
     spk_count, spk_edges, depth_edges = np.histogram2d(spike_times, spike_depths, bins=[spike_bins, depth_bins])
     spk_rates = spk_count / np.mean(np.diff(spike_bins))
-    spk_edges = spk_edges[1:]
-    depth_edges = depth_edges[1:]
+    spk_edges = spk_edges[:-1]
+    depth_edges = depth_edges[:-1]
+
+    # region colorcode, by depths
+    binned_hexcodes = []
+
+    y_spacing = np.abs(np.nanmedian(np.where(np.diff(pos_y)==0, np.nan, np.diff(pos_y))))
+    anno_depth_bins = np.arange(0, depth_bins[-1], y_spacing)
+    for s, e in zip(anno_depth_bins[:-1], anno_depth_bins[1:]):
+        hexcodes = color_code[np.logical_and(pos_y > s, pos_y <= e)]
+        if len(hexcodes):
+            binned_hexcodes.append(Counter(hexcodes).most_common()[0][0])
+        else:
+            binned_hexcodes.append('FFFFFF')
+
+    region_rgb = np.array([list(ImageColor.getrgb('#' + chex)) for chex in binned_hexcodes])
+    region_rgb = np.repeat(region_rgb[:, np.newaxis, :], 10, axis=1)
 
     # canvas setup
     fig = plt.figure(figsize=(16, 8))
-    grid = plt.GridSpec(12, 5, wspace=0.1, hspace=0.2)
+    grid = plt.GridSpec(12, 12)
 
-    ax_main = plt.subplot(grid[1:, 0:3])
-    ax_cbar = plt.subplot(grid[0, 0:3])
-    ax_spkcount = plt.subplot(grid[1:, 3])
-    # ax_anno = plt.subplot(grid[1:, 4])
+    ax_main = plt.subplot(grid[1:, 0:9])
+    ax_cbar = plt.subplot(grid[0, 0:9])
+    ax_spkcount = plt.subplot(grid[1:, 9:11])
+    ax_anno = plt.subplot(grid[1:, 11:])
 
     # -- plot main --
-    sns.heatmap(spk_rates.T, cmap='gray_r', ax=ax_main, cbar_ax=ax_cbar,
-                cbar_kws={'orientation': 'horizontal'})
+    im = ax_main.imshow(spk_rates.T, aspect='auto', cmap='gray_r',
+                        extent=[spike_bins[0], spike_bins[-1], depth_bins[-1], depth_bins[0]])
     # cosmetic
     ax_main.invert_yaxis()
-
-    xticks = np.arange(0, len(spk_edges), time_bin_count/5).astype(int)
-    ax_main.set_xticks(xticks)
-    ax_main.set_xticklabels(spk_edges[xticks].astype(int), rotation=0)
-    yticks = np.arange(0, len(depth_edges), depth_bin_count/5).astype(int)
-    ax_main.set_yticks(yticks)
-    ax_main.set_yticklabels(depth_edges[yticks].astype(int))
-
     ax_main.set_xlabel('Time (sec)')
     ax_main.set_ylabel('Distance from tip sites (um)')
-    ax_main.set_ylim(0, len(depth_edges))
+    ax_main.set_ylim(depth_edges[0], depth_edges[-1])
+    ax_main.spines['right'].set_visible(False)
+    ax_main.spines['top'].set_visible(False)
 
-    ax_cbar.xaxis.tick_top()
-    ax_cbar.set_xlabel('Firing rate (Hz)')
-    ax_cbar.xaxis.set_label_position('top')
+    cb = fig.colorbar(im, cax=ax_cbar, orientation='horizontal')
+    cb.outline.set_visible(False)
+    cb.ax.xaxis.tick_top()
+    cb.set_label('Firing rate (Hz)')
+    cb.ax.xaxis.set_label_position('top')
 
     # -- plot spikecount --
     ax_spkcount.plot(spk_count.sum(axis=0) / 10e3, depth_edges, 'k')
@@ -382,6 +407,22 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
     ax_spkcount.spines['top'].set_visible(False)
     ax_spkcount.spines['bottom'].set_visible(False)
     ax_spkcount.spines['left'].set_visible(False)
+
+    # -- plot colored region annotation
+    ax_anno.imshow(region_rgb, aspect='auto',
+                   extent=[0, 10, (anno_depth_bins[-1] + dv_loc) / 1000, (anno_depth_bins[0] + dv_loc) / 1000])
+
+    ax_anno.invert_yaxis()
+
+    ax_anno.spines['right'].set_visible(False)
+    ax_anno.spines['top'].set_visible(False)
+    ax_anno.spines['bottom'].set_visible(False)
+    ax_anno.spines['left'].set_visible(False)
+
+    ax_anno.set_xticks([])
+    ax_anno.yaxis.tick_right()
+    ax_anno.set_ylabel('Depth in the brain (mm)')
+    ax_anno.yaxis.set_label_position('right')
 
     return fig
 
