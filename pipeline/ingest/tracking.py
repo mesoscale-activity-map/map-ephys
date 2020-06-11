@@ -151,7 +151,7 @@ class TrackingIngest(dj.Imported):
                 tfull = list(tpath.glob(tfile))
 
                 if not tfull or len(tfull) > 1:
-                    # log.info('file mismatch: file: {} trial: {} ({})'.format(t, tmap[t], tfull))
+                    log.debug('file mismatch: file: {} trial: {} ({})'.format(t, tmap[t], tfull))
                     continue
 
                 tfull = tfull[-1]
