@@ -300,20 +300,20 @@ def _get_sess_tracking_dir(tracking_path, session):
     _, session_nth, _ = np.intersect1d(ordered_sess_numbers, session['session'], assume_unique=True, return_indices=True)
     session_nth = session_nth[0] + 1  # 1-based indexing
 
-    sess_dirname = ('{}_{}'.format(h2o, sess_datetime.date().strftime('%m%d%y'))
-                    + ('_{}'.format(session_nth) if session_nth > 1 else ''))
-    legacy_sess_dirname = ('{}'.format(sess_datetime.date().strftime('%Y%m%d'))
-                           + ('_{}'.format(session_nth) if session_nth > 1 else ''))
+    session_nth_str = '_{}'.format(session_nth) if session_nth > 1 else ''
+
+    sess_dirname = '{}_{}'.format(h2o, sess_datetime.date().strftime('%m%d%y')) + session_nth_str
+    legacy_sess_dirname = sess_datetime.date().strftime('%Y%m%d') + session_nth_str
 
     dir = tracking_path / h2o / sess_dirname
     legacy_dir = tracking_path / h2o / legacy_sess_dirname / 'tracking'
 
     if dir.exists():
         print('Found {}'.format(dir.relative_to(tracking_path)))
-        return dir, sess_datetime.date().strftime('%m%d%y')
+        return dir, sess_datetime.date().strftime('%m%d%y') + session_nth_str
     elif legacy_dir.exists():
         print('Found {}'.format(legacy_dir.relative_to(tracking_path)))
-        return legacy_dir, sess_datetime.date().strftime('%Y%m%d')
+        return legacy_dir, sess_datetime.date().strftime('%Y%m%d') + session_nth_str
     else:
         raise FileNotFoundError('Neither ({}) nor ({}) found'.format(dir.relative_to(tracking_path),
                                                                      legacy_dir.relative_to(tracking_path)))
