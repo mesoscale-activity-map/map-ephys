@@ -71,15 +71,14 @@ class TrackingIngest(dj.Imported):
         log.info('\n======================================================')
         log.info('TrackingIngest().make(): key: {k}'.format(k=key))
 
-        h2o = (lab.WaterRestriction & key).fetch1('water_restriction_number')
-        session = (experiment.Session & key).fetch1()
+        session = (lab.WaterRestriction.proj('water_restriction_number') * experiment.Session.proj(
+            ..., session_datetime="cast(concat(session_date, ' ', session_time) as datetime)") & key).fetch1()
+
+        h2o = session['water_restriction_number']
         trials = (experiment.SessionTrial & session).fetch('trial')
 
         log.info('got session: {} ({} trials)'.format(session, len(trials)))
         log.info('\n-----------')
-
-        sess_time = (datetime.min + session['session_time']).time()
-        sess_datetime = datetime.combine(session['session_date'], sess_time)
 
         paths = get_tracking_paths()
         devices = tracking.TrackingDevice.fetch(as_dict=True)
@@ -93,7 +92,7 @@ class TrackingIngest(dj.Imported):
             tdat = p[-1]
 
             try:
-                tpath, sdate_sml = _get_sess_tracking_dir(tdat, h2o, sess_datetime)
+                tpath, sdate_sml = _get_sess_tracking_dir(tdat, session)
             except FileNotFoundError as e:
                 log.warning('{} - skipping'.format(str(e)))
                 continue
@@ -127,6 +126,10 @@ class TrackingIngest(dj.Imported):
                 continue
 
             n_tmap = len(tmap)
+
+            # sanity check
+            assert len(trials) >= n_tmap, '{} tracking trials found but only {} behavior trials available'.format(n_tmap, len(trials))
+
             log.info('loading tracking data for {} trials'.format(n_tmap))
 
             i = 0
@@ -148,8 +151,7 @@ class TrackingIngest(dj.Imported):
                 tfull = list(tpath.glob(tfile))
 
                 if not tfull or len(tfull) > 1:
-                    log.info('file mismatch: file: {} trial: {} ({})'.format(
-                        t, tmap[t], tfull))
+                    log.debug('file mismatch: file: {} trial: {} ({})'.format(t, tmap[t], tfull))
                     continue
 
                 tfull = tfull[-1]
@@ -216,7 +218,7 @@ class TrackingIngest(dj.Imported):
 
                 # special handling for whisker(s)
                 whisker_keys = [k for k in recs if 'whisker' in k]
-                tracking.Tracking.WhiskerTracking.insert([{**recs[k], 'whisker_id': uuid.uuid4(), 'whisker_name': k}
+                tracking.Tracking.WhiskerTracking.insert([{**recs[k], 'whisker_name': k}
                                                           for k in whisker_keys], allow_direct_insert=True)
 
                 tracking_files.append({**key, 'trial': tmap[t], 'tracking_device': tdev,
@@ -282,21 +284,36 @@ class TrackingIngest(dj.Imported):
 
 # ======== Helpers for directory navigation ========
 
-def _get_sess_tracking_dir(tracking_path, h2o, sess_datetime):
+def _get_sess_tracking_dir(tracking_path, session):
     tracking_path = pathlib.Path(tracking_path)
+    h2o = session['water_restriction_number']
+    sess_datetime = session['session_datetime']
 
     if (tracking_path / h2o).exists():
         log.info('Checking for tracking data at: {}'.format(tracking_path / h2o))
     else:
         raise FileNotFoundError('{} not found'.format(tracking_path / h2o))
 
-    dir_format = tracking_path / h2o / '{}_{}'.format(h2o, sess_datetime.date().strftime('%m%d%y'))
-    legacy_dir_format = tracking_path / h2o / sess_datetime.date().strftime('%Y%m%d') / 'tracking'
+    day_sessions = (experiment.Session & {'subject_id': session['subject_id'],
+                                          'session_date': sess_datetime.date()})
+    ordered_sess_numbers = day_sessions.fetch('session', order_by='session_time')
+    _, session_nth, _ = np.intersect1d(ordered_sess_numbers, session['session'], assume_unique=True, return_indices=True)
+    session_nth = session_nth[0] + 1  # 1-based indexing
 
-    if dir_format.exists():
-        return dir_format, sess_datetime.date().strftime('%m%d%y')
-    elif legacy_dir_format.exists():
-        return legacy_dir_format, sess_datetime.date().strftime('%Y%m%d')
+    session_nth_str = '_{}'.format(session_nth) if session_nth > 1 else ''
+
+    sess_dirname = '{}_{}'.format(h2o, sess_datetime.date().strftime('%m%d%y')) + session_nth_str
+    legacy_sess_dirname = sess_datetime.date().strftime('%Y%m%d') + session_nth_str
+
+    dir = tracking_path / h2o / sess_dirname
+    legacy_dir = tracking_path / h2o / legacy_sess_dirname / 'tracking'
+
+    if dir.exists():
+        print('Found {}'.format(dir.relative_to(tracking_path)))
+        return dir, sess_datetime.date().strftime('%m%d%y') + session_nth_str
+    elif legacy_dir.exists():
+        print('Found {}'.format(legacy_dir.relative_to(tracking_path)))
+        return legacy_dir, sess_datetime.date().strftime('%Y%m%d') + session_nth_str
     else:
-        raise FileNotFoundError('Neither ({}) nor ({}) found'.format(dir_format.relative_to(tracking_path),
-                                                                     legacy_dir_format.relative_to(tracking_path)))
+        raise FileNotFoundError('Neither ({}) nor ({}) found'.format(dir.relative_to(tracking_path),
+                                                                     legacy_dir.relative_to(tracking_path)))

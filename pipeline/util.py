@@ -37,6 +37,12 @@ def _get_stim_onset_time(units, trial_cond_name):
 
 
 def _get_units_hemisphere(units):
+    """
+    Return the hemisphere ("left" or "right") that the specified units belong to,
+     based on the targeted insertion location - "ephys.ProbeInsertion.InsertionLocation"
+    :param units: either a list of unit_keys or a query of the ephys.Unit table
+    :return: "left" or "right"
+    """
     ml_locations = np.unique((ephys.ProbeInsertion.InsertionLocation & units).fetch('ml_location'))
     if len(ml_locations) == 0:
         raise Exception('No ProbeInsertion.InsertionLocation available')
@@ -52,6 +58,11 @@ def _get_units_hemisphere(units):
 
 
 def _get_clustering_method(probe_insertion):
+    """
+    Return the "clustering_method" used to estimate the all the units for the provided "probe_insertion"
+    :param probe_insertion: an "ephys.ProbeInsertion" key
+    :return: clustering_method
+    """
     clustering_methods = (ephys.ClusteringMethod & (ephys.Unit & probe_insertion)).fetch('clustering_method')
     if len(clustering_methods) == 1:
         return clustering_methods[0]

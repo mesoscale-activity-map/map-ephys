@@ -311,6 +311,9 @@ def shell(*args):
              local=globals())
 
 
+def ccfload(*args):
+    ccf.CCFBrainRegion.load_regions()
+    ccf.CCFAnnotation.load_ccf_annotation()
 
 
 def erd(*args):

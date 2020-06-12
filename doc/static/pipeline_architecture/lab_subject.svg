@@ -1,0 +1,146 @@
+<svg height="185pt" viewBox="0.00 0.00 660.00 185.00" width="660pt" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g class="graph" id="graph0" transform="scale(1 1) rotate(0) translate(4 181)">
+<title>%3</title>
+<polygon fill="#ffffff" points="-4,4 -4,-181 656,-181 656,4 -4,4" stroke="transparent"/>
+<!-- lab.Subject.Strain -->
+<g class="node" id="node1">
+<title>lab.Subject.Strain</title>
+<g id="a_node1"><a xlink:title="→ lab.Subject→ lab.AnimalStrain">
+<polygon fill="transparent" points="94,-27 0,-27 0,-8 94,-8 94,-27" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="middle" x="47" y="-15">lab.Subject.Strain</text>
+</a>
+</g>
+</g>
+<!-- lab.Person -->
+<g class="node" id="node2">
+<title>lab.Person</title>
+<g id="a_node2"><a xlink:title="username             ------------------------------fullname             ">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="558,-177 484,-177 484,-142 558,-142 558,-177" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="492" y="-157.4">lab.Person</text>
+</a>
+</g>
+</g>
+<!-- lab.Surgery -->
+<g class="node" id="node9">
+<title>lab.Surgery</title>
+<g id="a_node9"><a xlink:title="→ lab.Subjectsurgery_id           ------------------------------→ lab.Personstart_time           end_time             surgery_description  ">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="652,-35 574,-35 574,0 652,0 652,-35" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="582" y="-15.4">lab.Surgery</text>
+</a>
+</g>
+</g>
+<!-- lab.Person&#45;&gt;lab.Surgery -->
+<g class="edge" id="edge1">
+<title>lab.Person-&gt;lab.Surgery</title>
+<path d="M532.4658,-141.8027C550.0955,-114.5918 583.6733,-62.7651 601.3897,-35.4203" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.Subject -->
+<g class="node" id="node10">
+<title>lab.Subject</title>
+<g id="a_node10"><a xlink:title="subject_id           ------------------------------→ [nullable] lab.Personcage_number          date_of_birth        sex                  → [nullable] lab.AnimalSource">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="390.5,-106 313.5,-106 313.5,-71 390.5,-71 390.5,-106" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="321.5" y="-86.4">lab.Subject</text>
+</a>
+</g>
+</g>
+<!-- lab.Person&#45;&gt;lab.Subject -->
+<g class="edge" id="edge2">
+<title>lab.Person-&gt;lab.Subject</title>
+<path d="M483.9122,-143.9187C456.3177,-132.3258 418.7493,-116.5426 390.7621,-104.7847" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.WaterRestriction -->
+<g class="node" id="node3">
+<title>lab.WaterRestriction</title>
+<g id="a_node3"><a xlink:title="→ lab.Subject------------------------------water_restriction_number cage_number          wr_start_date        wr_start_weight      ">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="394,-35 270,-35 270,0 394,0 394,-35" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="middle" x="332" y="-14.4">lab.WaterRestriction</text>
+</a>
+</g>
+</g>
+<!-- lab.Subject.GeneModification -->
+<g class="node" id="node4">
+<title>lab.Subject.GeneModification</title>
+<g id="a_node4"><a xlink:title="→ lab.Subject→ lab.ModifiedGene------------------------------zygosity=&quot;Unknown&quot;   type=&quot;Unknown&quot;       ">
+<polygon fill="transparent" points="556,-27 412,-27 412,-8 556,-8 556,-27" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="middle" x="484" y="-15">lab.Subject.GeneModification</text>
+</a>
+</g>
+</g>
+<!-- lab.AnimalStrain -->
+<g class="node" id="node5">
+<title>lab.AnimalStrain</title>
+<g id="a_node5"><a xlink:title="animal_strain        ">
+<polygon fill="#000000" fill-opacity="0.125490" points="91,-106 3,-106 3,-71 91,-71 91,-106" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="11" y="-87">lab.AnimalStrain</text>
+</a>
+</g>
+</g>
+<!-- lab.AnimalStrain&#45;&gt;lab.Subject.Strain -->
+<g class="edge" id="edge3">
+<title>lab.AnimalStrain-&gt;lab.Subject.Strain</title>
+<path d="M47,-70.9494C47,-57.1517 47,-38.4447 47,-27.2141" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.AnimalSource -->
+<g class="node" id="node6">
+<title>lab.AnimalSource</title>
+<g id="a_node6"><a xlink:title="animal_source        ">
+<polygon fill="#000000" fill-opacity="0.125490" points="398.5,-177 305.5,-177 305.5,-142 398.5,-142 398.5,-177" stroke="transparent"/>
+<text fill="#000000" font-family="arial" font-size="10.00" text-anchor="start" text-decoration="underline" x="313.5" y="-158">lab.AnimalSource</text>
+</a>
+</g>
+</g>
+<!-- lab.AnimalSource&#45;&gt;lab.Subject -->
+<g class="edge" id="edge4">
+<title>lab.AnimalSource-&gt;lab.Subject</title>
+<path d="M352,-141.9494C352,-131.1083 352,-117.2366 352,-106.3418" fill="none" stroke="#000000" stroke-dasharray="5,2" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.ModifiedGene -->
+<g class="node" id="node7">
+<title>lab.ModifiedGene</title>
+<g id="a_node7"><a xlink:title="gene_modification    ------------------------------gene_modification_description=&quot;&quot; ">
+<polygon fill="#00ff00" fill-opacity="0.188235" points="539.5,-106 428.5,-106 428.5,-71 539.5,-71 539.5,-106" stroke="#00ff00" stroke-opacity="0.188235"/>
+<text fill="#006400" font-family="arial" font-size="12.00" text-anchor="start" text-decoration="underline" x="436.5" y="-86.4">lab.ModifiedGene</text>
+</a>
+</g>
+</g>
+<!-- lab.ModifiedGene&#45;&gt;lab.Subject.GeneModification -->
+<g class="edge" id="edge5">
+<title>lab.ModifiedGene-&gt;lab.Subject.GeneModification</title>
+<path d="M484,-70.9494C484,-57.1517 484,-38.4447 484,-27.2141" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.CompleteGenotype -->
+<g class="node" id="node8">
+<title>lab.CompleteGenotype</title>
+<g id="a_node8"><a xlink:title="→ lab.Subject------------------------------complete_genotype    ">
+<ellipse cx="182" cy="-17.5" fill="#ff0000" fill-opacity="0.125490" rx="13" ry="13" stroke="#ff0000" stroke-opacity="0.125490"/>
+<text fill="#7f0000" font-family="arial" font-size="12.00" text-anchor="middle" x="182" y="-14.4">lab.CompleteGenotype</text>
+</a>
+</g>
+</g>
+<!-- lab.Subject&#45;&gt;lab.Subject.Strain -->
+<g class="edge" id="edge6">
+<title>lab.Subject-&gt;lab.Subject.Strain</title>
+<path d="M313.3513,-81.3315C264.1752,-71.9509 176.762,-54.4063 103,-35 94.1344,-32.6675 84.581,-29.8121 75.9193,-27.0898" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.Subject&#45;&gt;lab.WaterRestriction -->
+<g class="edge" id="edge7">
+<title>lab.Subject-&gt;lab.WaterRestriction</title>
+<path d="M347.0562,-70.9494C344.0024,-60.1083 340.0948,-46.2366 337.0259,-35.3418" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- lab.Subject&#45;&gt;lab.Subject.GeneModification -->
+<g class="edge" id="edge8">
+<title>lab.Subject-&gt;lab.Subject.GeneModification</title>
+<path d="M384.6292,-70.9494C410.4341,-57.0696 445.4749,-38.2219 466.3113,-27.0144" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+<!-- lab.Subject&#45;&gt;lab.CompleteGenotype -->
+<g class="edge" id="edge9">
+<title>lab.Subject-&gt;lab.CompleteGenotype</title>
+<path d="M313.4244,-72.389C275.2187,-56.4325 218.9626,-32.9373 194.3222,-22.6463" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width="2"/>
+</g>
+<!-- lab.Subject&#45;&gt;lab.Surgery -->
+<g class="edge" id="edge10">
+<title>lab.Subject-&gt;lab.Surgery</title>
+<path d="M390.822,-78.4481C400.3591,-75.9956 410.5453,-73.3902 420,-71 484.3756,-54.7252 501.4961,-54.3995 565,-35 567.8842,-34.1189 570.8489,-33.1632 573.822,-32.1682" fill="none" stroke="#000000" stroke-opacity="0.250980" stroke-width=".75"/>
+</g>
+</g>
+</svg>
