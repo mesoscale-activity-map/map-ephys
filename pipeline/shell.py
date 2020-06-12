@@ -200,7 +200,8 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
 
 
 def load_ccf(*args):
-    ccf.CCFAnnotation.load_ccf_r3_20um()
+    ccf.CCFBrainRegion.load_regions()
+    ccf.CCFAnnotation.load_ccf_annotation()
 
 
 def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': True}):
@@ -309,11 +310,6 @@ def shell(*args):
                  '.'.join(m.__name__.split('.')[1:])
                  for m in pipeline_modules)),
              local=globals())
-
-
-def ccfload(*args):
-    ccf.CCFBrainRegion.load_regions()
-    ccf.CCFAnnotation.load_ccf_annotation()
 
 
 def erd(*args):
