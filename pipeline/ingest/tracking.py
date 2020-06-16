@@ -309,10 +309,10 @@ def _get_sess_tracking_dir(tracking_path, session):
     legacy_dir = tracking_path / h2o / legacy_sess_dirname / 'tracking'
 
     if dir.exists():
-        print('Found {}'.format(dir.relative_to(tracking_path)))
+        log.info('Found {}'.format(dir.relative_to(tracking_path)))
         return dir, sess_datetime.date().strftime('%m%d%y') + session_nth_str
     elif legacy_dir.exists():
-        print('Found {}'.format(legacy_dir.relative_to(tracking_path)))
+        log.info('Found {}'.format(legacy_dir.relative_to(tracking_path)))
         return legacy_dir, sess_datetime.date().strftime('%Y%m%d') + session_nth_str
     else:
         raise FileNotFoundError('Neither ({}) nor ({}) found'.format(dir.relative_to(tracking_path),
