@@ -419,7 +419,7 @@ class ProbeLevelDriftMap(dj.Computed):
             fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_{shank}_'
             fig_dict = save_figs((fig,), ('driftmap',), probe_dir, fn_prefix)
             plt.close('all')
-            self.insert1({**key, **fig_dict})
+            self.insert1({**key, **fig_dict, 'shank': shank})
 
 # ============================= UNIT LEVEL ====================================
 
