@@ -802,7 +802,7 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
         unit_ypos = [ks.data['channel_positions'][site_idx, 1] for site_idx in vmax_unit_site_idx]
         # unit waveforms
         unit_wav = np.load(ks_dir / 'mean_waveforms.npy')
-        unit_wav = unit_wav[valid_units, :, :]  # unit x channel x sample
+        unit_wav = unit_wav[metrics.index, :, :]  # unit x channel x sample
     else:
         vmax_unit_site, unit_xpos, unit_ypos, unit_amp = [], [], [], []
         for unit in valid_units:
