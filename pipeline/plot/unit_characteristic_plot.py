@@ -318,7 +318,7 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
             raise ValueError(str(e) + '\nPlease specify one with the kwarg "clustering_method"')
 
     units = (ephys.Unit * lab.ElectrodeConfig.Electrode & probe_insertion & {'clustering_method': clustering_method} & 'unit_quality != "all"')
-    units = (units.proj('spike_times', 'spike_depths', 'unit_posy') * ephys.ProbeInsertion.proj() * lab.ElectrodeConfig.Electrode
+    units = (units.proj('spike_times', 'spike_depths', 'unit_posy') * ephys.ProbeInsertion.proj()
              * lab.ProbeType.Electrode.proj('shank') & {'shank': shank_no})
 
     dv_loc = float((ephys.ProbeInsertion.InsertionLocation & probe_insertion).fetch1('depth'))
@@ -368,8 +368,8 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
         else:
             binned_hexcodes.append('FFFFFF')
 
-    region_rgb = np.array([list(ImageColor.getrgb('#' + chex)) for chex in binned_hexcodes])
-    region_rgb = np.repeat(region_rgb[:, np.newaxis, :], 10, axis=1)
+    region_rgba = np.array([list(ImageColor.getcolor("#" + chex, "RGBA")) for chex in binned_hexcodes])
+    region_rgba = np.repeat(region_rgba[:, np.newaxis, :], 10, axis=1)
 
     # canvas setup
     fig = plt.figure(figsize=(16, 8))
@@ -409,7 +409,7 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
     ax_spkcount.spines['left'].set_visible(False)
 
     # -- plot colored region annotation
-    ax_anno.imshow(region_rgb, aspect='auto',
+    ax_anno.imshow(region_rgba, aspect='auto',
                    extent=[0, 10, (anno_depth_bins[-1] + dv_loc) / 1000, (anno_depth_bins[0] + dv_loc) / 1000])
 
     ax_anno.invert_yaxis()
