@@ -442,7 +442,6 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
         unit_ccf = (ephys.Unit * ccf_tbl & insert_key & {'clustering_method': clustering_method}).aggr(
             ccf.CCFAnnotation, ..., annotation='annotation', keep_all_rows=True).fetch(
             'unit', 'ccf_x', 'ccf_y', 'ccf_z', 'annotation', order_by='unit')
-        
         unit_ccfs.extend(list(zip(*unit_ccf)))
 
     if unit_ccfs:
@@ -451,9 +450,9 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
         print('ok.')
     else:
         print('n/a')
+
     # savemat
     # -------
-
     print('... saving to {}:'.format(filepath), end='')
 
     scio.savemat(filepath, edata)
