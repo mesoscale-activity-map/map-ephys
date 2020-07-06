@@ -440,7 +440,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     unit_ccfs = []
     for ccf_tbl in (histology.ElectrodeCCFPosition.ElectrodePosition, histology.ElectrodeCCFPosition.ElectrodePositionError):
         unit_ccf = (ephys.Unit * ccf_tbl & insert_key & {'clustering_method': clustering_method}).aggr(
-            ccf.CCFAnnotation, ..., annotation='annotation', keep_all_rows=True).fetch(
+            ccf.CCFAnnotation, ..., annotation='IFNULL(annotation, "")', keep_all_rows=True).fetch(
             'unit', 'ccf_x', 'ccf_y', 'ccf_z', 'annotation', order_by='unit')
         unit_ccfs.extend(list(zip(*unit_ccf)))
 
