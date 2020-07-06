@@ -401,7 +401,7 @@ class ProbeLevelDriftMap(dj.Computed):
     """
 
     # Only process ProbeInsertion with Histology and InsertionLocation known
-    key_source = ephys.ProbeInsertion * ephys.ClusteringMethod & ephys.ProbeInsertion.InsertionLocation & histology.ElectrodeCCFPosition
+    key_source = (ephys.ProbeInsertion * ephys.ClusteringMethod & ephys.Unit.proj()) & ephys.ProbeInsertion.InsertionLocation & histology.ElectrodeCCFPosition
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
@@ -417,10 +417,10 @@ class ProbeLevelDriftMap(dj.Computed):
         for shank in shanks:
             fig = unit_characteristic_plot.plot_driftmap(probe_insertion, shank_no=shank)
             # ---- Save fig and insert ----
-            fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_{shank}'
+            fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_{shank}_'
             fig_dict = save_figs((fig,), ('driftmap',), probe_dir, fn_prefix)
             plt.close('all')
-            self.insert1({**key, **fig_dict})
+            self.insert1({**key, **fig_dict, 'shank': shank})
 
 # ============================= UNIT LEVEL ====================================
 
