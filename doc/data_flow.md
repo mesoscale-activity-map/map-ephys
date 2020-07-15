@@ -105,6 +105,9 @@ Automatic generation of report figures based on availability of upstream results
     + only process ***ProbeInsertion*** with ***UnitSelectivity*** computation fully completed 
 + `report.ProbeLevelPhotostimEffectReport`
     + only process ProbeInsertion with UnitPSTH computation (for all TrialCondition) fully completed
++ `report.ProbeLevelDriftMap`
+    + figures generated on a per-shank level
+    + only process ProbeInsertion with Histology and InsertionLocation known
 + `report.UnitLevelEphysReport`
     + only process Units from probe that has ***InsertionLocation*** present
     + ignore units of `unit_quality` of type "all"

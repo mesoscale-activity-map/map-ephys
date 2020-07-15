@@ -192,6 +192,10 @@ As shown in the diagram, report figures are categorized into 4 levels.
 
 <img src="static/pipeline_architecture/probe_group_photostim.png" alt="probe_group_photostim" width="600" height="150">
 
+`report.ProbeLevelDriftMap`
+
+<img src="static/pipeline_architecture/probe_driftmap.png" alt="probe_driftmap" width="600" height="150">
+
 ### unit-level
 
 |`report.UnitLevelEphysReport`|`report.UnitLevelTrackingReport`
