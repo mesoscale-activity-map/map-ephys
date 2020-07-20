@@ -64,6 +64,13 @@ class TaskProtocol(dj.Lookup):
 
 
 @schema
+class WaterPort(dj.Lookup):
+    definition = """
+    water_port: varchar(16)  # e.g. "left", "right", "middle", "top-left", "purple"
+    """
+
+
+@schema
 class Photostim(dj.Manual):
     definition = """  # Photostim protocol
     -> Session
@@ -195,7 +202,7 @@ class SessionComment(dj.Manual):
 
 @schema
 class SessionDetails(dj.Manual):
-    # TODO: better table name
+    # TODO: more specific table name?
     definition = """
     -> Session
     ---
@@ -212,16 +219,6 @@ class TrialInstruction(dj.Lookup):
     definition = """
     # Instruction to mouse 
     trial_instruction  : varchar(8) 
-    """
-    contents = zip(('left', 'right', 'none'))
-
-
-@schema
-class Choice(dj.Lookup):
-    # TODO: better table name
-    definition = """
-    # Choice of the mouse 
-    choice  : varchar(8) 
     """
     contents = zip(('left', 'right', 'middle', 'none'))
 
@@ -255,10 +252,18 @@ class BehaviorTrial(dj.Imported):
     -> TaskProtocol
     -> TrialInstruction
     -> EarlyLick
-    -> Choice
     -> Outcome
     auto_water=0: bool
     free_water=0: bool
+    """
+
+
+@schema
+class WaterPortChoice(dj.Imported):
+    definition = """  # The water port selected by the animal for each trial
+    -> BehaviorTrial
+    ---
+    -> WaterPort
     """
 
 
@@ -309,19 +314,24 @@ class ActionEvent(dj.Imported):
 # ---- Foraging paradigm specifics ----
 
 @schema
-class TrialBlock(dj.Imported):
+class SessionBlock(dj.Imported):
     definition = """
     -> Session
     block : smallint 		# block number
     ---
-    block_uid : int  # unique across sessions/animals
+    block_uid : int  # unique across sessions/animals 
     block_start_time : decimal(10, 4)  # (s) relative to session beginning
-    p_reward_left = null: decimal(8, 4)  # reward probability on the left waterport
-    p_reward_right = null : decimal(8, 4)  # reward probability on the right waterport
-    p_reward_middle = null : decimal(8, 4)  # reward probability on the middle waterport
     """
 
-    class BlockMember(dj.Part):
+    class WaterPortRewardProbability(dj.Part):
+        definition = """
+        -> master
+        -> WaterPort
+        ---
+        reward_probability: decimal(8, 4)
+        """
+
+    class BlockTrial(dj.Part):
         definition = """
         -> master
         -> BehaviorTrial
@@ -329,28 +339,31 @@ class TrialBlock(dj.Imported):
 
 
 @schema
-class WaterValveData(dj.Imported):
+class WaterValveSetting(dj.Imported):
     definition = """
     -> BehaviorTrial
     ----
-    water_valve_lateral_pos = null: int # position value of the motor
-    water_valve_rostrocaudal_pos = null: int # position value of the motor
-    water_valve_dorsoventral_pos = null: int # position value of the motor
-    water_valve_time_left = null: decimal(5,4) # seconds of valve open time
-    water_valve_time_right = null: decimal(5,4) # seconds of valve open time
-    water_valve_time_middle = null: decimal(5,4) # seconds of valve open time
+    water_valve_lateral_pos=null: int # position value of the motor
+    water_valve_rostrocaudal_pos=null: int # position value of the motor
+    water_valve_dorsoventral_pos=null: int # position value of the motor
     """
+
+    class OpenDuration(dj.Part):
+        definition = """
+        -> master
+        -> WaterPort
+        ---
+        open_duration: decimal(5 4)  # (s) duration of valve open time
+        """
 
 
 @schema
 class TrialAvailableReward(dj.Imported):
-    definition = """
-    # available reward for the mouse upon choice
+    definition = """ # available reward (bool) for each water port per trial
     -> BehaviorTrial
-    ----
-    trial_available_reward_left=null  : bool # 1: reward is available, 0: reward is not available   
-    trial_available_reward_right=null  : bool # 1: reward is available, 0: reward is not available
-    trial_available_reward_middle=null  : bool # 1: reward is available, 0: reward is not available
+    -> WaterPort
+    ---
+    reward_available: bool
     """
 
 
