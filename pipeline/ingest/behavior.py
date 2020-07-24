@@ -674,6 +674,8 @@ class BehaviorBpodIngest(dj.Imported):
         behavior_file:              varchar(255)          # behavior file name
         """
     
+    water_port_name_mapper = {'left': 'L', 'right': 'R', 'middle': 'M'}
+    
     @staticmethod
     def get_bpod_projects():
         projectdirs = dj.config.get('custom', {}).get('behavior_bpod', []).get('project_paths')
@@ -708,17 +710,14 @@ class BehaviorBpodIngest(dj.Imported):
                         and df_wr_row['Training type'] != 'restriction'
                         and df_wr_row['Training type'] != 'handling'):
 
-                    date_now = df_wr_row.Date  # .replace('-','')
-                    if '-' in date_now:
-                        year = date_now[:date_now.find('-')]
-                        date_res = date_now[date_now.find('-') + 1:]
-                        month = date_res[:date_res.find('-')]
-                        if len(month) == 1:
-                            month = '0' + month
-                        day = date_res[date_res.find('-') + 1:]
-                        if len(day) == 1:
-                            day = '0' + day
-                        date_now = year + month + day
+                    try:
+                        date_now = datetime.strptime(df_wr_row.Date, '%Y-%m-%d').date()
+                    except:
+                        try:
+                            date_now = datetime.strptime(df_wr_row.Date, '%Y/%m/%d').date()
+                        except:
+                            log.info('Unable to parse session date: {}. Skipping...'.format(df_wr_row.Date))
+                            continue
 
                     if not (experiment.Session & {'subject_id': subject_id_now, 'session_date': date_now}):
                         key_source.append({'subject_id': subject_id_now,
@@ -734,10 +733,6 @@ class BehaviorBpodIngest(dj.Imported):
         for k in self.key_source:
             with dj.conn().transaction:
                 self.make(k)
-
-    @property
-    def water_port_name_mapper(self):
-        return {'left': 'L', 'right': 'R', 'middle': 'M'}
 
     def make(self, key):
         log.info('BehaviorBpodIngest.make(): key: {key}'.format(key=key))
@@ -771,16 +766,26 @@ class BehaviorBpodIngest(dj.Imported):
                          'photostim', 'photostim_location', 'photostim_trial', 'photostim_trial_event',
                          'valve_setting', 'valve_open_dur', 'available_reward')
 
+        # getting started
         concat_rows = {k: list() for k in tbls_2_insert}
-
         sess_key = None
+        trial_num = 0  # trial numbering starts at 1
+
         for session_idx in bpodsess_order:
             session = sessions_now[session_idx]
             experiment_name = experimentnames_now[session_idx]
             csvfilename = (pathlib.Path(session.path) / (pathlib.Path(session.path).name + '.csv'))
+            
+            # ---- Special parsing for csv file ----
+            df_behavior_session = util.load_and_parse_a_csv_file(csvfilename)
+            
+            trial_start_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'TRIAL') & (df_behavior_session['MSG'] == 'New trial')].index
+            if not len(trial_start_idxs):
+                log.info('No "trial start" for {}. Skipping...'.format(csvfilename))
+                return
 
             # ---- New session - construct a session key ----
-            if sess_key is not None:
+            if sess_key is None:
                 session_time = df_behavior_session['PC-TIME'][trial_start_idxs[0]]
                 if session.setup_name.lower() in ['day1', 'tower-2', 'day2-7', 'day_1', 'real foraging']:
                     setupname = 'Training-Tower-2'
@@ -801,8 +806,6 @@ class BehaviorBpodIngest(dj.Imported):
                             'username': df_behavior_session['experimenter'][0],
                             'rig': setupname}
 
-            # ---- Special parsing for csv file ----
-            df_behavior_session = util.load_and_parse_a_csv_file(csvfilename)
             # extracting task protocol - hard-code implementation
             if 'foraging' in experiment_name.lower() or ('bari' in experiment_name.lower() and 'cohen' in experiment_name.lower()):
                 if 'var:lickport_number' in df_behavior_session and df_behavior_session['var:lickport_number'][0] == 3:
@@ -824,14 +827,6 @@ class BehaviorBpodIngest(dj.Imported):
                 water_port_channels[lick_port] = df_behavior_session[chn_varname][0]
 
             # ---- Ingestion of trials ----
-            trial_start_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'TRIAL') & (df_behavior_session['MSG'] == 'New trial')].index
-
-            if not len(trial_start_idxs):
-                log.info('No "trial start" for {}. Skipping...'.format(csvfilename))
-                return
-
-            # lists of various records for batch-insert
-            rows = {k: list() for k in tbls_2_insert}
 
             # extracting trial data
             session_start_time = datetime.combine(sess_key['session_date'], sess_key['session_time'])
@@ -842,7 +837,9 @@ class BehaviorBpodIngest(dj.Imported):
             prevtrialstarttime = np.nan
             blocknum_local_prev = np.nan
 
-            trial_num = 0  # trial numbering starts at 1
+            # getting ready
+            rows = {k: list() for k in tbls_2_insert} # lists of various records for batch-insert
+
             for trial_start_idx, trial_end_idx in zip(trial_start_idxs, trial_end_idxs):
                 df_behavior_trial = df_behavior_session[trial_start_idx:trial_end_idx + 1]
 
@@ -852,7 +849,7 @@ class BehaviorBpodIngest(dj.Imported):
                     continue
 
                 # ---- session trial ----
-                trial_num += 1
+                trial_num += 1  # increment trial number
                 trial_uid = len(experiment.SessionTrial & {'subject_id': subject_id_now}) + 1
                 trial_start_time = df_behavior_session['PC-TIME'][trial_start_idx].to_pydatetime() - session_start_time
                 trial_stop_time = df_behavior_session['PC-TIME'][trial_end_idx].to_pydatetime() - session_start_time
@@ -886,7 +883,8 @@ class BehaviorBpodIngest(dj.Imported):
                         itsanewblock = True
 
                     if itsanewblock:
-                        block_num = np.max([b['block'] for b in rows['sess_block']]) if rows['sess_block'] else 1
+                        all_blocks = [b['block'] for b in rows['sess_block'] + concat_rows['sess_block']]
+                        block_num = (np.max(all_blocks) + 1 if all_blocks else 1)
                         rows['sess_block'].append({**sess_key,
                                                    'block': block_num,
                                                    'block_start_time': trial_start_time.total_seconds(),
@@ -933,7 +931,7 @@ class BehaviorBpodIngest(dj.Imported):
                     rows['available_reward'].append({
                         **sess_trial_key, 'water_port': lick_port,
                         'reward_available': df_behavior_trial['reward_{}_accumulated'.format(
-                            water_port_channels[lick_port])].values[0]})
+                            self.water_port_name_mapper[lick_port])].values[0]})
 
                 # ---- auto water and notes ----
                 auto_water = False

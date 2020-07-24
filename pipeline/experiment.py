@@ -148,7 +148,7 @@ class SessionTrial(dj.Imported):
 @schema 
 class TrialNoteType(dj.Lookup):
     definition = """
-    trial_note_type : varchar(12)
+    trial_note_type : varchar(24)
     """
     contents = zip(('autolearn', 'protocol #', 'bad', 'bitcode', 'autowater', 'random_seed_start'))
 
@@ -341,7 +341,7 @@ class SessionBlock(dj.Imported):
 
 @schema
 class WaterValveSetting(dj.Imported):
-    definition = """
+    definition = """  
     -> BehaviorTrial
     ----
     water_valve_lateral_pos=null: int # position value of the motor

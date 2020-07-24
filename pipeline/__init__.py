@@ -81,7 +81,7 @@ def dict_to_hash(input_dict):
     Given a dictionary, returns an md5 hash string of its ordered keys-values.
     """
     hashed = hashlib.md5()
-    for k, v in sorted(input_dict.keys()):
+    for k, v in sorted(input_dict.items()):
         hashed.update(str(k).encode())
         hashed.update(str(v).encode())
     return hashed.hexdigest()
