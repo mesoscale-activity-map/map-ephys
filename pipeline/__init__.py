@@ -66,11 +66,22 @@ class InsertBuffer(object):
             return self.flush(1)
 
 
-def dict_to_hash(key):
+def dict_value_to_hash(key):
     """
-	Given a dictionary `key`, returns a hash string
+	Given a dictionary `key`, returns a hash string of the values
     """
     hashed = hashlib.md5()
     for k, v in sorted(key.items()):
+        hashed.update(str(v).encode())
+    return hashed.hexdigest()
+
+
+def dict_to_hash(input_dict):
+    """
+    Given a dictionary, returns an md5 hash string of its ordered keys-values.
+    """
+    hashed = hashlib.md5()
+    for k, v in sorted(input_dict.keys()):
+        hashed.update(str(k).encode())
         hashed.update(str(v).encode())
     return hashed.hexdigest()

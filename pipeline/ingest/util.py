@@ -13,25 +13,21 @@ import os
 import pickle
 import shutil
 
-# %%
-paths = ['/home/rozmar/Data/Behavior/Behavior_rigs/Tower-3', 'C:\\Users\\labadmin\\Documents\\Pybpod\\Projects']
-for defpath in paths:
-    if os.path.exists(defpath):
-        break
 
-
-# defpath = 'C:\\Users\\labadmin\\Documents\\Pybpod\\Projects'#'/home/rozmar/Network/BehaviorRig/Behavroom-Stacked-2/labadmin/Documents/Pybpod/Projects'
-
-def loaddirstucture(projectdir=Path(defpath), projectnames_needed=None, experimentnames_needed=None,
+def loaddirstucture(projectdir, projectnames_needed=None, experimentnames_needed=None,
                     setupnames_needed=None):
+
+    projectdir = Path(projectdir)
+    if not projectdir.exists():
+        raise RuntimeError('Project directory not found: {}'.format(projectdir))
+
     dirstructure = dict()
     projectnames = list()
     experimentnames = list()
     setupnames = list()
     sessionnames = list()
     subjectnames = list()
-    if type(projectdir) != type(Path()):
-        projectdir = Path(projectdir)
+
     for projectname in projectdir.iterdir():
         if projectname.is_dir() and (not projectnames_needed or projectname.name in projectnames_needed):
             dirstructure[projectname.name] = dict()
@@ -210,8 +206,8 @@ def load_and_parse_a_csv_file(csvfilename):
     return df
 
 
-def loadcsvdata(bigtable=pd.DataFrame(),
-                projectdir=Path(defpath),
+def loadcsvdata(projectdir,
+                bigtable=pd.DataFrame(),
                 projectnames_needed=None,
                 experimentnames_needed=None,
                 setupnames_needed=None,
@@ -221,8 +217,11 @@ def loadcsvdata(bigtable=pd.DataFrame(),
     # bigtable=pd.DataFrame()
     # projectdir = Path('/home/rozmar/Network/BehaviorRig/Behavroom-Stacked-2/labadmin/Documents/Pybpod/Projects')
     # projectdir = Path('/home/rozmar/Data/Behavior/Projects')
-    if type(projectdir) != type(Path()):
-        projectdir = Path(projectdir)
+
+    projectdir = Path(projectdir)
+    if not projectdir.exists():
+        raise RuntimeError('Project directory not found: {}'.format(projectdir))
+
     if type(bigtable_orig) == pd.DataFrame and len(bigtable) > 0:
         sessionnamessofar = bigtable['session'].unique()
         sessionnamessofar = np.sort(sessionnamessofar)
@@ -363,16 +362,19 @@ def minethedata(data):
 # %%
 # df = bigtable
 
-def save_pickles_for_online_analysis(projectdir=Path(defpath), projectnames_needed=None, experimentnames_needed=None,
+def save_pickles_for_online_analysis(projectdir, projectnames_needed=None, experimentnames_needed=None,
                                      setupnames_needed=None, load_only_last_day=False):
     dirstructure = dict()
     projectnames = list()
     experimentnames = list()
     setupnames = list()
     sessionnames = list()
+
     # projectdir= defpath
-    if type(projectdir) != type(Path()):
-        projectdir = Path(projectdir)
+    projectdir = Path(projectdir)
+    if not projectdir.exists():
+        raise RuntimeError('Project directory not found: {}'.format(projectdir))
+
     for projectname in projectdir.iterdir():
         if projectname.is_dir() and (not projectnames_needed or projectname.name in projectnames_needed):
             dirstructure[projectname.name] = dict()
@@ -450,7 +452,7 @@ def save_pickles_for_online_analysis(projectdir=Path(defpath), projectnames_need
 #                                         print(sessionname.name+' skipped' )
 # =============================================================================
 
-def load_pickles_for_online_analysis(projectdir=Path(defpath), projectnames_needed=None, experimentnames_needed=None,
+def load_pickles_for_online_analysis(projectdir, projectnames_needed=None, experimentnames_needed=None,
                                      setupnames_needed=None, subjectnames_needed=None, load_only_last_day=False):
     # =============================================================================
     #     projectdir = Path(defpath)
@@ -462,8 +464,11 @@ def load_pickles_for_online_analysis(projectdir=Path(defpath), projectnames_need
     # =============================================================================
 
     variables_out = dict()
-    if type(projectdir) != type(Path()):
-        projectdir = Path(projectdir)
+
+    projectdir = Path(projectdir)
+    if not projectdir.exists():
+        raise RuntimeError('Project directory not found: {}'.format(projectdir))
+
     for projectname in projectdir.iterdir():
         if projectname.is_dir() and (not projectnames_needed or projectname.name in projectnames_needed):
             for experimentname in (projectname / 'experiments_exported').iterdir():

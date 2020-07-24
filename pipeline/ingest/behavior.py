@@ -3,22 +3,25 @@
 import os
 import logging
 import re
-import math
 import pathlib
 
-from datetime import date
-from datetime import datetime
+from datetime import date, datetime
 from collections import namedtuple
+import time as timer
 
 import scipy.io as spio
 import numpy as np
+import pandas as pd
+import decimal
 import warnings
-
 import datajoint as dj
 
-from pipeline import lab
-from pipeline import experiment
-from .. import get_schema_name
+from pybpodgui_api.models.project import Project as BPodProject
+from . import util
+
+from pipeline import lab, experiment
+from pipeline import get_schema_name, dict_to_hash
+
 
 schema = dj.schema(get_schema_name('ingest_behavior'))
 
@@ -76,6 +79,27 @@ def get_behavior_paths():
     return sorted(paths, key=lambda x: x[-1])
 
 
+def get_session_user():
+    '''
+    Determine desired 'session user' for a session.
+
+    - 1st, try dj.config['custom']['session.user']
+    - 2nd, try dj.config['database.user']
+    - else, use 'unknown'
+
+    TODO: multi-user / bulk ingest support
+    '''
+    session_user = dj.config.get('custom', {}).get('session.user', None)
+
+    session_user = (dj.config.get('database.user')
+                    if not session_user else session_user)
+
+    if len(lab.Person() & {'username': session_user}):
+        return session_user
+    else:
+        return 'unknown'
+
+
 @schema
 class BehaviorIngest(dj.Imported):
     definition = """
@@ -85,7 +109,7 @@ class BehaviorIngest(dj.Imported):
     class BehaviorFile(dj.Part):
         ''' files in rig-specific storage '''
         definition = """
-        -> BehaviorIngest
+        -> master
         behavior_file:              varchar(255)          # behavior file name
         """
 
@@ -95,27 +119,6 @@ class BehaviorIngest(dj.Imported):
         -> BehaviorIngest
         -> experiment.TrialEvent
         """
-
-    @staticmethod
-    def get_session_user():
-        '''
-        Determine desired 'session user' for a session.
-
-        - 1st, try dj.config['custom']['session.user']
-        - 2nd, try dj.config['database.user']
-        - else, use 'unknown'
-
-        TODO: multi-user / bulk ingest support
-        '''
-        session_user = dj.config.get('custom', {}).get('session.user', None)
-
-        session_user = (dj.config.get('database.user')
-                        if not session_user else session_user)
-
-        if len(lab.Person() & {'username': session_user}):
-            return session_user
-        else:
-            return 'unknown'
 
     @property
     def key_source(self):
@@ -211,7 +214,7 @@ class BehaviorIngest(dj.Imported):
         skey = {}
         skey['subject_id'] = subject_id
         skey['session_date'] = ymd
-        skey['username'] = self.get_session_user()
+        skey['username'] = get_session_user()
         skey['rig'] = key['rig']
 
         # File paths conform to the pattern:
@@ -583,7 +586,7 @@ class BehaviorIngest(dj.Imported):
         # Session Insertion
 
         log.info('BehaviorIngest.make(): adding session record')
-        experiment.Session().insert1(skey)
+        experiment.Session.insert1(skey)
 
         # Behavior Insertion
 
@@ -593,26 +596,26 @@ class BehaviorIngest(dj.Imported):
         self.insert1(key, ignore_extra_fields=True, allow_direct_insert=True)
 
         log.info('BehaviorIngest.make(): ... experiment.Session.Trial')
-        experiment.SessionTrial().insert(
+        experiment.SessionTrial.insert(
             rows['trial'], ignore_extra_fields=True, allow_direct_insert=True)
 
         log.info('BehaviorIngest.make(): ... experiment.BehaviorTrial')
-        experiment.BehaviorTrial().insert(
+        experiment.BehaviorTrial.insert(
             rows['behavior_trial'], ignore_extra_fields=True,
             allow_direct_insert=True)
 
         log.info('BehaviorIngest.make(): ... experiment.TrialNote')
-        experiment.TrialNote().insert(
+        experiment.TrialNote.insert(
             rows['trial_note'], ignore_extra_fields=True,
             allow_direct_insert=True)
 
         log.info('BehaviorIngest.make(): ... experiment.TrialEvent')
-        experiment.TrialEvent().insert(
+        experiment.TrialEvent.insert(
             rows['trial_event'], ignore_extra_fields=True,
             allow_direct_insert=True, skip_duplicates=True)
 
         log.info('BehaviorIngest.make(): ... experiment.ActionEvent')
-        experiment.ActionEvent().insert(
+        experiment.ActionEvent.insert(
             rows['action_event'], ignore_extra_fields=True,
             allow_direct_insert=True)
 
@@ -653,6 +656,408 @@ class BehaviorIngest(dj.Imported):
         # Behavior Ingest Insertion
 
         log.info('BehaviorIngest.make(): ... BehaviorIngest.BehaviorFile')
-        BehaviorIngest.BehaviorFile().insert1(
+        BehaviorIngest.BehaviorFile.insert1(
             dict(key, behavior_file=os.path.basename(key['subpath'])),
             ignore_extra_fields=True, allow_direct_insert=True)
+
+
+@schema
+class BehaviorBpodIngest(dj.Imported):
+    definition = """
+    -> experiment.Session
+    """
+
+    class BehaviorFile(dj.Part):
+        ''' files in rig-specific storage '''
+        definition = """
+        -> master
+        behavior_file:              varchar(255)          # behavior file name
+        """
+    
+    @staticmethod
+    def get_bpod_projects():
+        projectdirs = dj.config.get('custom', {}).get('behavior_bpod', []).get('project_paths')
+        # construct a list of BPod Projects
+        projects = []
+        for projectdir in projectdirs:
+            projects.append(BPodProject())
+            projects[-1].load(projectdir)
+        return projects
+    
+    @property
+    def key_source(self):
+        key_source = []
+
+        IDs = {k: v for k, v in zip(*lab.WaterRestriction().fetch(
+            'water_restriction_number', 'subject_id'))}
+
+        for subject_now, subject_id_now in IDs.items():
+            meta_dir = dj.config.get('custom', {}).get('behavior_bpod', []).get('meta_dir')
+
+            subject_csv = pathlib.Path(meta_dir) / '{}.csv'.format(subject_now)
+            if subject_csv.exists():
+                df_wr = pd.read_csv(subject_csv)
+            else:
+                log.info('No metadata csv found for {}'.format(subject_now))
+                continue
+
+            for r_idx, df_wr_row in df_wr.iterrows():
+                # we use it when both start and end times are filled in, restriction and handling is skipped
+                if (df_wr_row['Time'] and isinstance(df_wr_row['Time'], str)
+                        and df_wr_row['Time-end'] and isinstance(df_wr_row['Time-end'], str)
+                        and df_wr_row['Training type'] != 'restriction'
+                        and df_wr_row['Training type'] != 'handling'):
+
+                    date_now = df_wr_row.Date  # .replace('-','')
+                    if '-' in date_now:
+                        year = date_now[:date_now.find('-')]
+                        date_res = date_now[date_now.find('-') + 1:]
+                        month = date_res[:date_res.find('-')]
+                        if len(month) == 1:
+                            month = '0' + month
+                        day = date_res[date_res.find('-') + 1:]
+                        if len(day) == 1:
+                            day = '0' + day
+                        date_now = year + month + day
+
+                    if not (experiment.Session & {'subject_id': subject_id_now, 'session_date': date_now}):
+                        key_source.append({'subject_id': subject_id_now,
+                                           'session_date': date_now,
+                                           'session_comment': str(df_wr_row['Notes']),
+                                           'session_weight': df_wr_row['Weight'],
+                                           'session_water_earned': df_wr_row['Water during training'],
+                                           'session_water_extra': df_wr_row['Extra water']})
+
+        return key_source
+
+    def populate(self, *args, **kwargs):
+        for k in self.key_source:
+            with dj.conn().transaction:
+                self.make(k)
+
+    @property
+    def water_port_name_mapper(self):
+        return {'left': 'L', 'right': 'R', 'middle': 'M'}
+
+    def make(self, key):
+        log.info('BehaviorBpodIngest.make(): key: {key}'.format(key=key))
+
+        subject_id_now = key['subject_id']
+        subject_now = (lab.WaterRestriction() & {'subject_id': subject_id_now}).fetch1('water_restriction_number')
+
+        date_now_str = key['session_date'].strftime('%Y%m%d')
+        log.info('h2o: {h2o}, date: {d}'.format(h2o=subject_now, d=date_now_str))
+
+        # ---- Ingest information for BPod projects ----
+        projects = self.get_bpod_projects()
+        sessions_now, session_start_times_now, experimentnames_now = [], [], []
+        for proj in projects:  #
+            exps = proj.experiments
+            for exp in exps:
+                stps = exp.setups
+                for stp in stps:
+                    for session in stp.sessions:
+                        if (session.subjects and session.subjects[0].find(subject_now) > -1
+                                and session.name.startswith(date_now_str)):
+                            sessions_now.append(session)
+                            session_start_times_now.append(session.started)
+                            experimentnames_now.append(exp.name)
+        bpodsess_order = np.argsort(session_start_times_now)
+
+        # ---- Concatenate bpod sessions (and corresponding trials) into one datajoint session ----
+        tbls_2_insert = ('sess_trial', 'behavior_trial', 'trial_note',
+                         'sess_block', 'sess_block_trial',
+                         'trial_choice', 'trial_event', 'action_event',
+                         'photostim', 'photostim_location', 'photostim_trial', 'photostim_trial_event',
+                         'valve_setting', 'valve_open_dur', 'available_reward')
+
+        concat_rows = {k: list() for k in tbls_2_insert}
+
+        sess_key = None
+        for session_idx in bpodsess_order:
+            session = sessions_now[session_idx]
+            experiment_name = experimentnames_now[session_idx]
+            csvfilename = (pathlib.Path(session.path) / (pathlib.Path(session.path).name + '.csv'))
+
+            # ---- New session - construct a session key ----
+            if sess_key is not None:
+                session_time = df_behavior_session['PC-TIME'][trial_start_idxs[0]]
+                if session.setup_name.lower() in ['day1', 'tower-2', 'day2-7', 'day_1', 'real foraging']:
+                    setupname = 'Training-Tower-2'
+                elif session.setup_name.lower() in ['tower-3', 'tower-3beh', ' tower-3', '+', 'tower 3']:
+                    setupname = 'Training-Tower-3'
+                elif session.setup_name.lower() in ['tower-1']:
+                    setupname = 'Training-Tower-1'
+                else:
+                    log.info('ERROR: unhandled setup name {} (from {}). Skipping...'.format(session.setup_name, session.path))
+                    return
+
+                log.debug('synthesizing session ID')
+                key['session'] = (dj.U().aggr(experiment.Session()
+                                              & {'subject_id': subject_id_now},
+                                              n='max(session)').fetch1('n') or 0) + 1
+                sess_key = {**key,
+                            'session_time': session_time.time(),
+                            'username': df_behavior_session['experimenter'][0],
+                            'rig': setupname}
+
+            # ---- Special parsing for csv file ----
+            df_behavior_session = util.load_and_parse_a_csv_file(csvfilename)
+            # extracting task protocol - hard-code implementation
+            if 'foraging' in experiment_name.lower() or ('bari' in experiment_name.lower() and 'cohen' in experiment_name.lower()):
+                if 'var:lickport_number' in df_behavior_session and df_behavior_session['var:lickport_number'][0] == 3:
+                    task = 'foraging 3lp'
+                    task_protocol = 101
+                    lick_ports = ['left', 'right', 'middle']
+                else:
+                    task = 'foraging'
+                    task_protocol = 100
+                    lick_ports = ['left', 'right']
+            else:
+                log.info('ERROR: unhandled task name {}. Skipping...'.format(experiment_name))
+                return
+
+            # ---- channel for water ports ----
+            water_port_channels = {}
+            for lick_port in lick_ports:
+                chn_varname = 'var:WaterPort_{}_ch_in'.format(self.water_port_name_mapper[lick_port])
+                water_port_channels[lick_port] = df_behavior_session[chn_varname][0]
+
+            # ---- Ingestion of trials ----
+            trial_start_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'TRIAL') & (df_behavior_session['MSG'] == 'New trial')].index
+
+            if not len(trial_start_idxs):
+                log.info('No "trial start" for {}. Skipping...'.format(csvfilename))
+                return
+
+            # lists of various records for batch-insert
+            rows = {k: list() for k in tbls_2_insert}
+
+            # extracting trial data
+            session_start_time = datetime.combine(sess_key['session_date'], sess_key['session_time'])
+            trial_start_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'TRIAL') & (df_behavior_session['MSG'] == 'New trial')].index
+            trial_start_idxs = pd.Index([0]).append(trial_start_idxs[1:])  # so the random seed will be present
+            trial_end_idxs = trial_start_idxs[1:].append(pd.Index([(max(df_behavior_session.index))]))
+            # trial_end_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'END-TRIAL')].index
+            prevtrialstarttime = np.nan
+            blocknum_local_prev = np.nan
+
+            trial_num = 0  # trial numbering starts at 1
+            for trial_start_idx, trial_end_idx in zip(trial_start_idxs, trial_end_idxs):
+                df_behavior_trial = df_behavior_session[trial_start_idx:trial_end_idx + 1]
+
+                # Trials without GoCue  are skipped
+                if not len(df_behavior_trial['PC-TIME'][(df_behavior_trial['MSG'] == 'GoCue') & (
+                        df_behavior_trial['TYPE'] == 'TRANSITION')]):
+                    continue
+
+                # ---- session trial ----
+                trial_num += 1
+                trial_uid = len(experiment.SessionTrial & {'subject_id': subject_id_now}) + 1
+                trial_start_time = df_behavior_session['PC-TIME'][trial_start_idx].to_pydatetime() - session_start_time
+                trial_stop_time = df_behavior_session['PC-TIME'][trial_end_idx].to_pydatetime() - session_start_time
+
+                sess_trial_key = {**sess_key,
+                                  'trial': trial_num,
+                                  'trial_uid': trial_uid,
+                                  'trial_start_time': trial_start_time.total_seconds(),
+                                  'trial_stop_time': trial_stop_time.total_seconds()}
+                rows['sess_trial'].append(sess_trial_key)
+
+                # ---- session block ----
+                if 'Block_number' in df_behavior_session:
+                    if np.isnan(df_behavior_trial['Block_number'].to_list()[0]):
+                        blocknum_local = 0 if np.isnan(blocknum_local_prev) else blocknum_local_prev
+                    else:
+                        blocknum_local = int(df_behavior_trial['Block_number'].to_list()[0]) - 1
+                        blocknum_local_prev = blocknum_local
+
+                    reward_probability = {}
+                    for lick_port in lick_ports:
+                        p_reward_varname = 'var:reward_probabilities_{}'.format(self.water_port_name_mapper[lick_port])
+                        reward_probability[lick_port] = decimal.Decimal(
+                            df_behavior_trial[p_reward_varname].to_list()[0][blocknum_local]).quantize(
+                            decimal.Decimal('.001'))
+
+                    # determine if this is a new block: compare reward probability with the previous block
+                    if rows['sess_block']:
+                        itsanewblock = dict_to_hash(reward_probability) != dict_to_hash(rows['sess_block'][-1]['reward_probability'])
+                    else:
+                        itsanewblock = True
+
+                    if itsanewblock:
+                        block_num = np.max([b['block'] for b in rows['sess_block']]) if rows['sess_block'] else 1
+                        rows['sess_block'].append({**sess_key,
+                                                   'block': block_num,
+                                                   'block_start_time': trial_start_time.total_seconds(),
+                                                   'reward_probability': reward_probability})
+                    else:
+                        block_num = rows['sess_block'][-1]['block']
+
+                    rows['sess_block_trial'].append({**sess_trial_key, 'block': block_num})
+
+                # ---- WaterPort Choice ----
+                trial_choice = {}
+                for lick_port in lick_ports:
+                    if any((df_behavior_trial['MSG'] == 'Choice_{}'.format(self.water_port_name_mapper[lick_port]))
+                           & (df_behavior_trial['TYPE'] == 'TRANSITION')):
+                        trial_choice = {'water_port': lick_port}
+                        break
+
+                rows['trial_choice'].append({**sess_trial_key, **trial_choice})
+
+                # ---- Trial events ----
+                time_TrialStart = df_behavior_session['PC-TIME'][trial_start_idx].to_numpy()
+                time_GoCue = df_behavior_trial['PC-TIME'][(df_behavior_trial['MSG'] == 'GoCue') & (df_behavior_trial['TYPE'] == 'TRANSITION')].to_numpy()
+
+                lick_times = {}
+                for lick_port in lick_ports:
+                    lick_times[lick_port] = df_behavior_trial['PC-TIME'][(df_behavior_trial['+INFO'] == water_port_channels[lick_port])].to_numpy()
+
+                # early lick
+                early_lick = 'no early'
+                for lick_port in lick_ports:
+                    if any(lick_times[lick_port] - time_GoCue < np.timedelta64(0)):
+                        early_lick = 'early'
+                        break
+                # outcome
+                outcome = 'miss' if trial_choice else 'ignore'
+                for lick_port in lick_ports:
+                    if any((df_behavior_trial['MSG'] == 'Reward_{}'.format(water_port_channels[lick_port]))
+                           & (df_behavior_trial['TYPE'] == 'TRANSITION')):
+                        outcome = 'hit'
+                        break
+
+                # ---- accumulated reward ----
+                for lick_port in lick_ports:
+                    rows['available_reward'].append({
+                        **sess_trial_key, 'water_port': lick_port,
+                        'reward_available': df_behavior_trial['reward_{}_accumulated'.format(
+                            water_port_channels[lick_port])].values[0]})
+
+                # ---- auto water and notes ----
+                auto_water = False
+                auto_water_times = {}
+                for lick_port in lick_ports:
+                    auto_water_varname = 'Auto_Water_{}'.format(self.water_port_name_mapper[lick_port])
+                    auto_water_ind = (df_behavior_trial['TYPE'] == 'STATE') & (df_behavior_trial['MSG'] == auto_water_varname)
+                    if any(auto_water_ind):
+                        auto_water = True
+                        auto_water_times[lick_port] = float(df_behavior_trial['+INFO'][auto_water_ind.idxmax()])
+
+                if auto_water_times:
+                    auto_water_ports = [k for k, v in auto_water_times.items() if v > 0.001]
+                    rows['trial_note'].append({**sess_trial_key,
+                                               'trial_note_type': 'autowater',
+                                               'trial_note': 'and '.join(auto_water_ports)})
+
+                # add random seed start note
+                if any(df_behavior_trial['MSG'] == 'Random seed:'):
+                    seedidx = (df_behavior_trial['MSG'] == 'Random seed:').idxmax() + 1
+                    rows['trial_note'].append({**sess_trial_key,
+                                               'trial_note_type': 'random_seed_start',
+                                               'trial_note': str(df_behavior_trial['MSG'][seedidx])})
+
+                # ---- Behavior Trial ----
+                rows['behavior_trial'].append({**sess_trial_key,
+                                               'task': task,
+                                               'task_protocol': task_protocol,
+                                               'trial_instruct': 'none',
+                                               'early_lick': early_lick,
+                                               'outcome': outcome,
+                                               'auto_water': auto_water,
+                                               'free_water': False})
+
+                # ---- Water Valve Setting ----
+                valve_setting = {**sess_trial_key}
+
+                if 'var_motor:LickPort_Lateral_pos' in df_behavior_trial.keys():
+                    valve_setting['water_valve_lateral_pos'] = \
+                    df_behavior_trial['var_motor:LickPort_Lateral_pos'].values[0]
+                if 'var_motor:LickPort_RostroCaudal_pos' in df_behavior_trial.keys():
+                    valve_setting['water_valve_rostrocaudal_pos'] = \
+                    df_behavior_trial['var_motor:LickPort_RostroCaudal_pos'].values[0]
+                if 'var_motor:LickPort_DorsoVentral_pos' in df_behavior_trial.keys():
+                    valve_setting['water_valve_dorsoventral_pos'] = \
+                    df_behavior_trial['var_motor:LickPort_DorsoVentral_pos'].values[0]
+
+                rows['valve_setting'].append(valve_setting)
+
+                for lick_port in lick_ports:
+                    valve_open_varname = 'var:ValveOpenTime_{}'.format(self.water_port_name_mapper[lick_port])
+                    if valve_open_varname in df_behavior_trial:
+                        rows['valve_open_dur'].append({
+                            **sess_trial_key, 'water_port': lick_port,
+                            'open_duration': df_behavior_trial[valve_open_varname].values[0]})
+
+                # ---- Trial Event and Action Event ----
+
+                # -- add Go Cue
+                GoCueTimes = (time_GoCue - time_TrialStart) / np.timedelta64(1, 's')
+                rows['trial_event'].extend([{**sess_trial_key, 'trial_event_id': idx, 'trial_event_type': 'go',
+                                             'trial_event_time': t, 'duration': 0} for idx, t in enumerate(GoCueTimes)])
+
+                # -- add licks
+                all_lick_types = np.concatenate([[ltype]*len(ltimes) for ltype, ltimes in lick_times.items()])
+                all_lick_times = np.concatenate([(ltimes - time_TrialStart) / np.timedelta64(1, 's') for ltimes in lick_times.values()])
+
+                # sort by lick times
+                sorted_licks = sorted(zip(all_lick_types, all_lick_times), key=lambda x: x[-1])
+
+                rows['action_event'].extend([{**sess_trial_key, 'trial_event_id': idx, 'trial_event_type': ltype,
+                                             'trial_event_time': ltime} for idx, (ltype, ltime)
+                                            in enumerate(sorted_licks)])
+
+            # add to the session-concat
+            for tbl in tbls_2_insert:
+                concat_rows[tbl].extend(rows[tbl])
+
+        # ---- The insertions to relevant tables ----
+
+        # Session, SessionComment, SessionDetails insert
+        log.info('BehaviorIngest.make(): adding session record')
+        experiment.Session.insert1(sess_key, ignore_extra_fields=True)
+        experiment.SessionComment.insert1(sess_key, ignore_extra_fields=True)
+        experiment.SessionDetails.insert1(sess_key, ignore_extra_fields=True)
+
+        # Behavior Insertion
+        insert_settings = {'ignore_extra_fields': True, 'allow_direct_insert': True}
+
+        log.info('BehaviorIngest.make(): bulk insert phase')
+
+        log.info('BehaviorIngest.make(): ... experiment.Session.Trial')
+        experiment.SessionTrial.insert(concat_rows['sess_trial'], **insert_settings)
+
+        log.info('BehaviorIngest.make(): ... experiment.BehaviorTrial')
+        experiment.BehaviorTrial.insert(concat_rows['behavior_trial'], **insert_settings)
+
+        log.info('BehaviorIngest.make(): ... experiment.TrialNote')
+        experiment.TrialNote.insert(concat_rows['trial_note'], **insert_settings)
+
+        log.info('BehaviorIngest.make(): ... experiment.TrialEvent')
+        experiment.TrialEvent.insert(concat_rows['trial_event'], **insert_settings)
+
+        log.info('BehaviorIngest.make(): ... experiment.ActionEvent')
+        experiment.ActionEvent.insert(concat_rows['action_event'], **insert_settings)
+
+        log.info('BehaviorIngest.make(): ... experiment.SessionBlock')
+        experiment.SessionBlock.insert(concat_rows['sess_block'], **insert_settings)
+        experiment.SessionBlock.BlockTrial.insert(concat_rows['sess_block_trial'], **insert_settings)
+        block_reward_prob = []
+        for block in concat_rows['sess_block']:
+            block_reward_prob.extend([{**block, 'water_port': water_port, 'reward_probability': reward_p}
+                                      for water_port, reward_p in block.pop('reward_probability').items()])
+        experiment.SessionBlock.WaterPortRewardProbability.insert(block_reward_prob, **insert_settings)
+
+        log.info('BehaviorIngest.make(): ... experiment.TrialAvailableReward')
+        experiment.TrialAvailableReward.insert(concat_rows['available_reward'], **insert_settings)
+
+        log.info('BehaviorIngest.make(): ... experiment.WaterValveSetting')
+        experiment.WaterValveSetting.insert(concat_rows['valve_setting'], **insert_settings)
+        experiment.WaterValveSetting.OpenDuration.insert(concat_rows['valve_open_dur'], **insert_settings)
+
+        # Behavior Ingest Insertion
+        log.info('BehaviorBpodIngest.make(): saving ingest {}'.format(sess_key))
+        self.insert1(sess_key, **insert_settings)
+        self.BehaviorFile.insert([{**sess_key, 'behavior_file': pathlib.Path(s.path).as_posix()}
+                                  for s in sessions_now], **insert_settings)
