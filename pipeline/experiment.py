@@ -66,8 +66,10 @@ class TaskProtocol(dj.Lookup):
 @schema
 class WaterPort(dj.Lookup):
     definition = """
-    water_port: varchar(16)  # e.g. "left", "right", "middle", "top-left", "purple"
+    water_port: varchar(16)  # e.g. left, right, middle, top-left, purple
     """
+
+    contents = zip(['left', 'right', 'middle'])
 
 
 @schema
@@ -146,9 +148,9 @@ class SessionTrial(dj.Imported):
 @schema 
 class TrialNoteType(dj.Lookup):
     definition = """
-    trial_note_type : varchar(12)
+    trial_note_type : varchar(24)
     """
-    contents = zip(('autolearn', 'protocol #', 'bad', 'bitcode'))
+    contents = zip(('autolearn', 'protocol #', 'bad', 'bitcode', 'autowater', 'random_seed_start'))
 
 
 @schema
@@ -263,7 +265,7 @@ class WaterPortChoice(dj.Imported):
     definition = """  # The water port selected by the animal for each trial
     -> BehaviorTrial
     ---
-    -> WaterPort
+    [nullable] -> WaterPort
     """
 
 
@@ -319,7 +321,6 @@ class SessionBlock(dj.Imported):
     -> Session
     block : smallint 		# block number
     ---
-    block_uid : int  # unique across sessions/animals 
     block_start_time : decimal(10, 4)  # (s) relative to session beginning
     """
 
@@ -340,7 +341,7 @@ class SessionBlock(dj.Imported):
 
 @schema
 class WaterValveSetting(dj.Imported):
-    definition = """
+    definition = """  
     -> BehaviorTrial
     ----
     water_valve_lateral_pos=null: int # position value of the motor
@@ -353,7 +354,7 @@ class WaterValveSetting(dj.Imported):
         -> master
         -> WaterPort
         ---
-        open_duration: decimal(5 4)  # (s) duration of valve open time
+        open_duration: decimal(5, 4)  # (s) duration of valve open time
         """
 
 
