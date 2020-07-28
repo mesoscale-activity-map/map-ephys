@@ -501,3 +501,35 @@ def write_to_activity_viewer_json(probe_insertion, filepath=None, per_period=Fal
             json.dump(penetration_group, fp, default=str)
 
     return penetration_group
+
+
+def write_to_activity_viewer(probe_insertion, output_dir='./'):
+    probe_insertion = probe_insertion.proj()
+    insertion_number, session_date, h2o = (probe_insertion * lab.WaterRestriction * experiment.Session).fetch1(
+        'insertion_number', 'session_date', 'water_restriction_number')
+    uid = f'{h2o}-{datetime.strftime(session_date, "%m-%d-%Y")}-{insertion_number}'
+
+    if not (ephys.Unit * lab.ElectrodeConfig.Electrode * histology.ElectrodeCCFPosition.ElectrodePosition & probe_insertion):
+        print('The units in the specified ProbeInsertion do not have CCF data yet')
+        return
+
+    q_unit = (ephys.UnitStat * ephys.Unit * lab.ElectrodeConfig.Electrode
+              * histology.ElectrodeCCFPosition.ElectrodePosition * psth.UnitPsth
+              & probe_insertion & 'unit_quality != "all"' & 'trial_condition_name in ("good_noearlylick_hit")')
+
+    unit_id, ccf_x, ccf_y, ccf_z, unit_amp, unit_snr, avg_firing_rate, isi_violation, waveform, unit_psth = q_unit.fetch(
+        'unit', 'ccf_x', 'ccf_y', 'ccf_z', 'unit_amp', 'unit_snr', 'avg_firing_rate',
+        'isi_violation', 'waveform', 'unit_psth', order_by='unit')
+
+    unit_stats = ["unit_amp", "unit_snr", "avg_firing_rate", "isi_violation"]
+    timeseries = ["unit_psth"]
+    waveform = np.stack(waveform)
+    spike_rates = np.array([d[0] for d in unit_psth])
+    unit_psth = np.vstack((unit_psth[0][1][1:], spike_rates))
+    ccf_coord = np.transpose(np.vstack((ccf_z, ccf_y, 11400 - ccf_x)))
+
+    filepath = pathlib.Path(output_dir) / uid
+
+    np.savez(filepath, probe_insertion=uid, unit_id=unit_id, ccf_coord=ccf_coord, waveform=waveform,
+             timeseries=timeseries, unit_stats=unit_stats, unit_amp=unit_amp, unit_snr=unit_snr,
+             avg_firing_rate=avg_firing_rate, isi_violation=isi_violation, unit_psth=unit_psth)
