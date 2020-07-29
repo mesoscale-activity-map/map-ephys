@@ -132,6 +132,7 @@ class GlobusStorageManager:
 
     def ls(self, endpoint_path):
         # TODO? separate 'stat' call?
+        # FIXME?: ls on a file works? if not how check file?
         '''
         returns:
             {
