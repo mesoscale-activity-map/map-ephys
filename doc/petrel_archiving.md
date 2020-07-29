@@ -2,12 +2,44 @@
 ## Petrel / Raw Data Archival
 
 Note: archival functionality currently requires updates to match new project
-  filename conventions.
+  filename conventions. (ok: ephys; todo: video)
 
 The map-ephys pipeline does *not* directly handle processing of raw recording
 files into the second-stage processed data used in later stages, however, some
 facility is provided for tracking raw data files and transferring them to/from
 the ANL [\'petrel\'](https://www.alcf.anl.gov/petrel) facility using the [globus toolkit](http://toolkit.globus.org/toolkit/) and [Globus Python SDK](https://globus-sdk-python.readthedocs.io/en/stable/).
+
+## Petrel/Globus Archive Structure
+
+The globus archive structure describes the layout of the raw files on
+the archive system (petrel). Each archive type ('raw-ephys', 'raw-video')
+has a corresponding StorageLocation which defines a globus endpoint
+and a root path for that collection within the archive system.
+
+Currently, these are:
+
+raw-ephys 5b875fda-4185-11e8-bb52-0ac6873fc732:/4ElectrodeRig_Ephys
+raw-video 5b875fda-4185-11e8-bb52-0ac6873fc732:/
+
+### Electrophysiology
+
+The electrophysiology recordings are layed out according to the following
+format:
+
+  - root
+    - water restriction
+      - session
+        - probe
+
+More specifically::
+
+  <root>/<h2o>/catgt_<h2o>_<mdy>_g0/
+  <root>/<h2o>/catgt_<h2o>_<mdy>_g0/<h2o>_<mdy>_imecN
+
+### Tracking Videos
+
+TBD - being restructured.
+
 
 ## MAP Pipeline Globus Configuration
 
