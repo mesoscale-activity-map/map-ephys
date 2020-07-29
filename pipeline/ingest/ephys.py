@@ -204,7 +204,7 @@ class EphysIngest(dj.Imported):
 
         q_electrodes = lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode & e_config_key
         site2electrode_map = {}
-        for recorded_site in np.unique(spike_sites):
+        for recorded_site in np.unique(np.concatenate([spike_sites, vmax_unit_site])):
             shank, shank_col, shank_row, _ = npx_meta.shankmap['data'][recorded_site - 1]  # subtract 1 because npx_meta shankmap is 0-indexed
             site2electrode_map[recorded_site] = (q_electrodes
                                                  & {'shank': shank + 1,  # this is a 1-indexed pipeline
@@ -790,19 +790,19 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
         metrics = pd.read_csv(metric_fp)
         metrics.set_index('cluster_id', inplace=True)
         metrics = metrics[metrics.index == valid_units]
-
-        # peak_chn, amp, snr
+        # -- peak_chn, amp, snr --
         vmax_unit_site = metrics.peak_channel.values  # peak channel
         unit_amp = metrics.amplitude.values  # amp
         unit_snr = metrics.snr.values  # snr
         unit_snr = np.where(np.logical_or(np.isinf(unit_snr), np.isnan(unit_snr)), 0, unit_snr)  # set value to 0 if INF or NaN
-        # unit x, y
+        # -- unit x, y --
         vmax_unit_site_idx = [np.where(ks.data['channel_map'] == peak_site)[0][0] for peak_site in vmax_unit_site]
         unit_xpos = [ks.data['channel_positions'][site_idx, 0] for site_idx in vmax_unit_site_idx]
         unit_ypos = [ks.data['channel_positions'][site_idx, 1] for site_idx in vmax_unit_site_idx]
-        # unit waveforms
-        unit_wav = np.load(ks_dir / 'mean_waveforms.npy')
-        unit_wav = unit_wav[valid_units, :, :]  # unit x channel x sample
+        # -- unit waveforms --
+        unit_wav = np.load(ks_dir / 'mean_waveforms.npy')  # all unit x all channel x sample
+        # extract unit wavform for valid units and recording channels
+        unit_wav = unit_wav[np.ix_(metrics.index, ks.data['channel_map'], range(unit_wav.shape[-1]))]  # unit x channel x sample
     else:
         vmax_unit_site, unit_xpos, unit_ypos, unit_amp = [], [], [], []
         for unit in valid_units:
