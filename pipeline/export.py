@@ -471,9 +471,9 @@ def write_to_activity_viewer(insert_keys, output_dir='./'):
         insert_keys = [insert_keys]
 
     for key in insert_keys:
-        water_res_num, sess_date = get_wr_sessdate(key)
+        water_res_num, sess_datetime = get_wr_sessdate(key)
 
-        uid = f'{water_res_num}_{sess_date}_{key["insertion_number"]}'
+        uid = f'{water_res_num}_{sess_datetime}_{key["insertion_number"]}'
 
         if not (ephys.Unit * lab.ElectrodeConfig.Electrode * histology.ElectrodeCCFPosition.ElectrodePosition & key):
             print('The units in the specified ProbeInsertion do not have CCF data yet')
