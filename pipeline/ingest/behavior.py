@@ -970,13 +970,13 @@ class BehaviorBpodIngest(dj.Imported):
                 valve_setting = {**sess_trial_key}
 
                 if 'var_motor:LickPort_Lateral_pos' in df_behavior_trial.keys():
-                    valve_setting['water_valve_lateral_pos'] = \
+                    valve_setting['water_port_lateral_pos'] = \
                     df_behavior_trial['var_motor:LickPort_Lateral_pos'].values[0]
                 if 'var_motor:LickPort_RostroCaudal_pos' in df_behavior_trial.keys():
-                    valve_setting['water_valve_rostrocaudal_pos'] = \
+                    valve_setting['water_port_rostrocaudal_pos'] = \
                     df_behavior_trial['var_motor:LickPort_RostroCaudal_pos'].values[0]
                 if 'var_motor:LickPort_DorsoVentral_pos' in df_behavior_trial.keys():
-                    valve_setting['water_valve_dorsoventral_pos'] = \
+                    valve_setting['water_port_dorsoventral_pos'] = \
                     df_behavior_trial['var_motor:LickPort_DorsoVentral_pos'].values[0]
 
                 rows['valve_setting'].append(valve_setting)
@@ -1051,8 +1051,8 @@ class BehaviorBpodIngest(dj.Imported):
         experiment.TrialAvailableReward.insert(concat_rows['available_reward'], **insert_settings)
 
         log.info('BehaviorIngest.make(): ... experiment.WaterValveSetting')
-        experiment.WaterValveSetting.insert(concat_rows['valve_setting'], **insert_settings)
-        experiment.WaterValveSetting.OpenDuration.insert(concat_rows['valve_open_dur'], **insert_settings)
+        experiment.WaterPortSetting.insert(concat_rows['valve_setting'], **insert_settings)
+        experiment.WaterPortSetting.OpenDuration.insert(concat_rows['valve_open_dur'], **insert_settings)
 
         # Behavior Ingest Insertion
         log.info('BehaviorBpodIngest.make(): saving ingest {}'.format(sess_key))
