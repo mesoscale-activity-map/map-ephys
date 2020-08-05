@@ -340,13 +340,13 @@ class SessionBlock(dj.Imported):
 
 
 @schema
-class WaterValveSetting(dj.Imported):
+class WaterPortSetting(dj.Imported):
     definition = """  
     -> BehaviorTrial
     ----
-    water_valve_lateral_pos=null: int # position value of the motor
-    water_valve_rostrocaudal_pos=null: int # position value of the motor
-    water_valve_dorsoventral_pos=null: int # position value of the motor
+    water_port_lateral_pos=null: int # position value of the motor
+    water_port_rostrocaudal_pos=null: int # position value of the motor
+    water_port_dorsoventral_pos=null: int # position value of the motor
     """
 
     class OpenDuration(dj.Part):
@@ -354,7 +354,7 @@ class WaterValveSetting(dj.Imported):
         -> master
         -> WaterPort
         ---
-        open_duration: decimal(5, 4)  # (s) duration of valve open time
+        open_duration: decimal(5, 4)  # (s) duration of port open time
         """
 
 
