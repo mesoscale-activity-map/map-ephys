@@ -1,11 +1,29 @@
-FROM datajoint/jupyter:latest
 
-RUN pip install datajoint==0.12.dev4
+# map-ephys dockerfile
 
-RUN apt update && apt -y install mysql-client-5.7 netcat
+FROM datajoint/pydev:python3.6
 
-RUN pip install globus_sdk
+RUN apt-get update && apt-get -y install mysql-client-5.7 netcat
 
-ADD . /src/map-ephys
+RUN useradd -m map
 
-RUN pip install -e /src/map-ephys
+USER map
+
+ENV PATH=/home/map/.local/bin:$PATH
+
+RUN pip3 install --upgrade --user pip \
+	&& pip3 install --user datajoint==0.12.dev4
+
+RUN pip3 install --user jupyter globus_sdk scipy matplotlib==3.1.3
+
+ADD --chown=map:map . /src/map-ephys
+
+RUN pip3 install --user -e /src/map-ephys \
+	&& ln -s /src/map-ephys /home/map/map-ephys
+
+WORKDIR /home/map
+
+ENTRYPOINT [ "jupyter" ]
+
+CMD [ "notebook", "--no-browser", "--ip", "0.0.0.0", "--port", "8888" ]
+
