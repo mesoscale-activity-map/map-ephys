@@ -36,6 +36,17 @@ More specifically::
   <root>/<h2o>/catgt_<h2o>_<mdy>_g0/
   <root>/<h2o>/catgt_<h2o>_<mdy>_g0/<h2o>_<mdy>_imecN
 
+In the event of multiple sessions in one day, additional sessions
+should be labeled::
+
+  <root>/<h2o>/catgt_<h2o>_<mdy>_<ident>_g0/
+  <root>/<h2o>/catgt_<h2o>_<mdy>_<ident>_g0/<h2o>_<mdy>_<ident>_imecN
+
+Where 'ident' is an identifier for that session. 
+
+By default, 'ident' should be incrmentally numbered e.g. '1' 
+is the second session for that day, etc. 
+
 ### Tracking Videos
 
 TBD - being restructured.
