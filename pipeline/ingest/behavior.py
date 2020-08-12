@@ -843,7 +843,7 @@ class BehaviorBpodIngest(dj.Imported):
             for trial_start_idx, trial_end_idx in zip(trial_start_idxs, trial_end_idxs):
                 df_behavior_trial = df_behavior_session[trial_start_idx:trial_end_idx + 1]
 
-                # Trials without GoCue  are skipped
+                # Trials without GoCue are skipped
                 if not len(df_behavior_trial['PC-TIME'][(df_behavior_trial['MSG'] == 'GoCue') & (
                         df_behavior_trial['TYPE'] == 'TRANSITION')]):
                     continue
@@ -964,7 +964,7 @@ class BehaviorBpodIngest(dj.Imported):
                                                'early_lick': early_lick,
                                                'outcome': outcome,
                                                'auto_water': auto_water,
-                                               'free_water': False})
+                                               'free_water': False})  # TODO: verify this
 
                 # ---- Water Valve Setting ----
                 valve_setting = {**sess_trial_key}
