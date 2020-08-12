@@ -1525,6 +1525,7 @@ def archive_ingested_clustering_results(session_key):
             (report.SessionLevelCDReport & session_key).delete()
             (report.ProbeLevelPhotostimEffectReport & session_key).delete()
             (report.ProbeLevelReport & session_key).delete()
+            (report.ProbeLevelDriftMap & session_key).delete()
 
     # the copy, delete part
     if dj.conn().in_transaction:
