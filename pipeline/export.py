@@ -12,6 +12,7 @@ from tqdm import tqdm
 from datetime import datetime
 from pipeline import lab, experiment, tracking, ephys, histology, psth, ccf
 from pipeline.util import _get_clustering_method
+from pipeline.report import get_wr_sessdate
 
 '''
 
@@ -460,44 +461,42 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     print('ok.')
 
 
-def write_to_activity_viewer_json(probe_insertion, filepath=None, per_period=False):
-    probe_insertion = probe_insertion.proj()
-    key = (probe_insertion * lab.WaterRestriction * experiment.Session).proj('session_date', 'water_restriction_number').fetch1()
-    uid = f'{key["subject_id"]}({key["water_restriction_number"]})/{datetime.strftime(key["session_date"], "%m-%d-%Y")}({key["session"]})/{key["insertion_number"]}'
+def write_to_activity_viewer(insert_keys, output_dir='./'):
+    """
+    :param insert_keys: list of dict, for multiple ProbeInsertion keys
+    :param output_dir: directory to write the npz files
+    """
 
-    units = (ephys.UnitStat * ephys.Unit * lab.ElectrodeConfig.Electrode
-             * histology.ElectrodeCCFPosition.ElectrodePosition
-             & probe_insertion & 'unit_quality != "all"').fetch(
-        'unit', 'ccf_x', 'ccf_y', 'ccf_z', 'avg_firing_rate', order_by='unit')
+    if not isinstance(insert_keys, list):
+        insert_keys = [insert_keys]
 
-    if len(units[0]) == 0:
-        print('The units in the specified ProbeInsertion do not have CCF data yet')
-        return
+    for key in insert_keys:
+        water_res_num, sess_datetime = get_wr_sessdate(key)
 
-    penetration_group = {'id': uid, 'points': []}
+        uid = f'{water_res_num}_{sess_datetime}_{key["insertion_number"]}'
 
-    for unit, x, y, z, spk_rate in tqdm(zip(*units)):
-        contra_frate, ipsi_frate = (psth.PeriodSelectivity & probe_insertion
-                                    & f'unit={unit}' & 'period in ("sample", "delay", "response")').fetch(
-            'contra_firing_rate', 'ipsi_firing_rate')
+        if not (ephys.Unit * lab.ElectrodeConfig.Electrode * histology.ElectrodeCCFPosition.ElectrodePosition & key):
+            print('The units in the specified ProbeInsertion do not have CCF data yet')
+            continue
 
-        # (red: #FF0000), (blue: #0000FF)
-        if per_period:
-            sel_color = ['#FF0000' if i_rate > c_rate else '#0000FF' for c_rate, i_rate in zip(contra_frate, ipsi_frate)]
-            radius = [np.mean([c_rate, i_rate]) for c_rate, i_rate in zip(contra_frate, ipsi_frate)]
-        else:
-            sel_color = ['#FF0000' if ipsi_frate.mean() > contra_frate.mean() else '#0000FF']
-            radius = [spk_rate]
+        q_unit = (ephys.UnitStat * ephys.Unit * lab.ElectrodeConfig.Electrode
+                  * histology.ElectrodeCCFPosition.ElectrodePosition * psth.UnitPsth
+                  & key & 'unit_quality != "all"' & 'trial_condition_name in ("good_noearlylick_hit")')
 
-        unit_dict = {'id': unit, 'x': x, 'y': y, 'z': z, 'alpha': 0.8,
-                     'color': {'t': list(range(len(sel_color))), 'vals': sel_color},
-                     'radius': {'t': list(range(len(radius))), 'vals': radius}}
+        unit_id, ccf_x, ccf_y, ccf_z, unit_amp, unit_snr, avg_firing_rate, isi_violation, waveform, unit_psth = q_unit.fetch(
+            'unit', 'ccf_x', 'ccf_y', 'ccf_z', 'unit_amp', 'unit_snr', 'avg_firing_rate',
+            'isi_violation', 'waveform', 'unit_psth', order_by='unit')
 
-        penetration_group['points'].append(unit_dict)
+        unit_stats = ["unit_amp", "unit_snr", "avg_firing_rate", "isi_violation"]
+        timeseries = ["unit_psth"]
+        waveform = np.stack(waveform)
+        spike_rates = np.array([d[0] for d in unit_psth])
+        edges = unit_psth[0][1] if unit_psth[0][1].shape == unit_psth[0][0].shape else unit_psth[0][1][1:]
+        unit_psth = np.vstack((edges, spike_rates))
+        ccf_coord = np.transpose(np.vstack((ccf_z, ccf_y, 11400 - ccf_x)))
 
-    if filepath:
-        path = pathlib.Path(filepath)
-        with open(path, 'w') as fp:
-            json.dump(penetration_group, fp, default=str)
+        filepath = pathlib.Path(output_dir) / uid
 
-    return penetration_group
+        np.savez(filepath, probe_insertion=uid, unit_id=unit_id, ccf_coord=ccf_coord, waveform=waveform,
+                 timeseries=timeseries, unit_stats=unit_stats, unit_amp=unit_amp, unit_snr=unit_snr,
+                 avg_firing_rate=avg_firing_rate, isi_violation=isi_violation, unit_psth=unit_psth)

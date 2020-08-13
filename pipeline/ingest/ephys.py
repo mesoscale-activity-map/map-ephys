@@ -1489,7 +1489,7 @@ def archive_ingested_clustering_results(session_key):
                 after_start = unit['spike_times'] >= tr_start[:, None]
                 before_stop = unit['spike_times'] <= tr_stop[:, None]
                 in_trial = ((after_start & before_stop) * tr_no[:, None]).sum(axis=0)
-                unit['trial_spike'] = np.where(in_trial == 0, np.nan, in_trial)
+                unit['trial_spike'] = np.where(in_trial == 0, np.nan, in_trial).astype(int)
             # for unit in tqdm(units):
             #     trial_spike = np.full_like(unit['spike_times'], np.nan)
             #     for tr, tstart, tstop in zip(tr_no, tr_start, tr_stop):
@@ -1525,6 +1525,7 @@ def archive_ingested_clustering_results(session_key):
             (report.SessionLevelCDReport & session_key).delete()
             (report.ProbeLevelPhotostimEffectReport & session_key).delete()
             (report.ProbeLevelReport & session_key).delete()
+            (report.ProbeLevelDriftMap & session_key).delete()
 
     # the copy, delete part
     if dj.conn().in_transaction:
