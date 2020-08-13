@@ -204,7 +204,6 @@ class SessionComment(dj.Manual):
 
 @schema
 class SessionDetails(dj.Manual):
-    # TODO: more specific table name?
     definition = """
     -> Session
     ---
