@@ -739,7 +739,6 @@ class BehaviorBpodIngest(dj.Imported):
 
         subject_id_now = key['subject_id']
         subject_now = (lab.WaterRestriction() & {'subject_id': subject_id_now}).fetch1('water_restriction_number')
-
         date_now_str = key['session_date'].strftime('%Y%m%d')
         log.info('h2o: {h2o}, date: {d}'.format(h2o=subject_now, d=date_now_str))
 
@@ -771,12 +770,13 @@ class BehaviorBpodIngest(dj.Imported):
         sess_key = None
         trial_num = 0  # trial numbering starts at 1
 
-        for session_idx in bpodsess_order:
+        for s_idx, session_idx in enumerate(bpodsess_order):
             session = sessions_now[session_idx]
             experiment_name = experimentnames_now[session_idx]
             csvfilename = (pathlib.Path(session.path) / (pathlib.Path(session.path).name + '.csv'))
             
             # ---- Special parsing for csv file ----
+            log.info('Load session file(s) ({}/{}): {}'.format(s_idx + 1, len(bpodsess_order), csvfilename))
             df_behavior_session = util.load_and_parse_a_csv_file(csvfilename)
             
             trial_start_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'TRIAL') & (df_behavior_session['MSG'] == 'New trial')].index
@@ -824,6 +824,9 @@ class BehaviorBpodIngest(dj.Imported):
             water_port_channels = {}
             for lick_port in lick_ports:
                 chn_varname = 'var:WaterPort_{}_ch_in'.format(self.water_port_name_mapper[lick_port])
+                if chn_varname not in df_behavior_session:
+                    log.error('Bpod CSV KeyError: {} - Available columns: {}'.format(chn_varname, df_behavior_session.columns))
+                    return
                 water_port_channels[lick_port] = df_behavior_session[chn_varname][0]
 
             # ---- Ingestion of trials ----
@@ -928,7 +931,12 @@ class BehaviorBpodIngest(dj.Imported):
 
                 # ---- accumulated reward ----
                 for lick_port in lick_ports:
-                    reward = df_behavior_trial['reward_{}_accumulated'.format(self.water_port_name_mapper[lick_port])].values[0]
+                    reward_var_name = 'reward_{}_accumulated'.format(self.water_port_name_mapper[lick_port])
+                    if reward_var_name not in df_behavior_trial:
+                        log.error('Bpod CSV KeyError: {} - Available columns: {}'.format(reward_var_name, df_behavior_trial.columns))
+                        return
+
+                    reward = df_behavior_trial[reward_var_name].values[0]
                     rows['available_reward'].append({
                         **sess_trial_key, 'water_port': lick_port,
                         'reward_available': False if np.isnan(reward) else reward})
