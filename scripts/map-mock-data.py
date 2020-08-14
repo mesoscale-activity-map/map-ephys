@@ -642,6 +642,25 @@ def mockdata():
             skip_duplicates=True
         )
 
+        for num in range(1, 20):
+            lab.Subject().insert1({
+                'subject_id': 777000 + num,
+                'username': 'tn',
+                'cage_number': 173167,
+                'date_of_birth': '2019-07-15',
+                'sex': 'M',
+                'animal_source': 'Jackson labs'},
+                skip_duplicates=True
+            )
+            lab.WaterRestriction().insert1({
+                'subject_id': 777000 + num,
+                'water_restriction_number': 'FOR' + f'{num:02}',
+                'cage_number': 173167,
+                'wr_start_date': '2019-09-20',
+                'wr_start_weight': 22.8},
+                skip_duplicates=True
+            )
+
         # Rig
         lab.Rig().insert1({
             'rig': 'TRig1',

@@ -11,7 +11,7 @@ import scipy.stats as sc_stats
 from . import (lab, experiment, ephys)
 [lab, experiment, ephys]  # NOQA
 
-from . import get_schema_name
+from . import get_schema_name, dict_to_hash
 from .util import _get_units_hemisphere
 
 schema = dj.schema(get_schema_name('psth'))
@@ -19,17 +19,6 @@ log = logging.getLogger(__name__)
 
 # NOW:
 # - rework Condition to TrialCondition funtion+arguments based schema
-
-
-def dict_to_hash(input_dict):
-    """
-    Given a dictionary, returns an md5 hash string of its ordered keys-values.
-    """
-    hashed = hashlib.md5()
-    for k in sorted(input_dict.keys()):
-        hashed.update(str(k).encode())
-        hashed.update(str(input_dict[k]).encode())
-    return hashed.hexdigest()
 
 
 @schema
@@ -589,5 +578,4 @@ def compute_CD_projected_psth(units, time_period=None):
     proj_ipsi_trial = np.vstack(np.dot(tr_u, cd_vec) for tr_u in ipsi_psth_per_trial)    # trial# x time
 
     return cd_vec, proj_contra_trial, proj_ipsi_trial, time_stamps, unit_hemi
-
 

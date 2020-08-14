@@ -31,10 +31,12 @@ class Task(dj.Lookup):
     task_description : varchar(4000)
     """
     contents = [
-         ('audio delay', 'auditory delayed response task (2AFC)'),
-         ('audio mem', 'auditory working memory task'),
-         ('s1 stim', 'S1 photostimulation task (2AFC)')
-         ]
+        ('audio delay', 'auditory delayed response task (2AFC)'),
+        ('audio mem', 'auditory working memory task'),
+        ('s1 stim', 'S1 photostimulation task (2AFC)'),
+        ('foraging', 'foraging task based on Bari-Cohen 2019'),
+        ('foraging 3lp', 'foraging task based on Bari-Cohen 2019 with variable delay period')
+    ]
 
 
 @schema
@@ -47,16 +49,27 @@ class TaskProtocol(dj.Lookup):
     task_protocol_description : varchar(4000)
     """
     contents = [
-         ('audio delay', 1, 'high tone vs. low tone'),
-         ('s1 stim', 2, 'mini-distractors'),
-         ('s1 stim', 3, 'full distractors, with 2 distractors (at different times) on some of the left trials'),
-         ('s1 stim', 4, 'full distractors'),
-         ('s1 stim', 5, 'mini-distractors, with different levels of the mini-stim during sample period'),
-         ('s1 stim', 6, 'full distractors; same as protocol 4 but with a no-chirp trial-type'),
-         ('s1 stim', 7, 'mini-distractors and full distractors (only at late delay)'),
-         ('s1 stim', 8, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample                 period'),
-         ('s1 stim', 9, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample period')
-         ]
+        ('audio delay', 1, 'high tone vs. low tone'),
+        ('s1 stim', 2, 'mini-distractors'),
+        ('s1 stim', 3, 'full distractors, with 2 distractors (at different times) on some of the left trials'),
+        ('s1 stim', 4, 'full distractors'),
+        ('s1 stim', 5, 'mini-distractors, with different levels of the mini-stim during sample period'),
+        ('s1 stim', 6, 'full distractors; same as protocol 4 but with a no-chirp trial-type'),
+        ('s1 stim', 7, 'mini-distractors and full distractors (only at late delay)'),
+        ('s1 stim', 8, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample period'),
+        ('s1 stim', 9, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample period'),
+        ('foraging', 100, 'moving lickports, delay period, early lick punishment, sound GO cue then free choice'),
+        ('foraging 3lp', 101, 'moving lickports, delay period, early lick punishment, sound GO cue then free choice from three lickports')
+    ]
+
+
+@schema
+class WaterPort(dj.Lookup):
+    definition = """
+    water_port: varchar(16)  # e.g. left, right, middle, top-left, purple
+    """
+
+    contents = zip(['left', 'right', 'middle'])
 
 
 @schema
@@ -135,9 +148,9 @@ class SessionTrial(dj.Imported):
 @schema 
 class TrialNoteType(dj.Lookup):
     definition = """
-    trial_note_type : varchar(12)
+    trial_note_type : varchar(24)
     """
-    contents = zip(('autolearn', 'protocol #', 'bad', 'bitcode'))
+    contents = zip(('autolearn', 'protocol #', 'bad', 'bitcode', 'autowater', 'random_seed_start'))
 
 
 @schema
@@ -189,6 +202,17 @@ class SessionComment(dj.Manual):
     """
 
 
+@schema
+class SessionDetails(dj.Manual):
+    definition = """
+    -> Session
+    ---
+    session_weight : decimal(8,4) # weight of the mouse at the beginning of the session
+    session_water_earned : decimal(8,4) # water earned by the mouse during the session
+    session_water_extra : decimal(8,4) # extra water provided after the session
+    """
+
+
 # ---- behavioral trials ----
 
 @schema
@@ -197,7 +221,7 @@ class TrialInstruction(dj.Lookup):
     # Instruction to mouse 
     trial_instruction  : varchar(8) 
     """
-    contents = zip(('left', 'right'))
+    contents = zip(('left', 'right', 'middle', 'none'))
 
 
 @schema
@@ -236,6 +260,15 @@ class BehaviorTrial(dj.Imported):
 
 
 @schema
+class WaterPortChoice(dj.Imported):
+    definition = """  # The water port selected by the animal for each trial
+    -> BehaviorTrial
+    ---
+    [nullable] -> WaterPort
+    """
+
+
+@schema
 class TrialEventType(dj.Lookup):
     definition = """
     trial_event_type  : varchar(12)  
@@ -262,9 +295,10 @@ class ActionEventType(dj.Lookup):
     ----
     action_event_description : varchar(1000)
     """
-    contents =[  
-       ('left lick', ''), 
-       ('right lick', '')]
+
+    contents = [('left lick', ''),
+                ('right lick', ''),
+                ('middle lick', '')]
 
 
 @schema
@@ -276,6 +310,62 @@ class ActionEvent(dj.Imported):
     -> ActionEventType
     action_event_time : decimal(8,4)  # (s) from trial start
     """
+
+
+# ---- Foraging paradigm specifics ----
+
+@schema
+class SessionBlock(dj.Imported):
+    definition = """
+    -> Session
+    block : smallint 		# block number
+    ---
+    block_start_time : decimal(10, 4)  # (s) relative to session beginning
+    """
+
+    class WaterPortRewardProbability(dj.Part):
+        definition = """
+        -> master
+        -> WaterPort
+        ---
+        reward_probability: decimal(8, 4)
+        """
+
+    class BlockTrial(dj.Part):
+        definition = """
+        -> master
+        -> BehaviorTrial
+        """
+
+
+@schema
+class WaterPortSetting(dj.Imported):
+    definition = """  
+    -> BehaviorTrial
+    ----
+    water_port_lateral_pos=null: int # position value of the motor
+    water_port_rostrocaudal_pos=null: int # position value of the motor
+    water_port_dorsoventral_pos=null: int # position value of the motor
+    """
+
+    class OpenDuration(dj.Part):
+        definition = """
+        -> master
+        -> WaterPort
+        ---
+        open_duration: decimal(5, 4)  # (s) duration of port open time
+        """
+
+
+@schema
+class TrialAvailableReward(dj.Imported):
+    definition = """ # available reward (bool) for each water port per trial
+    -> BehaviorTrial
+    -> WaterPort
+    ---
+    reward_available: bool
+    """
+
 
 # ---- Photostim trials ----
 
