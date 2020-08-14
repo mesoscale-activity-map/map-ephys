@@ -264,7 +264,7 @@ class WaterPortChoice(dj.Imported):
     definition = """  # The water port selected by the animal for each trial
     -> BehaviorTrial
     ---
-    [nullable] -> WaterPort
+    -> [nullable] WaterPort
     """
 
 
