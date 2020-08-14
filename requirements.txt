@@ -10,3 +10,4 @@ pillow
 tqdm
 xlrd
 numpy
+pybpod
