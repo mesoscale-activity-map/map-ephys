@@ -31,8 +31,8 @@ def usage_exit():
         {}
         ''').lstrip().rstrip().format(
             os.path.basename(sys.argv[0]),
-            str().join("  - {}: {}\n".format(k,v[1])
-                       for k,v in actions.items())))
+            str().join("  - {}: {}\n".format(k, v[1])
+                       for k, v in actions.items())))
 
     # print("usage: {p} [{c}] <args>"
     #       .format(p=os.path.basename(sys.argv[0]),
@@ -58,8 +58,8 @@ def logsetup(*args):
     else:
         handlers = [logging.StreamHandler()]
 
-    datefmt='%Y-%m-%d %H:%M:%S'
-    msgfmt='%(asctime)s:%(levelname)s:%(module)s:%(funcName)s:%(message)s'
+    datefmt = '%Y-%m-%d %H:%M:%S'
+    msgfmt = '%(asctime)s:%(levelname)s:%(module)s:%(funcName)s:%(message)s'
 
     logging.basicConfig(format=msgfmt, datefmt=datefmt, level=logging.ERROR,
                         handlers=handlers)
@@ -117,7 +117,7 @@ def ingest_all(*args):
     sfile = dj.config.get('custom', def_sheet).get('recording_notes_spreadsheet')
     sname = dj.config.get('custom', def_sheet).get('recording_notes_sheet_name')
 
-    if sheet:
+    if sfile:
         load_insertion_location(sfile, sheet_name=sname)
 
 
@@ -163,10 +163,11 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
             valid_btime = False
 
         if valid_btime:
-            sess_key = experiment.Session & (behav_ingest.BehaviorIngest.BehaviorFile
-                                             & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
-                                             & 'behavior_file LIKE "%{}%{}_{:06}%"'.format(
-                        row.water_restriction_number, row.session_date.date().strftime('%Y%m%d'), int(row.behaviour_time)))
+            sess_key = experiment.Session & (
+                behav_ingest.BehaviorIngest.BehaviorFile
+                & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
+                & 'behavior_file LIKE "%{}%{}_{:06}%"'.format(
+                    row.water_restriction_number, row.session_date.date().strftime('%Y%m%d'), int(row.behaviour_time)))
         else:
             sess_key = False
 
@@ -278,7 +279,7 @@ def publication_login(*args):
 
     from pipeline.globus import GlobusStorageManager
 
-    gsm = GlobusStorageManager()
+    GlobusStorageManager()
 
     if cfgname == 'local':
         dj.config.save_local()
@@ -288,14 +289,20 @@ def publication_login(*args):
         log.warning('unknown configuration {}. not saving'.format(cfgname))
 
 
-def publication_publish(*args):
+def publication_publish_ephys(*args):
     publication.ArchivedRawEphys.populate()
+
+
+def publication_publish_video(*args):
     publication.ArchivedTrackingVideo.populate()
 
 
-def publication_discovery(*args):
+def publication_discover_ephys(*args):
     publication.ArchivedRawEphys.discover()
-    # publication.ArchivedTrackingVideo.populate()
+
+
+def publication_discover_video(*args):
+    publication.ArchivedTrackingVideo.discover()
 
 
 def export_recording(*args):
@@ -403,22 +410,24 @@ actions = {
     'ingest-histology': (ingest_histology, 'ingest histology data'),
     'ingest-all': (ingest_all, 'run auto ingest job (load all types)'),
     'populate-psth': (populate_psth, 'populate psth schema'),
-    'publication-login': (publication_login,
-                            'login to globus'),
-    'publication-publish': (publication_publish,
-                            'run raw data globus publication'),
-    'publication-discovery': (publication_discovery,
-                              'run globus publication discovery',),
+    'publication-login': (publication_login, 'login to globus'),
+    'publication-publish-ephys': (publication_publish_ephys,
+                                  'publish raw ephys data to globus'),
+    'publication-publish-video': (publication_publish_video,
+                                  'publish raw video data to globus'),
+    'publication-discover-ephys': (publication_discover_ephys,
+                                   'discover raw ephys data on globus'),
+    'publication-discover-video': (publication_discover_video,
+                                   'discover raw video data on globus'),
     'export-recording': (export_recording, 'export data to .mat'),
     'generate-report': (generate_report, 'run report generation logic'),
     'sync-report': (sync_report, 'sync report data locally'),
     'shell': (shell, 'interactive shell'),
     'erd': (erd, 'write DataJoint ERDs to files'),
     'load-ccf': (load_ccf, 'load CCF reference atlas'),
-    'automate-computation': (automate_computation,
-                             'run report worker job'),
+    'automate-computation': (automate_computation, 'run report worker job'),
     'automate-sync-and-cleanup': (sync_and_external_cleanup,
-                                  'run report cleanup job' ),
+                                  'run report cleanup job'),
     'load-insertion-location': (load_insertion_location,
                                 'load ProbeInsertions from .xlsx'),
     'load-animal': (load_animal, 'load subject data from .xlsx')
