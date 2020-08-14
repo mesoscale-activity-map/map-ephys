@@ -20,7 +20,7 @@ import datajoint as dj
 #import pdb
 
 from pipeline import lab, experiment, ephys, report
-from pipeline import InsertBuffer, dict_to_hash
+from pipeline import InsertBuffer, dict_value_to_hash
 
 from .. import get_schema_name
 from . import ProbeInsertionError, ClusterMetricError, BitCodeError, IdenticalClusterResultError
@@ -530,7 +530,7 @@ def _gen_electrode_config(npx_meta):
             npx_meta.probe_model))
 
     # ---- compute hash for the electrode config (hash of dict of all ElectrodeConfig.Electrode) ----
-    ec_hash = dict_to_hash({k['electrode']: k for k in eg_members})
+    ec_hash = dict_value_to_hash({k['electrode']: k for k in eg_members})
 
     el_list = sorted([k['electrode'] for k in eg_members])
     el_jumps = [-1] + np.where(np.diff(el_list) > 1)[0].tolist() + [len(el_list) - 1]
@@ -1525,6 +1525,7 @@ def archive_ingested_clustering_results(session_key):
             (report.SessionLevelCDReport & session_key).delete()
             (report.ProbeLevelPhotostimEffectReport & session_key).delete()
             (report.ProbeLevelReport & session_key).delete()
+            (report.ProbeLevelDriftMap & session_key).delete()
 
     # the copy, delete part
     if dj.conn().in_transaction:

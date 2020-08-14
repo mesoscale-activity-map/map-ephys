@@ -94,8 +94,9 @@ main pipeline documentation.
      - Trials and trial labels (e.g. type, response, photostim trial, etc.)
      - Trial events (e.g. onsets of sample/delay/response period, 
        onset of photostim, etc.)
-
-   To perform behavior ingest, users can additionally configure the
+    
+   ### Delay-Response Experiment
+   To perform behavior ingest for the ***delay-response*** experiment, users can additionally configure the
    dj.config['custom'] variable 'behavior_data_paths' list. Each item
    in this list is itself a list containing the rig name, path to rig 
    data files, and a priority number. For example:
@@ -103,6 +104,19 @@ main pipeline documentation.
        >>> mypaths = [['Rig1', '/data/rig1', 0]]
        >>> dj.config['custom']['behavior_data_paths'] = mypaths
        >>> dj.config.save_local()
+       
+   or in ***dj_local_conf.json***:
+       
+   ```json
+    "custom": {
+            "behavior_data_paths":
+            [
+                ["Rig1", "/data/rig1", 0],
+                ["RRig2", "/data/rig2", 1],
+                ["Tower-3", "/data/tower3", 2]
+            ]
+    }            
+   ```
 
    After any necessary configuration, behavior ingest is run using
    the 'ingest-behavior' mapshell command:
@@ -111,7 +125,37 @@ main pipeline documentation.
 
    This action will traverse the contents of the rig data paths, finding
    behavior session files and attempting to load them.
+   
+   ### Foraging Experiment
+   To perform behavior ingest for the ***foraging*** experiment, users will need to configure the dj.config['custom'] 
+   to contain the ***behavior_bpod*** variable, which specifies 2 fields:
+    + ***meta_dir***: full path to the directory containing all of the meta data csv files for all subjects (e.g. FOR01.csv, FOR02.csv...)
+    + ***project_paths***: full path to all of the bpod project data directories
+    
+   For example, in ***dj_local_conf.json***:
+       
+   ```json
+    "custom": {
+            "behavior_bpod": {
+                "meta_dir": "path/to/Metadata",
+                "project_paths": 
+                [
+                    "/path/to/bpod/Tower-1/Foraging",
+                    "/path/to/bpod/Tower-2/Foraging",
+                    "/path/to/bpod/Tower-2/Foraging_homecage"
+                ]
+            },
+    }          
+   ```
 
+   After any necessary configuration, behavior ingest is run using
+   the 'ingest-foraging' mapshell command:
+
+       $ mapshell.py ingest-foraging
+
+   This action will traverse the contents of the rig data paths, finding
+   behavior session files and attempting to load them.
+  
 2) Tracking Ingest
 
    The tracking ingest phase loads feature position data into the
@@ -126,6 +170,18 @@ main pipeline documentation.
        >>> mypaths = [['Rig1', '/data/rig1']]
        >>> dj.config['custom']['tracking_data_paths'] = mypaths
        >>> dj.config.save_local()
+       
+   or in ***dj_local_conf.json***:
+       
+   ```json
+    "custom": {
+        "tracking_data_paths":
+            [
+                ["RRig1", "/data/rig1"],
+                ["RRig2", "/data/rig2"]
+            ]
+    }          
+   ```
 
    After any necessary configuration, behavior ingest is run using
    the 'ingest-tracking' mapshell command:
@@ -146,12 +202,16 @@ main pipeline documentation.
      - Ingestion of quality control results (if available)
 
    If needed, users can additionally configure a dj.config['custom']
-   variable to adjust local data paths for ephys data:
-
-       >>> mypaths = [['/data/rig1', 0]]
-       >>> dj.config['custom']['ephys_data_paths'] = mypaths
-       >>> dj.config.save_local()
-
+   variable to adjust local data paths for ephys data.
+    
+   In ***dj_local_conf.json***:
+       
+   ```json
+    "custom": {
+        "ephys_data_paths": ["/path/to/ephys", "/path/to/ephys2"]
+    }          
+   ```
+       
    After any necessary configuration, ephys ingest is run using
    the 'ingest-ephys' mapshell command:
 
@@ -187,9 +247,17 @@ main pipeline documentation.
    If needed, users can additionally configure a dj.config['custom']
    variable to adjust local data paths for session histology data:
 
-       >>> mypaths = [['/data/rig1']]
+       >>> mypaths = ["/path/to/histology"]
        >>> dj.config['custom']['histology_data_paths'] = mypaths
        >>> dj.config.save_local()
+   
+   or in ***dj_local_conf.json***:
+   
+   ```json
+    "custom": {
+        "histology_data_paths": ["/path/to/histology"]
+    }          
+   ```
 
    After any necessary configuration, histology ingest is run using
    the 'ingest-histology' mapshell command:
@@ -218,5 +286,5 @@ main pipeline documentation.
        
     Or users can setup the `ccf_data_paths` in `dj_local_conf.json` as above and run:
     
-        & mapshell.py ccfload
+        $ mapshell.py ccfload
         

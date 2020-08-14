@@ -20,7 +20,7 @@ import datajoint as dj
 # import pdb
 
 from pipeline import lab, experiment, ephys
-from pipeline import dict_to_hash
+from pipeline import dict_value_to_hash
 
 from pipeline.ingest import ProbeInsertionError, ClusterMetricError, BitCodeError, IdenticalClusterResultError
 from pipeline.ingest.ephys import get_ephys_paths
@@ -227,7 +227,7 @@ def _gen_electrode_config(npx_meta):
             npx_meta.probe_model))
 
     # ---- compute hash for the electrode config (hash of dict of all ElectrodeConfig.Electrode) ----
-    ec_hash = dict_to_hash({k['electrode']: k for k in eg_members})
+    ec_hash = dict_value_to_hash({k['electrode']: k for k in eg_members})
 
     el_list = sorted([k['electrode'] for k in eg_members])
     el_jumps = [-1] + np.where(np.diff(el_list) > 1)[0].tolist() + [len(el_list) - 1]

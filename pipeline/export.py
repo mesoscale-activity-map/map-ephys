@@ -491,7 +491,8 @@ def write_to_activity_viewer(insert_keys, output_dir='./'):
         timeseries = ["unit_psth"]
         waveform = np.stack(waveform)
         spike_rates = np.array([d[0] for d in unit_psth])
-        unit_psth = np.vstack((unit_psth[0][1][1:], spike_rates))
+        edges = unit_psth[0][1] if unit_psth[0][1].shape == unit_psth[0][0].shape else unit_psth[0][1][1:]
+        unit_psth = np.vstack((edges, spike_rates))
         ccf_coord = np.transpose(np.vstack((ccf_z, ccf_y, 11400 - ccf_x)))
 
         filepath = pathlib.Path(output_dir) / uid

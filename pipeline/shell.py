@@ -82,6 +82,11 @@ def ingest_behavior(*args):
     behavior_ingest.BehaviorIngest().populate(display_progress=True)
 
 
+def ingest_foraging_behavior(*args):
+    from pipeline.ingest import behavior as behavior_ingest
+    behavior_ingest.BehaviorBpodIngest().populate(display_progress=True)
+
+
 def ingest_ephys(*args):
     from pipeline.ingest import ephys as ephys_ingest
     ephys_ingest.EphysIngest().populate(display_progress=True)
@@ -392,6 +397,7 @@ def sync_and_external_cleanup():
 
 actions = {
     'ingest-behavior': (ingest_behavior, 'ingest behavior data'),
+    'ingest-foraging': (ingest_behavior, 'ingest foraging behavior data'),
     'ingest-ephys': (ingest_ephys, 'ingest ephys data'),
     'ingest-tracking': (ingest_tracking, 'ingest tracking data'),
     'ingest-histology': (ingest_histology, 'ingest histology data'),
