@@ -898,11 +898,11 @@ class BehaviorBpodIngest(dj.Imported):
                     rows['sess_block_trial'].append({**sess_trial_key, 'block': block_num})
 
                 # ---- WaterPort Choice ----
-                trial_choice = {}
+                trial_choice = {'water_port': None}
                 for lick_port in lick_ports:
                     if any((df_behavior_trial['MSG'] == 'Choice_{}'.format(self.water_port_name_mapper[lick_port]))
                            & (df_behavior_trial['TYPE'] == 'TRANSITION')):
-                        trial_choice = {'water_port': lick_port}
+                        trial_choice['water_port'] = lick_port
                         break
 
                 rows['trial_choice'].append({**sess_trial_key, **trial_choice})
@@ -924,7 +924,7 @@ class BehaviorBpodIngest(dj.Imported):
                 # outcome
                 outcome = 'miss' if trial_choice else 'ignore'
                 for lick_port in lick_ports:
-                    if any((df_behavior_trial['MSG'] == 'Reward_{}'.format(water_port_channels[lick_port]))
+                    if any((df_behavior_trial['MSG'] == 'Reward_{}'.format(self.water_port_name_mapper[lick_port]))
                            & (df_behavior_trial['TYPE'] == 'TRANSITION')):
                         outcome = 'hit'
                         break
@@ -1037,6 +1037,9 @@ class BehaviorBpodIngest(dj.Imported):
 
         log.info('BehaviorIngest.make(): ... experiment.BehaviorTrial')
         experiment.BehaviorTrial.insert(concat_rows['behavior_trial'], **insert_settings)
+
+        log.info('BehaviorIngest.make(): ... experiment.WaterPortChoice')
+        experiment.WaterPortChoice.insert(concat_rows['trial_choice'], **insert_settings)
 
         log.info('BehaviorIngest.make(): ... experiment.TrialNote')
         experiment.TrialNote.insert(concat_rows['trial_note'], **insert_settings)
