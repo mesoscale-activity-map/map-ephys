@@ -31,6 +31,7 @@ os.environ['DJ_SUPPORT_FILEPATH_MANAGEMENT'] = "TRUE"
 
 store_stage = pathlib.Path(dj.config['stores']['report_store']['stage'])
 
+# todo: fill in with defaults so unconfigured import works
 if dj.config['stores']['report_store']['protocol'] == 's3':
     store_location = (pathlib.Path(dj.config['stores']['report_store']['bucket'])
                       / pathlib.Path(dj.config['stores']['report_store']['location']))
