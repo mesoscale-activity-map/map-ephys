@@ -87,12 +87,12 @@ class BlockRewardFraction(dj.Computed):
                 reward='water_port = "{}" AND outcome = "hit"'.format(water_port)).fetch('reward', order_by='trial')
             wp_r_frac[water_port] = {
                 'wp_block_fraction': rw.sum() / block_rw.sum() if block_rw.sum() else np.nan,
-                'wp_first_tertile_fraction': (rw[:tertilelength].sum()
-                                              / block_rw[:tertilelength].sum() if block_rw[:tertilelength].sum() else np.nan),
-                'wp_second_tertile_fraction': (rw[tertilelength:2 * tertilelength].sum()
-                                               / block_rw[tertilelength:2 * tertilelength].sum() if block_rw[tertilelength:2 * tertilelength].sum() else np.nan),
-                'wp_third_tertile_fraction': (rw[-tertilelength:].sum()
-                                              / block_rw[-tertilelength:].sum() if block_rw[-tertilelength:].sum() else np.nan)}
+                'wp_first_tertile_fraction': (rw[:tertilelength].sum() / block_rw[:tertilelength].sum()
+                                              if block_rw[:tertilelength].sum() else np.nan),
+                'wp_second_tertile_fraction': (rw[tertilelength:2 * tertilelength].sum() / block_rw[tertilelength:2 * tertilelength].sum()
+                                               if block_rw[tertilelength:2 * tertilelength].sum() else np.nan),
+                'wp_third_tertile_fraction': (rw[-tertilelength:].sum() / block_rw[-tertilelength:].sum()
+                                              if block_rw[-tertilelength:].sum() else np.nan)}
 
             wp_r_frac[water_port]['wp_incremental_fraction'] = np.full(len(self._window_ends), np.nan)
             for i, (t_start, t_end) in enumerate(zip(self._window_starts, self._window_ends)):
@@ -108,24 +108,24 @@ class BlockEfficiency(dj.Computed):  # bias check excluded
     definition = """
     -> BlockRewardFraction
     ---
-    block_effi_one_p_reward: float                              # denominator = max of the reward assigned probability (no baiting)
-    block_effi_one_p_reward_first_tertile: float                # first tertile
-    block_effi_one_p_reward_second_tertile: float               # second tertile
-    block_effi_one_p_reward_third_tertile: float                # third tertile
-    block_effi_sum_p_reward: float                              # denominator = sum of the reward assigned probability (no baiting)
-    block_effi_sum_p_reward_first_tertile: float                # first tertile
-    block_effi_sum_p_reward_second_tertile: decimal(8,4)        # second tertile
-    block_effi_sum_p_reward_third_tertile: decimal(8,4)         # third tertile
-    block_effi_one_a_reward: decimal(8,4)                       # denominator = max of the reward assigned probability + baiting)
-    block_effi_one_a_reward_first_tertile: decimal(8,4)         # first tertile
-    block_effi_one_a_reward_second_tertile: decimal(8,4)        # second tertile
-    block_effi_one_a_reward_third_tertile: decimal(8,4)         # third tertile
-    block_effi_sum_a_reward: decimal(8,4)                       # denominator = sum of the reward assigned probability + baiting)
-    block_effi_sum_a_reward_first_tertile: decimal(8,4)         # first tertile
-    block_effi_sum_a_reward_second_tertile: decimal(8,4)        # second tertile
-    block_effi_sum_a_reward_third_tertile: decimal(8,4)         # third tertile
-    block_ideal_phat_greedy=null: decimal(8,4)                  # denominator = Ideal-pHat-greedy
-    regret_ideal_phat_greedy=null: decimal(8,4)                 # Ideal-pHat-greedy - reward collected
+    block_effi_one_p_reward: float                       # denominator = max of the reward assigned probability (no baiting)
+    block_effi_one_p_reward_first_tertile: float         # first tertile
+    block_effi_one_p_reward_second_tertile: float        # second tertile
+    block_effi_one_p_reward_third_tertile: float         # third tertile
+    block_effi_sum_p_reward: float                       # denominator = sum of the reward assigned probability (no baiting)
+    block_effi_sum_p_reward_first_tertile: float         # first tertile
+    block_effi_sum_p_reward_second_tertile: float        # second tertile
+    block_effi_sum_p_reward_third_tertile: float         # third tertile
+    block_effi_one_a_reward=null: float                  # denominator = max of the reward assigned probability + baiting)
+    block_effi_one_a_reward_first_tertile=null: float    # first tertile
+    block_effi_one_a_reward_second_tertile=null: float   # second tertile
+    block_effi_one_a_reward_third_tertile=null: float    # third tertile
+    block_effi_sum_a_reward=null: float                  # denominator = sum of the reward assigned probability + baiting)
+    block_effi_sum_a_reward_first_tertile=null: float    # first tertile
+    block_effi_sum_a_reward_second_tertile=null: float   # second tertile
+    block_effi_sum_a_reward_third_tertile=null: float    # third tertile
+    block_ideal_phat_greedy=null: float                  # denominator = Ideal-pHat-greedy
+    regret_ideal_phat_greedy=null: float                 # Ideal-pHat-greedy - reward collected
     """
 
     def make(self, key):
@@ -162,14 +162,22 @@ class BlockEfficiency(dj.Computed):  # bias check excluded
             block_effi_sum_p_reward_first_tertile=block_reward_fraction['first_tertile_fraction'] / sum_prob_reward,
             block_effi_sum_p_reward_second_tertile=block_reward_fraction['second_tertile_fraction'] / sum_prob_reward,
             block_effi_sum_p_reward_third_tertile=block_reward_fraction['third_tertile_fraction'] / sum_prob_reward,
-            block_effi_one_a_reward=block_reward_fraction['block_fraction'] / max_reward_available.mean(),
-            block_effi_one_a_reward_first_tertile=block_reward_fraction['first_tertile_fraction'] / max_reward_available_first.mean(),
-            block_effi_one_a_reward_second_tertile=block_reward_fraction['second_tertile_fraction'] / max_reward_available_second.mean(),
-            block_effi_one_a_reward_third_tertile=block_reward_fraction['third_tertile_fraction'] / max_reward_available_third.mean(),
-            block_effi_sum_a_reward=block_reward_fraction['block_fraction'] / sum_reward_available.mean(),
-            block_effi_sum_a_reward_first_tertile=block_reward_fraction['first_tertile_fraction'] / sum_reward_available_first.mean(),
-            block_effi_sum_a_reward_second_tertile=block_reward_fraction['second_tertile_fraction'] / sum_reward_available_second.mean(),
-            block_effi_sum_a_reward_third_tertile=block_reward_fraction['third_tertile_fraction'] / sum_reward_available_third.mean())
+            block_effi_one_a_reward=(block_reward_fraction['block_fraction'] / max_reward_available.mean()
+                                     if max_reward_available.mean() else np.nan),
+            block_effi_one_a_reward_first_tertile=(block_reward_fraction['first_tertile_fraction'] / max_reward_available_first.mean()
+                                                   if max_reward_available_first.mean() else np.nan),
+            block_effi_one_a_reward_second_tertile=(block_reward_fraction['second_tertile_fraction'] / max_reward_available_second.mean()
+                                                    if max_reward_available_second.mean() else np.nan),
+            block_effi_one_a_reward_third_tertile=(block_reward_fraction['third_tertile_fraction'] / max_reward_available_third.mean()
+                                                   if max_reward_available_third.mean() else np.nan),
+            block_effi_sum_a_reward=(block_reward_fraction['block_fraction'] / sum_reward_available.mean()
+                                     if sum_reward_available.mean() else np.nan),
+            block_effi_sum_a_reward_first_tertile=(block_reward_fraction['first_tertile_fraction'] / sum_reward_available_first.mean()
+                                                   if sum_reward_available_first.mean() else np.nan),
+            block_effi_sum_a_reward_second_tertile=(block_reward_fraction['second_tertile_fraction'] / sum_reward_available_second.mean()
+                                                    if sum_reward_available_second.mean() else np.nan),
+            block_effi_sum_a_reward_third_tertile=(block_reward_fraction['third_tertile_fraction'] / sum_reward_available_third.mean()
+                                                   if sum_reward_available_third.mean() else np.nan))
 
         # Ideal-pHat-greedy  - only for blocks containing "left" and "right" port only
         if not len(np.setdiff1d(['right', 'left'], water_ports)):
@@ -178,7 +186,7 @@ class BlockEfficiency(dj.Computed):  # bias check excluded
             if p0 != 0:
                 m_star_greedy = math.floor(math.log(1 - p1) / math.log(1 - p0))
                 p_star_greedy = p1 + (1 - (1 - p0) ** (m_star_greedy + 1) - p1 ** 2) / (m_star_greedy + 1)
-                
+
                 block_efficiency_data.update(
                     block_ideal_phat_greedy=block_reward_fraction['block_fraction'] / p_star_greedy,
                     regret_ideal_phat_greedy=p_star_greedy - block_reward_fraction['block_fraction'])
