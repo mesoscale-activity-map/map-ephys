@@ -922,7 +922,7 @@ class BehaviorBpodIngest(dj.Imported):
                         early_lick = 'early'
                         break
                 # outcome
-                outcome = 'miss' if trial_choice else 'ignore'
+                outcome = 'miss' if trial_choice['water_port'] else 'ignore'
                 for lick_port in lick_ports:
                     if any((df_behavior_trial['MSG'] == 'Reward_{}'.format(self.water_port_name_mapper[lick_port]))
                            & (df_behavior_trial['TYPE'] == 'TRANSITION')):
