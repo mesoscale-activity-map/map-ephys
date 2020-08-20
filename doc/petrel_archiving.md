@@ -2,12 +2,79 @@
 ## Petrel / Raw Data Archival
 
 Note: archival functionality currently requires updates to match new project
-  filename conventions.
+  filename conventions. (ok: ephys; todo: video)
 
 The map-ephys pipeline does *not* directly handle processing of raw recording
 files into the second-stage processed data used in later stages, however, some
 facility is provided for tracking raw data files and transferring them to/from
-the ANL [\'petrel\'](https://www.alcf.anl.gov/petrel) facility using the [globus toolkit](http://toolkit.globus.org/toolkit/) and [Globus Python SDK](https://globus-sdk-python.readthedocs.io/en/stable/).
+the ANL [\'petrel\'](https://www.alcf.anl.gov/petrel) facility using 
+the [globus toolkit](http://toolkit.globus.org/toolkit/) 
+and [Globus Python SDK](https://globus-sdk-python.readthedocs.io/en/stable/).
+
+## Petrel/Globus Archive Structure
+
+The globus archive structure describes the layout of the raw files on
+the archive system (petrel). Each archive type ('raw-ephys', 'raw-video')
+has a corresponding StorageLocation which defines a globus endpoint
+and a root path for that collection within the archive system.
+
+Currently, these are:
+
+raw-ephys 5b875fda-4185-11e8-bb52-0ac6873fc732:/4ElectrodeRig_Ephys
+raw-video 5b875fda-4185-11e8-bb52-0ac6873fc732:/
+
+### Electrophysiology
+
+The electrophysiology recordings are layed out according to the following
+format:
+
+  - root
+    - water restriction
+      - session
+        - probe
+
+More specifically::
+
+  <root>/<h2o>/catgt_<h2o>_<mdy>_g0/
+  <root>/<h2o>/catgt_<h2o>_<mdy>_g0/<h2o>_<mdy>_imecN
+
+In the event of multiple sessions in one day, additional sessions
+should be labeled::
+
+  <root>/<h2o>/catgt_<h2o>_<mdy>_<ident>_g0/
+  <root>/<h2o>/catgt_<h2o>_<mdy>_<ident>_g0/<h2o>_<mdy>_<ident>_imecN
+
+Where 'ident' is an identifier for that session. 
+
+By default, 'ident' should be incrmentally numbered e.g. '1' 
+is the second session for that day, etc. 
+
+### Tracking Videos
+
+The tracking video recordings are layed out according to the following
+format:
+
+  - root
+    - water restriction
+      - session date
+        - 'video'
+          - video file
+
+More specifically::
+
+  <root>/<h2o>/<MMDDYYYY>/video
+  <root>/<h2o>/<MMDDYYYY>/video/<h2o>_<cameraposition>_NNN-NNNN.avi
+
+In the event of multiple sessions in one day, additional sessions
+should be labeled::
+
+  <root>/<h2o>/<MMDDYYYY>_<ident>/video
+  <root>/<h2o>/<MMDDYYYY>_<ident>/video/<h2o>_<cameraposition>_NNN-NNNN.avi
+
+Where 'ident' is an identifier for that session. 
+
+By default, 'ident' should be incrmentally numbered e.g. '1' 
+is the second session for that day, etc. 
 
 ## MAP Pipeline Globus Configuration
 
@@ -81,7 +148,9 @@ your globus account.
 
 Once the local Globus endpoint has been configured, population and
 data transfer of the raw data files can be performed using the
-`mapshell.py` utility function `publish`.
+`mapshell.py` utility function `publication-publish`. This function
+will call `.populate()` on the individual publication archive tables,
+currently `ArchivedRawEphys` and `ArchivedTrackingVideo`.
 
 The population logic will look for files matching project naming
 conventions for the ingested experimental sessions, and if files
@@ -89,16 +158,26 @@ are found, transfer them to petrel and log an entry in the publication
 schema. These records can then be used by users to query and retrieve
 the raw data files (see below).
 
+### Raw Recording Usage (Archive Discovery)
+
+Once the local Globus endpoint has been configured, files contained
+within the archive storage can be registered into the database using
+the `.discover()` method of the publication archive tables.
+
+This functionality is useful for rebuilding the archive schema in
+the event local raw recording files are not available or in other,
+similar cases.
+
 ### Raw Recording Usage (Download)
 
 Once the local globus endpoint has been configured, retrieval of raw data
 files can be done interactively using DataJoint operations in combination
-with the `.retrieve()` method of the `ArchivedRawEphysTrial` class.
+with the `.retrieve()` method of the publication archive tables.
 
 For example, to fetch all raw recordings related to subject #407513,
 the following DataJoint expression can be used:
 
-    >>> (publication.ArchivedRawEphysTrial() 
+    >>> (publication.ArchivedRawEphys() 
          & {'subject_id': 407513}).retrieve()
 
 This will save the related files to the configured local globus
@@ -108,4 +187,3 @@ taken not to retrieve files on the same computer used to transmit
 them, to keep the original files from being overwritten; Disabling
 the writable setting on machines used for data upload should
 help prevent this from possibly occurring.
-
