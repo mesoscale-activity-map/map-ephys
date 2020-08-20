@@ -12,6 +12,7 @@ from globus_sdk import RefreshTokenAuthorizer
 from globus_sdk import TransferClient
 from globus_sdk import DeleteData
 from globus_sdk import TransferData
+from globus_sdk import TransferAPIError
 
 
 DEFAULT_GLOBUS_WAIT_TIMEOUT = 60
@@ -39,6 +40,7 @@ class GlobusStorageManager:
             self.refresh()
         else:
             self.login()
+            self.refresh()
 
     # authentication methods
 
@@ -129,6 +131,8 @@ class GlobusStorageManager:
     # transfer methods
 
     def ls(self, endpoint_path):
+        # TODO? separate 'stat' call?
+        # FIXME?: ls on a file works? if not how check file?
         '''
         returns:
             {
@@ -160,7 +164,18 @@ class GlobusStorageManager:
             }
         '''
         ep, path = self.ep_parts(endpoint_path)
-        return self.xfer_client.operation_ls(ep, path=path)
+
+        res = None
+
+        try:
+            res = self.xfer_client.operation_ls(ep, path=path)
+        except TransferAPIError as e:
+            if e.http_status == 404:
+                res = None
+            else:
+                raise
+
+        return res
 
     def fts(self, ep_path):
         '''
@@ -169,19 +184,24 @@ class GlobusStorageManager:
         ep, path = self.ep_parts(ep_path)
 
         stack = []
-        stack.append(path)
+        stack.append(path.rstrip('/') if len(path) > 1 else path)
 
         while len(stack):
 
             u = stack.pop()
             e = self.ls('{}:{}'.format(ep, u))
 
-            yield (ep, u, e)
+            yield (ep, u.rstrip('/') if len(u) > 1 else u, e)
+
             for ei in e['DATA']:
+
                 if ei['type'] == 'dir':
-                    stack.append('{}/{}'.format(u, ei['name']))
+                    stack.append('{}/{}'.format(u, ei['name'])
+                                 if u != '/' else '/{}'.format(ei['name']))
                 else:
                     yield (ep, u, ei)
+
+
 
     def mkdir(self, ep_path):
         ''' create a directory at ep_path '''
