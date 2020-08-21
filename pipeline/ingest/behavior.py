@@ -735,7 +735,7 @@ class BehaviorBpodIngest(dj.Imported):
                 self.make(k)
 
     def make(self, key):
-        log.info('BehaviorBpodIngest.make(): key: {key}'.format(key=key))
+        log.info('----------------------\nBehaviorBpodIngest.make(): key: {key}'.format(key=key))
 
         subject_id_now = key['subject_id']
         subject_now = (lab.WaterRestriction() & {'subject_id': subject_id_now}).fetch1('water_restriction_number')
@@ -757,6 +757,11 @@ class BehaviorBpodIngest(dj.Imported):
                             session_start_times_now.append(session.started)
                             experimentnames_now.append(exp.name)
         bpodsess_order = np.argsort(session_start_times_now)
+        
+        # --- Handle missing BPod session ---
+        if len(bpodsess_order) == 0:
+            log.error('BPod session not found!')
+            return
 
         # ---- Concatenate bpod sessions (and corresponding trials) into one datajoint session ----
         tbls_2_insert = ('sess_trial', 'behavior_trial', 'trial_note',
