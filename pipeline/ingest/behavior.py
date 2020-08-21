@@ -730,6 +730,9 @@ class BehaviorBpodIngest(dj.Imported):
         return key_source
 
     def populate(self, *args, **kwargs):
+        # Load project info (just once)
+        self.projects = self.get_bpod_projects()
+
         for k in self.key_source:
             with dj.conn().transaction:
                 self.make(k)
@@ -743,9 +746,8 @@ class BehaviorBpodIngest(dj.Imported):
         log.info('h2o: {h2o}, date: {d}'.format(h2o=subject_now, d=date_now_str))
 
         # ---- Ingest information for BPod projects ----
-        projects = self.get_bpod_projects()
         sessions_now, session_start_times_now, experimentnames_now = [], [], []
-        for proj in projects:  #
+        for proj in self.projects:  #
             exps = proj.experiments
             for exp in exps:
                 stps = exp.setups
