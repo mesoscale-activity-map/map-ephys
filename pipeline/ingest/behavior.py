@@ -786,33 +786,19 @@ class BehaviorBpodIngest(dj.Imported):
             log.info('Load session file(s) ({}/{}): {}'.format(s_idx + 1, len(bpodsess_order), csvfilename))
             df_behavior_session = util.load_and_parse_a_csv_file(csvfilename)
             
+            # ---- Integrity check of the current bpodsess file ---
+            # It must have at least one 'trial start' and 'trial end'
             trial_start_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'TRIAL') & (df_behavior_session['MSG'] == 'New trial')].index
             if not len(trial_start_idxs):
                 log.info('No "trial start" for {}. Skipping...'.format(csvfilename))
-                return
-
-            # ---- New session - construct a session key ----
-            if sess_key is None:
-                session_time = df_behavior_session['PC-TIME'][trial_start_idxs[0]]
-                if session.setup_name.lower() in ['day1', 'tower-2', 'day2-7', 'day_1', 'real foraging']:
-                    setupname = 'Training-Tower-2'
-                elif session.setup_name.lower() in ['tower-3', 'tower-3beh', ' tower-3', '+', 'tower 3']:
-                    setupname = 'Training-Tower-3'
-                elif session.setup_name.lower() in ['tower-1']:
-                    setupname = 'Training-Tower-1'
-                else:
-                    log.info('ERROR: unhandled setup name {} (from {}). Skipping...'.format(session.setup_name, session.path))
-                    return
-
-                log.debug('synthesizing session ID')
-                key['session'] = (dj.U().aggr(experiment.Session()
-                                              & {'subject_id': subject_id_now},
-                                              n='max(session)').fetch1('n') or 0) + 1
-                sess_key = {**key,
-                            'session_time': session_time.time(),
-                            'username': df_behavior_session['experimenter'][0],
-                            'rig': setupname}
-
+                continue   # Make sure 'start' exists, otherwise move on to try the next bpodsess file if exists     
+                   
+            trial_end_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'TRANSITION') & (df_behavior_session['MSG'] == 'End')].index
+            if not len(trial_end_idxs):
+                log.info('No "trial end" for {}. Skipping...'.format(csvfilename))
+                continue   # Make sure 'end' exists, otherwise move on to try the next bpodsess file if exists     
+            
+            # It must be a foraging session
             # extracting task protocol - hard-code implementation
             if 'foraging' in experiment_name.lower() or ('bari' in experiment_name.lower() and 'cohen' in experiment_name.lower()):
                 if 'var:lickport_number' in df_behavior_session and df_behavior_session['var:lickport_number'][0] == 3:
@@ -825,7 +811,29 @@ class BehaviorBpodIngest(dj.Imported):
                     lick_ports = ['left', 'right']
             else:
                 log.info('ERROR: unhandled task name {}. Skipping...'.format(experiment_name))
-                return
+                continue   # Make sure this is a foraging bpodsess, otherwise move on to try the next bpodsess file if exists 
+                
+            # ---- New session - construct a session key (from the first bpodsess that passes the integrity check) ----
+            if sess_key is None:
+                session_time = df_behavior_session['PC-TIME'][trial_start_idxs[0]]
+                if session.setup_name.lower() in ['day1', 'tower-2', 'day2-7', 'day_1', 'real foraging']:
+                    setupname = 'Training-Tower-2'
+                elif session.setup_name.lower() in ['tower-3', 'tower-3beh', ' tower-3', '+', 'tower 3']:
+                    setupname = 'Training-Tower-3'
+                elif session.setup_name.lower() in ['tower-1']:
+                    setupname = 'Training-Tower-1'
+                else:
+                    log.info('ERROR: unhandled setup name {} (from {}). Skipping...'.format(session.setup_name, session.path))
+                    continue   # Move on to try the next bpodsess file if exists
+
+                log.debug('synthesizing session ID')
+                key['session'] = (dj.U().aggr(experiment.Session()
+                                              & {'subject_id': subject_id_now},
+                                              n='max(session)').fetch1('n') or 0) + 1
+                sess_key = {**key,
+                            'session_time': session_time.time(),
+                            'username': df_behavior_session['experimenter'][0],
+                            'rig': setupname}
 
             # ---- channel for water ports ----
             water_port_channels = {}
@@ -857,7 +865,7 @@ class BehaviorBpodIngest(dj.Imported):
                 if not len(df_behavior_trial['PC-TIME'][(df_behavior_trial['MSG'] == 'GoCue') & (
                         df_behavior_trial['TYPE'] == 'TRANSITION')]):
                     continue
-
+                
                 # ---- session trial ----
                 trial_num += 1  # increment trial number
                 trial_uid = len(experiment.SessionTrial & {'subject_id': subject_id_now}) + 1
