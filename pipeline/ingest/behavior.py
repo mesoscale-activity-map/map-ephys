@@ -1007,6 +1007,9 @@ class BehaviorBpodIngest(dj.Imported):
 
                 # -- add Go Cue
                 GoCueTimes = (time_GoCue - time_TrialStart) / np.timedelta64(1, 's')
+                GoCueTimes[GoCueTimes > 9999] = 9999  # Wordaround for bug #9: BPod protocol was paused and then 
+                                                      # resumed after an impossible long period of time (> decimal(8, 4)).
+                
                 rows['trial_event'].extend([{**sess_trial_key, 'trial_event_id': idx, 'trial_event_type': 'go',
                                              'trial_event_time': t, 'duration': 0} for idx, t in enumerate(GoCueTimes)])
 
