@@ -195,9 +195,17 @@ class BehaviorIngest(dj.Imported):
         return recs
 
     def populate(self, *args, **kwargs):
+        # 'populate' which won't require upstream tables
+        # 'reserve_jobs' not parallel, overloaded to mean "don't exit on error"
         for k in self.key_source:
-            with dj.conn().transaction:
-                self.make(k)
+            try:
+                with dj.conn().transaction:
+                    self.make(k)
+            except Exception as e:
+                log.warning('session key {} error: {}'.format(
+                    key, repr(e))
+                if not kwargs.get('reserve_jobs', False):
+                    raise
 
     def make(self, key):
         log.info('BehaviorIngest.make(): key: {key}'.format(key=key))
@@ -730,9 +738,17 @@ class BehaviorBpodIngest(dj.Imported):
         return key_source
 
     def populate(self, *args, **kwargs):
+        # 'populate' which won't require upstream tables
+        # 'reserve_jobs' not parallel, overloaded to mean "don't exit on error"
         for k in self.key_source:
-            with dj.conn().transaction:
-                self.make(k)
+            try:
+                with dj.conn().transaction:
+                    self.make(k)
+            except Exception as e:
+                log.warning('session key {} error: {}'.format(
+                    key, repr(e))
+                if not kwargs.get('reserve_jobs', False):
+                    raise
 
     def make(self, key):
         log.info('BehaviorBpodIngest.make(): key: {key}'.format(key=key))
