@@ -704,11 +704,13 @@ class BehaviorBpodIngest(dj.Imported):
                 continue
 
             for r_idx, df_wr_row in df_wr.iterrows():
-                # we use it when both start and end times are filled in, restriction and handling is skipped
+                # we use it when both start and end times are filled in and Water during training > 0; restriction, freewater and handling is skipped
                 if (df_wr_row['Time'] and isinstance(df_wr_row['Time'], str)
                         and df_wr_row['Time-end'] and isinstance(df_wr_row['Time-end'], str)
                         and df_wr_row['Training type'] != 'restriction'
-                        and df_wr_row['Training type'] != 'handling'):
+                        and df_wr_row['Training type'] != 'handling'
+                        and df_wr_row['Training type'] != 'freewater'
+                        and df_wr_row['Water during training'] > 0):
 
                     try:
                         date_now = datetime.strptime(df_wr_row.Date, '%Y-%m-%d').date()
@@ -824,7 +826,7 @@ class BehaviorBpodIngest(dj.Imported):
                     setupname = 'Training-Tower-1'
                 else:
                     log.info('ERROR: unhandled setup name {} (from {}). Skipping...'.format(session.setup_name, session.path))
-                    continue   # Move on to try the next bpodsess file if exists
+                    continue   # Another integrity check here
 
                 log.debug('synthesizing session ID')
                 key['session'] = (dj.U().aggr(experiment.Session()
