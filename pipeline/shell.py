@@ -84,7 +84,8 @@ def ingest_behavior(*args):
 
 def ingest_foraging_behavior(*args):
     from pipeline.ingest import behavior as behavior_ingest
-    behavior_ingest.BehaviorBpodIngest().populate(display_progress=True)
+    behavior_ingest.BehaviorBpodIngest().populate(
+        display_progress=True, reserve_jobs=True)
 
 
 def ingest_ephys(*args):
