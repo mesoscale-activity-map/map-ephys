@@ -211,6 +211,95 @@ def load_ccf(*args):
     ccf.CCFAnnotation.load_ccf_annotation()
 
 
+def load_meta_foraging():  
+    '''
+    Load metadata for the foraging task
+    Adapted from Marton's code: https://github.com/rozmar/DataPipeline/blob/master/ingest/datapipeline_metadata.py
+    '''
+    import pathlib
+    meta_dir = dj.config.get('custom', {}).get('behavior_bpod', []).get('meta_dir')
+    meta_lab_dir = dj.config.get('custom', {}).get('behavior_bpod', []).get('meta_lab_dir')
+    
+    # --- Add experimenters ---
+    print('Adding experimenters...')
+    df_experimenters = pd.read_csv(pathlib.Path(meta_lab_dir) / 'Experimenter.csv')
+    
+    for experimenter in df_experimenters.iterrows():
+        experimenter = experimenter[1]
+        experimenternow = {'username':experimenter['username'],'fullname':experimenter['fullname']}
+        try:
+            lab.Person().insert1(experimenternow)
+        except dj.errors.DuplicateError:
+            print('  duplicate. experimenter: ',experimenternow['username'], ' already exists')
+    
+    # --- Add rigs ---
+    print('Adding rigs... ')
+    df_rigs = pd.read_csv(pathlib.Path(meta_lab_dir) / 'Rig.csv')
+    
+    for rig in df_rigs.iterrows():
+        rig = rig[1]
+        rignow = {'rig':rig['rig'],'room':rig['room'],'rig_description':rig['rig_description']}
+        try:
+            lab.Rig().insert1(rignow)
+        except dj.errors.DuplicateError:
+            print('  duplicate. rig: ',rignow['rig'], ' already exists')
+            
+    # --- Add viruses ---
+    # Not implemented for now.  Han
+  
+    # --- Add subjects and water restrictions ---
+    print('Adding subjects and water restrictions...')
+    df_surgery = pd.read_csv(pathlib.Path(meta_dir) / 'Surgery.csv')
+    
+    # For each entry
+    for item in df_surgery.iterrows():
+        item = item[1]
+        
+        if item['project'] == 'foraging' and (item['status'] == 'training' or item['status'] == 'sacrificed'):
+            
+            # -- Add lab.Subject() --
+            subjectdata = {
+                    'subject_id': item['animal#'],
+                    'cage_number': item['cage#'],
+                    'date_of_birth': item['DOB'],
+                    'sex': item['sex'],
+                    'username': item['experimenter'],
+                    }
+            try:
+                lab.Subject().insert1(subjectdata)
+                
+            except dj.errors.DuplicateError:
+                print('  duplicate. animal :',item['animal#'], ' already exists')
+                
+            # -- Add lab.Surgery() --
+            # Not implemented. Han
+
+            # -- Virus injection --
+            # Not implemented. Han
+                
+            # -- Add lab.WaterRestriction() --
+            if item['ID']:
+                # Get water restriction start date and weight
+                subject_csv = pathlib.Path(meta_dir) / '{}.csv'.format(item['ID'])
+                if subject_csv.exists():
+                    df_wr = pd.read_csv(subject_csv)
+                else:
+                    print('  No metadata csv found for {}'.format(item['ID']))
+                    continue
+            
+                wrdata = {
+                        'subject_id':item['animal#'],
+                        'water_restriction_number': item['ID'],
+                        'cage_number': item['cage#'],
+                        'wr_start_date': df_wr['Date'][0],
+                        'wr_start_weight': df_wr['Weight'][0],
+                        }
+                try:
+                    lab.WaterRestriction().insert1(wrdata)
+                except dj.errors.DuplicateError:
+                    print('  duplicate. water restriction:', item['ID'], ' already exists')
+
+
 def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': True}):
 
     log.info('experiment.PhotostimBrainRegion.populate()')
@@ -431,5 +520,6 @@ actions = {
                                   'run report cleanup job'),
     'load-insertion-location': (load_insertion_location,
                                 'load ProbeInsertions from .xlsx'),
-    'load-animal': (load_animal, 'load subject data from .xlsx')
+    'load-animal': (load_animal, 'load subject data from .xlsx'),
+    'load-meta-foraging': (load_meta_foraging, 'load foraging meta information from .csv')
 }
