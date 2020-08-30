@@ -733,7 +733,9 @@ class BehaviorBpodIngest(dj.Imported):
 
     def populate(self, *args, **kwargs):
         # Load project info (just once)
+        log.info('------ Loading pybpod project -------')
         self.projects = self.get_bpod_projects()
+        log.info('------------   Done! ----------------')
 
         for k in self.key_source:
             with dj.conn().transaction:

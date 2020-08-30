@@ -15,7 +15,8 @@ def get_schema_name(name):
     try:
         return dj.config['custom']['{}.database'.format(name)]
     except KeyError:
-        prefix = 'map_v2_'
+        # prefix = 'map_v2_'
+        prefix = 'hanhou_foraging_'
 
     return prefix + name
 

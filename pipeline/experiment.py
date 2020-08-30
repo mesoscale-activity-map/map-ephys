@@ -187,7 +187,7 @@ class SessionTraining(dj.Manual):
 
 
 @schema
-class SessionTask(dj.Manual):
+class SessionWaterTask(dj.Manual):
     definition = """
     -> Session
     -> TaskProtocol

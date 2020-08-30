@@ -1,0 +1,36 @@
+{
+	"database.host": "mesoscale-activity.datajoint.io",
+  	"database.user": "hanhou",
+  	"database.password": "han_datajoint",	
+	"database.port": 3306,
+	"connection.init_function": null,
+	"database.reconnect": false,
+	"loglevel": "INFO",
+	"safemode": true,
+	"display.limit": 30,
+	"display.width": 30,
+	"display.show_tuple_count": true,
+	"history": [],
+	"do_unittest": false,
+	"nuclear_option": true,
+	"custom": {
+    	"behavior_bpod": {
+    	"meta_dir": "D:/Data/Data_for_ingestion/Metadata",
+	"meta_lab_dir": "D:/Data/Data_for_ingestion/Metadata_lab",
+   		"project_paths": [
+        	"D:/Data/Data_for_ingestion/Behavior_rigs/Tower-1/Foraging",
+        	"D:/Data/Data_for_ingestion/Behavior_rigs/Tower-2/Foraging",
+            "D:/Data/Data_for_ingestion/Behavior_rigs/Tower-2/Foraging_again",
+			"D:/Data/Data_for_ingestion/Behavior_rigs/Tower-2/Foraging_homecage",
+			"D:/Data/Data_for_ingestion/Behavior_rigs/Tower-3/Foraging_homecage"]
+		},
+    	"logfile": "log.txt"
+    },
+	"stores": {
+    	"report_store": {
+    	"protocol": "s3",
+    	"stage": "/tmp/stage",
+    	"bucket": "foo",
+    	"location": "/"}
+	}
+}
