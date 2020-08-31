@@ -38,9 +38,9 @@ class CCF(dj.Lookup):
     definition = """
     # Common Coordinate Framework
     -> CCFLabel
-    ccf_x   :  int   # (um)
-    ccf_y   :  int   # (um)
-    ccf_z   :  int   # (um)
+    ccf_x   :  int   # (um)  Left-to-Right (ML axis)
+    ccf_y   :  int   # (um)  Superior-to-Inferior (DV axis)
+    ccf_z   :  int   # (um)  Anterior-to-Posterior (AP axis)
     """
 
 

@@ -15,6 +15,191 @@ minimum_trial_per_block = 30
 
 
 @schema
+class SessionTaskProtocol(dj.Computed):
+    definition = """
+    -> experiment.Session
+    ---
+    session_task_protocol : tinyint # the number of the dominant task protocol in the session
+    session_real_foraging : bool # True if it is real foraging, false in case of pretraining
+    """
+
+    # Foraging sessions only
+    key_source = experiment.Session & (experiment.BehaviorTrial & 'task LIKE "foraging%"')
+
+    def make(self, key):
+        task_protocols = (experiment.BehaviorTrial & key).fetch('task_protocol')
+
+        is_real_foraging = bool(experiment.SessionBlock.WaterPortRewardProbability & key
+                                & 'reward_probability > 0 and reward_probability < 1')
+
+        self.insert1({**key,
+                      'session_task_protocol': np.median(task_protocols),
+                      'session_real_foraging': is_real_foraging})
+
+
+@schema
+class TrialReactionTime(dj.Computed):
+    definition = """
+    -> experiment.BehaviorTrial
+    ---
+    reaction_time=null : decimal(8,4) # reaction time in seconds (first lick relative to go cue) [-1 in case of ignore trials]
+    """
+
+    # Foraging sessions only
+    key_source = experiment.BehaviorTrial & 'task LIKE "foraging%"'
+
+    def make(self, key):
+        gocue_time = (experiment.TrialEvent & key & 'trial_event_type = "go"').fetch1('trial_event_time')
+        q_reaction_time = experiment.BehaviorTrial.aggr(experiment.ActionEvent & key
+                                                        & 'action_event_type LIKE "%lick"'
+                                                        & 'action_event_time > {}'.format(gocue_time),
+                                                        reaction_time='min(action_event_time)')
+        if q_reaction_time:
+            key['reaction_time'] = q_reaction_time.fetch1('reaction_time')
+
+        self.insert1(key)
+
+
+# remove bias check trials from statistics # 03/25/20 NW added nobiascheck terms for hit, miss and ignore trial num
+@schema
+class SessionStats(dj.Computed):
+    definition = """
+    -> experiment.Session
+    ---
+    session_total_trial_num = null          : int #number of trials
+    session_block_num = null                : int #number of blocks, including bias check
+    session_block_num_nobiascheck = null    : int # number of blocks, no bias check
+    session_hit_num = null                  : int #number of hits
+    session_hit_num_nobiascheck = null      : int # number of hits without bias check
+    session_miss_num = null                 : int #number of misses
+    session_miss_num_nobiascheck = null     : int # number of misses without bias check
+    session_ignore_num = null               : int #number of ignores
+    session_ignore_num_nobiascheck = null   : int #number of ignores without bias check
+    session_ignore_trial_nums = null        : longblob #trial number of ignore trials
+    session_autowater_num = null            : int #number of trials with autowaters
+    session_length = null                   : decimal(10, 4) #length of the session in seconds
+    session_bias_check_trial_num = null     : int #number of bias check trials
+    session_bias_check_trial_idx = null     : longblob # index of bias check trials
+    session_1st_3_ignores = null            : int #trialnum where the first three ignores happened in a row
+    session_1st_2_ignores = null            : int #trialnum where the first three ignores happened in a row
+    session_1st_ignore = null               : int #trialnum where the first ignore happened  
+    session_biascheck_block = null          : longblob # the index of bias check blocks
+    """
+
+    # Foraging sessions only
+    key_source = experiment.Session & (experiment.BehaviorTrial & 'task LIKE "foraging%"')
+
+    def make(self, key):
+        session_stats = {'session_total_trial_num': len(experiment.SessionTrial & key),
+                         'session_block_num': len(experiment.SessionBlock & key),
+                         'session_hit_num': len(experiment.BehaviorTrial & key & 'outcome = "hit"'),
+                         'session_miss_num': len(experiment.BehaviorTrial & key & 'outcome = "miss"'),
+                         'session_ignore_num': len(experiment.BehaviorTrial & key & 'outcome = "ignore"'),
+                         'session_autowater_num': len(experiment.TrialNote & key & 'trial_note_type = "autowater"')}
+
+        if session_stats['session_total_trial_num'] > 0:
+            session_stats['session_length'] = float(((experiment.SessionTrial & key).fetch('stop_time')).max())
+        else:
+            session_stats['session_length'] = 0
+
+        df_choices = pd.DataFrame({'outcome': (experiment.BehaviorTrial & key).fetch('outcome', order_by='trial')})
+
+        if len(df_choices) > 0:
+            realtraining = (experiment.SessionBlock.BlockTrial & key).aggr(
+                experiment.SessionBlock.WaterPortRewardProbability, max_prob='max(reward_probability)').proj(
+                ..., is_real_training='max_prob < 1').fetch('is_real_training', order_by='trial').astype(bool)
+
+            realtraining2 = np.multiply(realtraining, 1)
+            if not realtraining.any():
+                session_stats['session_bias_check_trial_num'] = 0
+                # print('all pretraining')
+            else:
+                session_stats['session_bias_check_trial_num'] = realtraining.argmax()
+                session_stats['session_bias_check_trial_idx'] = np.array([x+1 for x, y in enumerate(realtraining2) if y == 0])
+                #print(str(realtraining.values.argmax())+' out of '+str(keytoadd['session_trialnum']))
+
+            if (df_choices['outcome'][session_stats['session_bias_check_trial_num']:] == 'ignore').values.any():
+                session_stats['session_1st_ignore'] = (df_choices['outcome'][session_stats['session_bias_check_trial_num']:] == 'ignore').values.argmax()+session_stats['session_bias_check_trial_num']+1
+                if (np.convolve([1,1],(df_choices['outcome'][session_stats['session_bias_check_trial_num']:] == 'ignore').values)==2).any():
+                    session_stats['session_1st_2_ignores'] = (np.convolve([1,1],(df_choices['outcome'][session_stats['session_bias_check_trial_num']:] == 'ignore').values)==2).argmax() +session_stats['session_bias_check_trial_num']+1
+                if (np.convolve([1,1,1],(df_choices['outcome'][session_stats['session_bias_check_trial_num']:] == 'ignore').values)==3).any():
+                    session_stats['session_1st_3_ignores'] = (np.convolve([1,1,1],(df_choices['outcome'][session_stats['session_bias_check_trial_num']:] == 'ignore').values)==3).argmax() +session_stats['session_bias_check_trial_num']+1
+
+            # get the hit, miss and ignore without bias check 03/25/20 NW
+            session_stats['session_hit_num_nobiascheck'] = len(df_choices['outcome'][realtraining] == 'hit')
+            session_stats['session_miss_num_nobiascheck'] = len(df_choices['outcome'][realtraining] == 'miss')
+            session_stats['session_ignore_num_nobiascheck'] = len(df_choices['outcome'][realtraining] == 'ignore')
+
+            # get the block num without bias check 03/25/20 NW
+            if session_stats['session_block_num'] >= 1:
+                blocks, is_bias_check_blocks = (experiment.SessionBlock & key).aggr(
+                    experiment.SessionBlock.WaterPortRewardProbability & 'reward_probability = 1', c='count(*)').proj(
+                    is_bias_check='c > 0').fetch('block', 'is_bias_check', order_by='block')
+                is_bias_check_blocks = is_bias_check_blocks.astype(bool)
+
+                session_stats['session_block_num_nobiascheck'] = sum(~is_bias_check_blocks)
+                session_stats['session_biascheck_block'] = blocks[is_bias_check_blocks]
+            else:
+                session_stats['session_block_num_nobiascheck'] = 0
+
+        self.insert1({**key, **session_stats})
+
+
+@schema
+class SessionMatchBias(dj.Computed): # bias check removed,
+    definition = """
+    -> experiment.Session
+    """
+
+    class WaterPortRewardFraction(dj.Part):
+        definition = """
+        -> master
+        -> experiment.WaterPort
+        ---
+        reward_fraction=null: float
+        reward_first_tertile_fraction=null: float
+        reward_second_tertile_fraction=null: float
+        reward_third_tertile_fraction=null: float
+        """
+
+    class WaterPortChoiceFraction(dj.Part):
+        definition = """
+        -> master
+        -> experiment.WaterPort
+        ---
+        choice_fraction=null: float
+        wp_first_tertile_fraction=null: float
+        wp_second_tertile_fraction=null: float
+        wp_third_tertile_fraction=null: float
+        """
+
+
+
+
+
+@schema
+class BlockStats(dj.Computed):
+    definition = """
+    -> experiment.SessionBlock
+    ---
+    block_trial_num : int # number of trials in block
+    block_ignore_num : int # number of ignores
+    block_reward_rate = null: decimal(8,4) # hits / (hits + misses)
+    """
+
+    def make(self, key):
+        q_block_trials = experiment.BehaviorTrial * experiment.SessionBlock.BlockTrial & key
+
+        block_stats = {'block_trial_num': len((experiment.SessionBlock.BlockTrial & key)),
+                       'block_ignore_num': len(q_block_trials & 'outcome = "ignore"')}
+        try:
+            block_stats['block_reward_rate'] = len(q_block_trials & 'outcome = "hit"') / len(q_block_trials & 'outcome in ("hit", "miss")')
+        except:
+            pass
+        self.insert1({**key, **block_stats})
+
+
+@schema
 class BlockRewardFraction(dj.Computed):
     definition = """ # Block reward fraction without bias check
     -> experiment.SessionBlock
@@ -57,8 +242,8 @@ class BlockRewardFraction(dj.Computed):
         # trial-count > minimum_trial_per_block
         ks_tr_count = experiment.SessionBlock.aggr(experiment.SessionBlock.BlockTrial, tr_count='count(*)') & 'tr_count > {}'.format(minimum_trial_per_block)
         # is_real_training only
-        ks_real = ks_tr_count - (experiment.SessionBlock.WaterPortRewardProbability & 'reward_probability >= 1')
-        return ks_real
+        ks_real_training = ks_tr_count - (experiment.SessionBlock.WaterPortRewardProbability & 'reward_probability >= 1')
+        return ks_real_training
 
     def make(self, key):
         # To skip bias check trial 04/02/20 NW
