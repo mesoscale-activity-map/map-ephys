@@ -2,6 +2,7 @@ import datajoint as dj
 import numpy as np
 import pandas as pd
 import math
+import warnings
 
 from pipeline import get_schema_name, experiment
 
@@ -12,6 +13,8 @@ block_reward_ratio_increment_window = 20
 block_reward_ratio_increment_max = 200
 bootstrapnum = 100
 minimum_trial_per_block = 30
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
 @schema
@@ -151,19 +154,19 @@ class SessionMatchBias(dj.Computed):  # bias check removed,
     -> SessionStats
     """
 
-    class WaterPortFraction(dj.Part):
-        definition = """
+    class WaterPortMatchBias(dj.Part):
+        definition = """  # reward and choice fraction of this water-port w.r.t the sum of the other water-ports
         -> master
         -> experiment.WaterPort
         ---
-        reward_fraction=null                : longblob  # lickport reward fraction from all blocks
-        reward_first_tertile_fraction=null  : longblob  # from the first tertile blocks
-        reward_second_tertile_fraction=null : longblob  # from the second tertile blocks
-        reward_third_tertile_fraction=null  : longblob  # from the third tertile blocks
-        choice_fraction=null                : longblob  # lickport choice fraction from all blocks        
-        choice_first_tertile_fraction=null  : longblob  # from the first tertile blocks
-        choice_second_tertile_fraction=null : longblob  # from the second tertile blocks
-        choice_third_tertile_fraction=null  : longblob  # from the third tertile blocks
+        reward_fraction=null                : longblob      # lickport reward fraction from all blocks
+        reward_fraction_first_tertile=null  : longblob      # from the first tertile blocks
+        reward_fraction_second_tertile=null : longblob      # from the second tertile blocks
+        reward_fraction_third_tertile=null  : longblob      # from the third tertile blocks
+        choice_fraction=null                : longblob      # lickport choice fraction from all blocks        
+        choice_fraction_first_tertile=null  : longblob      # from the first tertile blocks
+        choice_fraction_second_tertile=null : longblob      # from the second tertile blocks
+        choice_fraction_third_tertile=null  : longblob      # from the third tertile blocks
         match_idx=null                      : decimal(8,4)  # slope of log ratio from all blocks
         match_idx_first_tertile=null        : decimal(8,4)  # from the first tertile blocks
         match_idx_second_tertile=null       : decimal(8,4)  # from the second tertile blocks
@@ -173,6 +176,67 @@ class SessionMatchBias(dj.Computed):  # bias check removed,
         bias_second_tertile=null            : decimal(8,4)  # from the second tertile blocks
         bias_third_tertile=null             : decimal(8,4)  # from the third tertile blocks
         """
+
+    def make(self, key):
+        q_block_fraction = BlockFraction.WaterPortFraction & key
+
+        fraction_attrs = ['reward_fraction', 'reward_fraction_first_tertile',
+                          'reward_fraction_second_tertile', 'reward_fraction_third_tertile',
+                          'choice_fraction', 'choice_fraction_first_tertile',
+                          'choice_fraction_second_tertile', 'choice_fraction_third_tertile']
+        session_bias = {}
+        for water_port in experiment.WaterPort.fetch('water_port'):
+            # ---- compute the reward and choice fraction, across blocks ----
+            # query for this port
+            this_port = (q_block_fraction & 'water_port = "{}"'.format(water_port))
+            # query for other ports, take the sum of the reward and choice fraction of the other ports
+            other_ports = BlockFraction.aggr(
+                q_block_fraction & 'water_port != "{}"'.format(water_port),
+                rw_sum='sum(block_reward_fraction)',
+                rw1_sum='sum(block_reward_fraction_first_tertile)',
+                rw2_sum='sum(block_reward_fraction_second_tertile)',
+                rw3_sum='sum(block_reward_fraction_third_tertile)',
+                choice_sum='sum(block_choice_fraction)',
+                choice1_sum='sum(block_choice_fraction_first_tertile)',
+                choice2_sum='sum(block_choice_fraction_second_tertile)',
+                choice3_sum='sum(block_choice_fraction_third_tertile)')
+            # merge and compute the fraction of this port over the sum of the other ports
+            wp_block_bias = (this_port * other_ports).proj(
+                reward_fraction='block_reward_fraction / rw_sum',
+                reward_fraction_first_tertile='block_reward_fraction_first_tertile / rw1_sum',
+                reward_fraction_second_tertile='block_reward_fraction_second_tertile / rw2_sum',
+                reward_fraction_third_tertile='block_reward_fraction_third_tertile / rw3_sum',
+                choice_fraction='block_choice_fraction / choice_sum',
+                choice_fraction_first_tertile='block_choice_fraction_first_tertile / choice1_sum',
+                choice_fraction_second_tertile='block_choice_fraction_second_tertile / choice2_sum',
+                choice_fraction_third_tertile='block_choice_fraction_third_tertile / choice3_sum').fetch(
+                *fraction_attrs, order_by='block')
+
+            # taking the log2
+            session_bias[water_port] = {attr: np.log2(attr_value.astype(float))
+                                        for attr, attr_value in zip(fraction_attrs, wp_block_bias)}
+
+            # ---- compute the match index and bias ----
+            for tertile_suffix in ('', '_first_tertile', '_second_tertile', '_third_tertile'):
+                reward_name = 'reward_fraction' + tertile_suffix
+                choice_name = 'choice_fraction' + tertile_suffix
+                # Ignore those with all NaNs or all Infs
+                if (np.isfinite(session_bias[water_port][reward_name]).any()
+                        and np.isfinite(session_bias[water_port][choice_name]).any()):
+                    match_idx, bias = draw_bs_pairs_linreg(
+                        session_bias[water_port][reward_name],
+                        session_bias[water_port][choice_name], size=bootstrapnum)
+                    session_bias[water_port]['match_idx' + tertile_suffix] = np.nanmean(match_idx)
+                    session_bias[water_port]['bias' + tertile_suffix] = np.nanmean(bias)
+                else:
+                    session_bias[water_port].pop(reward_name)
+                    session_bias[water_port].pop(choice_name)
+
+        # ---- Insert ----
+        self.insert1(key)
+        # can't do list comprehension for batch insert because "session_bias" may have different fields
+        for k, v in session_bias.items():
+            self.WaterPortMatchBias.insert1({**key, 'water_port': k, **v})
 
 
 @schema
@@ -214,16 +278,16 @@ class BlockFraction(dj.Computed):
         -> master
         -> experiment.WaterPort
         ---
-        block_reward_fraction=null: float
-        block_reward_fraction_first_tertile=null: float
-        block_reward_fraction_second_tertile=null: float
-        block_reward_fraction_third_tertile=null: float
-        block_reward_fraction_incremental: longblob
-        block_choice_fraction=null: float
-        block_choice_fraction_first_tertile=null: float
-        block_choice_fraction_second_tertile=null: float
-        block_choice_fraction_third_tertile=null: float
-        block_choice_fraction_incremental: longblob        
+        block_reward_fraction=null                  : float     # lickport reward fraction from all trials
+        block_reward_fraction_first_tertile=null    : float     # from the first tertile trials
+        block_reward_fraction_second_tertile=null   : float     # from the second tertile blocks
+        block_reward_fraction_third_tertile=null    : float     # from the third tertile blocks
+        block_reward_fraction_incremental           : longblob  # from incremental trials
+        block_choice_fraction=null                  : float
+        block_choice_fraction_first_tertile=null    : float
+        block_choice_fraction_second_tertile=null   : float
+        block_choice_fraction_third_tertile=null    : float
+        block_choice_fraction_incremental           : longblob        
         """
 
     _window_starts = (np.arange(block_reward_ratio_increment_window / 2,
@@ -401,3 +465,30 @@ class BlockEfficiency(dj.Computed):  # bias check excluded
                     regret_ideal_phat_greedy=p_star_greedy - block_reward_fraction['block_fraction'])
 
         self.insert1({**key, **block_efficiency_data})
+
+
+# ====================== HELPER FUNCTIONS ==========================
+
+def draw_bs_pairs_linreg(x, y, size=1):
+    """Perform pairs bootstrap for linear regression."""  # from serhan aya
+    # Set up array of indices to sample from: inds
+    inds = np.arange(len(x))
+
+    # Initialize replicates: bs_slope_reps, bs_intercept_reps
+    bs_slope_reps = []
+    bs_intercept_reps = []
+
+    # Generate replicates
+    for _ in range(size):
+        bs_inds = np.random.choice(inds, size=len(inds))  # sampling the indices (1d array requirement)
+        bs_x, bs_y = x[bs_inds], y[bs_inds]
+        finite_idx = np.isfinite(bs_x) & np.isfinite(bs_y)  # consider only "finite" points: remove NaN and Inf points
+
+        try:
+            bs_slope, bs_intercept = np.polyfit(bs_x[finite_idx], bs_y[finite_idx], 1)
+            bs_slope_reps.append(bs_slope)
+            bs_intercept_reps.append(bs_intercept)
+        except:
+            pass
+
+    return bs_slope_reps, bs_intercept_reps

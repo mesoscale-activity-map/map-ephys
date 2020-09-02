@@ -80,11 +80,11 @@ def extract_trials(plottype='2lickport',
 
     subject_id = (lab.WaterRestriction & 'water_restriction_number = "{}"'.format(wr_name)).fetch1('subject_id')
 
-    trial_attrs = ['session', 'trial', 'early_lick', 'trial_start_time', 'reaction_time',
+    trial_attrs = ['session', 'trial', 'early_lick', 'start_time', 'reaction_time',
                    'trial_event_time', 'trial_choice', 'outcome']
 
     behaviortrial = (experiment.BehaviorTrial * experiment.SessionTrial
-                     * experiment.TrialEvent * experiment.SessionBlock * foraging_analysis.TrialReactionTime
+                     * experiment.TrialEvent * experiment.SessionBlock.BlockTrial * foraging_analysis.TrialReactionTime
                      & 'subject_id = {}'.format(subject_id) & 'session >= {}'.format(sessions[0])
                      & 'session <= {}'.format(sessions[1]) & 'trial_event_type = "go"').fetch(*trial_attrs)
 
