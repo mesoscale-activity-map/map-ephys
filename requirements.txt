@@ -10,4 +10,4 @@ pillow
 tqdm
 xlrd
 numpy
-pybpod
+pybpodgui_api
