@@ -557,7 +557,7 @@ def plot_efficiency_matching_bias(ax3,
     ax3.set_xlim([np.min(session_switch_trial_nums) - 10, np.max(session_switch_trial_nums) + 10])
 
     match_idx_r, bias_r, sessions = np.asarray(
-        (behavior_foraging.SessionMatchBias() * foraging_analysis.SessionStats() &
+        (foraging_analysis.SessionMatchBias() * foraging_analysis.SessionStats() &
          'subject_id = {}'.format(subject_id) &
          'session >= {}'.format(sessions[0]) &
          'session <= {}'.format(sessions[1])).fetch('match_idx_r', 'bias_r', 'session'))

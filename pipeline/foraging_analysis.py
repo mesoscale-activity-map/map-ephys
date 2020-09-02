@@ -146,35 +146,33 @@ class SessionStats(dj.Computed):
 
 
 @schema
-class SessionMatchBias(dj.Computed): # bias check removed,
+class SessionMatchBias(dj.Computed):  # bias check removed,
     definition = """
-    -> experiment.Session
+    -> SessionStats
     """
 
-    class WaterPortRewardFraction(dj.Part):
+    class WaterPortFraction(dj.Part):
         definition = """
         -> master
         -> experiment.WaterPort
         ---
-        reward_fraction=null: float
-        reward_first_tertile_fraction=null: float
-        reward_second_tertile_fraction=null: float
-        reward_third_tertile_fraction=null: float
+        reward_fraction=null                : longblob  # lickport reward fraction from all blocks
+        reward_first_tertile_fraction=null  : longblob  # from the first tertile blocks
+        reward_second_tertile_fraction=null : longblob  # from the second tertile blocks
+        reward_third_tertile_fraction=null  : longblob  # from the third tertile blocks
+        choice_fraction=null                : longblob  # lickport choice fraction from all blocks        
+        choice_first_tertile_fraction=null  : longblob  # from the first tertile blocks
+        choice_second_tertile_fraction=null : longblob  # from the second tertile blocks
+        choice_third_tertile_fraction=null  : longblob  # from the third tertile blocks
+        match_idx=null                      : decimal(8,4)  # slope of log ratio from all blocks
+        match_idx_first_tertile=null        : decimal(8,4)  # from the first tertile blocks
+        match_idx_second_tertile=null       : decimal(8,4)  # from the second tertile blocks
+        match_idx_third_tertile=null        : decimal(8,4)  # from the third tertile blocks
+        bias=null                           : decimal(8,4)  # intercept of log ratio from all blocks
+        bias_first_tertile=null             : decimal(8,4)  # from the first tertile blocks
+        bias_second_tertile=null            : decimal(8,4)  # from the second tertile blocks
+        bias_third_tertile=null             : decimal(8,4)  # from the third tertile blocks
         """
-
-    class WaterPortChoiceFraction(dj.Part):
-        definition = """
-        -> master
-        -> experiment.WaterPort
-        ---
-        choice_fraction=null: float
-        wp_first_tertile_fraction=null: float
-        wp_second_tertile_fraction=null: float
-        wp_third_tertile_fraction=null: float
-        """
-
-
-
 
 
 @schema
@@ -200,8 +198,8 @@ class BlockStats(dj.Computed):
 
 
 @schema
-class BlockRewardFraction(dj.Computed):
-    definition = """ # Block reward fraction without bias check
+class BlockFraction(dj.Computed):
+    definition = """ # Block reward and choice fraction without bias check
     -> experiment.SessionBlock
     ---
     block_length: smallint #
@@ -216,11 +214,16 @@ class BlockRewardFraction(dj.Computed):
         -> master
         -> experiment.WaterPort
         ---
-        wp_block_fraction=null: float
-        wp_first_tertile_fraction=null: float
-        wp_second_tertile_fraction=null: float
-        wp_third_tertile_fraction=null: float
-        wp_incremental_fraction: longblob
+        block_reward_fraction=null: float
+        block_reward_fraction_first_tertile=null: float
+        block_reward_fraction_second_tertile=null: float
+        block_reward_fraction_third_tertile=null: float
+        block_reward_fraction_incremental: longblob
+        block_choice_fraction=null: float
+        block_choice_fraction_first_tertile=null: float
+        block_choice_fraction_second_tertile=null: float
+        block_choice_fraction_third_tertile=null: float
+        block_choice_fraction_incremental: longblob        
         """
 
     _window_starts = (np.arange(block_reward_ratio_increment_window / 2,
@@ -251,6 +254,8 @@ class BlockRewardFraction(dj.Computed):
         q_block_trial = experiment.BehaviorTrial * experiment.SessionBlock.BlockTrial & key
 
         block_rw = q_block_trial.proj(reward='outcome = "hit"').fetch('reward', order_by='trial')
+        block_choice = (experiment.WaterPortChoice * q_block_trial).proj(
+            non_null_wp='water_port IS NOT NULL').fetch('non_null_wp', order_by='trial')
 
         trialnum = len(block_rw)
         tertilelength = int(np.floor(trialnum / 3))
@@ -266,32 +271,51 @@ class BlockRewardFraction(dj.Computed):
         self.insert1({**key, **block_reward_fraction})
 
         # ---- water-port fraction ----
-        wp_r_frac = {}
+        wp_frac = {}
         for water_port in experiment.WaterPort.fetch('water_port'):
+            # --- reward fraction ---
             rw = (experiment.WaterPortChoice * q_block_trial).proj(
-                reward='water_port = "{}" AND outcome = "hit"'.format(water_port)).fetch('reward', order_by='trial')
-            wp_r_frac[water_port] = {
-                'wp_block_fraction': rw.sum() / block_rw.sum() if block_rw.sum() else np.nan,
-                'wp_first_tertile_fraction': (rw[:tertilelength].sum() / block_rw[:tertilelength].sum()
-                                              if block_rw[:tertilelength].sum() else np.nan),
-                'wp_second_tertile_fraction': (rw[tertilelength:2 * tertilelength].sum() / block_rw[tertilelength:2 * tertilelength].sum()
-                                               if block_rw[tertilelength:2 * tertilelength].sum() else np.nan),
-                'wp_third_tertile_fraction': (rw[-tertilelength:].sum() / block_rw[-tertilelength:].sum()
-                                              if block_rw[-tertilelength:].sum() else np.nan)}
+                reward='water_port = "{}" AND outcome = "hit"'.format(water_port)).fetch('reward', order_by='trial').astype(float)
+            wp_frac[water_port] = {
+                'block_reward_fraction': rw.sum() / block_rw.sum() if block_rw.sum() else np.nan,
+                'block_reward_fraction_first_tertile': (rw[:tertilelength].sum() / block_rw[:tertilelength].sum()
+                                                        if block_rw[:tertilelength].sum() else np.nan),
+                'block_reward_fraction_second_tertile': (rw[tertilelength:2 * tertilelength].sum() / block_rw[tertilelength:2 * tertilelength].sum()
+                                                         if block_rw[tertilelength:2 * tertilelength].sum() else np.nan),
+                'block_reward_fraction_third_tertile': (rw[-tertilelength:].sum() / block_rw[-tertilelength:].sum()
+                                                        if block_rw[-tertilelength:].sum() else np.nan)}
 
-            wp_r_frac[water_port]['wp_incremental_fraction'] = np.full(len(self._window_ends), np.nan)
+            wp_frac[water_port]['block_reward_fraction_incremental'] = np.full(len(self._window_ends), np.nan)
             for i, (t_start, t_end) in enumerate(zip(self._window_starts, self._window_ends)):
                 if trialnum >= t_end and block_rw[t_start:t_end].sum() > 0:
-                    wp_r_frac[water_port]['wp_incremental_fraction'][i] = (rw[t_start:t_end].sum()
-                                                                           / block_rw[t_start:t_end].sum())
+                    wp_frac[water_port]['block_reward_fraction_incremental'][i] = (rw[t_start:t_end].sum()
+                                                                                   / block_rw[t_start:t_end].sum())
+            # --- choice fraction ---
+            choice = (experiment.WaterPortChoice * q_block_trial).proj(
+                choice='water_port = "{}"'.format(water_port)).fetch('choice', order_by='trial').astype(float)
 
-        self.WaterPortFraction.insert([{**key, 'water_port': wp, **wp_data} for wp, wp_data in wp_r_frac.items()])
+            wp_frac[water_port].update(**{
+                'block_choice_fraction': choice.sum() / block_choice.sum() if block_choice.sum() else np.nan,
+                'block_choice_fraction_first_tertile': (choice[:tertilelength].sum() / block_choice[:tertilelength].sum()
+                                                        if block_choice[:tertilelength].sum() else np.nan),
+                'block_choice_fraction_second_tertile': (choice[tertilelength:2 * tertilelength].sum() / block_choice[tertilelength:2 * tertilelength].sum()
+                                                         if block_choice[tertilelength:2 * tertilelength].sum() else np.nan),
+                'block_choice_fraction_third_tertile': (choice[-tertilelength:].sum() / block_choice[-tertilelength:].sum()
+                                                        if block_choice[-tertilelength:].sum() else np.nan)})
+
+            wp_frac[water_port]['block_choice_fraction_incremental'] = np.full(len(self._window_ends), np.nan)
+            for i, (t_start, t_end) in enumerate(zip(self._window_starts, self._window_ends)):
+                if trialnum >= t_end and block_choice[t_start:t_end].sum() > 0:
+                    wp_frac[water_port]['block_choice_fraction_incremental'][i] = (choice[t_start:t_end].sum()
+                                                                                   / block_choice[t_start:t_end].sum())
+
+        self.WaterPortFraction.insert([{**key, 'water_port': wp, **wp_data} for wp, wp_data in wp_frac.items()])
 
 
 @schema
 class BlockEfficiency(dj.Computed):  # bias check excluded
     definition = """
-    -> BlockRewardFraction
+    -> BlockFraction
     ---
     block_effi_one_p_reward: float                       # denominator = max of the reward assigned probability (no baiting)
     block_effi_one_p_reward_first_tertile: float         # first tertile
@@ -336,7 +360,7 @@ class BlockEfficiency(dj.Computed):  # bias check excluded
         sum_reward_available_second = sum_reward_available[tertilelength:2 * tertilelength]
         sum_reward_available_third = sum_reward_available[-tertilelength:]
 
-        block_reward_fraction = (BlockRewardFraction & key).fetch1()
+        block_reward_fraction = (BlockFraction & key).fetch1()
 
         block_efficiency_data = dict(
             block_effi_one_p_reward=block_reward_fraction['block_fraction'] / max_prob_reward,
