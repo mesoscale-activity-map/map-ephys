@@ -195,9 +195,17 @@ class BehaviorIngest(dj.Imported):
         return recs
 
     def populate(self, *args, **kwargs):
+        # 'populate' which won't require upstream tables
+        # 'reserve_jobs' not parallel, overloaded to mean "don't exit on error"
         for k in self.key_source:
-            with dj.conn().transaction:
-                self.make(k)
+            try:
+                with dj.conn().transaction:
+                    self.make(k)
+            except Exception as e:
+                log.warning('session key {} error: {}'.format(
+                    key, repr(e))
+                if not kwargs.get('reserve_jobs', False):
+                    raise
 
     def make(self, key):
         log.info('BehaviorIngest.make(): key: {key}'.format(key=key))
@@ -704,11 +712,13 @@ class BehaviorBpodIngest(dj.Imported):
                 continue
 
             for r_idx, df_wr_row in df_wr.iterrows():
-                # we use it when both start and end times are filled in, restriction and handling is skipped
+                # we use it when both start and end times are filled in and Water during training > 0; restriction, freewater and handling is skipped
                 if (df_wr_row['Time'] and isinstance(df_wr_row['Time'], str)
                         and df_wr_row['Time-end'] and isinstance(df_wr_row['Time-end'], str)
                         and df_wr_row['Training type'] != 'restriction'
-                        and df_wr_row['Training type'] != 'handling'):
+                        and df_wr_row['Training type'] != 'handling'
+                        and df_wr_row['Training type'] != 'freewater'
+                        and df_wr_row['Water during training'] > 0):
 
                     try:
                         date_now = datetime.strptime(df_wr_row.Date, '%Y-%m-%d').date()
@@ -730,12 +740,23 @@ class BehaviorBpodIngest(dj.Imported):
         return key_source
 
     def populate(self, *args, **kwargs):
+        # Load project info (just once)
+        self.projects = self.get_bpod_projects()
+
+        # 'populate' which won't require upstream tables
+        # 'reserve_jobs' not parallel, overloaded to mean "don't exit on error"                          
         for k in self.key_source:
-            with dj.conn().transaction:
-                self.make(k)
+            try:
+                with dj.conn().transaction:
+                    self.make(k)
+            except Exception as e:
+                log.warning('session key {} error: {}'.format(
+                    key, repr(e))
+                if not kwargs.get('reserve_jobs', False):
+                    raise
 
     def make(self, key):
-        log.info('BehaviorBpodIngest.make(): key: {key}'.format(key=key))
+        log.info('----------------------\nBehaviorBpodIngest.make(): key: {key}'.format(key=key))
 
         subject_id_now = key['subject_id']
         subject_now = (lab.WaterRestriction() & {'subject_id': subject_id_now}).fetch1('water_restriction_number')
@@ -743,9 +764,8 @@ class BehaviorBpodIngest(dj.Imported):
         log.info('h2o: {h2o}, date: {d}'.format(h2o=subject_now, d=date_now_str))
 
         # ---- Ingest information for BPod projects ----
-        projects = self.get_bpod_projects()
         sessions_now, session_start_times_now, experimentnames_now = [], [], []
-        for proj in projects:  #
+        for proj in self.projects:  #
             exps = proj.experiments
             for exp in exps:
                 stps = exp.setups
@@ -757,6 +777,11 @@ class BehaviorBpodIngest(dj.Imported):
                             session_start_times_now.append(session.started)
                             experimentnames_now.append(exp.name)
         bpodsess_order = np.argsort(session_start_times_now)
+        
+        # --- Handle missing BPod session ---
+        if len(bpodsess_order) == 0:
+            log.error('BPod session not found!')
+            return
 
         # ---- Concatenate bpod sessions (and corresponding trials) into one datajoint session ----
         tbls_2_insert = ('sess_trial', 'behavior_trial', 'trial_note',
@@ -779,33 +804,19 @@ class BehaviorBpodIngest(dj.Imported):
             log.info('Load session file(s) ({}/{}): {}'.format(s_idx + 1, len(bpodsess_order), csvfilename))
             df_behavior_session = util.load_and_parse_a_csv_file(csvfilename)
             
+            # ---- Integrity check of the current bpodsess file ---
+            # It must have at least one 'trial start' and 'trial end'
             trial_start_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'TRIAL') & (df_behavior_session['MSG'] == 'New trial')].index
             if not len(trial_start_idxs):
                 log.info('No "trial start" for {}. Skipping...'.format(csvfilename))
-                return
-
-            # ---- New session - construct a session key ----
-            if sess_key is None:
-                session_time = df_behavior_session['PC-TIME'][trial_start_idxs[0]]
-                if session.setup_name.lower() in ['day1', 'tower-2', 'day2-7', 'day_1', 'real foraging']:
-                    setupname = 'Training-Tower-2'
-                elif session.setup_name.lower() in ['tower-3', 'tower-3beh', ' tower-3', '+', 'tower 3']:
-                    setupname = 'Training-Tower-3'
-                elif session.setup_name.lower() in ['tower-1']:
-                    setupname = 'Training-Tower-1'
-                else:
-                    log.info('ERROR: unhandled setup name {} (from {}). Skipping...'.format(session.setup_name, session.path))
-                    return
-
-                log.debug('synthesizing session ID')
-                key['session'] = (dj.U().aggr(experiment.Session()
-                                              & {'subject_id': subject_id_now},
-                                              n='max(session)').fetch1('n') or 0) + 1
-                sess_key = {**key,
-                            'session_time': session_time.time(),
-                            'username': df_behavior_session['experimenter'][0],
-                            'rig': setupname}
-
+                continue   # Make sure 'start' exists, otherwise move on to try the next bpodsess file if exists     
+                   
+            trial_end_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'TRANSITION') & (df_behavior_session['MSG'] == 'End')].index
+            if not len(trial_end_idxs):
+                log.info('No "trial end" for {}. Skipping...'.format(csvfilename))
+                continue   # Make sure 'end' exists, otherwise move on to try the next bpodsess file if exists     
+            
+            # It must be a foraging session
             # extracting task protocol - hard-code implementation
             if 'foraging' in experiment_name.lower() or ('bari' in experiment_name.lower() and 'cohen' in experiment_name.lower()):
                 if 'var:lickport_number' in df_behavior_session and df_behavior_session['var:lickport_number'][0] == 3:
@@ -818,7 +829,29 @@ class BehaviorBpodIngest(dj.Imported):
                     lick_ports = ['left', 'right']
             else:
                 log.info('ERROR: unhandled task name {}. Skipping...'.format(experiment_name))
-                return
+                continue   # Make sure this is a foraging bpodsess, otherwise move on to try the next bpodsess file if exists 
+                
+            # ---- New session - construct a session key (from the first bpodsess that passes the integrity check) ----
+            if sess_key is None:
+                session_time = df_behavior_session['PC-TIME'][trial_start_idxs[0]]
+                if session.setup_name.lower() in ['day1', 'tower-2', 'day2-7', 'day_1', 'real foraging']:
+                    setupname = 'Training-Tower-2'
+                elif session.setup_name.lower() in ['tower-3', 'tower-3beh', ' tower-3', '+', 'tower 3']:
+                    setupname = 'Training-Tower-3'
+                elif session.setup_name.lower() in ['tower-1']:
+                    setupname = 'Training-Tower-1'
+                else:
+                    log.info('ERROR: unhandled setup name {} (from {}). Skipping...'.format(session.setup_name, session.path))
+                    continue   # Another integrity check here
+
+                log.debug('synthesizing session ID')
+                key['session'] = (dj.U().aggr(experiment.Session()
+                                              & {'subject_id': subject_id_now},
+                                              n='max(session)').fetch1('n') or 0) + 1
+                sess_key = {**key,
+                            'session_time': session_time.time(),
+                            'username': df_behavior_session['experimenter'][0],
+                            'rig': setupname}
 
             # ---- channel for water ports ----
             water_port_channels = {}
@@ -850,7 +883,7 @@ class BehaviorBpodIngest(dj.Imported):
                 if not len(df_behavior_trial['PC-TIME'][(df_behavior_trial['MSG'] == 'GoCue') & (
                         df_behavior_trial['TYPE'] == 'TRANSITION')]):
                     continue
-
+                
                 # ---- session trial ----
                 trial_num += 1  # increment trial number
                 trial_uid = len(experiment.SessionTrial & {'subject_id': subject_id_now}) + 1
@@ -1000,6 +1033,9 @@ class BehaviorBpodIngest(dj.Imported):
 
                 # -- add Go Cue
                 GoCueTimes = (time_GoCue - time_TrialStart) / np.timedelta64(1, 's')
+                GoCueTimes[GoCueTimes > 9999] = 9999  # Wordaround for bug #9: BPod protocol was paused and then 
+                                                      # resumed after an impossible long period of time (> decimal(8, 4)).
+                
                 rows['trial_event'].extend([{**sess_trial_key, 'trial_event_id': idx, 'trial_event_type': 'go',
                                              'trial_event_time': t, 'duration': 0} for idx, t in enumerate(GoCueTimes)])
 
