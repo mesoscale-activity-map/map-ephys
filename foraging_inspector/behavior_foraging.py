@@ -37,7 +37,7 @@ class TrialReactionTime(dj.Computed):
             
 @schema # TODO remove bias check?
 class BlockStats(dj.Computed):
-    definition = """
+    definition = """ # All blocks including bias check
     -> experiment.SessionBlock
     ---
     block_trial_num : int # number of trials in block
@@ -112,97 +112,77 @@ class SessionTaskProtocol(dj.Computed):
                       'session_task_protocol': np.median(task_protocols),
                       'session_real_foraging': is_real_foraging})
 
-@schema
-class BlockRewardFractionNoBiasCheck(dj.Computed): # without bias check 
-    definition = """
-    -> experiment.SessionBlock
-    ---
-    block_reward_per_trial = null: decimal(8,4) # miss = 0, hit = 1
-    block_reward_fraction_left= 0: decimal(8,4) # other = 0, left = 1
-    block_reward_fraction_right = 0: decimal(8,4) # other = 0, right = 1
-    block_reward_fraction_middle = 0: decimal(8,4) # other = 0, middle = 1
-    """    
-    def make(self, key):
-        #%%
-        #key = {'subject_id': 452272, 'session': 21, 'block': 10}
-        # To skip bias check trial 04/02/20 NW
-
-        #print(bias_check_block)
-        print(key)        
-        df_behaviortrial = pd.DataFrame((experiment.BehaviorTrial() & key))
-        df_behaviortrial['reward']=0
-        df_behaviortrial.loc[df_behaviortrial['outcome'] == 'hit' , 'reward'] = 1
-        df_behaviortrial.loc[df_behaviortrial['outcome'] == 'miss' , 'reward'] = 0     
-        df_behaviortrial['reward_R']=0
-        df_behaviortrial.loc[(df_behaviortrial['trial_choice'] == 'left') & (df_behaviortrial['outcome'] == 'hit') ,'reward_L']=1
-        df_behaviortrial.loc[(df_behaviortrial['trial_choice'] == 'right') & (df_behaviortrial['outcome'] == 'hit') ,'reward_R']=1
-        df_behaviortrial.loc[(df_behaviortrial['trial_choice'] == 'middle') & (df_behaviortrial['outcome'] == 'hit') ,'reward_M']=1
-        df_choices = pd.DataFrame((experiment.BehaviorTrial()*experiment.SessionBlock()) & key)
-        realtraining = (df_choices['p_reward_left']<1) & (df_choices['p_reward_right']<1) & ((df_choices['p_reward_middle']<1) | df_choices['p_reward_middle'].isnull())
-        
-        block_reward_per_trial = np.nan
-        block_reward_fraction_left = 0
-        block_reward_fraction_right = 0
-        block_reward_fraction_middle = 0
-        
-        if len(df_behaviortrial) > minimum_trial_per_block:
-            if realtraining[0] == True:                                                    
-                block_reward_per_trial = df_behaviortrial.reward.mean()
-                
-                if df_behaviortrial.reward.sum():# np.isnan(block_reward_fraction_differential):                    
-                    block_reward_fraction_left = df_behaviortrial.reward_L.sum() / df_behaviortrial.reward.sum()
-                    block_reward_fraction_right = df_behaviortrial.reward_R.sum() / df_behaviortrial.reward.sum()
-                    block_reward_fraction_middle = df_behaviortrial.reward_M.sum() / df_behaviortrial.reward.sum()
-                    
-            print(block_reward_per_trial)        
-            key['block_reward_per_trial'] = block_reward_per_trial
-            key['block_reward_fraction_left'] = block_reward_fraction_left
-            key['block_reward_fraction_right'] = block_reward_fraction_right
-            key['block_reward_fraction_middle'] = block_reward_fraction_middle
-            
-        self.insert1(key,skip_duplicates=True)
         
 @schema
-class BlockChoiceFractionNoBiasCheck(dj.Computed): # without bias check
-    definition = """ # value between 0 and 1 for left and 1 right choices, averaged over the whole block or a fraction of the block
+class BlockFraction(dj.Computed):
+    definition = """ # Block reward and choice fraction without bias check
     -> experiment.SessionBlock
     ---
-    block_choice_fraction_right = 0 : decimal(8,4) # 0 = rest, 1 = right
-    block_choice_fraction_left = 0: decimal(8,4) # 0 = rest, 1 = left
-    block_choice_fraction_middle = 0: decimal(8,4) # 0 = rest, 1 = middle
-    """    
+    block_length: smallint #
+    block_reward_per_trial: float   # This is actually "block reward rate", same as BlockStats.block_reward_rate, except only for real_training and > min_trial_length
+    """
+
+    class WaterPortFraction(dj.Part):
+        definition = """
+        -> master
+        -> experiment.WaterPort
+        ---
+        block_reward_fraction=null                  : float     # lickport reward fraction from all trials
+        block_choice_fraction=null                  : float
+        """
+
+    @property
+    def key_source(self):
+        """
+        Only process the blocks with:
+         1. trial-count > minimum_trial_per_block
+         2. is_real_training only
+        """
+        # trial-count > minimum_trial_per_block
+        ks_tr_count = experiment.SessionBlock.aggr(experiment.SessionBlock.BlockTrial, tr_count='count(*)') & 'tr_count > {}'.format(minimum_trial_per_block)
+        # is_real_training only
+        ks_real_training = ks_tr_count - (experiment.SessionBlock.WaterPortRewardProbability & 'reward_probability >= 1')
+        return ks_real_training
+
     def make(self, key):
-        #%%
-       # warnings.filterwarnings("error")
-       # key = {'subject_id': 452275, 'session': 10, 'block': 30}
-
-        df_behaviortrial = pd.DataFrame((experiment.BehaviorTrial() & key))
-        df_choices = pd.DataFrame((experiment.BehaviorTrial()*experiment.SessionBlock()) & key)
-        realtraining = (df_choices['p_reward_left']<1) & (df_choices['p_reward_right']<1) & ((df_choices['p_reward_middle']<1) | df_choices['p_reward_middle'].isnull())
-        
         # To skip bias check trial 04/02/20 NW
-        #print(key)
-        #print(bias_check_block[0])
-        if len(df_behaviortrial) > minimum_trial_per_block:
-            if realtraining[0] == True:                     
-                df_behaviortrial['choice_L']=0
-                df_behaviortrial['choice_R']=0
-                df_behaviortrial['choice_M']=0
-                df_behaviortrial.loc[(df_behaviortrial['trial_choice'] == 'left'),'choice_L']=1
-                df_behaviortrial.loc[(df_behaviortrial['trial_choice'] == 'right'),'choice_R']=1
-                df_behaviortrial.loc[(df_behaviortrial['trial_choice'] == 'middle'),'choice_M']=1
-    #%%
-                all_choice = df_behaviortrial.choice_L.sum()+df_behaviortrial.choice_R.sum()+df_behaviortrial.choice_M.sum()
-                if all_choice:
-                    key['block_choice_fraction_right'] = df_behaviortrial.choice_R.sum()/all_choice
-                    key['block_choice_fraction_left'] = df_behaviortrial.choice_L.sum()/all_choice
-                    key['block_choice_fraction_middle'] = df_behaviortrial.choice_M.sum()/all_choice
+        q_block_trial = experiment.BehaviorTrial * experiment.SessionBlock.BlockTrial & key
 
-        try:
-            self.insert1(key,skip_duplicates=True)
-        except:
-            print('error with blockchoice ratio: '+str(key['subject_id']))
-            #print(key)     
+        block_rw = q_block_trial.proj(reward='outcome = "hit"').fetch('reward', order_by='trial')
+        block_choice = (experiment.WaterPortChoice * q_block_trial).proj(
+            non_null_wp='water_port IS NOT NULL').fetch('non_null_wp', order_by='trial')
+
+        trialnum = len(block_rw)
+
+        # ---- whole-block fraction ----
+        block_reward_fraction = dict(
+            block_length=trialnum,
+            # block_reward_per_trial=block_rw.mean(),
+            block_reward_per_trial=block_rw.sum()/block_choice.sum(),   # Exclude ignore trials
+            )
+
+        self.insert1({**key, **block_reward_fraction})
+
+        # ---- water-port fraction ----
+        wp_frac = {}
+        for water_port in experiment.WaterPort.fetch('water_port'):
+            # --- reward fraction ---
+            rw = (experiment.WaterPortChoice * q_block_trial).proj(
+                reward='water_port = "{}" AND outcome = "hit"'.format(water_port)).fetch('reward', order_by='trial').astype(float)
+            wp_frac[water_port] = {
+                'block_reward_fraction': rw.sum() / block_rw.sum() if block_rw.sum() else np.nan,
+              }
+
+            # --- choice fraction ---
+            choice = (experiment.WaterPortChoice * q_block_trial).proj(
+                choice='water_port = "{}"'.format(water_port)).fetch('choice', order_by='trial').astype(float)
+
+            wp_frac[water_port].update(**{
+                'block_choice_fraction': np.nansum(choice) / block_choice.sum() if block_choice.sum() else np.nan,
+               })
+
+        self.WaterPortFraction.insert([{**key, 'water_port': wp, **wp_data} for wp, wp_data in wp_frac.items()])
+        
 
 @schema
 class SessionMatchBias(dj.Computed): # bias check removed, 
