@@ -60,10 +60,11 @@ class BlockStats(dj.Computed):
     """
     def make(self, key):
         keytoinsert = key
-        keytoinsert['block_trial_num'] = len((experiment.BehaviorTrial() & key))
-        keytoinsert['block_ignore_num'] = len((experiment.BehaviorTrial() & key & 'outcome = "ignore"'))
+        session_block_trial = experiment.BehaviorTrial() * experiment.SessionBlock.BlockTrial() 
+        keytoinsert['block_trial_num'] = len((session_block_trial & key))
+        keytoinsert['block_ignore_num'] = len((session_block_trial & key & 'outcome = "ignore"'))
         try:
-            keytoinsert['block_reward_rate'] = len((experiment.BehaviorTrial() & key & 'outcome = "hit"')) / (len((experiment.BehaviorTrial() & key & 'outcome = "miss"')) + len((experiment.BehaviorTrial() & key & 'outcome = "hit"')))
+            keytoinsert['block_reward_rate'] = len((session_block_trial & key & 'outcome = "hit"')) / (len((session_block_trial & key & 'outcome = "miss"')) + len((session_block_trial & key & 'outcome = "hit"')))
         except:
             pass
         self.insert1(keytoinsert,skip_duplicates=True)
