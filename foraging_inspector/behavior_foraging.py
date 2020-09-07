@@ -95,7 +95,7 @@ class SessionStats(dj.Computed):
         keytoadd['session_ignore_num'] = len(experiment.BehaviorTrial()&key&'outcome = "ignore"')
         keytoadd['session_autowater_num'] = len(experiment.TrialNote & key &'trial_note_type = "autowater"')
         if keytoadd['session_total_trial_num'] > 0:
-            keytoadd['session_length'] = float(((experiment.SessionTrial() & key).fetch('trial_stop_time')).max())
+            keytoadd['session_length'] = float(((experiment.SessionTrial() & key).fetch('stop_time')).max())
         else:
             keytoadd['session_length'] = 0
 
