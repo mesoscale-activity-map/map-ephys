@@ -12,25 +12,6 @@ dj.config["enable_python_native_blobs"] = True
 bootstrapnum = 100
 minimum_trial_per_block = 30
 
-def draw_bs_pairs_linreg(x, y, size=1): 
-    """Perform pairs bootstrap for linear regression."""#from serhan aya
-    try:
-        # Set up array of indices to sample from: inds
-        inds = np.arange(len(x))
-    
-        # Initialize replicates: bs_slope_reps, bs_intercept_reps
-        bs_slope_reps = np.empty(size)
-        bs_intercept_reps = np.empty(shape=size)
-    
-        # Generate replicates
-        for i in range(size):
-            bs_inds = np.random.choice(inds, size=len(inds)) # sampling the indices (1d array requirement)
-            bs_x, bs_y = x[bs_inds], y[bs_inds]
-            bs_slope_reps[i], bs_intercept_reps[i] = np.polyfit(bs_x, bs_y, 1)
-    
-        return bs_slope_reps, bs_intercept_reps
-    except:
-        return np.nan, np.nan
 
 #%%
 @schema
@@ -40,15 +21,20 @@ class TrialReactionTime(dj.Computed):
     ---
     reaction_time = null : decimal(8,4) # reaction time in seconds (first lick relative to go cue) [-1 in case of ignore trials]
     """
-    def make(self, key):
-        df_licks=pd.DataFrame((experiment.ActionEvent & key).fetch())
-        df_gocue = pd.DataFrame((experiment.TrialEvent() & key).fetch())
-        gocue_time = df_gocue['trial_event_time'][df_gocue['trial_event_type'] == 'go']
-        lick_times = (df_licks['action_event_time'][df_licks['action_event_time'].values>gocue_time.values] - gocue_time.values).values
-        if len(lick_times) > 0:
-            key['reaction_time'] = float(min(lick_times))
-        self.insert1(key,skip_duplicates=True)
+    # Foraging sessions only
+    key_source = experiment.BehaviorTrial & 'task LIKE "foraging%"'
 
+    def make(self, key):
+        gocue_time = (experiment.TrialEvent & key & 'trial_event_type = "go"').fetch1('trial_event_time')
+        q_reaction_time = experiment.BehaviorTrial.aggr(experiment.ActionEvent & key
+                                                        & 'action_event_type LIKE "%lick"'
+                                                        & 'action_event_time > {}'.format(gocue_time),
+                                                        reaction_time='min(action_event_time)')
+        if q_reaction_time:
+            key['reaction_time'] = q_reaction_time.fetch1('reaction_time') - gocue_time
+
+        self.insert1(key)
+            
 @schema # TODO remove bias check?
 class BlockStats(dj.Computed):
     definition = """
@@ -58,16 +44,18 @@ class BlockStats(dj.Computed):
     block_ignore_num : int # number of ignores
     block_reward_rate = null: decimal(8,4) # hits / (hits + misses)
     """
+
     def make(self, key):
-        keytoinsert = key
-        session_block_trial = experiment.BehaviorTrial() * experiment.SessionBlock.BlockTrial() 
-        keytoinsert['block_trial_num'] = len((session_block_trial & key))
-        keytoinsert['block_ignore_num'] = len((session_block_trial & key & 'outcome = "ignore"'))
+        
+        q_block_trials = experiment.BehaviorTrial * experiment.SessionBlock.BlockTrial & key
+
+        block_stats = {'block_trial_num': len((experiment.SessionBlock.BlockTrial & key)),
+                       'block_ignore_num': len(q_block_trials & 'outcome = "ignore"')}
         try:
-            keytoinsert['block_reward_rate'] = len((session_block_trial & key & 'outcome = "hit"')) / (len((session_block_trial & key & 'outcome = "miss"')) + len((session_block_trial & key & 'outcome = "hit"')))
+            block_stats['block_reward_rate'] = len(q_block_trials & 'outcome = "hit"') / len(q_block_trials & 'outcome in ("hit", "miss")')
         except:
             pass
-        self.insert1(keytoinsert,skip_duplicates=True)
+        self.insert1({**key, **block_stats})
  
     
 @schema #remove bias check trials from statistics # 03/25/20 NW added nobiascheck terms for hit, miss and ignore trial num
@@ -83,23 +71,24 @@ class SessionStats(dj.Computed):
     session_autowater_num = null : int #number of trials with autowaters
     session_length = null : decimal(10, 4) #length of the session in seconds
     """
-    def make(self, key):
-#%%
-        #key = {'subject_id' : 467913, 'session' : 20}
-        keytoadd = key
-        #print(key)
-        keytoadd['session_total_trial_num'] = len(experiment.SessionTrial()&key)
-        keytoadd['session_block_num'] = len(experiment.SessionBlock()&key)
-        keytoadd['session_hit_num'] = len(experiment.BehaviorTrial()&key&'outcome = "hit"')
-        keytoadd['session_miss_num'] = len(experiment.BehaviorTrial()&key&'outcome = "miss"')
-        keytoadd['session_ignore_num'] = len(experiment.BehaviorTrial()&key&'outcome = "ignore"')
-        keytoadd['session_autowater_num'] = len(experiment.TrialNote & key &'trial_note_type = "autowater"')
-        if keytoadd['session_total_trial_num'] > 0:
-            keytoadd['session_length'] = float(((experiment.SessionTrial() & key).fetch('stop_time')).max())
-        else:
-            keytoadd['session_length'] = 0
+    # Foraging sessions only
+    key_source = experiment.Session & (experiment.BehaviorTrial & 'task LIKE "foraging%"')
 
-        self.insert1(keytoadd,skip_duplicates=True)
+    def make(self, key):
+    
+        session_stats = {'session_total_trial_num': len(experiment.SessionTrial & key),
+                'session_block_num': len(experiment.SessionBlock & key),
+                'session_hit_num': len(experiment.BehaviorTrial & key & 'outcome = "hit"'),
+                'session_miss_num': len(experiment.BehaviorTrial & key & 'outcome = "miss"'),
+                'session_ignore_num': len(experiment.BehaviorTrial & key & 'outcome = "ignore"'),
+                'session_autowater_num': len(experiment.TrialNote & key & 'trial_note_type = "autowater"')}
+        
+        if session_stats['session_total_trial_num'] > 0:
+            session_stats['session_length'] = float(((experiment.SessionTrial() & key).fetch('stop_time')).max())
+        else:
+            session_stats['session_length'] = 0
+
+        self.insert1({**key, **session_stats})
             
 @schema
 class SessionTaskProtocol(dj.Computed):
@@ -109,18 +98,19 @@ class SessionTaskProtocol(dj.Computed):
     session_task_protocol : tinyint # the number of the dominant task protocol in the session
     session_real_foraging : bool # True if it is real foraging, false in case of pretraining
     """
+    
+    # Foraging sessions only
+    key_source = experiment.Session & (experiment.BehaviorTrial & 'task LIKE "foraging%"')
+    
     def make(self, key):
-        task_protocol,p_reward_left,p_reward_right,p_reward_middle = (experiment.BehaviorTrial() *experiment.SessionBlock() & key).fetch('task_protocol','p_reward_left','p_reward_right','p_reward_middle')
-        if len(task_protocol)>0:  # in some sessions there is no behavior at all..
-            key['session_task_protocol'] = np.median(task_protocol)
-            p_reward_left = np.asarray(p_reward_left,'float')
-            p_reward_right = np.asarray(p_reward_right,'float')
-            p_reward_middle = np.asarray(p_reward_middle,'float')
-            if any((p_reward_left<1) & (p_reward_left>0)) or any((p_reward_right<1) & (p_reward_right>0)) or any((p_reward_middle<1) & (p_reward_middle>0)):
-                key['session_real_foraging'] =  True
-            else:
-                key['session_real_foraging'] =  False
-            self.insert1(key,skip_duplicates=True)
+        task_protocols = (experiment.BehaviorTrial & key).fetch('task_protocol')
+
+        is_real_foraging = bool(experiment.SessionBlock.WaterPortRewardProbability & key
+                                & 'reward_probability > 0 and reward_probability < 1')
+
+        self.insert1({**key,
+                      'session_task_protocol': np.median(task_protocols),
+                      'session_real_foraging': is_real_foraging})
 
 @schema
 class BlockRewardFractionNoBiasCheck(dj.Computed): # without bias check 
@@ -327,3 +317,22 @@ class BlockEfficiency(dj.Computed): # bias check excluded
           
         self.insert1(keytoinsert,skip_duplicates=True)
         
+def draw_bs_pairs_linreg(x, y, size=1): 
+    """Perform pairs bootstrap for linear regression."""#from serhan aya
+    try:
+        # Set up array of indices to sample from: inds
+        inds = np.arange(len(x))
+    
+        # Initialize replicates: bs_slope_reps, bs_intercept_reps
+        bs_slope_reps = np.empty(size)
+        bs_intercept_reps = np.empty(shape=size)
+    
+        # Generate replicates
+        for i in range(size):
+            bs_inds = np.random.choice(inds, size=len(inds)) # sampling the indices (1d array requirement)
+            bs_x, bs_y = x[bs_inds], y[bs_inds]
+            bs_slope_reps[i], bs_intercept_reps[i] = np.polyfit(bs_x, bs_y, 1)
+    
+        return bs_slope_reps, bs_intercept_reps
+    except:
+        return np.nan, np.nan
