@@ -1,9 +1,6 @@
 import datajoint as dj
-# import pipeline.lab as lab
-# import pipeline.experiment as experiment
-# from pipeline.pipeline_tools import get_schema_name
-from pipeline import (lab, experiment, get_schema_name)
-schema = dj.schema(get_schema_name('behavior_foraging'),locals())
+from pipeline import (experiment, get_schema_name)
+schema = dj.schema(get_schema_name('foraging_analysis'),locals())
 import numpy as np
 import pandas as pd
 import math
