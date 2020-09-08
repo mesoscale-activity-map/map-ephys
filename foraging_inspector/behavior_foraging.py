@@ -236,26 +236,29 @@ class SessionMatching(dj.Computed):  # bias check removed,
             # taking the log2
             # session_matching[water_port] = {attr: np.log2(attr_value.astype(float))
             #                             for attr, attr_value in zip(ratio_attrs, wp_block_ratio)}
+            session_matching[water_port] = {}
             for attr, attr_value in zip(ratio_attrs, wp_block_ratio):
                 attr_value = attr_value.astype(float)
-                attr_value[(attr_value==np.inf) | (attr_value==0)] = np.nan
-                session_matching[water_port] = {attr: np.log2(attr_value)}
+                attr_value[(attr_value==0)] = np.nan
+                session_matching[water_port][attr] = np.log2(attr_value)
 
             # ---- compute the match index and bias ----
-            for tertile_suffix in (''): #, '_first_tertile', '_second_tertile', '_third_tertile'):
-                reward_name = 'reward_ratio' + tertile_suffix
-                choice_name = 'choice_ratio' + tertile_suffix
-                # Ignore those with all NaNs or all Infs
-                if (np.isfinite(session_matching[water_port][reward_name]).any()
-                        and np.isfinite(session_matching[water_port][choice_name]).any()):
-                    match_idx, bias = draw_bs_pairs_linreg(
-                        session_matching[water_port][reward_name],
-                        session_matching[water_port][choice_name], size=bootstrapnum)
-                    session_matching[water_port]['match_idx' + tertile_suffix] = np.nanmean(match_idx)
-                    session_matching[water_port]['bias' + tertile_suffix] = np.nanmean(bias)
-                else:
-                    session_matching[water_port].pop(reward_name)
-                    session_matching[water_port].pop(choice_name)
+            # for tertile_suffix in ('', '_first_tertile', '_second_tertile', '_third_tertile'):
+            tertile_suffix = ''
+            reward_name = 'reward_ratio' + tertile_suffix
+            choice_name = 'choice_ratio' + tertile_suffix
+            # Ignore those with all NaNs or all Infs
+            if (np.isfinite(session_matching[water_port][reward_name]).any()
+                    and np.isfinite(session_matching[water_port][choice_name]).any()):
+                match_idx, bias = draw_bs_pairs_linreg(
+                    session_matching[water_port][reward_name],
+                    session_matching[water_port][choice_name], size=bootstrapnum)
+                session_matching[water_port]['match_idx' + tertile_suffix] = np.nanmean(match_idx)
+                session_matching[water_port]['bias' + tertile_suffix] = np.nanmean(bias)
+
+            else:
+                session_matching[water_port].pop(reward_name)
+                session_matching[water_port].pop(choice_name)
 
         # ---- Insert ----
         self.insert1(key)
@@ -309,6 +312,11 @@ class BlockEfficiency(dj.Computed): # bias check excluded
         
 def draw_bs_pairs_linreg(x, y, size=1): 
     """Perform pairs bootstrap for linear regression."""#from serhan aya
+    # Get rid of infs/nans
+    idx = np.isfinite(x) & np.isfinite(y)
+    x = x[idx]
+    y = y[idx]
+
     try:
         # Set up array of indices to sample from: inds
         inds = np.arange(len(x))
