@@ -185,75 +185,85 @@ class BlockFraction(dj.Computed):
         
 
 @schema
-class SessionMatchBias(dj.Computed): # bias check removed, 
-    definition = """
-    -> experiment.Session
-    ---
-    block_r_r_ratio = null: longblob # right lickport reward ratio
-    block_r_c_ratio = null: longblob # right lickport choice ratio
-    match_idx_r = null: decimal(8,4) # slope of log ratio R from whole blocks
-    bias_r = null: decimal(8,4) # intercept of log ratio R from whole blocks
+class SessionMatching(dj.Computed):  # bias check removed,
+    definition = """# Blockwise matching of a session
+    -> SessionStats
     """
-    def make(self, key):
-        #key = {'subject_id': 453478, 'session': 13}
-       
-        bias_check_block = pd.DataFrame(SessionStats() & key)        
-        # df_behaviortrial = pd.DataFrame((experiment.BehaviorTrial() & key))
-        
-        block_R_RewardRatio = np.ones(bias_check_block['session_block_num'])*np.nan
-        block_R_ChoiceRatio = np.ones(bias_check_block['session_block_num'])*np.nan
-        df_block = pd.DataFrame((experiment.SessionBlock() & key))
-        
-        print(key)
-        if len(df_block)> 0:
-            for x in range(len(df_block['block'])):
-                print('block '+str(x))
-                df_choices = pd.DataFrame((experiment.BehaviorTrial()*experiment.SessionBlock()) & key & 'block ='+str(x+1))
-                realtraining = (df_choices['p_reward_left']<1) & (df_choices['p_reward_right']<1) & ((df_choices['p_reward_middle']<1) | df_choices['p_reward_middle'].isnull())
-                if realtraining[0] == True:
-                    BlockRewardFraction = pd.DataFrame(BlockRewardFractionNoBiasCheck() & key & 'block ='+str(x+1))
-                    BlockChoiceFraction = pd.DataFrame(BlockChoiceFractionNoBiasCheck() & key & 'block ='+str(x+1))
-                    
-                    # if df_behaviortrial['task_protocol'][0] == 100: # if it's 2lp task, then only calculate R log ratio
-                    #     try:
-                    #         block_R_RewardRatio[x] = np.log2(float(BlockRewardFraction['block_reward_fraction_right']/BlockRewardFraction['block_reward_fraction_left']))
-                    #     except:
-                    #         pass
-                    #     try:
-                    #         block_R_ChoiceRatio[x] = np.log2(float(BlockChoiceFraction['block_choice_fraction_right']/BlockChoiceFraction['block_choice_fraction_left']))
-                    #     except:
-                    #         pass
-                    # elif df_behaviortrial['task_protocol'][0] == 101: # if ti's 3lp task, then calculate R, L and M
-                    
-                    # Middle will naturally be 0 if it's a 2lp task
-                    try:
-                        block_R_RewardRatio[x] = np.log2(float(BlockRewardFraction['block_reward_fraction_right']/(BlockRewardFraction['block_reward_fraction_left']+BlockRewardFraction['block_reward_fraction_middle'])))
-                    except:
-                        pass
-                    
-                    try:
-                        block_R_ChoiceRatio[x] = np.log2(float(BlockChoiceFraction['block_choice_fraction_right']/(BlockChoiceFraction['block_choice_fraction_left']+BlockChoiceFraction['block_choice_fraction_middle'])))
-                    except:
-                        pass
-        
-        block_R_RewardRatio = block_R_RewardRatio[~np.isinf(block_R_RewardRatio)]
-        block_R_ChoiceRatio = block_R_ChoiceRatio[~np.isinf(block_R_ChoiceRatio)]
 
-        try:
-            match_idx_r, bias_r = draw_bs_pairs_linreg(block_R_RewardRatio, block_R_ChoiceRatio, size=bootstrapnum)
-        except:
-            pass
+    class WaterPortMatching(dj.Part):
+        definition = """  # reward and choice ratio of this water-port w.r.t the sum of the other water-ports
+        -> master
+        -> experiment.WaterPort
+        ---
+        reward_ratio=null                : longblob      # lickport reward ratio (this : sum of others)
+        choice_ratio=null                : longblob      # lickport choice ratio (this : sum of others)       
+        match_idx=null                      : decimal(8,4)  # slope of log ratio
+        bias=null                           : decimal(8,4)  # intercept of log ratio
+        """
+
+    def make(self, key):
+        q_block_fraction = BlockFraction.WaterPortFraction & key
+
+        ratio_attrs = ['reward_ratio', 
+                        'choice_ratio']
         
-        key['match_idx_r'] = np.nanmean(match_idx_r)   
-        key['bias_r'] = np.nanmean(bias_r) 
+        session_matching = {}
         
-        key['block_r_r_ratio'] = block_R_RewardRatio
-        key['block_r_c_ratio'] = block_R_ChoiceRatio
+        # ratio = this / others = fraction / (1-fraction)
+        q_block_ratio = q_block_fraction.proj(reward_ratio='block_reward_fraction/(1-block_reward_fraction)',
+                                               choice_ratio='block_choice_fraction/(1-block_choice_fraction)')
         
-        self.insert1(key,skip_duplicates=True)     
-        
-        
-        
+        for water_port in experiment.WaterPort.fetch('water_port'):
+            # # ---- compute the reward and choice fraction, across blocks ----
+            # # query for this port
+            # this_port = (q_block_fraction & 'water_port = "{}"'.format(water_port))
+            
+            # # query for other ports, take the sum of the reward and choice fraction of the other ports
+            # other_ports = BlockFraction.aggr(
+            #     q_block_fraction & 'water_port != "{}"'.format(water_port),
+            #     rw_sum='sum(block_reward_fraction)',
+            #     choice_sum='sum(block_choice_fraction)')
+            
+            # # merge and compute the fraction of this port over the sum of the other ports
+            # wp_block_ratio = (this_port * other_ports).proj(
+            #     reward_ratio='block_reward_fraction / rw_sum',
+            #     choice_ratio='block_choice_fraction / choice_sum').fetch(
+            #     *ratio_attrs, order_by='block')
+                    
+            wp_block_ratio = (q_block_ratio & 'water_port = "{}"'.format(water_port)).fetch(
+                              *ratio_attrs, order_by='block')
+            
+            # taking the log2
+            # session_matching[water_port] = {attr: np.log2(attr_value.astype(float))
+            #                             for attr, attr_value in zip(ratio_attrs, wp_block_ratio)}
+            for attr, attr_value in zip(ratio_attrs, wp_block_ratio):
+                attr_value = attr_value.astype(float)
+                attr_value[(attr_value==np.inf) | (attr_value==0)] = np.nan
+                session_matching[water_port] = {attr: np.log2(attr_value)}
+
+            # ---- compute the match index and bias ----
+            for tertile_suffix in (''): #, '_first_tertile', '_second_tertile', '_third_tertile'):
+                reward_name = 'reward_ratio' + tertile_suffix
+                choice_name = 'choice_ratio' + tertile_suffix
+                # Ignore those with all NaNs or all Infs
+                if (np.isfinite(session_matching[water_port][reward_name]).any()
+                        and np.isfinite(session_matching[water_port][choice_name]).any()):
+                    match_idx, bias = draw_bs_pairs_linreg(
+                        session_matching[water_port][reward_name],
+                        session_matching[water_port][choice_name], size=bootstrapnum)
+                    session_matching[water_port]['match_idx' + tertile_suffix] = np.nanmean(match_idx)
+                    session_matching[water_port]['bias' + tertile_suffix] = np.nanmean(bias)
+                else:
+                    session_matching[water_port].pop(reward_name)
+                    session_matching[water_port].pop(choice_name)
+
+        # ---- Insert ----
+        self.insert1(key)
+        # can't do list comprehension for batch insert because "session_matching" may have different fields
+        for k, v in session_matching.items():
+            self.WaterPortMatching.insert1({**key, 'water_port': k, **v})
+            
+               
 @schema
 class BlockEfficiency(dj.Computed): # bias check excluded
     definition = """
