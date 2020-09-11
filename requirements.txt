@@ -11,3 +11,4 @@ tqdm
 xlrd
 numpy
 pybpodgui_api
+pynrrd

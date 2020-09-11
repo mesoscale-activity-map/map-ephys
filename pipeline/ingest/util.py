@@ -74,12 +74,14 @@ def load_and_parse_a_csv_file(csvfilename):
             df['PC-TIME'][badidx] = [df['PC-TIME'][badidx] + '.000000']
         df['PC-TIME'] = df['PC-TIME'].apply(
             lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S.%f'))  # converting string time to datetime
+        
     tempstr = df['+INFO'][df['MSG'] == 'CREATOR-NAME'].values[0]
     experimenter = tempstr[2:tempstr[2:].find('"') + 2]  # +2
     tempstr = df['+INFO'][df['MSG'] == 'SUBJECT-NAME'].values[0]
     subject = tempstr[2:tempstr[2:].find("'") + 2]  # +2
     df['experimenter'] = experimenter
     df['subject'] = subject
+    
     # adding trial numbers in session
     idx = (df[df['TYPE'] == 'TRIAL']).index.to_numpy()
     idx = np.concatenate(([0], idx, [len(df)]), 0)
@@ -116,6 +118,7 @@ def load_and_parse_a_csv_file(csvfilename):
                 df.loc[df['Trial_number_in_session'] == trialnum, 'Block_number'] = int(blocknumber)
             except:
                 df.loc[df['Trial_number_in_session'] == trialnum, 'Block_number'] = np.nan
+
     # adding accumulated rewards -L,R,M
     for direction in ['L', 'R', 'M']:
         indexes = df[df['MSG'] == 'reward_{}_accumulated:'.format(direction)].index + 1  # +2
@@ -132,7 +135,8 @@ def load_and_parse_a_csv_file(csvfilename):
                 except:
                     df.loc[
                         df['Trial_number_in_session'] == trialnum, 'reward_{}_accumulated'.format(direction)] = np.nan
-                    # adding trial numbers -  the variable names are crappy.. sorry
+                   
+    # adding trial numbers -  the variable names are crappy.. sorry
     indexes = df[df['MSG'] == 'Trialnumber:'].index + 1  # +2
     if len(indexes) > 0:
         if 'Trial_number' not in df.columns:
@@ -145,25 +149,40 @@ def load_and_parse_a_csv_file(csvfilename):
                 df.loc[df['Trial_number_in_session'] == trialnum, 'Trial_number'] = int(blocknumber)
             except:
                 df.loc[df['Trial_number_in_session'] == trialnum, 'Block_number'] = np.nan
+
     # saving variables (if any)
     variableidx = (df[df['MSG'] == 'Variables:']).index.to_numpy()
     if len(variableidx) > 0:
         d = {}
         exec('variables = ' + df['MSG'][variableidx + 1].values[0], d)
         for varname in d['variables'].keys():
-            if isinstance(d['variables'][varname], (list, tuple)):
-                templist = list()
-                for idx in range(0, len(df)):
-                    templist.append(d['variables'][varname])
-                df['var:' + varname] = templist
-            else:
-                df['var:' + varname] = d['variables'][varname]
+            if ('reward_probabilities' in varname or '_ch_in' in varname or '_ch_out' in varname
+                or varname in ['retract_motor_signal', 'protract_motor_signal']):  
+                # For the variables that never change within one **bpod** session, 
+                # only save to the first row of the dataframe to save time and space
+                df['var:' + varname] = None   # Initialize with None
+                df['var:' + varname][0] = d['variables'][varname]   # Only save to the first row
+            else:        
+                if isinstance(d['variables'][varname], (list, tuple)):
+                    templist = list()
+                    for idx in range(0, len(df)):
+                        templist.append(d['variables'][varname])
+                    df['var:' + varname] = templist
+                else:
+                    df['var:' + varname] = d['variables'][varname]
+                    
     # updating variables
     variableidxs = (df[df['MSG'] == 'Variables updated:']).index.to_numpy()
     for variableidx in variableidxs:
         d = {}
         exec('variables = ' + df['MSG'][variableidx + 1], d)
         for varname in d['variables'].keys():
+            # Skip the variables that never change within one **bpod** session
+            if ('reward_probabilities' in varname 
+                or '_ch_in' in varname or '_ch_out' in varname
+                or varname in ['retract_motor_signal', 'protract_motor_signal']):     
+                continue
+            
             if isinstance(d['variables'][varname], (list, tuple)):
                 templist = list()
                 idxs = list()
@@ -188,19 +207,21 @@ def load_and_parse_a_csv_file(csvfilename):
         exec('variables = ' + df['MSG'][variableidx + 1].values[0], d)
         for varname in d['variables'].keys():
             df['var_motor:' + varname] = d['variables'][varname]
-    # extracting reward probabilities from variables
-    if ('var:reward_probabilities_L' in df.columns) and ('Block_number' in df.columns):
-        probs_l = df['var:reward_probabilities_L'][0]
-        probs_r = df['var:reward_probabilities_R'][0]
-        df['reward_p_L'] = np.nan
-        df['reward_p_R'] = np.nan
-        if ('var:reward_probabilities_M' in df.columns) and ('Block_number' in df.columns):
-            probs_m = df['var:reward_probabilities_M'][0]
-            df['reward_p_M'] = np.nan
-        for blocknum in df['Block_number'].unique():
-            if not np.isnan(blocknum):
-                df.loc[df['Block_number'] == blocknum, 'reward_p_L'] = probs_l[int(blocknum - 1)]
-                df.loc[df['Block_number'] == blocknum, 'reward_p_R'] = probs_r[int(blocknum - 1)]
-                if ('var:reward_probabilities_M' in df.columns) and ('Block_number' in df.columns):
-                    df.loc[df['Block_number'] == blocknum, 'reward_p_M'] = probs_m[int(blocknum - 1)]
+            
+    # extracting reward probabilities from variables (already in behavior.py; no need to broadcast to every time stamp in df)
+    # if ('var:reward_probabilities_L' in df.columns) and ('Block_number' in df.columns):
+    #     probs_l = df['var:reward_probabilities_L'][0]
+    #     probs_r = df['var:reward_probabilities_R'][0]
+    #     df['reward_p_L'] = np.nan
+    #     df['reward_p_R'] = np.nan
+    #     if ('var:reward_probabilities_M' in df.columns) and ('Block_number' in df.columns):
+    #         probs_m = df['var:reward_probabilities_M'][0]
+    #         df['reward_p_M'] = np.nan
+    #     for blocknum in df['Block_number'].unique():
+    #         if not np.isnan(blocknum):
+    #             df.loc[df['Block_number'] == blocknum, 'reward_p_L'] = probs_l[int(blocknum - 1)]
+    #             df.loc[df['Block_number'] == blocknum, 'reward_p_R'] = probs_r[int(blocknum - 1)]
+    #             if ('var:reward_probabilities_M' in df.columns) and ('Block_number' in df.columns):
+    #                 df.loc[df['Block_number'] == blocknum, 'reward_p_M'] = probs_m[int(blocknum - 1)]
+                    
     return df

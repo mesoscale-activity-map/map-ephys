@@ -6,7 +6,7 @@ import datajoint as dj
 import pathlib
 import scipy.io as scio
 
-from tifffile import imread
+import nrrd
 
 from . import InsertBuffer
 from . import get_schema_name
@@ -27,10 +27,14 @@ class CCFLabel(dj.Lookup):
     ccf_description:    varchar(255)    # CCFLabel Description
     """
     CCF_R3_20UM_ID = 0
+    CCF_R3_20UM_VERSION = 3
+    CCF_R3_20UM_RESOLUTION = 20
     CCF_R3_20UM_DESC = 'Allen Institute Mouse CCF, Rev. 3, 20uM Resolution'
-    CCF_R3_20UM_TYPE = 'CCF_2017_20UM'
 
-    contents = [(CCF_R3_20UM_ID, 3, 20, CCF_R3_20UM_DESC)]
+    contents = [(CCF_R3_20UM_ID,
+                 CCF_R3_20UM_VERSION,
+                 CCF_R3_20UM_RESOLUTION,
+                 CCF_R3_20UM_DESC)]
 
 
 @schema
@@ -85,17 +89,41 @@ class CCFAnnotation(dj.Manual):
     @classmethod
     def load_ccf_annotation(cls):
         """
-        Load the CCF r3 20 uM Dataset.
-        Requires that dj.config['ccf.r3_20um_path'] be set to the location
-        of the CCF Annotation tif stack.
+        Load the CCF r3 10 uM NRRD Dataset scaled to 20um.
+
+        Expects dj.config:
+
+            "custom": {
+                "ccf_data_paths": {
+                    "version_name": "CCF_2017",
+                    "annotation_nrrd": "annotation_10.nrrd",
+                    "region_csv": "mousebrainontology_2.csv",
+                    "hexcode_csv": "hexcode.csv"
+                }
+            }
+
+        see also: 
+
+        http://download.alleninstitute.org/informatics-archive/current-release/mouse_ccf/annotation/ccf_2017
+
         """
-        # TODO: scaling
+
+        ccf_vol_res = CCFLabel.CCF_R3_20UM_RESOLUTION
+        vol_res = 10                         # volume resolution from the nrrd
+        ds_factor = ccf_vol_res / vol_res    # down-sample factor
+        assert int(ds_factor) == ds_factor   # futureproofing paranoia
+        ds_factor = int(ds_factor)           # int(down-sample factor)
+        scale_factor = vol_res * ds_factor   # voxel to uM scale factor
+
         log.info('CCFAnnotation.load_ccf_annotation(): start')
 
         version_name = dj.config['custom']['ccf_data_paths']['version_name']
-        stack_path = dj.config['custom']['ccf_data_paths']['annotation_tif']
+        stack_path = dj.config['custom']['ccf_data_paths']['annotation_nrrd']
 
-        stack = imread(stack_path)  # load reference stack
+        stack, hdr = nrrd.read(stack_path)  # AP (ccf_z), DV (ccf_y), ML (ccf_x)
+
+        # downsample by a factor of "ds_factor" (all 3 dimensions)
+        stack = stack[::ds_factor, ::ds_factor, ::ds_factor]
 
         log.info('.. loaded stack of shape {} from {}'
                  .format(stack.shape, stack_path))
@@ -113,20 +141,21 @@ class CCFAnnotation(dj.Manual):
                      .format(region_id, idx, len(regions), r.region_name))
 
             # extracting filled volumes from stack in scaled [[x,y,z]] shape,
-            vol = np.array(np.where(stack == region_id)).T[:, [2, 1, 0]] * 20
+            vol = (np.array(np.where(stack == region_id)).T[:, [2, 1, 0]]
+                   * scale_factor)
 
             if not vol.shape[0]:
                 log.info('.. region {} volume: shape {} - skipping'
                          .format(region_id, vol.shape))
                 continue
 
-            log.info('.. region {} volume: shape {}'.format(region_id, vol.shape))
+            log.info('.. region {} volume: shape {}'.format(
+                region_id, vol.shape))
 
             with dj.conn().transaction:
                 with InsertBuffer(CCF, chunksz, **ib_args) as buf:
                     for vox in vol:
                         buf.insert1((CCFLabel.CCF_R3_20UM_ID, *vox))
-                        buf.flush()
 
                 with InsertBuffer(cls, chunksz, **ib_args) as buf:
                     for vox in vol:
@@ -134,7 +163,6 @@ class CCFAnnotation(dj.Manual):
                                      'ccf_x': vox[0], 'ccf_y': vox[1], 'ccf_z': vox[2],
                                      'annotation_version': version_name,
                                      'annotation': r.region_name})
-                        buf.flush()
 
         log.info('.. done.')
 
