@@ -326,8 +326,8 @@ def get_pseudocoronal_slices(probe_insertion, shank_no=1):
                                          & probe_insertion & {'shank': shank_no}).fetch('ccf_z', 'ccf_y', 'ccf_x'))))
 
     # ---- linear fit of probe in AP-DV axis ----
-    X = np.asmatrix(np.hstack((np.ones((coords.shape[0], 1)), coords[:, 1][:, np.newaxis])))
-    y = np.asmatrix(coords[:, 0]).T
+    X = np.asmatrix(np.hstack((np.ones((coords.shape[0], 1)), coords[:, 1][:, np.newaxis])))  # DV
+    y = np.asmatrix(coords[:, 0]).T  # AP
     XtX = X.T * X
     Xty = X.T * y
     b = np.linalg.solve(XtX, Xty)
@@ -343,7 +343,7 @@ def get_pseudocoronal_slices(probe_insertion, shank_no=1):
     ap_coords = np.array(X2 * b).flatten().astype(np.int)
 
     # -- inspect the fit --
-    if False:
+    if True:
         fig, ax = plt.subplots(1, 1)
         ax.plot(coords[:, 1], coords[:, 0], 'r.')
         ax.plot(dv_coords, ap_coords, 'k--')
@@ -375,16 +375,16 @@ def get_pseudocoronal_slices(probe_insertion, shank_no=1):
     # ---- paint electrode sites on this probe/shank ----
     coronal_slice[coords[:, 1], coords[:, 2], :] = np.full((coords.shape[0], 3), ImageColor.getcolor("#080808", "RGB"))
 
-    # ---- remove nan-only columns and rows (due to too high sampling) ----
-    # coronal_slice = coronal_slice[::20, :, :]
-    # coronal_slice = coronal_slice[:, ::20, :]
+    # # ---- remove nan-only columns and rows (due to too high sampling) ----
+    # invalid_row_ind = np.where(~np.any(~np.isnan(coronal_slice[:, :, 0]), axis=0))[0]
+    # invalid_col_ind = np.where(~np.any(~np.isnan(coronal_slice[:, :, 0]), axis=1))[0]
+    #
+    # coronal_slice = coronal_slice.astype(np.uint8)
+    # coronal_slice = np.delete(coronal_slice, invalid_col_ind, axis=0)
+    # coronal_slice = np.delete(coronal_slice, invalid_row_ind, axis=1)
 
-    invalid_row_ind = np.where(~np.any(~np.isnan(coronal_slice[:, :, 0]), axis=0))[0]
-    invalid_col_ind = np.where(~np.any(~np.isnan(coronal_slice[:, :, 0]), axis=1))[0]
-
-    coronal_slice = coronal_slice.astype(np.uint8)
-    coronal_slice = np.delete(coronal_slice, invalid_col_ind, axis=0)
-    coronal_slice = np.delete(coronal_slice, invalid_row_ind, axis=1)
+    # ---- downsample the 2D slice to the voxel resolution ----
+    coronal_slice = coronal_slice[::voxel_res, ::voxel_res, :]
 
     # paint outside region white
     nan_r, nan_c = np.where(np.nansum(coronal_slice, axis=2) == 0)
@@ -815,7 +815,7 @@ def _get_ccf_xyz_max():
 
 def _get_ccf_vox_res():
     voxel_res = (ccf.CCFLabel & 'ccf_label_id = 0').fetch1('ccf_resolution')
-    locals()['_ccf_vox_res'] = _ccf_vox_res
-    return _ccf_vox_res
+    locals()['_ccf_vox_res'] = voxel_res
+    return voxel_res
 
 
