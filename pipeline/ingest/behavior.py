@@ -909,8 +909,8 @@ class BehaviorBpodIngest(dj.Imported):
                     for lick_port in lick_ports:
                         p_reward_varname = 'var:reward_probabilities_{}'.format(self.water_port_name_mapper[lick_port])
                         reward_probability[lick_port] = decimal.Decimal(
-                            df_behavior_trial[p_reward_varname].to_list()[0][blocknum_local]).quantize(
-                            decimal.Decimal('.001'))
+                            df_behavior_session[p_reward_varname][0][blocknum_local]).quantize(
+                            decimal.Decimal('.001'))    # Note: Reward probabilities never changes during a **bpod** session
 
                     # determine if this is a new block: compare reward probability with the previous block
                     if rows['sess_block']:
