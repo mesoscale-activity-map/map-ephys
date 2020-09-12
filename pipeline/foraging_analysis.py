@@ -313,10 +313,12 @@ class BlockEfficiency(dj.Computed):  # bias check excluded
             if p0 != 0:
                 m_star_greedy = math.floor(math.log(1 - p1) / math.log(1 - p0))
                 p_star_greedy = p1 + (1 - (1 - p0) ** (m_star_greedy + 1) - p1 ** 2) / (m_star_greedy + 1)
+            else:
+                p_star_greedy = p1
 
-                block_efficiency_data.update(
-                    block_ideal_phat_greedy=block_fraction['block_reward_per_trial'] / p_star_greedy,
-                    regret_ideal_phat_greedy=p_star_greedy - block_fraction['block_reward_per_trial'])
+            block_efficiency_data.update(
+                block_ideal_phat_greedy=block_fraction['block_reward_per_trial'] / p_star_greedy,
+                regret_ideal_phat_greedy=p_star_greedy - block_fraction['block_reward_per_trial'])
 
         self.insert1({**key, **block_efficiency_data})
 
