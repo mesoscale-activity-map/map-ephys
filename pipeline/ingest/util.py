@@ -161,7 +161,7 @@ def load_and_parse_a_csv_file(csvfilename):
                 # For the variables that never change within one **bpod** session, 
                 # only save to the first row of the dataframe to save time and space
                 df['var:' + varname] = None   # Initialize with None
-                df['var:' + varname][0] = d['variables'][varname]   # Only save to the first row
+                df.at[0, 'var:' + varname] = d['variables'][varname]   # Only save to the first row
             else:        
                 if isinstance(d['variables'][varname], (list, tuple)):
                     templist = list()

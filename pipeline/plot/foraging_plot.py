@@ -54,7 +54,11 @@ def extract_trials(plottype = '2lickport',
                    show_bias_check_trials = True,
                    kernel = np.ones(10)/10,
                    filters=None,
-                   local_matching = {'calculate_local_matching':False}):
+                   local_matching = {'calculate_local_matching': True,
+                                     'sliding_window':100,
+                                     'matching_window':300,
+                                     'matching_step':30,
+                                     'efficiency_type': 'ideal'}):
     
     movingwindow = local_matching['sliding_window']
     fit_window = local_matching['matching_window']
@@ -137,54 +141,59 @@ def extract_trials(plottype = '2lickport',
         df_behaviortrial = df_behaviortrial.reset_index(drop=True)
         
         
-    #% calculating local matching, bias, reward rate
-
-    kernel = np.ones(movingwindow)/movingwindow
-    p1 = np.asarray(np.max([df_behaviortrial['p_reward_right'],df_behaviortrial['p_reward_left']],0),float)
-    p0 = np.asarray(np.min([df_behaviortrial['p_reward_right'],df_behaviortrial['p_reward_left']],0),float)
-    m_star_greedy = np.floor(np.log(1-p1)/np.log(1-p0))
-    p_star_greedy = p1 + (1-(1-p0)**(m_star_greedy+1)-p1**2)/(m_star_greedy+1)
-    local_reward_rate = np.convolve(df_behaviortrial['outcome']=='hit',kernel,'same')
-    max_reward_rate = np.convolve(p_star_greedy,kernel,'same')
-    local_efficiency = local_reward_rate/max_reward_rate
-    choice_right = np.asarray(df_behaviortrial['trial_choice']=='right')
-    choice_left = np.asarray(df_behaviortrial['trial_choice']=='left')
-    choice_middle = np.asarray(df_behaviortrial['trial_choice']=='middle')
-    
-    reward_rate_right =np.asarray((df_behaviortrial['trial_choice']=='right') &(df_behaviortrial['outcome']=='hit'))
-    reward_rate_left =np.asarray((df_behaviortrial['trial_choice']=='left') &(df_behaviortrial['outcome']=='hit'))
-    reward_rate_middle =np.asarray((df_behaviortrial['trial_choice']=='middle') &(df_behaviortrial['outcome']=='hit'))
-    
-# =============================================================================
-#     choice_fraction_right = np.convolve(choice_right,kernel,'same')/np.convolve(choice_right+choice_left+choice_middle,kernel,'same')
-#     reward_fraction_right = np.convolve(reward_rate_right,kernel,'same')/local_reward_rate
-# =============================================================================
-    choice_rate_right= np.convolve(choice_right,kernel,'same')/np.convolve(choice_left+choice_middle,kernel,'same')
-    reward_rate_right = np.convolve(reward_rate_right,kernel,'same')/np.convolve(reward_rate_left+reward_rate_middle,kernel,'same')
-    slopes = list()
-    intercepts = list()
-    trial_number = list()
-    for center_trial in np.arange(np.round(fit_window/2),len(df_behaviortrial),fit_step):
-        #%
-        reward_rates_now = reward_rate_right[int(np.round(center_trial-fit_window/2)):int(np.round(center_trial+fit_window/2))]
-        choice_rates_now = choice_rate_right[int(np.round(center_trial-fit_window/2)):int(np.round(center_trial+fit_window/2))]
-        todel = (reward_rates_now==0) | (choice_rates_now==0)
-        reward_rates_now = reward_rates_now[~todel]
-        choice_rates_now = choice_rates_now[~todel]
-        try:
-            slope_now, intercept_now = np.polyfit(np.log2(reward_rates_now), np.log2(choice_rates_now), 1)
-            slopes.append(slope_now)
-            intercepts.append(intercept_now)
-            trial_number.append(center_trial)
-        except:
-            pass
+    #% --- calculating local matching, bias, reward rate ---
+    if local_matching['calculate_local_matching']:
+        kernel = np.ones(movingwindow)/movingwindow
+        p1 = np.asarray(np.max([df_behaviortrial['p_reward_right'],df_behaviortrial['p_reward_left']],0),float)
+        p0 = np.asarray(np.min([df_behaviortrial['p_reward_right'],df_behaviortrial['p_reward_left']],0),float)
         
+        m_star_greedy = np.floor(np.log(1-p1+1e-10)/np.log(1-p0+1e-10))
+        p_star_greedy = p1 + (1-(1-p0)**(m_star_greedy+1)-p1**2)/(m_star_greedy+1)
         
-    df_behaviortrial['local_efficiency']=local_efficiency
-    df_behaviortrial['local_matching_slope'] = np.nan
-    df_behaviortrial.loc[trial_number,'local_matching_slope']=slopes
-    df_behaviortrial['local_matching_bias'] = np.nan
-    df_behaviortrial.loc[trial_number,'local_matching_bias']=intercepts
+        local_reward_rate = np.convolve(df_behaviortrial['outcome']=='hit',kernel,'same')
+        max_reward_rate = np.convolve(p_star_greedy,kernel,'same')
+        local_efficiency = local_reward_rate/max_reward_rate
+        choice_right = np.asarray(df_behaviortrial['trial_choice']=='right')
+        choice_left = np.asarray(df_behaviortrial['trial_choice']=='left')
+        choice_middle = np.asarray(df_behaviortrial['trial_choice']=='middle')
+        
+        reward_rate_right =np.asarray((df_behaviortrial['trial_choice']=='right') &(df_behaviortrial['outcome']=='hit'))
+        reward_rate_left =np.asarray((df_behaviortrial['trial_choice']=='left') &(df_behaviortrial['outcome']=='hit'))
+        reward_rate_middle =np.asarray((df_behaviortrial['trial_choice']=='middle') &(df_behaviortrial['outcome']=='hit'))
+        
+    # =============================================================================
+    #     choice_fraction_right = np.convolve(choice_right,kernel,'same')/np.convolve(choice_right+choice_left+choice_middle,kernel,'same')
+    #     reward_fraction_right = np.convolve(reward_rate_right,kernel,'same')/local_reward_rate
+    # =============================================================================
+        with np.errstate(divide='ignore'):
+            choice_rate_right= np.convolve(choice_right,kernel,'same')/(np.convolve(choice_left+choice_middle,kernel,'same') )
+            reward_rate_right = np.convolve(reward_rate_right,kernel,'same')/(np.convolve(reward_rate_left+reward_rate_middle,kernel,'same') )
+        slopes = list()
+        intercepts = list()
+        trial_number = list()
+        for center_trial in np.arange(np.round(fit_window/2),len(df_behaviortrial),fit_step):
+            #%
+            reward_rates_now = reward_rate_right[int(np.round(center_trial-fit_window/2)):int(np.round(center_trial+fit_window/2))]
+            choice_rates_now = choice_rate_right[int(np.round(center_trial-fit_window/2)):int(np.round(center_trial+fit_window/2))]
+            todel = (reward_rates_now==0) | (choice_rates_now==0)
+            reward_rates_now = reward_rates_now[~todel]
+            choice_rates_now = choice_rates_now[~todel]
+            try:
+                x, y = np.log2(reward_rates_now), np.log2(choice_rates_now)
+                idx = np.isfinite(x) & np.isfinite(y)
+                slope_now, intercept_now = np.polyfit(x[idx], y[idx], 1)
+                slopes.append(slope_now)
+                intercepts.append(intercept_now)
+                trial_number.append(center_trial)
+            except:
+                pass
+            
+            
+        df_behaviortrial['local_efficiency']=local_efficiency
+        df_behaviortrial['local_matching_slope'] = np.nan
+        df_behaviortrial.loc[trial_number,'local_matching_slope']=slopes
+        df_behaviortrial['local_matching_bias'] = np.nan
+        df_behaviortrial.loc[trial_number,'local_matching_bias']=intercepts
     #%%
     return df_behaviortrial
 
