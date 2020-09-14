@@ -1,5 +1,5 @@
 import pandas as pd
-from pipeline import pipeline_tools, lab, experiment, behavior_foraging
+from pipeline import lab, experiment, foraging_analysis
 import numpy as np
 #dj.conn()
 
@@ -62,32 +62,36 @@ def extract_trials(plottype = '2lickport',
     
     subject_id = (lab.WaterRestriction()&'water_restriction_number = "{}"'.format(wr_name)).fetch1('subject_id')
     
-    df_behaviortrial = pd.DataFrame(np.asarray((experiment.BehaviorTrial()* experiment.SessionTrial()*experiment.TrialEvent() *experiment.SessionBlock() *behavior_foraging.TrialReactionTime &
-                                    'subject_id = {}'.format(subject_id) &
-                                    'session >= {}'.format(sessions[0]) &
-                                    'session <= {}'.format(sessions[1]) &
-                                    'trial_event_type = "go"').fetch('session',
-                                                             'trial',
-                                                             'early_lick',
-                                                             'trial_start_time',
-                                                             'reaction_time',
-                                                             'p_reward_left',
-                                                             'p_reward_right',
-                                                             'p_reward_middle',
-                                                             'trial_event_time',
-                                                             'trial_choice',
-                                                             'outcome'
-                                                             )).T,columns = ['session',
-                                                                             'trial',
-                                                                             'early_lick',
-                                                                             'trial_start_time',
-                                                                             'reaction_time',
-                                                                             'p_reward_left',
-                                                                             'p_reward_right',
-                                                                             'p_reward_middle',
-                                                                             'trial_event_time',
-                                                                             'trial_choice',
-                                                                             'outcome'])
+    # Query of session-block-trial info
+    q_session_block_trial = (experiment.SessionTrial * experiment.SessionBlock.BlockTrial
+                             & 'subject_id = {}'.format(subject_id) 
+                             & 'session >= {}'.format(sessions[0]) 
+                             & 'session <= {}'.format(sessions[1])) 
+    
+    # Query of behavior info
+    df_behaviortrial = pd.DataFrame((q_session_block_trial                         # Session-block-trial
+                        * experiment.WaterPortChoice.proj(trial_choice='water_port')   # Choice
+                        * experiment.BehaviorTrial                                 # Outcome
+                        * (experiment.TrialEvent & 'trial_event_type = "go"')      # Go cue
+                        * foraging_analysis.TrialReactionTime                      # Reaction time
+                        ).fetch('session', 'trial', 'block',
+                                'trial_choice', 'outcome', 'early_lick',
+                                'start_time', 'reaction_time',
+                                # 'p_reward_left',
+                                # 'p_reward_right',
+                                # 'p_reward_middle',
+                                'trial_event_time',
+                                as_dict=True,
+                                order_by=('session','trial')))
+                                                                             
+    # Handle p_{waterport}_reward
+    for water_port in experiment.WaterPort.fetch('water_port'):
+        p_reward_this = (q_session_block_trial * experiment.SessionBlock.WaterPortRewardProbability 
+                                                      & 'water_port = "{}"'.format(water_port)).fetch(
+                                                          'reward_probability', order_by=('session','trial')).astype(float)
+        if len(p_reward_this):
+            df_behaviortrial[f'p_reward_{water_port}'] = p_reward_this
+
 
     unique_sessions = df_behaviortrial['session'].unique()
     df_behaviortrial['iti']=np.nan
@@ -99,11 +103,11 @@ def extract_trials(plottype = '2lickport',
     if type(filters) == dict:
         df_behaviortrial['keep_trial']=1
     for session in unique_sessions:
-        total_trials_so_far = (behavior_foraging.SessionStats()&'subject_id = {}'.format(subject_id) &'session < {}'.format(session)).fetch('session_total_trial_num')
-        # bias_check_trials_now = (behavior_foraging.SessionStats()&'subject_id = {}'.format(subject_id) &'session = {}'.format(session)).fetch1('session_bias_check_trial_num')
+        total_trials_so_far = (foraging_analysis.SessionStats()&'subject_id = {}'.format(subject_id) &'session < {}'.format(session)).fetch('session_total_trial_num')
+        # bias_check_trials_now = (foraging_analysis.SessionStats()&'subject_id = {}'.format(subject_id) &'session = {}'.format(session)).fetch1('session_bias_check_trial_num')
         total_trials_so_far =sum(total_trials_so_far)
         gotime  = df_behaviortrial.loc[df_behaviortrial['session']==session, 'trial_event_time']
-        trialtime  = df_behaviortrial.loc[df_behaviortrial['session']==session, 'trial_start_time']
+        trialtime  = df_behaviortrial.loc[df_behaviortrial['session']==session, 'start_time']
         itis = np.concatenate([[np.nan],np.diff(np.asarray(trialtime+gotime,float))])
         df_behaviortrial.loc[df_behaviortrial['session']==session, 'iti'] = itis
         df_behaviortrial.loc[df_behaviortrial['session']==session, 'delay'] = np.asarray(gotime,float)
@@ -334,7 +338,7 @@ def plot_efficiency_matching_bias(ax3,
         maxrealforagingvalue = -1
     else:
         maxrealforagingvalue = 0
-    df_blockefficiency = pd.DataFrame(behavior_foraging.BlockEfficiency()*behavior_foraging.BlockStats()*behavior_foraging.SessionTaskProtocol() & 
+    df_blockefficiency = pd.DataFrame(foraging_analysis.BlockEfficiency()*foraging_analysis.BlockStats()*foraging_analysis.SessionTaskProtocol() & 
                                       'subject_id = {}'.format(subject_id) &
                                       'session >= {}'.format(sessions[0]) &
                                       'session <= {}'.format(sessions[1]) &
@@ -346,14 +350,14 @@ def plot_efficiency_matching_bias(ax3,
     session_start_trial_nums = list()
     session_end_trial_nums = list()
     for session in unique_sessions:
-        total_trials_so_far = (behavior_foraging.SessionStats()&'subject_id = {}'.format(subject_id) &'session < {}'.format(session)).fetch('session_total_trial_num')
-        #bias_check_trials_now = (behavior_foraging.SessionStats()&'subject_id = {}'.format(subject_id) &'session = {}'.format(session)).fetch1('session_bias_check_trial_num')
+        total_trials_so_far = (foraging_analysis.SessionStats()&'subject_id = {}'.format(subject_id) &'session < {}'.format(session)).fetch('session_total_trial_num')
+        #bias_check_trials_now = (foraging_analysis.SessionStats()&'subject_id = {}'.format(subject_id) &'session = {}'.format(session)).fetch1('session_bias_check_trial_num')
         total_trials_so_far =sum(total_trials_so_far)
         session_start_trial_nums.append(total_trials_so_far)
 
-        total_trials_now = (behavior_foraging.SessionStats()&'subject_id = {}'.format(subject_id) &'session = {}'.format(session)).fetch1('session_total_trial_num')
+        total_trials_now = (foraging_analysis.SessionStats()&'subject_id = {}'.format(subject_id) &'session = {}'.format(session)).fetch1('session_total_trial_num')
         session_end_trial_nums.append(total_trials_so_far+total_trials_now)
-        #bias_check_trials_now = (behavior_foraging.SessionStats()&'subject_id = {}'.format(subject_id) &'session = {}'.format(session)).fetch1('session_bias_check_trial_num')
+        #bias_check_trials_now = (foraging_analysis.SessionStats()&'subject_id = {}'.format(subject_id) &'session = {}'.format(session)).fetch1('session_bias_check_trial_num')
 
         df_blockefficiency.loc[df_blockefficiency['session']==session, 'session_start_trialnum'] += total_trials_so_far
         blocks = df_blockefficiency.loc[df_blockefficiency['session']==session, 'block'].values
@@ -382,12 +386,17 @@ def plot_efficiency_matching_bias(ax3,
     for session_switch_trial_num in session_switch_trial_nums:
         ax3.plot([session_switch_trial_num,session_switch_trial_num],[-.15,1.15],'b--')
     ax3.set_xlim([np.min(session_switch_trial_nums)-10,np.max(session_switch_trial_nums)+10]) 
-
-    match_idx_r,bias_r,sessions = np.asarray((behavior_foraging.SessionMatchBias()*behavior_foraging.SessionStats()&
-                                              'subject_id = {}'.format(subject_id) &
-                                              'session >= {}'.format(sessions[0]) &
-                                              'session <= {}'.format(sessions[1])).fetch('match_idx_r','bias_r','session'))
+    
+    # Session matching
+    q_session_matching = (foraging_analysis.SessionMatching.WaterPortMatching * foraging_analysis.SessionStats
+                          & 'subject_id = {}'.format(subject_id) 
+                          & 'session >= {}'.format(sessions[0]) 
+                          & 'session <= {}'.format(sessions[1]))
+    
+    water_port = 'right'  # Only match_idx_r and bias_r are needed
+    match_idx_r,bias_r,sessions = np.asarray((q_session_matching & 'water_port = "{}"'.format(water_port)).fetch('match_idx','bias','session'))
     bias_r = (np.asarray(bias_r,float))
+    
     #bias_r = (np.asarray(bias_r,float)+np.log2(10))/(np.log2(10)*2) # converting it between 0 and 1
     
     session_middle_trial_nums = list()
