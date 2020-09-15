@@ -422,6 +422,38 @@ class ProbeLevelDriftMap(dj.Computed):
             plt.close('all')
             self.insert1({**key, **fig_dict, 'shank': shank})
 
+
+@schema
+class ProbeLevelCoronalSlice(dj.Computed):
+    definition = """
+    -> ephys.ProbeInsertion
+    shank: int
+    ---
+    coronal_slice: filepath@report_store
+    """
+
+    # Only process ProbeInsertion with Histology and ElectrodeCCFPosition known
+    key_source = ephys.ProbeInsertion & histology.ElectrodeCCFPosition
+
+    def make(self, key):
+        water_res_num, sess_date = get_wr_sessdate(key)
+        probe_dir = store_stage / water_res_num / sess_date / str(key['insertion_number'])
+        probe_dir.mkdir(parents=True, exist_ok=True)
+
+        probe_insertion = ephys.ProbeInsertion & key
+
+        shanks = probe_insertion.aggr(lab.ElectrodeConfig.Electrode * lab.ProbeType.Electrode,
+                                      shanks='GROUP_CONCAT(DISTINCT shank SEPARATOR ", ")').fetch1('shanks')
+        shanks = np.array(shanks.split(', ')).astype(int)
+
+        for shank in shanks:
+            fig = unit_characteristic_plot.plot_pseudocoronal_slice(probe_insertion, shank_no=shank)
+            # ---- Save fig and insert ----
+            fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{shank}_'
+            fig_dict = save_figs((fig,), ('coronal_slice',), probe_dir, fn_prefix)
+            plt.close('all')
+            self.insert1({**key, **fig_dict, 'shank': shank})
+
 # ============================= UNIT LEVEL ====================================
 
 
@@ -560,7 +592,8 @@ report_tables = [SessionLevelReport,
                  SessionLevelCDReport,
                  SessionLevelProbeTrack,
                  ProjectLevelProbeTrack,
-                 ProbeLevelDriftMap]
+                 ProbeLevelDriftMap,
+                 ProbeLevelCoronalSlice]
 
 
 def get_wr_sessdate(key):

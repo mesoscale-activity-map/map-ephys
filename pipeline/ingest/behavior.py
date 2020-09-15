@@ -1054,9 +1054,7 @@ class BehaviorBpodIngest(dj.Imported):
             # add to the session-concat
             for tbl in tbls_2_insert:
                 concat_rows[tbl].extend(rows[tbl])
-
         # ---- The insertions to relevant tables ----
-
         # Session, SessionComment, SessionDetails insert
         log.info('BehaviorIngest.make(): adding session record')
         experiment.Session.insert1(sess_key, ignore_extra_fields=True)
