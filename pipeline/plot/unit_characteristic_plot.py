@@ -310,7 +310,7 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
     return fig
 
 
-def get_pseudocoronal_slices(probe_insertion, shank_no=1):
+def plot_pseudocoronal_slice(probe_insertion, shank_no=1):
     probe_insertion = probe_insertion.proj()
 
     # ---- Electrode sites ----
@@ -325,7 +325,7 @@ def get_pseudocoronal_slices(probe_insertion, shank_no=1):
     prb_trk_coords = np.array(list(zip(*(histology.LabeledProbeTrack.Point
                                          & probe_insertion & {'shank': shank_no}).fetch('ccf_z', 'ccf_y', 'ccf_x'))))
 
-    # ---- linear fit of probe in AP-DV axis ----
+    # ---- linear fit of probe in DV-AP axis ----
     X = np.asmatrix(np.hstack((np.ones((coords.shape[0], 1)), coords[:, 1][:, np.newaxis])))  # DV
     y = np.asmatrix(coords[:, 0]).T  # AP
     XtX = X.T * X
@@ -336,18 +336,21 @@ def get_pseudocoronal_slices(probe_insertion, shank_no=1):
     voxel_res = _ccf_vox_res or _get_ccf_vox_res()
     lr_max, dv_max, _ = _ccf_xyz_max or _get_ccf_xyz_max()
 
-    dv_coords = np.arange(dv_max)
+    dv_coords = np.arange(0, dv_max, voxel_res)
 
     X2 = np.asmatrix(np.hstack((np.ones((len(dv_coords), 1)), dv_coords[:, np.newaxis])))
 
     ap_coords = np.array(X2 * b).flatten().astype(np.int)
 
+    # round to the nearest voxel resolution
+    ap_coords = (voxel_res * np.round(ap_coords / voxel_res)).astype(np.int)
+
     # -- inspect the fit --
     if True:
         fig, ax = plt.subplots(1, 1)
-        ax.plot(coords[:, 1], coords[:, 0], 'r.')
-        ax.plot(dv_coords, ap_coords, 'k--')
-        ax.plot(prb_trk_coords[:, 1], prb_trk_coords[:, 0], 'b.')
+        ax.plot(coords[:, 0], coords[:, 1], 'r.')
+        ax.plot(ap_coords, dv_coords, 'k.')
+        ax.plot(prb_trk_coords[:, 0], prb_trk_coords[:, 1], 'b.')
         ax.invert_yaxis()
         ax.xaxis.tick_top()
         ax.set_xlabel('AP-axis')
@@ -355,8 +358,8 @@ def get_pseudocoronal_slices(probe_insertion, shank_no=1):
 
     # ---- extract pseudoconoral plane from DB ----
     q_ccf = ccf.CCFAnnotation * ccf.CCFBrainRegion.proj(..., annotation='region_name')
-    dv_pts, lr_pts, colors = (q_ccf & 'ccf_y in ({}) and ccf_z in ({})'.format(
-        ', '.join(dv_coords.astype(str)), ', '.join(ap_coords.astype(str)))).fetch(
+    dv_pts, lr_pts, colors = (q_ccf & [{'ccf_y': dv, 'ccf_z': ap}
+                                       for ap, dv in zip(ap_coords, dv_coords)]).fetch(
         'ccf_y', 'ccf_x', 'color_code')
 
     # ---- paint annotation color code ----
@@ -374,14 +377,6 @@ def get_pseudocoronal_slices(probe_insertion, shank_no=1):
 
     # ---- paint electrode sites on this probe/shank ----
     coronal_slice[coords[:, 1], coords[:, 2], :] = np.full((coords.shape[0], 3), ImageColor.getcolor("#080808", "RGB"))
-
-    # # ---- remove nan-only columns and rows (due to too high sampling) ----
-    # invalid_row_ind = np.where(~np.any(~np.isnan(coronal_slice[:, :, 0]), axis=0))[0]
-    # invalid_col_ind = np.where(~np.any(~np.isnan(coronal_slice[:, :, 0]), axis=1))[0]
-    #
-    # coronal_slice = coronal_slice.astype(np.uint8)
-    # coronal_slice = np.delete(coronal_slice, invalid_col_ind, axis=0)
-    # coronal_slice = np.delete(coronal_slice, invalid_row_ind, axis=1)
 
     # ---- downsample the 2D slice to the voxel resolution ----
     coronal_slice = coronal_slice[::voxel_res, ::voxel_res, :]
