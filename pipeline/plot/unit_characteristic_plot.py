@@ -345,17 +345,6 @@ def plot_pseudocoronal_slice(probe_insertion, shank_no=1):
     # round to the nearest voxel resolution
     ap_coords = (voxel_res * np.round(ap_coords / voxel_res)).astype(np.int)
 
-    # -- inspect the fit --
-    if True:
-        fig, ax = plt.subplots(1, 1)
-        ax.plot(coords[:, 0], coords[:, 1], 'r.')
-        ax.plot(ap_coords, dv_coords, 'k.')
-        ax.plot(prb_trk_coords[:, 0], prb_trk_coords[:, 1], 'b.')
-        ax.invert_yaxis()
-        ax.xaxis.tick_top()
-        ax.set_xlabel('AP-axis')
-        ax.set_ylabel('DV-axis')
-
     # ---- extract pseudoconoral plane from DB ----
     q_ccf = ccf.CCFAnnotation * ccf.CCFBrainRegion.proj(..., annotation='region_name')
     dv_pts, lr_pts, colors = (q_ccf & [{'ccf_y': dv, 'ccf_z': ap}
