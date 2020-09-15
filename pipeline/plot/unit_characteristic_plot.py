@@ -321,10 +321,6 @@ def plot_pseudocoronal_slice(probe_insertion, shank_no=1):
 
     coords = np.array(list(zip(*annotated_electrodes.fetch('ccf_z', 'ccf_y', 'ccf_x'))))  # (AP, DV, ML)
 
-    # ---- Labeled Probe Track points ----
-    prb_trk_coords = np.array(list(zip(*(histology.LabeledProbeTrack.Point
-                                         & probe_insertion & {'shank': shank_no}).fetch('ccf_z', 'ccf_y', 'ccf_x'))))
-
     # ---- linear fit of probe in DV-AP axis ----
     X = np.asmatrix(np.hstack((np.ones((coords.shape[0], 1)), coords[:, 1][:, np.newaxis])))  # DV
     y = np.asmatrix(coords[:, 0]).T  # AP
@@ -793,13 +789,13 @@ def get_m_scale(shank_count):
 def _get_ccf_xyz_max():
     xmax, ymax, zmax = ccf.CCFLabel.aggr(ccf.CCF, xmax='max(ccf_x)', ymax='max(ccf_y)', zmax='max(ccf_z)').fetch1(
         'xmax', 'ymax', 'zmax')
-    locals()['_ccf_xyz_max'] = xmax, ymax, zmax
+    global _ccf_xyz_max
+    _ccf_xyz_max = xmax, ymax, zmax
     return xmax, ymax, zmax
 
 
 def _get_ccf_vox_res():
     voxel_res = (ccf.CCFLabel & 'ccf_label_id = 0').fetch1('ccf_resolution')
-    locals()['_ccf_vox_res'] = voxel_res
+    global _ccf_vox_res
+    _ccf_vox_res = voxel_res
     return voxel_res
-
-
