@@ -20,6 +20,8 @@ from . import PhotostimError
 
 _plt_xmin = -3
 _plt_xmax = 2
+_ccf_xyz_max = None
+_ccf_vox_res = None
 
 
 def plot_clustering_quality(probe_insertion, clustering_method=None, axs=None):
@@ -308,6 +310,80 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
     return fig
 
 
+def plot_pseudocoronal_slice(probe_insertion, shank_no=1):
+    probe_insertion = probe_insertion.proj()
+
+    # ---- Electrode sites ----
+    annotated_electrodes = (lab.ElectrodeConfig.Electrode * lab.ProbeType.Electrode
+                            * ephys.ProbeInsertion
+                            * histology.ElectrodeCCFPosition.ElectrodePosition
+                            & probe_insertion & {'shank': shank_no})
+
+    coords = np.array(list(zip(*annotated_electrodes.fetch('ccf_z', 'ccf_y', 'ccf_x'))))  # (AP, DV, ML)
+
+    # ---- linear fit of probe in DV-AP axis ----
+    X = np.asmatrix(np.hstack((np.ones((coords.shape[0], 1)), coords[:, 1][:, np.newaxis])))  # DV
+    y = np.asmatrix(coords[:, 0]).T  # AP
+    XtX = X.T * X
+    Xty = X.T * y
+    b = np.linalg.solve(XtX, Xty)
+
+    # ---- predict x coordinates ----
+    voxel_res = _ccf_vox_res or _get_ccf_vox_res()
+    lr_max, dv_max, _ = _ccf_xyz_max or _get_ccf_xyz_max()
+
+    dv_coords = np.arange(0, dv_max, voxel_res)
+
+    X2 = np.asmatrix(np.hstack((np.ones((len(dv_coords), 1)), dv_coords[:, np.newaxis])))
+
+    ap_coords = np.array(X2 * b).flatten().astype(np.int)
+
+    # round to the nearest voxel resolution
+    ap_coords = (voxel_res * np.round(ap_coords / voxel_res)).astype(np.int)
+
+    # ---- extract pseudoconoral plane from DB ----
+    q_ccf = ccf.CCFAnnotation * ccf.CCFBrainRegion.proj(..., annotation='region_name')
+    dv_pts, lr_pts, colors = (q_ccf & [{'ccf_y': dv, 'ccf_z': ap}
+                                       for ap, dv in zip(ap_coords, dv_coords)]).fetch(
+        'ccf_y', 'ccf_x', 'color_code')
+
+    # ---- paint annotation color code ----
+    coronal_slice = np.full((dv_max, lr_max, 3), np.nan)
+    for color in set(colors):
+        matched_ind = np.where(colors == color)[0]
+        dv_ind = dv_pts[matched_ind]  # rows
+        lr_ind = lr_pts[matched_ind]  # cols
+        try:
+            c_rgb = ImageColor.getcolor("#" + color, "RGB")
+        except ValueError as e:
+            print(str(e))
+            continue
+        coronal_slice[dv_ind, lr_ind, :] = np.full((len(matched_ind), 3), c_rgb)
+
+    # ---- paint electrode sites on this probe/shank ----
+    coronal_slice[coords[:, 1], coords[:, 2], :] = np.full((coords.shape[0], 3), ImageColor.getcolor("#080808", "RGB"))
+
+    # ---- downsample the 2D slice to the voxel resolution ----
+    coronal_slice = coronal_slice[::voxel_res, ::voxel_res, :]
+
+    # paint outside region white
+    nan_r, nan_c = np.where(np.nansum(coronal_slice, axis=2) == 0)
+    coronal_slice[nan_r, nan_c, :] = np.full((len(nan_r), 3), ImageColor.getcolor("#FFFFFF", "RGB"))
+
+    # ---- plot ----
+    fig, ax = plt.subplots(1, 1)
+    ax.imshow(coronal_slice.astype(np.uint8), extent=[0, lr_max, dv_max, 0])
+
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+
+    return fig
+
+
 def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
     probe_insertion = probe_insertion.proj()
 
@@ -327,9 +403,9 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
     annotated_electrodes = (lab.ElectrodeConfig.Electrode * lab.ProbeType.Electrode
                             * ephys.ProbeInsertion
                             * histology.ElectrodeCCFPosition.ElectrodePosition
-                            * ccf.CCFAnnotation * ccf.CCFBrainRegion.proj(..., annotation = 'region_name')
+                            * ccf.CCFAnnotation * ccf.CCFBrainRegion.proj(..., annotation='region_name')
                             & probe_insertion & {'shank': shank_no})
-    pos_y, ccf_z, color_code = annotated_electrodes.fetch('y_coord', 'ccf_z', 'color_code', order_by='y_coord DESC')
+    pos_y, color_code = annotated_electrodes.fetch('y_coord', 'color_code', order_by='y_coord DESC')
 
     # ---- spikes ----
     spike_times, spike_depths = units.fetch('spike_times', 'spike_depths', order_by='unit')
@@ -708,3 +784,18 @@ def plot_paired_coding_direction(unit_g1, unit_g2, labels=None, time_period=None
 
 def get_m_scale(shank_count):
     return 1350 - 150*shank_count
+
+
+def _get_ccf_xyz_max():
+    xmax, ymax, zmax = ccf.CCFLabel.aggr(ccf.CCF, xmax='max(ccf_x)', ymax='max(ccf_y)', zmax='max(ccf_z)').fetch1(
+        'xmax', 'ymax', 'zmax')
+    global _ccf_xyz_max
+    _ccf_xyz_max = xmax, ymax, zmax
+    return xmax, ymax, zmax
+
+
+def _get_ccf_vox_res():
+    voxel_res = (ccf.CCFLabel & 'ccf_label_id = 0').fetch1('ccf_resolution')
+    global _ccf_vox_res
+    _ccf_vox_res = voxel_res
+    return voxel_res

@@ -5,6 +5,7 @@ import sys
 import logging
 from code import interact
 from datetime import datetime
+from textwrap import dedent
 import time
 import numpy as np
 import pandas as pd
@@ -13,7 +14,7 @@ import datajoint as dj
 from pymysql.err import OperationalError
 
 
-from pipeline import (lab, experiment, tracking, ephys, psth, ccf, histology, export, publication, get_schema_name)
+from pipeline import (lab, experiment, tracking, ephys, psth, ccf, histology, export, publication, globus, get_schema_name)
 
 pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth]
 
@@ -21,9 +22,21 @@ log = logging.getLogger(__name__)
 
 
 def usage_exit():
-    print("usage: {p} [{c}] <args>"
-          .format(p=os.path.basename(sys.argv[0]),
-                  c='|'.join(list(actions.keys()))))
+    print(dedent(
+        '''
+        usage: {} cmd args
+
+        where 'cmd' is one of:
+
+        {}
+        ''').lstrip().rstrip().format(
+            os.path.basename(sys.argv[0]),
+            str().join("  - {}: {}\n".format(k, v[1])
+                       for k, v in actions.items())))
+
+    # print("usage: {p} [{c}] <args>"
+    #       .format(p=os.path.basename(sys.argv[0]),
+    #               c='|'.join(list(actions.keys()))))
     sys.exit(0)
 
 
@@ -45,8 +58,8 @@ def logsetup(*args):
     else:
         handlers = [logging.StreamHandler()]
 
-    datefmt='%Y-%m-%d %H:%M:%S'
-    msgfmt='%(asctime)s:%(levelname)s:%(module)s:%(funcName)s:%(message)s'
+    datefmt = '%Y-%m-%d %H:%M:%S'
+    msgfmt = '%(asctime)s:%(levelname)s:%(module)s:%(funcName)s:%(message)s'
 
     logging.basicConfig(format=msgfmt, datefmt=datefmt, level=logging.ERROR,
                         handlers=handlers)
@@ -71,7 +84,8 @@ def ingest_behavior(*args):
 
 def ingest_foraging_behavior(*args):
     from pipeline.ingest import behavior as behavior_ingest
-    behavior_ingest.BehaviorBpodIngest().populate(display_progress=True)
+    behavior_ingest.BehaviorBpodIngest().populate(
+        display_progress=True, reserve_jobs=True)
 
 
 def ingest_ephys(*args):
@@ -89,7 +103,7 @@ def ingest_histology(*args):
     histology_ingest.HistologyIngest().populate(display_progress=True)
 
 
-def auto_ingest(*args):
+def ingest_all(*args):
 
     log.info('running auto ingest')
 
@@ -104,7 +118,7 @@ def auto_ingest(*args):
     sfile = dj.config.get('custom', def_sheet).get('recording_notes_spreadsheet')
     sname = dj.config.get('custom', def_sheet).get('recording_notes_sheet_name')
 
-    if sheet:
+    if sfile:
         load_insertion_location(sfile, sheet_name=sname)
 
 
@@ -150,10 +164,11 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
             valid_btime = False
 
         if valid_btime:
-            sess_key = experiment.Session & (behav_ingest.BehaviorIngest.BehaviorFile
-                                             & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
-                                             & 'behavior_file LIKE "%{}%{}_{:06}%"'.format(
-                        row.water_restriction_number, row.session_date.date().strftime('%Y%m%d'), int(row.behaviour_time)))
+            sess_key = experiment.Session & (
+                behav_ingest.BehaviorIngest.BehaviorFile
+                & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
+                & 'behavior_file LIKE "%{}%{}_{:06}%"'.format(
+                    row.water_restriction_number, row.session_date.date().strftime('%Y%m%d'), int(row.behaviour_time)))
         else:
             sess_key = False
 
@@ -189,6 +204,11 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     ephys.ProbeInsertion.RecordableBrainRegion.insert(recordable_brain_regions)
 
     log.info('load_insertion_location - Number of insertions: {}'.format(len(insertion_locations)))
+
+
+def load_ccf(*args):
+    ccf.CCFBrainRegion.load_regions()
+    ccf.CCFAnnotation.load_ccf_annotation()
 
 
 def load_meta_foraging():  
@@ -341,10 +361,38 @@ def nuke_all():
         m.schema.drop()
 
 
-def publish(*args):
-    from pipeline import publication  # triggers ingest, so skipped
+def publication_login(*args):
+    cfgname = args[0] if len(args) else 'local'
+
+    if 'custom' in dj.config and 'globus.token' in dj.config['custom']:
+        del dj.config['custom']['globus.token']
+
+    from pipeline.globus import GlobusStorageManager
+
+    GlobusStorageManager()
+
+    if cfgname == 'local':
+        dj.config.save_local()
+    elif cfgname == 'global':
+        dj.config.save_global()
+    else:
+        log.warning('unknown configuration {}. not saving'.format(cfgname))
+
+
+def publication_publish_ephys(*args):
     publication.ArchivedRawEphys.populate()
+
+
+def publication_publish_video(*args):
     publication.ArchivedTrackingVideo.populate()
+
+
+def publication_discover_ephys(*args):
+    publication.ArchivedRawEphys.discover()
+
+
+def publication_discover_video(*args):
+    publication.ArchivedTrackingVideo.discover()
 
 
 def export_recording(*args):
@@ -364,11 +412,6 @@ def shell(*args):
                  '.'.join(m.__name__.split('.')[1:])
                  for m in pipeline_modules)),
              local=globals())
-
-
-def ccfload(*args):
-    ccf.CCFBrainRegion.load_regions()
-    ccf.CCFAnnotation.load_ccf_annotation()
 
 
 def erd(*args):
@@ -450,23 +493,33 @@ def sync_and_external_cleanup():
 
 
 actions = {
-    'ingest-behavior': ingest_behavior,
-    'ingest-foraging': ingest_foraging_behavior,
-    'ingest-ephys': ingest_ephys,
-    'ingest-tracking': ingest_tracking,
-    'ingest-histology': ingest_histology,
-    'auto-ingest': auto_ingest,
-    'populate-psth': populate_psth,
-    'publish': publish,
-    'export-recording': export_recording,
-    'generate-report': generate_report,
-    'sync-report': sync_report,
-    'shell': shell,
-    'erd': erd,
-    'ccfload': ccfload,
-    'automate-computation': automate_computation,
-    'automate-sync-and-cleanup': sync_and_external_cleanup,
-    'load-insertion-location': load_insertion_location,
-    'load-animal': load_animal,
-    'load-meta-foraging': load_meta_foraging,
+    'ingest-behavior': (ingest_behavior, 'ingest behavior data'),
+    'ingest-foraging': (ingest_behavior, 'ingest foraging behavior data'),
+    'ingest-ephys': (ingest_ephys, 'ingest ephys data'),
+    'ingest-tracking': (ingest_tracking, 'ingest tracking data'),
+    'ingest-histology': (ingest_histology, 'ingest histology data'),
+    'ingest-all': (ingest_all, 'run auto ingest job (load all types)'),
+    'populate-psth': (populate_psth, 'populate psth schema'),
+    'publication-login': (publication_login, 'login to globus'),
+    'publication-publish-ephys': (publication_publish_ephys,
+                                  'publish raw ephys data to globus'),
+    'publication-publish-video': (publication_publish_video,
+                                  'publish raw video data to globus'),
+    'publication-discover-ephys': (publication_discover_ephys,
+                                   'discover raw ephys data on globus'),
+    'publication-discover-video': (publication_discover_video,
+                                   'discover raw video data on globus'),
+    'export-recording': (export_recording, 'export data to .mat'),
+    'generate-report': (generate_report, 'run report generation logic'),
+    'sync-report': (sync_report, 'sync report data locally'),
+    'shell': (shell, 'interactive shell'),
+    'erd': (erd, 'write DataJoint ERDs to files'),
+    'load-ccf': (load_ccf, 'load CCF reference atlas'),
+    'automate-computation': (automate_computation, 'run report worker job'),
+    'automate-sync-and-cleanup': (sync_and_external_cleanup,
+                                  'run report cleanup job'),
+    'load-insertion-location': (load_insertion_location,
+                                'load ProbeInsertions from .xlsx'),
+    'load-animal': (load_animal, 'load subject data from .xlsx'),
+    'load-meta-foraging': (load_meta_foraging, 'load foraging meta information from .csv')
 }

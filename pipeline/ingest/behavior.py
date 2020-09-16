@@ -195,9 +195,17 @@ class BehaviorIngest(dj.Imported):
         return recs
 
     def populate(self, *args, **kwargs):
+        # 'populate' which won't require upstream tables
+        # 'reserve_jobs' not parallel, overloaded to mean "don't exit on error"
         for k in self.key_source:
-            with dj.conn().transaction:
-                self.make(k)
+            try:
+                with dj.conn().transaction:
+                    self.make(k)
+            except Exception as e:
+                log.warning('session key {} error: {}'.format(
+                    key, repr(e))
+                if not kwargs.get('reserve_jobs', False):
+                    raise
 
     def make(self, key):
         log.info('BehaviorIngest.make(): key: {key}'.format(key=key))
@@ -735,9 +743,17 @@ class BehaviorBpodIngest(dj.Imported):
         # Load project info (just once)
         self.projects = self.get_bpod_projects()
 
+        # 'populate' which won't require upstream tables
+        # 'reserve_jobs' not parallel, overloaded to mean "don't exit on error"                          
         for k in self.key_source:
-            with dj.conn().transaction:
-                self.make(k)
+            try:
+                with dj.conn().transaction:
+                    self.make(k)
+            except Exception as e:
+                log.warning('session key {} error: {}'.format(
+                    key, repr(e))
+                if not kwargs.get('reserve_jobs', False):
+                    raise
 
     def make(self, key):
         log.info('----------------------\nBehaviorBpodIngest.make(): key: {key}'.format(key=key))
@@ -1038,9 +1054,7 @@ class BehaviorBpodIngest(dj.Imported):
             # add to the session-concat
             for tbl in tbls_2_insert:
                 concat_rows[tbl].extend(rows[tbl])
-
         # ---- The insertions to relevant tables ----
-
         # Session, SessionComment, SessionDetails insert
         log.info('BehaviorIngest.make(): adding session record')
         experiment.Session.insert1(sess_key, ignore_extra_fields=True)
