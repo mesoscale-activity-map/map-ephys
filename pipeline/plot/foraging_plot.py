@@ -1,6 +1,8 @@
 import pandas as pd
 from pipeline import lab, experiment, foraging_analysis
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 #dj.conn()
 
 
@@ -330,7 +332,11 @@ def plot_trials(df_behaviortrial,
         else:
             legenda = ['left','right']
         ax2.legend(legenda,fontsize='small',loc = 'upper right')
-        ax2.set_xlim([np.min(df_behaviortrial['trial'])-10,np.max(df_behaviortrial['trial'])+10])    
+        ax2.set_xlim([np.min(df_behaviortrial['trial'])-10,np.max(df_behaviortrial['trial'])+10])  
+        
+        if len(blockswitches)>0:
+            for trialnum_now in blockswitches:
+                ax2.plot([df_behaviortrial['trial'][trialnum_now],df_behaviortrial['trial'][trialnum_now]],[-.15,1.15],'b--')
         #%%
     return ax1, ax2
     
@@ -453,3 +459,97 @@ def plot_local_efficiency_matching_bias(df_behaviortrial,ax3):
     multicolor_ylabel(ax3,('Efficiency', ' Matching '),('r','k'),axis='y',size=12)
     #%%
     return ax3
+
+def plot_training_summary():
+    #%%
+    sns.set(style="darkgrid", context="poster", font_scale=1.2)
+    sns.set_palette("muted")
+    all_wr = lab.WaterRestriction().fetch('water_restriction_number', order_by='water_restriction_number')
+    highlight_prefix = 'HH'
+    
+    fig1 = plt.figure(figsize=(16,8))
+    ax = fig1.subplots(2,2)
+    fig1.subplots_adjust(hspace=0.5, wspace=0.5)
+
+    fig2 = plt.figure(figsize=(20,8))
+    ax2 = fig2.subplots(2,3)
+    fig2.subplots_adjust(hspace=0.5, wspace=0.5)
+    
+    # Only mice who started with 2lp task
+    for wr_name in all_wr:
+        q_two_lp_foraging_sessions = (foraging_analysis.SessionTaskProtocol * lab.WaterRestriction
+                                    & 'session_task_protocol=100'
+                                    & 'water_restriction_number="{}"'.format(wr_name))
+
+        # Skip this mice if it did not started with 2lp task
+        two_lp_foraging_sessions = q_two_lp_foraging_sessions.fetch('session')
+        if len(two_lp_foraging_sessions) == 0 or min(two_lp_foraging_sessions) > 1:
+            continue
+    
+        # -- Get data --
+        # Basic stats
+        this_mouse_session_stats = (foraging_analysis.SessionStats & q_two_lp_foraging_sessions).fetch(
+                          order_by='session', format='frame')
+        total_trial_num = this_mouse_session_stats['session_pure_choices_num'].values
+        foraging_eff = this_mouse_session_stats['session_foraging_eff_optimal'].values * 100
+        early_lick_ratio = this_mouse_session_stats['session_early_lick_ratio'].values * 100
+        reward_sum_mean = this_mouse_session_stats['session_mean_reward_sum'].values
+        reward_contrast_mean = this_mouse_session_stats['session_mean_reward_contrast'].values
+        block_length_mean = (this_mouse_session_stats['session_total_trial_num'] / this_mouse_session_stats['session_block_num']).values
+        
+        # Delay period (not well-defined by the data because it's affected by early licks!!!)
+        
+        # Matching
+        matching_idx, matching_bias = (foraging_analysis.SessionMatching.WaterPortMatching & q_two_lp_foraging_sessions
+                                       & 'water_port="right"').fetch('match_idx', 'bias', order_by='session')
+        
+        # Plot settings
+        if highlight_prefix in wr_name:
+            plot_para = dict(marker='o' if wr_name in ['HH06', 'HH07'] else '', label=wr_name)
+        else:
+            plot_para = dict(lw=0.5, color='grey')
+            
+        # -- 1. Total finished trials --
+        ax[0,0].plot(total_trial_num, **plot_para)
+        
+        # -- 2. Session-wise foraging efficiency (optimal) --
+        ax[0,1].plot(foraging_eff, **plot_para)
+        ax2[0,0].plot(total_trial_num, foraging_eff, **plot_para)
+        
+        # -- 3. Matching bias --
+        ax[1,0].plot(abs(matching_bias.astype(float)), **plot_para)
+        ax2[0,1].plot(matching_idx, foraging_eff, '.')
+        
+        # -- 4. Early lick ratio --
+        ax[1,1].plot(early_lick_ratio, **plot_para)
+        
+        # -- 5. Reward schedule and block structure --
+        ax2[1,0].plot(reward_sum_mean, **plot_para)
+        ax2[1,1].plot(reward_contrast_mean, **plot_para)
+        ax2[1,2].plot(block_length_mean, **plot_para)
+                
+        
+    ax[0,0].set(title='Total finished trials')
+    ax[0,0].legend()
+    
+    ax[0,1].set(title='Foraging efficiency (optimal) %')
+    ax[1,1].set(xlabel='Session number', title='Early lick trials %')
+    
+    ax2[0,1].set(xlabel='Total finished trials', ylabel='Foraging efficiency (optimal) %')
+    ax2[0,1].legend()
+    ax2[1,0].set(xlabel='Session number', title='Mean reward prob sum')
+    ax2[1,0].legend()
+    ax2[1,1].set(xlabel='Session number', title='Mean reward prob contrast')
+    ax2[1,2].set(xlabel='Session number', title='Mean block length')
+    
+    ax[1,0].set(xlabel='Session number', title='abs(matching bias)')
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    

@@ -65,26 +65,73 @@ class SessionStats(dj.Computed):
     session_hit_num = null : int #number of hits
     session_miss_num = null : int #number of misses
     session_ignore_num = null : int #number of ignores
+    session_early_lick_ratio = null: decimal(5,4)  # early lick ratio
     session_autowater_num = null : int #number of trials with autowaters
     session_length = null : decimal(10, 4) #length of the session in seconds
+    session_pure_choices_num = null : int # Number of pure choices (excluding auto water)
+    
+    session_foraging_eff_optimal = null: decimal(5,4)   # Session-wise foraging efficiency (optimal; average sense)
+    session_foraging_eff_optimal_random_seed = null: decimal(5,4)   # Session-wise foraging efficiency (optimal; random seed) #!!!
+    
+    session_mean_reward_sum = null: decimal(4,3)  # Median of sum of reward prob
+    session_mean_reward_contrast = null: float  # Median of reward prob ratio
+    session_huge_block_trans_num = null: int  # Number of block transitions  #!!!
     """
     # Foraging sessions only
     key_source = experiment.Session & (experiment.BehaviorTrial & 'task LIKE "foraging%"')
 
     def make(self, key):
-    
-        session_stats = {'session_total_trial_num': len(experiment.SessionTrial & key),
-                'session_block_num': len(experiment.SessionBlock & key),
-                'session_hit_num': len(experiment.BehaviorTrial & key & 'outcome = "hit"'),
-                'session_miss_num': len(experiment.BehaviorTrial & key & 'outcome = "miss"'),
+        # import pdb; pdb.set_trace()
+        q_all_trial = experiment.SessionTrial & key
+        q_block = experiment.SessionBlock & key
+        q_hit = experiment.BehaviorTrial & key & 'outcome = "hit"'
+        q_miss = experiment.BehaviorTrial & key & 'outcome = "miss"'
+        q_auto_water = experiment.TrialNote & key & 'trial_note_type = "autowater"'
+        q_pure_finished = q_hit.proj() + q_miss.proj()  - q_auto_water.proj()
+        
+        session_stats = {'session_total_trial_num': len(q_all_trial),
+                'session_block_num': len(q_block),
+                'session_hit_num': len(q_hit),
+                'session_miss_num': len(q_miss),
                 'session_ignore_num': len(experiment.BehaviorTrial & key & 'outcome = "ignore"'),
-                'session_autowater_num': len(experiment.TrialNote & key & 'trial_note_type = "autowater"')}
+                'session_early_lick_ratio': len(experiment.BehaviorTrial & key & 'early_lick="early"') / (len(q_hit) + len(q_miss)),
+                'session_autowater_num': len(q_auto_water),
+                'session_pure_choices_num': len(q_pure_finished)}
         
         if session_stats['session_total_trial_num'] > 0:
             session_stats['session_length'] = float(((experiment.SessionTrial() & key).fetch('stop_time')).max())
         else:
             session_stats['session_length'] = 0
-
+            
+        # -- Session-wise foraging efficiency (2lp only) --
+        if len(experiment.BehaviorTrial & key & 'task="foraging"'):
+            # Get reward rate (hit but not autowater) / (hit but not autowater + miss but not autowater)
+            q_pure_hit_num = q_hit.proj() - q_auto_water.proj()
+            reward_rate = len(q_pure_hit_num) / len(q_pure_finished)
+            
+            q_pure_finished_reward_prob = (experiment.SessionTrial * experiment.SessionBlock.BlockTrial  # Session-block-trial
+                                           * experiment.SessionBlock.WaterPortRewardProbability  # Block-trial-p_reward
+                                           & q_pure_finished)  # Select finished trials
+                                
+            # Get reward probability
+            p_Ls = (q_pure_finished_reward_prob & 'water_port="left"').fetch(
+                'reward_probability').astype(float)
+            p_Rs = (q_pure_finished_reward_prob & 'water_port="right"').fetch(
+                'reward_probability').astype(float)
+             
+            # Reward schedule stats
+            if (SessionTaskProtocol & key).fetch1('session_real_foraging'):   # Real foraging
+                p_contrast = np.max([p_Ls, p_Rs], axis=0) / np.min([p_Ls, p_Rs], axis=0)
+                p_contrast[np.isinf(p_contrast)] = np.nan  # A arbitrary huge number
+                p_contrast_mean = np.nanmean(p_contrast)
+            else:
+                p_contrast_mean = 100
+                
+            session_stats.update(session_foraging_eff_optimal = foraging_eff(reward_rate, p_Ls, p_Rs)[0],
+                                 session_mean_reward_sum = np.nanmean(p_Ls + p_Rs), 
+                                 session_mean_reward_contrast = p_contrast_mean)
+            
+            
         self.insert1({**key, **session_stats})
             
 @schema
@@ -350,3 +397,56 @@ def draw_bs_pairs_linreg(x, y, size=1):
         return bs_slope_reps, bs_intercept_reps
     except:
         return np.nan, np.nan
+    
+
+def foraging_eff(reward_rate, p_Ls, p_Rs, random_number_L=None, random_number_R=None):  # Calculate foraging efficiency (only for 2lp)
+        
+        # --- Optimal-aver ---
+        p_stars = np.zeros_like(p_Ls)
+        for i, (p_L, p_R) in enumerate(zip(p_Ls, p_Rs)):   # Sum over all ps 
+            p_max = np.max([p_L, p_R])
+            p_min = np.min([p_L, p_R])
+            if p_min > 0:
+                m_star = np.floor(np.log(1-p_max)/np.log(1-p_min))
+                p_stars[i] = p_max + (1-(1-p_min)**(m_star + 1)-p_max**2)/(m_star+1)
+            else:
+                p_stars[i] = p_max
+        for_eff_optimal = reward_rate / np.nanmean(p_stars)
+        
+        if random_number_L is None:
+            return for_eff_optimal, np.nan
+            
+        # --- Optimal-actual (uses the actual random numbers by simulation)
+        block_trans = np.where(np.diff(np.hstack([np.inf, p_Ls, np.inf])))[0].tolist()
+        reward_refills = [p_Ls >= random_number_L, p_Rs >= random_number_R]
+        reward_optimal_random_seed = 0
+        # Generate optimal choice pattern
+        for b_start, b_end in zip(block_trans[:-1], block_trans[1:]):
+            p_max = np.max([p_Ls[b_start], p_Rs[b_start]])
+            p_min = np.min([p_Ls[b_start], p_Rs[b_start]])
+            side_max = np.argmax([p_Ls[b_start], p_Rs[b_start]])
+            
+            reward_refill = np.vstack([reward_refills[1 - side_max][b_start:b_end], 
+                             reward_refills[side_max][b_start:b_end]]).astype(int)  # Max = 1, Min = 0
+            
+            # Get choice pattern
+            if p_min > 0:   
+                m_star = np.floor(np.log(1-p_max)/np.log(1-p_min))
+                this_choice = np.array((([1]*int(m_star)+[0]) * 10000) [:b_end-b_start])
+            else:
+                this_choice = np.array([1] * (b_end-b_start))
+                
+            # Do simulation
+            reward_remain = [0,0]
+            for t in range(b_end - b_start):
+                reward_available = reward_remain | reward_refill[:, t]
+                reward_optimal_random_seed += reward_available[this_choice[t]]
+                reward_remain = reward_available.copy()
+                reward_remain[this_choice[t]] = 0
+            
+            if reward_optimal_random_seed:                
+                for_eff_optimal_random_seed = reward_rate / (reward_optimal_random_seed / len(p_Ls))
+            else:
+                for_eff_optimal_random_seed = np.nan
+        
+        return for_eff_optimal, for_eff_optimal_random_seed
