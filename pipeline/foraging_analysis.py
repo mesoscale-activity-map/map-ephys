@@ -115,9 +115,9 @@ class SessionStats(dj.Computed):
                                 
             # Get reward probability (only pure finished trials)
             p_Ls = (q_actual_finished_reward_prob & 'water_port="left"').fetch(
-                'reward_probability').astype(float)
+                'reward_probability', order_by='trial').astype(float)  # Note 'order_by'!!!
             p_Rs = (q_actual_finished_reward_prob & 'water_port="right"').fetch(
-                'reward_probability').astype(float)
+                'reward_probability', order_by='trial').astype(float)
             
             # Recover actual random numbers
             random_number_Ls = np.empty(len(q_all_trial))
