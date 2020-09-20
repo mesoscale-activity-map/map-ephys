@@ -71,7 +71,7 @@ class SessionStats(dj.Computed):
     session_pure_choices_num = null : int # Number of pure choices (excluding auto water)
     
     session_foraging_eff_optimal = null: decimal(5,4)   # Session-wise foraging efficiency (optimal; average sense)
-    session_foraging_eff_optimal_random_seed = null: decimal(5,4)   # Session-wise foraging efficiency (optimal; random seed) #!!!
+    session_foraging_eff_optimal_random_seed = null: decimal(5,4)   # Session-wise foraging efficiency (optimal; random seed)
     
     session_mean_reward_sum = null: decimal(4,3)  # Median of sum of reward prob
     session_mean_reward_contrast = null: float  # Median of reward prob ratio
@@ -103,7 +103,7 @@ class SessionStats(dj.Computed):
         else:
             session_stats['session_length'] = 0
             
-        # -- Session-wise foraging efficiency (2lp only) --
+        # -- Session-wise foraging efficiency and schedule stats (2lp only) --
         if len(experiment.BehaviorTrial & key & 'task="foraging"'):
             # Get reward rate (hit but not autowater) / (hit but not autowater + miss but not autowater)
             q_pure_hit_num = q_hit.proj() - q_auto_water.proj()
@@ -126,25 +126,30 @@ class SessionStats(dj.Computed):
             
             rand_seed_starts = (experiment.TrialNote()  & key & 'trial_note_type="random_seed_start"').fetch('trial', 'trial_note', order_by='trial')
             
-            for start_idx, start_seed in zip(rand_seed_starts[0], rand_seed_starts[1]):  # For each pybpod session
-                # Must be exactly the same as the pybpod protocol 
-                # https://github.com/hanhou/Foraging-Pybpod/blob/5e19e1d227657ed19e27c6e1221495e9f180c323/pybpod_protocols/Foraging_baptize_by_fire_new_lickport_retraction.py#L478
-                np.random.seed(int(start_seed))
-                random_number_L_this = np.random.uniform(0.,1.,2000).tolist()
-                random_number_R_this = np.random.uniform(0.,1.,2000).tolist()
+            if len(rand_seed_starts[0]):  # Random seed exists
+                for start_idx, start_seed in zip(rand_seed_starts[0], rand_seed_starts[1]):  # For each pybpod session
+                    # Must be exactly the same as the pybpod protocol 
+                    # https://github.com/hanhou/Foraging-Pybpod/blob/5e19e1d227657ed19e27c6e1221495e9f180c323/pybpod_protocols/Foraging_baptize_by_fire_new_lickport_retraction.py#L478
+                    np.random.seed(int(start_seed))
+                    random_number_L_this = np.random.uniform(0.,1.,2000).tolist()
+                    random_number_R_this = np.random.uniform(0.,1.,2000).tolist()
+                    
+                    # Fill in random numbers
+                    random_number_Ls[start_idx - 1 :] = random_number_L_this[: len(random_number_Ls) - start_idx + 1]
+                    random_number_Rs[start_idx - 1 :] = random_number_R_this[: len(random_number_Rs) - start_idx + 1]
+                    
+                # Select finished trials
+                actual_finished_idx = q_actual_finished.fetch('trial', order_by='trial')-1
+                random_number_Ls = random_number_Ls[actual_finished_idx]
+                random_number_Rs = random_number_Rs[actual_finished_idx]
+            else:  # No random seed (backward compatibility)
+                print(f'No random seeds for {key}')
+                random_number_Ls = None
+                random_number_Rs = None
                 
-                # Fill in random numbers
-                random_number_Ls[start_idx - 1 :] = random_number_L_this[: len(random_number_Ls) - start_idx + 1]
-                random_number_Rs[start_idx - 1 :] = random_number_R_this[: len(random_number_Rs) - start_idx + 1]
-                
-            # Select finished trials
-            actual_finished_idx = q_actual_finished.fetch('trial', order_by='trial')-1
-            random_number_Ls = random_number_Ls[actual_finished_idx]
-            random_number_Rs = random_number_Rs[actual_finished_idx]
-            
-            # Get foraging efficiency
+            # Compute foraging efficiency
             for_eff_optimal, for_eff_optimal_random_seed = foraging_eff(reward_rate, p_Ls, p_Rs, random_number_Ls, random_number_Rs)
-             
+
             # Reward schedule stats
             if (SessionTaskProtocol & key).fetch1('session_real_foraging'):   # Real foraging
                 p_contrast = np.max([p_Ls, p_Rs], axis=0) / np.min([p_Ls, p_Rs], axis=0)
@@ -157,7 +162,6 @@ class SessionStats(dj.Computed):
                                  session_foraging_eff_optimal_random_seed = for_eff_optimal_random_seed,
                                  session_mean_reward_sum = np.nanmean(p_Ls + p_Rs), 
                                  session_mean_reward_contrast = p_contrast_mean)
-            
             
         self.insert1({**key, **session_stats})
             
@@ -258,9 +262,12 @@ class BlockFraction(dj.Computed):
 @schema
 class SessionMatching(dj.Computed):  # bias check removed,
     definition = """# Blockwise matching of a session
-    -> SessionStats
+    -> experiment.Session
     """
-
+    
+    # Foraging sessions only
+    key_source = experiment.Session & (experiment.BehaviorTrial & 'task LIKE "foraging%"')
+    
     class WaterPortMatching(dj.Part):
         definition = """  # reward and choice ratio of this water-port w.r.t the sum of the other water-ports
         -> master
@@ -428,52 +435,53 @@ def draw_bs_pairs_linreg(x, y, size=1):
 
 def foraging_eff(reward_rate, p_Ls, p_Rs, random_number_L=None, random_number_R=None):  # Calculate foraging efficiency (only for 2lp)
         
-        # --- Optimal-aver (use optimal expectation as 100% efficiency) ---
-        p_stars = np.zeros_like(p_Ls)
-        for i, (p_L, p_R) in enumerate(zip(p_Ls, p_Rs)):   # Sum over all ps 
-            p_max = np.max([p_L, p_R])
-            p_min = np.min([p_L, p_R])
-            if p_min > 0:
-                m_star = np.floor(np.log(1-p_max)/np.log(1-p_min))
-                p_stars[i] = p_max + (1-(1-p_min)**(m_star + 1)-p_max**2)/(m_star+1)
-            else:
-                p_stars[i] = p_max
-        for_eff_optimal = reward_rate / np.nanmean(p_stars)
+    # --- Optimal-aver (use optimal expectation as 100% efficiency) ---
+    p_stars = np.zeros_like(p_Ls)
+    for i, (p_L, p_R) in enumerate(zip(p_Ls, p_Rs)):   # Sum over all ps 
+        p_max = np.max([p_L, p_R])
+        p_min = np.min([p_L, p_R])
+        if p_min == 0 or p_max >= 1:
+            p_stars[i] = p_max
+        else:
+            m_star = np.floor(np.log(1-p_max)/np.log(1-p_min))
+            p_stars[i] = p_max + (1-(1-p_min)**(m_star + 1)-p_max**2)/(m_star+1)
+
+    for_eff_optimal = reward_rate / np.nanmean(p_stars)
+    
+    if random_number_L is None:
+        return for_eff_optimal, np.nan
         
-        if random_number_L is None:
-            return for_eff_optimal, np.nan
-            
-        # --- Optimal-actual (uses the actual random numbers by simulation)
-        block_trans = np.where(np.diff(np.hstack([np.inf, p_Ls, np.inf])))[0].tolist()
-        reward_refills = [p_Ls >= random_number_L, p_Rs >= random_number_R]
-        reward_optimal_random_seed = 0
-        # Generate optimal choice pattern
-        for b_start, b_end in zip(block_trans[:-1], block_trans[1:]):
-            p_max = np.max([p_Ls[b_start], p_Rs[b_start]])
-            p_min = np.min([p_Ls[b_start], p_Rs[b_start]])
-            side_max = np.argmax([p_Ls[b_start], p_Rs[b_start]])
-            
-            reward_refill = np.vstack([reward_refills[1 - side_max][b_start:b_end], 
-                             reward_refills[side_max][b_start:b_end]]).astype(int)  # Max = 1, Min = 0
-            
-            # Get choice pattern
-            if p_min > 0:   
-                m_star = np.floor(np.log(1-p_max)/np.log(1-p_min))
-                this_choice = np.array((([1]*int(m_star)+[0]) * (1+int((b_end-b_start)/(m_star+1)))) [:b_end-b_start])
-            else:
-                this_choice = np.array([1] * (b_end-b_start))
-                
-            # Do simulation
-            reward_remain = [0,0]
-            for t in range(b_end - b_start):
-                reward_available = reward_remain | reward_refill[:, t]
-                reward_optimal_random_seed += reward_available[this_choice[t]]
-                reward_remain = reward_available.copy()
-                reward_remain[this_choice[t]] = 0
-            
-            if reward_optimal_random_seed:                
-                for_eff_optimal_random_seed = reward_rate / (reward_optimal_random_seed / len(p_Ls))
-            else:
-                for_eff_optimal_random_seed = np.nan
+    # --- Optimal-actual (uses the actual random numbers by simulation)
+    block_trans = np.where(np.diff(np.hstack([np.inf, p_Ls, np.inf])))[0].tolist()
+    reward_refills = [p_Ls >= random_number_L, p_Rs >= random_number_R]
+    reward_optimal_random_seed = 0
+    
+    # Generate optimal choice pattern
+    for b_start, b_end in zip(block_trans[:-1], block_trans[1:]):
+        p_max = np.max([p_Ls[b_start], p_Rs[b_start]])
+        p_min = np.min([p_Ls[b_start], p_Rs[b_start]])
+        side_max = np.argmax([p_Ls[b_start], p_Rs[b_start]])
         
-        return for_eff_optimal, for_eff_optimal_random_seed
+        # Get optimal choice pattern and expected optimal rate
+        if p_min == 0 or p_max >= 1:
+            this_choice = np.array([1] * (b_end-b_start))  # Greedy is obviously optimal
+        else:
+            m_star = np.floor(np.log(1-p_max)/np.log(1-p_min))
+            this_choice = np.array((([1]*int(m_star)+[0]) * (1+int((b_end-b_start)/(m_star+1)))) [:b_end-b_start])
+            
+        # Do simulation, using optimal choice pattern and actual random numbers
+        reward_refill = np.vstack([reward_refills[1 - side_max][b_start:b_end], 
+                         reward_refills[side_max][b_start:b_end]]).astype(int)  # Max = 1, Min = 0
+        reward_remain = [0,0]
+        for t in range(b_end - b_start):
+            reward_available = reward_remain | reward_refill[:, t]
+            reward_optimal_random_seed += reward_available[this_choice[t]]
+            reward_remain = reward_available.copy()
+            reward_remain[this_choice[t]] = 0
+        
+        if reward_optimal_random_seed:                
+            for_eff_optimal_random_seed = reward_rate / (reward_optimal_random_seed / len(p_Ls))
+        else:
+            for_eff_optimal_random_seed = np.nan
+    
+    return for_eff_optimal, for_eff_optimal_random_seed

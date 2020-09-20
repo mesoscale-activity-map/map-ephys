@@ -462,18 +462,18 @@ def plot_local_efficiency_matching_bias(df_behaviortrial,ax3):
 
 def plot_training_summary():
     #%%
-    sns.set(style="darkgrid", context="poster", font_scale=1.2)
+    sns.set(style="darkgrid", context="talk", font_scale=1)
     sns.set_palette("muted")
-    all_wr = lab.WaterRestriction().fetch('water_restriction_number', order_by='water_restriction_number')
+    all_wr = lab.WaterRestriction().fetch('water_restriction_number', order_by=('wr_start_date', 'water_restriction_number'))
     highlight_prefix = 'HH'
     
-    fig1 = plt.figure(figsize=(16,8))
-    ax = fig1.subplots(2,2)
-    fig1.subplots_adjust(hspace=0.5, wspace=0.5)
+    fig1 = plt.figure(figsize=(20,12))
+    ax = fig1.subplots(2,3)
+    fig1.subplots_adjust(hspace=0.3, wspace=0.3)
 
-    fig2 = plt.figure(figsize=(20,8))
+    fig2 = plt.figure(figsize=(20,12))
     ax2 = fig2.subplots(2,3)
-    fig2.subplots_adjust(hspace=0.5, wspace=0.5)
+    fig2.subplots_adjust(hspace=0.3, wspace=0.3)
     
     # Only mice who started with 2lp task
     for wr_name in all_wr:
@@ -492,6 +492,7 @@ def plot_training_summary():
                           order_by='session', format='frame')
         total_trial_num = this_mouse_session_stats['session_pure_choices_num'].values
         foraging_eff = this_mouse_session_stats['session_foraging_eff_optimal'].values * 100
+        foraging_eff_random_seed = this_mouse_session_stats['session_foraging_eff_optimal_random_seed'].to_numpy(dtype=np.float) * 100
         early_lick_ratio = this_mouse_session_stats['session_early_lick_ratio'].values * 100
         reward_sum_mean = this_mouse_session_stats['session_mean_reward_sum'].values
         reward_contrast_mean = this_mouse_session_stats['session_mean_reward_contrast'].values
@@ -514,7 +515,9 @@ def plot_training_summary():
         
         # -- 2. Session-wise foraging efficiency (optimal) --
         ax[0,1].plot(foraging_eff, **plot_para)
+        ax[0,2].plot(foraging_eff_random_seed, **plot_para)
         ax2[0,0].plot(total_trial_num, foraging_eff, **plot_para)
+        ax2[0,2].plot(foraging_eff, foraging_eff_random_seed, '.')
         
         # -- 3. Matching bias --
         ax[1,0].plot(abs(matching_bias.astype(float)), **plot_para)
@@ -533,10 +536,13 @@ def plot_training_summary():
     ax[0,0].legend()
     
     ax[0,1].set(title='Foraging efficiency (optimal) %')
+    ax[0,2].set(title='Foraging efficiency (optimal_random_seed) %')
     ax[1,1].set(xlabel='Session number', title='Early lick trials %')
     
-    ax2[0,1].set(xlabel='Total finished trials', ylabel='Foraging efficiency (optimal) %')
-    ax2[0,1].legend()
+    ax2[0,0].set(xlabel='Total finished trials', ylabel='Foraging efficiency (optimal) %')
+    ax2[0,1].set(xlabel='Matching slope', ylabel='Foraging efficiency (optimal) %')
+    ax2[0,2].set(xlabel='Foraging eff optimal', ylabel='Foraging eff random seed')
+    ax2[0,2].plot([0,100], [0,100], 'k--')
     ax2[1,0].set(xlabel='Session number', title='Mean reward prob sum')
     ax2[1,0].legend()
     ax2[1,1].set(xlabel='Session number', title='Mean reward prob contrast')
