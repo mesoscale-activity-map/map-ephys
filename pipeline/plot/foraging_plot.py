@@ -1,6 +1,8 @@
 import pandas as pd
 from pipeline import lab, experiment, foraging_analysis
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 #dj.conn()
 
 
@@ -54,7 +56,11 @@ def extract_trials(plottype = '2lickport',
                    show_bias_check_trials = True,
                    kernel = np.ones(10)/10,
                    filters=None,
-                   local_matching = {'calculate_local_matching':False}):
+                   local_matching = {'calculate_local_matching': True,
+                                     'sliding_window':100,
+                                     'matching_window':300,
+                                     'matching_step':30,
+                                     'efficiency_type': 'ideal'}):
     
     movingwindow = local_matching['sliding_window']
     fit_window = local_matching['matching_window']
@@ -137,54 +143,59 @@ def extract_trials(plottype = '2lickport',
         df_behaviortrial = df_behaviortrial.reset_index(drop=True)
         
         
-    #% calculating local matching, bias, reward rate
-
-    kernel = np.ones(movingwindow)/movingwindow
-    p1 = np.asarray(np.max([df_behaviortrial['p_reward_right'],df_behaviortrial['p_reward_left']],0),float)
-    p0 = np.asarray(np.min([df_behaviortrial['p_reward_right'],df_behaviortrial['p_reward_left']],0),float)
-    m_star_greedy = np.floor(np.log(1-p1)/np.log(1-p0))
-    p_star_greedy = p1 + (1-(1-p0)**(m_star_greedy+1)-p1**2)/(m_star_greedy+1)
-    local_reward_rate = np.convolve(df_behaviortrial['outcome']=='hit',kernel,'same')
-    max_reward_rate = np.convolve(p_star_greedy,kernel,'same')
-    local_efficiency = local_reward_rate/max_reward_rate
-    choice_right = np.asarray(df_behaviortrial['trial_choice']=='right')
-    choice_left = np.asarray(df_behaviortrial['trial_choice']=='left')
-    choice_middle = np.asarray(df_behaviortrial['trial_choice']=='middle')
-    
-    reward_rate_right =np.asarray((df_behaviortrial['trial_choice']=='right') &(df_behaviortrial['outcome']=='hit'))
-    reward_rate_left =np.asarray((df_behaviortrial['trial_choice']=='left') &(df_behaviortrial['outcome']=='hit'))
-    reward_rate_middle =np.asarray((df_behaviortrial['trial_choice']=='middle') &(df_behaviortrial['outcome']=='hit'))
-    
-# =============================================================================
-#     choice_fraction_right = np.convolve(choice_right,kernel,'same')/np.convolve(choice_right+choice_left+choice_middle,kernel,'same')
-#     reward_fraction_right = np.convolve(reward_rate_right,kernel,'same')/local_reward_rate
-# =============================================================================
-    choice_rate_right= np.convolve(choice_right,kernel,'same')/np.convolve(choice_left+choice_middle,kernel,'same')
-    reward_rate_right = np.convolve(reward_rate_right,kernel,'same')/np.convolve(reward_rate_left+reward_rate_middle,kernel,'same')
-    slopes = list()
-    intercepts = list()
-    trial_number = list()
-    for center_trial in np.arange(np.round(fit_window/2),len(df_behaviortrial),fit_step):
-        #%
-        reward_rates_now = reward_rate_right[int(np.round(center_trial-fit_window/2)):int(np.round(center_trial+fit_window/2))]
-        choice_rates_now = choice_rate_right[int(np.round(center_trial-fit_window/2)):int(np.round(center_trial+fit_window/2))]
-        todel = (reward_rates_now==0) | (choice_rates_now==0)
-        reward_rates_now = reward_rates_now[~todel]
-        choice_rates_now = choice_rates_now[~todel]
-        try:
-            slope_now, intercept_now = np.polyfit(np.log2(reward_rates_now), np.log2(choice_rates_now), 1)
-            slopes.append(slope_now)
-            intercepts.append(intercept_now)
-            trial_number.append(center_trial)
-        except:
-            pass
+    #% --- calculating local matching, bias, reward rate ---
+    if local_matching['calculate_local_matching']:
+        kernel = np.ones(movingwindow)/movingwindow
+        p1 = np.asarray(np.max([df_behaviortrial['p_reward_right'],df_behaviortrial['p_reward_left']],0),float)
+        p0 = np.asarray(np.min([df_behaviortrial['p_reward_right'],df_behaviortrial['p_reward_left']],0),float)
         
+        m_star_greedy = np.floor(np.log(1-p1+1e-10)/np.log(1-p0+1e-10))
+        p_star_greedy = p1 + (1-(1-p0)**(m_star_greedy+1)-p1**2)/(m_star_greedy+1)
         
-    df_behaviortrial['local_efficiency']=local_efficiency
-    df_behaviortrial['local_matching_slope'] = np.nan
-    df_behaviortrial.loc[trial_number,'local_matching_slope']=slopes
-    df_behaviortrial['local_matching_bias'] = np.nan
-    df_behaviortrial.loc[trial_number,'local_matching_bias']=intercepts
+        local_reward_rate = np.convolve(df_behaviortrial['outcome']=='hit',kernel,'same')
+        max_reward_rate = np.convolve(p_star_greedy,kernel,'same')
+        local_efficiency = local_reward_rate/max_reward_rate
+        choice_right = np.asarray(df_behaviortrial['trial_choice']=='right')
+        choice_left = np.asarray(df_behaviortrial['trial_choice']=='left')
+        choice_middle = np.asarray(df_behaviortrial['trial_choice']=='middle')
+        
+        reward_rate_right =np.asarray((df_behaviortrial['trial_choice']=='right') &(df_behaviortrial['outcome']=='hit'))
+        reward_rate_left =np.asarray((df_behaviortrial['trial_choice']=='left') &(df_behaviortrial['outcome']=='hit'))
+        reward_rate_middle =np.asarray((df_behaviortrial['trial_choice']=='middle') &(df_behaviortrial['outcome']=='hit'))
+        
+    # =============================================================================
+    #     choice_fraction_right = np.convolve(choice_right,kernel,'same')/np.convolve(choice_right+choice_left+choice_middle,kernel,'same')
+    #     reward_fraction_right = np.convolve(reward_rate_right,kernel,'same')/local_reward_rate
+    # =============================================================================
+        with np.errstate(divide='ignore'):
+            choice_rate_right= np.convolve(choice_right,kernel,'same')/(np.convolve(choice_left+choice_middle,kernel,'same') )
+            reward_rate_right = np.convolve(reward_rate_right,kernel,'same')/(np.convolve(reward_rate_left+reward_rate_middle,kernel,'same') )
+        slopes = list()
+        intercepts = list()
+        trial_number = list()
+        for center_trial in np.arange(np.round(fit_window/2),len(df_behaviortrial),fit_step):
+            #%
+            reward_rates_now = reward_rate_right[int(np.round(center_trial-fit_window/2)):int(np.round(center_trial+fit_window/2))]
+            choice_rates_now = choice_rate_right[int(np.round(center_trial-fit_window/2)):int(np.round(center_trial+fit_window/2))]
+            todel = (reward_rates_now==0) | (choice_rates_now==0)
+            reward_rates_now = reward_rates_now[~todel]
+            choice_rates_now = choice_rates_now[~todel]
+            try:
+                x, y = np.log2(reward_rates_now), np.log2(choice_rates_now)
+                idx = np.isfinite(x) & np.isfinite(y)
+                slope_now, intercept_now = np.polyfit(x[idx], y[idx], 1)
+                slopes.append(slope_now)
+                intercepts.append(intercept_now)
+                trial_number.append(center_trial)
+            except:
+                pass
+            
+            
+        df_behaviortrial['local_efficiency']=local_efficiency
+        df_behaviortrial['local_matching_slope'] = np.nan
+        df_behaviortrial.loc[trial_number,'local_matching_slope']=slopes
+        df_behaviortrial['local_matching_bias'] = np.nan
+        df_behaviortrial.loc[trial_number,'local_matching_bias']=intercepts
     #%%
     return df_behaviortrial
 
@@ -321,7 +332,11 @@ def plot_trials(df_behaviortrial,
         else:
             legenda = ['left','right']
         ax2.legend(legenda,fontsize='small',loc = 'upper right')
-        ax2.set_xlim([np.min(df_behaviortrial['trial'])-10,np.max(df_behaviortrial['trial'])+10])    
+        ax2.set_xlim([np.min(df_behaviortrial['trial'])-10,np.max(df_behaviortrial['trial'])+10])  
+        
+        if len(blockswitches)>0:
+            for trialnum_now in blockswitches:
+                ax2.plot([df_behaviortrial['trial'][trialnum_now],df_behaviortrial['trial'][trialnum_now]],[-.15,1.15],'b--')
         #%%
     return ax1, ax2
     
@@ -444,3 +459,103 @@ def plot_local_efficiency_matching_bias(df_behaviortrial,ax3):
     multicolor_ylabel(ax3,('Efficiency', ' Matching '),('r','k'),axis='y',size=12)
     #%%
     return ax3
+
+def plot_training_summary():
+    #%%
+    sns.set(style="darkgrid", context="talk", font_scale=1)
+    sns.set_palette("muted")
+    all_wr = lab.WaterRestriction().fetch('water_restriction_number', order_by=('wr_start_date', 'water_restriction_number'))
+    highlight_prefix = 'HH'
+    
+    fig1 = plt.figure(figsize=(20,12))
+    ax = fig1.subplots(2,3)
+    fig1.subplots_adjust(hspace=0.3, wspace=0.3)
+
+    fig2 = plt.figure(figsize=(20,12))
+    ax2 = fig2.subplots(2,3)
+    fig2.subplots_adjust(hspace=0.3, wspace=0.3)
+    
+    # Only mice who started with 2lp task
+    for wr_name in all_wr:
+        q_two_lp_foraging_sessions = (foraging_analysis.SessionTaskProtocol * lab.WaterRestriction
+                                    & 'session_task_protocol=100'
+                                    & 'water_restriction_number="{}"'.format(wr_name))
+
+        # Skip this mice if it did not started with 2lp task
+        two_lp_foraging_sessions = q_two_lp_foraging_sessions.fetch('session')
+        if len(two_lp_foraging_sessions) == 0 or min(two_lp_foraging_sessions) > 1:
+            continue
+    
+        # -- Get data --
+        # Basic stats
+        this_mouse_session_stats = (foraging_analysis.SessionStats & q_two_lp_foraging_sessions).fetch(
+                          order_by='session', format='frame')
+        total_trial_num = this_mouse_session_stats['session_pure_choices_num'].values
+        foraging_eff = this_mouse_session_stats['session_foraging_eff_optimal'].values * 100
+        foraging_eff_random_seed = this_mouse_session_stats['session_foraging_eff_optimal_random_seed'].to_numpy(dtype=np.float) * 100
+        early_lick_ratio = this_mouse_session_stats['session_early_lick_ratio'].values * 100
+        reward_sum_mean = this_mouse_session_stats['session_mean_reward_sum'].values
+        reward_contrast_mean = this_mouse_session_stats['session_mean_reward_contrast'].values
+        block_length_mean = (this_mouse_session_stats['session_total_trial_num'] / this_mouse_session_stats['session_block_num']).values
+        
+        # Delay period (not well-defined by the data because it's affected by early licks!!!)
+        
+        # Matching
+        matching_idx, matching_bias = (foraging_analysis.SessionMatching.WaterPortMatching & q_two_lp_foraging_sessions
+                                       & 'water_port="right"').fetch('match_idx', 'bias', order_by='session')
+        
+        # Plot settings
+        if highlight_prefix in wr_name:
+            plot_para = dict(marker='o' if wr_name in ['HH06', 'HH07'] else '', label=wr_name)
+        else:
+            plot_para = dict(lw=0.5, color='grey')
+            
+        # -- 1. Total finished trials --
+        ax[0,0].plot(total_trial_num, **plot_para)
+        
+        # -- 2. Session-wise foraging efficiency (optimal) --
+        ax[0,1].plot(foraging_eff, **plot_para)
+        ax[0,2].plot(foraging_eff_random_seed, **plot_para)
+        ax2[0,0].plot(total_trial_num, foraging_eff, **plot_para)
+        ax2[0,2].plot(foraging_eff, foraging_eff_random_seed, '.')
+        
+        # -- 3. Matching bias --
+        ax[1,0].plot(abs(matching_bias.astype(float)), **plot_para)
+        ax2[0,1].plot(matching_idx, foraging_eff, '.')
+        
+        # -- 4. Early lick ratio --
+        ax[1,1].plot(early_lick_ratio, **plot_para)
+        
+        # -- 5. Reward schedule and block structure --
+        ax2[1,0].plot(reward_sum_mean, **plot_para)
+        ax2[1,1].plot(reward_contrast_mean, **plot_para)
+        ax2[1,2].plot(block_length_mean, **plot_para)
+                
+        
+    ax[0,0].set(title='Total finished trials')
+    ax[0,0].legend()
+    
+    ax[0,1].set(title='Foraging efficiency (optimal) %')
+    ax[0,2].set(title='Foraging efficiency (optimal_random_seed) %')
+    ax[1,1].set(xlabel='Session number', title='Early lick trials %')
+    
+    ax2[0,0].set(xlabel='Total finished trials', ylabel='Foraging efficiency (optimal) %')
+    ax2[0,1].set(xlabel='Matching slope', ylabel='Foraging efficiency (optimal) %')
+    ax2[0,2].set(xlabel='Foraging eff optimal', ylabel='Foraging eff random seed')
+    ax2[0,2].plot([0,100], [0,100], 'k--')
+    ax2[1,0].set(xlabel='Session number', title='Mean reward prob sum')
+    ax2[1,0].legend()
+    ax2[1,1].set(xlabel='Session number', title='Mean reward prob contrast')
+    ax2[1,2].set(xlabel='Session number', title='Mean block length')
+    
+    ax[1,0].set(xlabel='Session number', title='abs(matching bias)')
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
