@@ -466,7 +466,11 @@ def plot_training_summary():
     sns.set(style="darkgrid", context="talk", font_scale=1)
     sns.set_palette("muted")
     all_wr = lab.WaterRestriction().fetch('water_restriction_number', order_by=('wr_start_date', 'water_restriction_number'))
-    highlight_prefix = 'HH'
+
+    highlight = ['HH01', 'HH04', 'HH06', 'HH07']
+    highlight_more = ['HH06', 'HH07']
+    # highlight = 'HH07' # 
+    # highlight_more = []# 
     
     fig1 = plt.figure(figsize=(20,12))
     ax = fig1.subplots(2,3)
@@ -506,8 +510,8 @@ def plot_training_summary():
                                        & 'water_port="right"').fetch('match_idx', 'bias', order_by='session')
         
         # Plot settings
-        if highlight_prefix in wr_name:
-            plot_setting = dict(marker='o' if wr_name in ['HH06', 'HH07'] else '', label=wr_name)
+        if wr_name in highlight:
+            plot_setting = dict(marker='o' if wr_name in highlight_more else '', label=wr_name)
         else:
             plot_setting = dict(lw=0.5, color='grey')
             
@@ -517,7 +521,7 @@ def plot_training_summary():
         # -- 2. Session-wise foraging efficiency (optimal) --
         ax[0,1].plot(foraging_eff, **plot_setting)
         ax[0,2].plot(foraging_eff_random_seed, **plot_setting)
-        ax2[0,0].plot(total_trial_num, foraging_eff, **plot_setting)
+        ax2[0,0].plot(total_trial_num, foraging_eff_random_seed, **plot_setting)
         ax2[0,2].plot(foraging_eff, foraging_eff_random_seed, '.')
         
         # -- 3. Matching bias --
@@ -540,26 +544,27 @@ def plot_training_summary():
     ax[0,2].set(title='Foraging efficiency (optimal_random_seed) %')
     ax[1,1].set(xlabel='Session number', title='Early lick trials %')
     
-    ax2[0,0].set(xlabel='Total finished trials', ylabel='Foraging efficiency (optimal) %')
+    ax2[0,0].set(xlabel='Total finished trials', ylabel='Foraging efficiency (optimal_random_seed) %')
     ax2[0,1].set(xlabel='Matching slope', ylabel='Foraging efficiency (optimal) %')
     ax2[0,2].set(xlabel='Foraging eff optimal', ylabel='Foraging eff random seed')
     ax2[0,2].plot([0,100], [0,100], 'k--')
     ax2[1,0].set(xlabel='Session number', title='Mean reward prob sum')
     ax2[1,0].legend()
-    ax2[1,1].set(xlabel='Session number', title='Mean reward prob contrast')
+    ax2[1,1].set(xlabel='Session number', title='Mean reward prob contrast', ylim=(0,10))
     ax2[1,2].set(xlabel='Session number', title='Mean block length')
     
-    ax[1,0].set(xlabel='Session number', title='abs(matching bias)')
+    ax[1,0].set(xlabel='Session number', title='abs(matching bias)', ylim=(-0.1, 5))
     #%%
     
 def plot_session_trial_events(key_subject_id_session = dict(subject_id=472184, session=14)):  # Plot all trial events of one specific session
     #%% 
     fig = plt.figure(figsize=(20,12))
-    gs = GridSpec(5, 1, wspace=0.4, hspace=0.3, bottom=0.05, top=0.9, left=0.07, right=0.97) 
+    gs = GridSpec(5, 1, wspace=0.4, hspace=0.4, bottom=0.07, top=0.95, left=0.1, right=0.9) 
     
     ax1 = fig.add_subplot(gs[0:3, :])
-    ax2 = fig.add_subplot(gs[3:, :])
-    ax1.get_shared_x_axes().join(ax1, ax2)
+    ax2 = fig.add_subplot(gs[3, :])
+    ax3 = fig.add_subplot(gs[4, :])
+    ax1.get_shared_x_axes().join(ax1, ax2, ax3)
     
     # Plot settings
     plot_setting = {'left lick':'red', 'right lick':'blue'}  
@@ -579,7 +584,7 @@ def plot_session_trial_events(key_subject_id_session = dict(subject_id=472184, s
     
     # -- All licking events (Ordered by trials) --
     ax1.plot([0, 0], [0, trial_num], 'k', lw=0.5)   # Aligned by go cue
-    ax1.set(ylabel='Trial number', xlim=(-4, 2))
+    ax1.set(ylabel='Trial number', xlim=(-3, 3), xticks=[])
 
     # Batch plotting to speed up    
     ax1.eventplot(lineoffsets=all_trial_num, positions=all_trial_start, color='k')   # Aligned by go cue
@@ -589,16 +594,25 @@ def plot_session_trial_events(key_subject_id_session = dict(subject_id=472184, s
                      color=plot_setting[event_type],
                      linewidth=2)   # Trial start
     
-    # -- Histograms --
+    # -- Histogram of all licks --
     for event_type in plot_setting:
-        sns.histplot(np.hstack(all_lick[event_type]), binwidth=0.01, ax=ax2, color=plot_setting[event_type], label=event_type)  # 10-ms window
+        sns.histplot(np.hstack(all_lick[event_type]), binwidth=0.01, alpha=0.5, 
+                     ax=ax2, color=plot_setting[event_type], label=event_type)  # 10-ms window
     
     ymax_tmp = max(ax2.get_ylim())  
     sns.histplot(-go_cue_times, binwidth=0.01, color='k', ax=ax2, label='trial start')  # 10-ms window
     ax2.axvline(x=0, color='k', lw=0.5)
-    ax2.set(xlabel='Time to Go Cue (s)', ylim=(0, ymax_tmp)) # Fix the ylim of left and right licks
+    ax2.set(ylim=(0, ymax_tmp), xticks=[], title='All events') # Fix the ylim of left and right licks
     ax2.legend()
     
-    
+    # -- Histogram of reaction time (first lick after go cue) --   
+    plot_setting = {'LEFT':'red', 'RIGHT':'blue'}  
+    for water_port in plot_setting:
+        this_RT = (foraging_analysis.TrialReactionTime() & key_subject_id_session & (experiment.WaterPortChoice() & 'water_port="{}"'.format(water_port))).fetch('reaction_time').astype(float)
+        sns.histplot(this_RT, binwidth=0.01, alpha=0.5, 
+                     ax=ax3, color=plot_setting[water_port], label=water_port)  # 10-ms window
+    ax3.axvline(x=0, color='k', lw=0.5)
+    ax3.set(xlabel='Time to Go Cue (s)', title='Reaction time') # Fix the ylim of left and right licks
+    ax3.legend()
     
     
