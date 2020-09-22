@@ -2,6 +2,7 @@ import pandas as pd
 from pipeline import lab, experiment, foraging_analysis
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 import seaborn as sns
 #dj.conn()
 
@@ -506,30 +507,30 @@ def plot_training_summary():
         
         # Plot settings
         if highlight_prefix in wr_name:
-            plot_para = dict(marker='o' if wr_name in ['HH06', 'HH07'] else '', label=wr_name)
+            plot_setting = dict(marker='o' if wr_name in ['HH06', 'HH07'] else '', label=wr_name)
         else:
-            plot_para = dict(lw=0.5, color='grey')
+            plot_setting = dict(lw=0.5, color='grey')
             
         # -- 1. Total finished trials --
-        ax[0,0].plot(total_trial_num, **plot_para)
+        ax[0,0].plot(total_trial_num, **plot_setting)
         
         # -- 2. Session-wise foraging efficiency (optimal) --
-        ax[0,1].plot(foraging_eff, **plot_para)
-        ax[0,2].plot(foraging_eff_random_seed, **plot_para)
-        ax2[0,0].plot(total_trial_num, foraging_eff, **plot_para)
+        ax[0,1].plot(foraging_eff, **plot_setting)
+        ax[0,2].plot(foraging_eff_random_seed, **plot_setting)
+        ax2[0,0].plot(total_trial_num, foraging_eff, **plot_setting)
         ax2[0,2].plot(foraging_eff, foraging_eff_random_seed, '.')
         
         # -- 3. Matching bias --
-        ax[1,0].plot(abs(matching_bias.astype(float)), **plot_para)
+        ax[1,0].plot(abs(matching_bias.astype(float)), **plot_setting)
         ax2[0,1].plot(matching_idx, foraging_eff, '.')
         
         # -- 4. Early lick ratio --
-        ax[1,1].plot(early_lick_ratio, **plot_para)
+        ax[1,1].plot(early_lick_ratio, **plot_setting)
         
         # -- 5. Reward schedule and block structure --
-        ax2[1,0].plot(reward_sum_mean, **plot_para)
-        ax2[1,1].plot(reward_contrast_mean, **plot_para)
-        ax2[1,2].plot(block_length_mean, **plot_para)
+        ax2[1,0].plot(reward_sum_mean, **plot_setting)
+        ax2[1,1].plot(reward_contrast_mean, **plot_setting)
+        ax2[1,2].plot(block_length_mean, **plot_setting)
                 
         
     ax[0,0].set(title='Total finished trials')
@@ -549,12 +550,54 @@ def plot_training_summary():
     ax2[1,2].set(xlabel='Session number', title='Mean block length')
     
     ax[1,0].set(xlabel='Session number', title='abs(matching bias)')
+    #%%
     
+def plot_session_trial_events(key_subject_id_session = dict(subject_id=472184, session=14)):  # Plot all trial events of one specific session
+    #%% 
+    fig = plt.figure(figsize=(20,12))
+    gs = GridSpec(5, 1, wspace=0.4, hspace=0.3, bottom=0.05, top=0.9, left=0.07, right=0.97) 
     
+    ax1 = fig.add_subplot(gs[0:3, :])
+    ax2 = fig.add_subplot(gs[3:, :])
+    ax1.get_shared_x_axes().join(ax1, ax2)
     
+    # Plot settings
+    plot_setting = {'left lick':'red', 'right lick':'blue'}  
     
+    # -- Get event times --
+    go_cue_times = (experiment.TrialEvent() & key_subject_id_session & 'trial_event_type="go"').fetch('trial_event_time', order_by='trial').astype(float)
+    lick_times = pd.DataFrame((experiment.ActionEvent() & key_subject_id_session).fetch(order_by='trial'))
     
+    trial_num = len(go_cue_times)
+    all_trial_num = np.arange(1, trial_num+1).tolist()
+    all_trial_start = [[-x] for x in go_cue_times]
+    all_lick = dict()
+    for event_type in plot_setting:
+        all_lick[event_type] = []
+        for i, trial_start in enumerate(all_trial_start):
+            all_lick[event_type].append((lick_times[(lick_times['trial']==i+1) & (lick_times['action_event_type']==event_type)]['action_event_time'].values.astype(float) + trial_start).tolist())
     
+    # -- All licking events (Ordered by trials) --
+    ax1.plot([0, 0], [0, trial_num], 'k', lw=0.5)   # Aligned by go cue
+    ax1.set(ylabel='Trial number', xlim=(-4, 2))
+
+    # Batch plotting to speed up    
+    ax1.eventplot(lineoffsets=all_trial_num, positions=all_trial_start, color='k')   # Aligned by go cue
+    for event_type in plot_setting:
+        ax1.eventplot(lineoffsets=all_trial_num, 
+                     positions=all_lick[event_type],
+                     color=plot_setting[event_type],
+                     linewidth=2)   # Trial start
+    
+    # -- Histograms --
+    for event_type in plot_setting:
+        sns.histplot(np.hstack(all_lick[event_type]), binwidth=0.01, ax=ax2, color=plot_setting[event_type], label=event_type)  # 10-ms window
+    
+    ymax_tmp = max(ax2.get_ylim())  
+    sns.histplot(-go_cue_times, binwidth=0.01, color='k', ax=ax2, label='trial start')  # 10-ms window
+    ax2.axvline(x=0, color='k', lw=0.5)
+    ax2.set(xlabel='Time to Go Cue (s)', ylim=(0, ymax_tmp)) # Fix the ylim of left and right licks
+    ax2.legend()
     
     
     
