@@ -12,25 +12,34 @@ minimum_trial_per_block = 30
 
 #%%
 @schema
-class TrialReactionTime(dj.Computed):
+class TrialStats(dj.Computed):
     definition = """
     -> experiment.BehaviorTrial
     ---
     reaction_time = null : decimal(8,4) # reaction time in seconds (first lick relative to go cue) [-1 in case of ignore trials]
+    double_dipping = null: tinyint # Whether this is a double dipped trial
     """
     # Foraging sessions only
     key_source = experiment.BehaviorTrial & 'task LIKE "foraging%"'
 
     def make(self, key):
+        trial_stats = dict()
+        
+        # -- Reaction time --
         gocue_time = (experiment.TrialEvent & key & 'trial_event_type = "go"').fetch1('trial_event_time')
-        q_reaction_time = experiment.BehaviorTrial.aggr(experiment.ActionEvent & key
-                                                        & 'action_event_type LIKE "%lick"'
-                                                        & 'action_event_time > {}'.format(gocue_time),
+        q_all_licks_after_go_cue = (experiment.ActionEvent & key 
+                                    & 'action_event_type LIKE "%lick"'
+                                    & 'action_event_time > {}'.format(gocue_time))
+        q_reaction_time = experiment.BehaviorTrial.aggr(q_all_licks_after_go_cue,
                                                         reaction_time='min(action_event_time)')
         if q_reaction_time:
-            key['reaction_time'] = q_reaction_time.fetch1('reaction_time') - gocue_time
+            trial_stats['reaction_time'] = q_reaction_time.fetch1('reaction_time') - gocue_time
+            
+        # -- Double dipping --
+        trial_stats['double_dipping'] = len(np.unique(q_all_licks_after_go_cue.fetch('action_event_type'))) > 1
+        
 
-        self.insert1(key)
+        self.insert1({**key, **trial_stats})
             
 @schema # TODO remove bias check?
 class BlockStats(dj.Computed):
@@ -70,6 +79,10 @@ class SessionStats(dj.Computed):
     session_length = null : decimal(10, 4) #length of the session in seconds
     session_pure_choices_num = null : int # Number of pure choices (excluding auto water)
     
+    session_double_dipping_ratio = null: decimal(5,4)  # Double dipping ratio
+    session_double_dipping_ratio_hit = null: decimal(5,4)  # Double dipping ratio of hit trials
+    session_double_dipping_ratio_miss = null: decimal(5,4)  # Double dipping ratio of miss trials
+    
     session_foraging_eff_optimal = null: decimal(5,4)   # Session-wise foraging efficiency (optimal; average sense)
     session_foraging_eff_optimal_random_seed = null: decimal(5,4)   # Session-wise foraging efficiency (optimal; random seed)
     
@@ -102,6 +115,15 @@ class SessionStats(dj.Computed):
             session_stats['session_length'] = float(((experiment.SessionTrial() & key).fetch('stop_time')).max())
         else:
             session_stats['session_length'] = 0
+            
+        # -- Double dipping ratio --
+        q_double_dipping = TrialStats & key & 'double_dipping = 1'
+        session_stats.update(session_double_dipping_ratio_hit = len(q_double_dipping & q_hit) / len(q_hit))        
+        
+        # Double dipping in missed trial is detected only for sessions later than the first day of using new lickport retraction logic 
+        if (experiment.Session & key & 'session_date > "2020-08-11"'):   
+            session_stats.update(session_double_dipping_ratio_miss = len(q_double_dipping & q_miss) / len(q_miss),
+                                 session_double_dipping_ratio = len(q_double_dipping & q_actual_finished) / len(q_actual_finished))
             
         # -- Session-wise foraging efficiency and schedule stats (2lp only) --
         if len(experiment.BehaviorTrial & key & 'task="foraging"'):

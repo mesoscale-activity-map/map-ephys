@@ -7,7 +7,7 @@ try:
     @ray.remote
     def populatemytables_core_paralel(arguments,runround):
         if runround == 1:
-            foraging_analysis.TrialReactionTime().populate(**arguments)
+            foraging_analysis.TrialStats().populate(**arguments)
             foraging_analysis.BlockStats().populate(**arguments)
             foraging_analysis.SessionStats().populate(**arguments)
             foraging_analysis.SessionTaskProtocol().populate(**arguments)
@@ -22,7 +22,7 @@ except:
     import multiprocessing as mp
     def populatemytables_core_paralel(arguments,runround):
         if runround == 1:
-            foraging_analysis.TrialReactionTime().populate(**arguments)
+            foraging_analysis.TrialStats().populate(**arguments)
             foraging_analysis.BlockStats().populate(**arguments)
             foraging_analysis.SessionStats().populate(**arguments)
             foraging_analysis.SessionTaskProtocol().populate(**arguments)
@@ -32,7 +32,7 @@ except:
     
 def populatemytables_core(arguments,runround):
     if runround == 1:
-        foraging_analysis.TrialReactionTime().populate(**arguments)
+        foraging_analysis.TrialStats().populate(**arguments)
         foraging_analysis.BlockStats().populate(**arguments)
         foraging_analysis.SessionStats().populate(**arguments)
         foraging_analysis.SessionTaskProtocol().populate(**arguments)
@@ -81,6 +81,10 @@ def populatemytables(paralel = True, cores = 9):
             
 if __name__ == '__main__' and use_ray == False:  # This is a workaround for mp.apply_async to run in Windows
 
+    # from pipeline import shell
+    # shell.logsetup('INFO')
+    # shell.ingest_foraging_behavior()
+    
     cores = int(mp.cpu_count()) - 2  # Auto core number selection
     pool = mp.Pool(processes=cores)
     

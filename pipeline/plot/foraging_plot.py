@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import seaborn as sns
+from datetime import timedelta
 #dj.conn()
 
 
@@ -80,7 +81,7 @@ def extract_trials(plottype = '2lickport',
                         * experiment.WaterPortChoice.proj(trial_choice='water_port')   # Choice
                         * experiment.BehaviorTrial                                 # Outcome
                         * (experiment.TrialEvent & 'trial_event_type = "go"')      # Go cue
-                        * foraging_analysis.TrialReactionTime                      # Reaction time
+                        * foraging_analysis.TrialStats                      # Reaction time
                         ).fetch('session', 'trial', 'block',
                                 'trial_choice', 'outcome', 'early_lick',
                                 'start_time', 'reaction_time',
@@ -461,27 +462,41 @@ def plot_local_efficiency_matching_bias(df_behaviortrial,ax3):
     #%%
     return ax3
 
-def plot_training_summary():
+def plot_training_summary(use_days_from_start=False):
     #%%
-    sns.set(style="darkgrid", context="talk", font_scale=1)
+    sns.set(style="darkgrid", context="talk", font_scale=1.2)
     sns.set_palette("muted")
     all_wr = lab.WaterRestriction().fetch('water_restriction_number', order_by=('wr_start_date', 'water_restriction_number'))
 
-    highlight = ['HH01', 'HH04', 'HH06', 'HH07']
-    highlight_more = ['HH06', 'HH07']
-    # highlight = 'HH07' # 
-    # highlight_more = []# 
+    exclude = []
+    # exclude = ['HH01', 'HH04', 'HH06', 'HH07']
+    # highlight = {('FOR01', 'FOR02', 'FOR03', 'FOR04'): dict(color='b'),
+    #              ('FOR11', 'FOR12'): dict(color='g'),
+    #              }
+    # highlight = {('FOR01', 'FOR02', 'FOR03', 'FOR04'): dict(color='r'),
+    #               ('HH01', 'HH04', 'HH06', 'HH07'): dict(color='b'),
+    #               }
+    highlight = {('HH01', 'HH04'): dict(marker='.'),
+                  ('HH06', 'HH07'): dict(marker='o')
+                  }
     
     fig1 = plt.figure(figsize=(20,12))
     ax = fig1.subplots(2,3)
-    fig1.subplots_adjust(hspace=0.3, wspace=0.3)
+    fig1.subplots_adjust(hspace=0.5, wspace=0.3)
 
     fig2 = plt.figure(figsize=(20,12))
     ax2 = fig2.subplots(2,3)
-    fig2.subplots_adjust(hspace=0.3, wspace=0.3)
+    fig2.subplots_adjust(hspace=0.5, wspace=0.3)
     
+    fig3 = plt.figure(figsize=(16,12))
+    ax3 = fig3.subplots(2,2)
+    fig3.subplots_adjust(hspace=0.5, wspace=0.3)
+
     # Only mice who started with 2lp task
     for wr_name in all_wr:
+        if wr_name in exclude:
+            continue
+        
         q_two_lp_foraging_sessions = (foraging_analysis.SessionTaskProtocol * lab.WaterRestriction
                                     & 'session_task_protocol=100'
                                     & 'water_restriction_number="{}"'.format(wr_name))
@@ -493,8 +508,25 @@ def plot_training_summary():
     
         # -- Get data --
         # Basic stats
-        this_mouse_session_stats = (foraging_analysis.SessionStats & q_two_lp_foraging_sessions).fetch(
-                          order_by='session', format='frame')
+        this_mouse_session_stats_raw = (foraging_analysis.SessionStats 
+                                        * (foraging_analysis.SessionMatching.WaterPortMatching.proj('match_idx', 'bias') & 'water_port="right"') 
+                                        & q_two_lp_foraging_sessions
+                                        ).fetch(
+                                            order_by='session', format='frame').reset_index()
+        
+        if use_days_from_start:  # Use the actual day from the first training day
+            training_day = (experiment.Session & q_two_lp_foraging_sessions).fetch('session_date')
+            training_day = ((training_day - min(training_day))/timedelta(days=1)).astype(int) + 1
+            
+            # Insert nans if no training day
+            x = np.arange(1, max(training_day)+1)
+            this_mouse_session_stats = pd.DataFrame(np.nan, index=x, columns=this_mouse_session_stats_raw.columns)
+            this_mouse_session_stats.loc[training_day] = this_mouse_session_stats_raw.values
+
+        else:  # Use continuous session number
+            x = this_mouse_session_stats_raw['session']
+            this_mouse_session_stats = this_mouse_session_stats_raw
+        
         total_trial_num = this_mouse_session_stats['session_pure_choices_num'].values
         foraging_eff = this_mouse_session_stats['session_foraging_eff_optimal'].values * 100
         foraging_eff_random_seed = this_mouse_session_stats['session_foraging_eff_optimal_random_seed'].to_numpy(dtype=np.float) * 100
@@ -503,57 +535,75 @@ def plot_training_summary():
         reward_contrast_mean = this_mouse_session_stats['session_mean_reward_contrast'].values
         block_length_mean = (this_mouse_session_stats['session_total_trial_num'] / this_mouse_session_stats['session_block_num']).values
         
-        # Delay period (not well-defined by the data because it's affected by early licks!!!)
+        double_dip = this_mouse_session_stats['session_double_dipping_ratio'].to_numpy(dtype=np.float) * 100
+        double_dip_hit = this_mouse_session_stats['session_double_dipping_ratio_hit'].to_numpy(dtype=np.float) * 100
+        double_dip_miss = this_mouse_session_stats['session_double_dipping_ratio_miss'].to_numpy(dtype=np.float) * 100
         
-        # Matching
-        matching_idx, matching_bias = (foraging_analysis.SessionMatching.WaterPortMatching & q_two_lp_foraging_sessions
-                                       & 'water_port="right"').fetch('match_idx', 'bias', order_by='session')
+        matching_idx = this_mouse_session_stats['match_idx'] 
+        matching_bias = this_mouse_session_stats['bias']        
         
         # Plot settings
-        if wr_name in highlight:
-            plot_setting = dict(marker='o' if wr_name in highlight_more else '', label=wr_name)
-        else:
+        plot_setting = None        
+        for h_wr in highlight:
+            if wr_name in h_wr:
+                plot_setting = {**highlight[h_wr], 'label': wr_name}
+        
+        if plot_setting is None:
             plot_setting = dict(lw=0.5, color='grey')
             
         # -- 1. Total finished trials --
-        ax[0,0].plot(total_trial_num, **plot_setting)
+        ax[0,0].plot(x, total_trial_num, **plot_setting)
         
         # -- 2. Session-wise foraging efficiency (optimal) --
-        ax[0,1].plot(foraging_eff, **plot_setting)
-        ax[0,2].plot(foraging_eff_random_seed, **plot_setting)
-        ax2[0,0].plot(total_trial_num, foraging_eff_random_seed, **plot_setting)
+        ax[0,1].plot(x, foraging_eff, **plot_setting)
+        ax[0,2].plot(x, foraging_eff_random_seed, **plot_setting)
+        ax2[0,0].plot(total_trial_num, foraging_eff, **plot_setting)
         ax2[0,2].plot(foraging_eff, foraging_eff_random_seed, '.')
         
         # -- 3. Matching bias --
-        ax[1,0].plot(abs(matching_bias.astype(float)), **plot_setting)
+        ax[1,0].plot(x, abs(matching_bias.astype(float)), **plot_setting)
         ax2[0,1].plot(matching_idx, foraging_eff, '.')
         
         # -- 4. Early lick ratio --
-        ax[1,1].plot(early_lick_ratio, **plot_setting)
+        ax[1,1].plot(x, early_lick_ratio, **plot_setting)
         
         # -- 5. Reward schedule and block structure --
-        ax2[1,0].plot(reward_sum_mean, **plot_setting)
-        ax2[1,1].plot(reward_contrast_mean, **plot_setting)
-        ax2[1,2].plot(block_length_mean, **plot_setting)
-                
+        ax2[1,0].plot(x, reward_sum_mean, **plot_setting)
+        ax2[1,1].plot(x, reward_contrast_mean, **plot_setting)
+        ax2[1,2].plot(x, block_length_mean, **plot_setting)
         
-    ax[0,0].set(title='Total finished trials')
+        # -- 6. Double dipping ratio --
+        ax3[0,0].plot(x, double_dip, **plot_setting)
+        ax3[0,1].plot(x, double_dip_hit, **plot_setting)
+        ax3[1,0].plot(x, double_dip_miss, **plot_setting)
+        ax3[1,1].plot(double_dip_hit, double_dip_miss, **plot_setting)
+                
+    x_name = 'Days from start' if use_days_from_start else 'Session number'
+        
+    ax[0,0].set(xlabel=x_name, title='Total finished trials')
     ax[0,0].legend()
     
-    ax[0,1].set(title='Foraging efficiency (optimal) %')
-    ax[0,2].set(title='Foraging efficiency (optimal_random_seed) %')
-    ax[1,1].set(xlabel='Session number', title='Early lick trials %')
+    ax[0,1].set(xlabel=x_name, title='Foraging efficiency (optimal) %')
+    ax[0,2].set(xlabel=x_name, title='Foraging efficiency (optimal_random_seed) %')
+    ax[1,0].set(xlabel=x_name, title='abs(matching bias)', ylim=(-0.1, 5))
+    ax[1,1].set(xlabel=x_name, title='Early lick trials %')
     
-    ax2[0,0].set(xlabel='Total finished trials', ylabel='Foraging efficiency (optimal_random_seed) %')
+    ax2[0,0].set(xlabel='Total finished trials', ylabel='Foraging efficiency (optimal) %')
     ax2[0,1].set(xlabel='Matching slope', ylabel='Foraging efficiency (optimal) %')
     ax2[0,2].set(xlabel='Foraging eff optimal', ylabel='Foraging eff random seed')
     ax2[0,2].plot([0,100], [0,100], 'k--')
-    ax2[1,0].set(xlabel='Session number', title='Mean reward prob sum')
+    ax2[1,0].set(xlabel=x_name, title='Mean reward prob sum')
     ax2[1,0].legend()
-    ax2[1,1].set(xlabel='Session number', title='Mean reward prob contrast', ylim=(0,10))
-    ax2[1,2].set(xlabel='Session number', title='Mean block length')
+    ax2[1,1].set(xlabel=x_name, title='Mean reward prob contrast', ylim=(0,10))
+    ax2[1,2].set(xlabel=x_name, title='Mean block length')
     
-    ax[1,0].set(xlabel='Session number', title='abs(matching bias)', ylim=(-0.1, 5))
+    ax3[0,0].set(xlabel=x_name, title='Double dipping all (%)')
+    ax3[0,0].legend()
+    ax3[0,1].set(xlabel=x_name, title='Double dipping if hit (%)')
+    ax3[1,0].set(xlabel=x_name, title='Double dipping if miss (%)')
+    ax3[1,1].set(title='Double dipping (%)', xlabel='if hit', ylabel='if miss')
+    ax3[1,1].plot([0,100], [0,100], 'k--')
+
     #%%
     
 def plot_session_trial_events(key_subject_id_session = dict(subject_id=472184, session=14)):  # Plot all trial events of one specific session
@@ -608,7 +658,7 @@ def plot_session_trial_events(key_subject_id_session = dict(subject_id=472184, s
     # -- Histogram of reaction time (first lick after go cue) --   
     plot_setting = {'LEFT':'red', 'RIGHT':'blue'}  
     for water_port in plot_setting:
-        this_RT = (foraging_analysis.TrialReactionTime() & key_subject_id_session & (experiment.WaterPortChoice() & 'water_port="{}"'.format(water_port))).fetch('reaction_time').astype(float)
+        this_RT = (foraging_analysis.TrialStats() & key_subject_id_session & (experiment.WaterPortChoice() & 'water_port="{}"'.format(water_port))).fetch('reaction_time').astype(float)
         sns.histplot(this_RT, binwidth=0.01, alpha=0.5, 
                      ax=ax3, color=plot_setting[water_port], label=water_port)  # 10-ms window
     ax3.axvline(x=0, color='k', lw=0.5)
