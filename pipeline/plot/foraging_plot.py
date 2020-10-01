@@ -1,6 +1,10 @@
 import pandas as pd
 from pipeline import lab, experiment, foraging_analysis
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+import seaborn as sns
+from datetime import timedelta
 #dj.conn()
 
 
@@ -33,7 +37,7 @@ def multicolor_ylabel(ax,list_of_strings,list_of_colors,axis='x',anchorpad=0,**k
     if axis=='x' or axis=='both':
         boxes = [TextArea(text, textprops=dict(color=color, ha='left',va='bottom',**kw)) 
                     for text,color in zip(list_of_strings,list_of_colors) ]
-        xbox = HPacker(children=boxes,align="center",pad=0, sep=5)
+        xbox = VPacker(children=boxes,align="center",pad=0, sep=1)
         anchored_xbox = AnchoredOffsetbox(loc=3, child=xbox, pad=anchorpad,frameon=False,bbox_to_anchor=(0.2, -0.09),
                                           bbox_transform=ax.transAxes, borderpad=0.)
         ax.add_artist(anchored_xbox)
@@ -42,7 +46,7 @@ def multicolor_ylabel(ax,list_of_strings,list_of_colors,axis='x',anchorpad=0,**k
     if axis=='y' or axis=='both':
         boxes = [TextArea(text, textprops=dict(color=color, ha='left',va='bottom',rotation=90,**kw)) 
                      for text,color in zip(list_of_strings[::-1],list_of_colors) ]
-        ybox = VPacker(children=boxes,align="center", pad=0, sep=5)
+        ybox = HPacker(children=boxes,align="center", pad=0, sep=1)
         anchored_ybox = AnchoredOffsetbox(loc=3, child=ybox, pad=anchorpad, frameon=False, bbox_to_anchor=(-0.10, 0.2), 
                                           bbox_transform=ax.transAxes, borderpad=0.)
         ax.add_artist(anchored_ybox)
@@ -54,14 +58,18 @@ def extract_trials(plottype = '2lickport',
                    show_bias_check_trials = True,
                    kernel = np.ones(10)/10,
                    filters=None,
-                   local_matching = {'calculate_local_matching':False}):
+                   local_matching = {'calculate_local_matching': True,
+                                     'sliding_window':100,
+                                     'matching_window':300,
+                                     'matching_step':30,
+                                     'efficiency_type': 'ideal'}):
     
     movingwindow = local_matching['sliding_window']
     fit_window = local_matching['matching_window']
     fit_step = local_matching['matching_step']
     
     subject_id = (lab.WaterRestriction()&'water_restriction_number = "{}"'.format(wr_name)).fetch1('subject_id')
-    
+
     # Query of session-block-trial info
     q_session_block_trial = (experiment.SessionTrial * experiment.SessionBlock.BlockTrial
                              & 'subject_id = {}'.format(subject_id) 
@@ -73,7 +81,7 @@ def extract_trials(plottype = '2lickport',
                         * experiment.WaterPortChoice.proj(trial_choice='water_port')   # Choice
                         * experiment.BehaviorTrial                                 # Outcome
                         * (experiment.TrialEvent & 'trial_event_type = "go"')      # Go cue
-                        * foraging_analysis.TrialReactionTime                      # Reaction time
+                        * foraging_analysis.TrialStats                      # Reaction time
                         ).fetch('session', 'trial', 'block',
                                 'trial_choice', 'outcome', 'early_lick',
                                 'start_time', 'reaction_time',
@@ -102,8 +110,11 @@ def extract_trials(plottype = '2lickport',
     df_behaviortrial['reaction_time_smoothed'] = np.nan
     if type(filters) == dict:
         df_behaviortrial['keep_trial']=1
+    
     for session in unique_sessions:
-        total_trials_so_far = (foraging_analysis.SessionStats()&'subject_id = {}'.format(subject_id) &'session < {}'.format(session)).fetch('session_total_trial_num')
+        # Relative to the beginning of selected sessions, not day 1 of training.
+        total_trials_so_far = (foraging_analysis.SessionStats()&'subject_id = {}'.format(subject_id) 
+                               &'session < {}'.format(session) &'session >= {}'.format(sessions[0])).fetch('session_total_trial_num')
         # bias_check_trials_now = (foraging_analysis.SessionStats()&'subject_id = {}'.format(subject_id) &'session = {}'.format(session)).fetch1('session_bias_check_trial_num')
         total_trials_so_far =sum(total_trials_so_far)
         gotime  = df_behaviortrial.loc[df_behaviortrial['session']==session, 'trial_event_time']
@@ -137,55 +148,61 @@ def extract_trials(plottype = '2lickport',
         df_behaviortrial = df_behaviortrial.reset_index(drop=True)
         
         
-    #% calculating local matching, bias, reward rate
-
-    kernel = np.ones(movingwindow)/movingwindow
-    p1 = np.asarray(np.max([df_behaviortrial['p_reward_right'],df_behaviortrial['p_reward_left']],0),float)
-    p0 = np.asarray(np.min([df_behaviortrial['p_reward_right'],df_behaviortrial['p_reward_left']],0),float)
-    m_star_greedy = np.floor(np.log(1-p1)/np.log(1-p0))
-    p_star_greedy = p1 + (1-(1-p0)**(m_star_greedy+1)-p1**2)/(m_star_greedy+1)
-    local_reward_rate = np.convolve(df_behaviortrial['outcome']=='hit',kernel,'same')
-    max_reward_rate = np.convolve(p_star_greedy,kernel,'same')
-    local_efficiency = local_reward_rate/max_reward_rate
-    choice_right = np.asarray(df_behaviortrial['trial_choice']=='right')
-    choice_left = np.asarray(df_behaviortrial['trial_choice']=='left')
-    choice_middle = np.asarray(df_behaviortrial['trial_choice']=='middle')
-    
-    reward_rate_right =np.asarray((df_behaviortrial['trial_choice']=='right') &(df_behaviortrial['outcome']=='hit'))
-    reward_rate_left =np.asarray((df_behaviortrial['trial_choice']=='left') &(df_behaviortrial['outcome']=='hit'))
-    reward_rate_middle =np.asarray((df_behaviortrial['trial_choice']=='middle') &(df_behaviortrial['outcome']=='hit'))
-    
-# =============================================================================
-#     choice_fraction_right = np.convolve(choice_right,kernel,'same')/np.convolve(choice_right+choice_left+choice_middle,kernel,'same')
-#     reward_fraction_right = np.convolve(reward_rate_right,kernel,'same')/local_reward_rate
-# =============================================================================
-    choice_rate_right= np.convolve(choice_right,kernel,'same')/np.convolve(choice_left+choice_middle,kernel,'same')
-    reward_rate_right = np.convolve(reward_rate_right,kernel,'same')/np.convolve(reward_rate_left+reward_rate_middle,kernel,'same')
-    slopes = list()
-    intercepts = list()
-    trial_number = list()
-    for center_trial in np.arange(np.round(fit_window/2),len(df_behaviortrial),fit_step):
-        #%
-        reward_rates_now = reward_rate_right[int(np.round(center_trial-fit_window/2)):int(np.round(center_trial+fit_window/2))]
-        choice_rates_now = choice_rate_right[int(np.round(center_trial-fit_window/2)):int(np.round(center_trial+fit_window/2))]
-        todel = (reward_rates_now==0) | (choice_rates_now==0)
-        reward_rates_now = reward_rates_now[~todel]
-        choice_rates_now = choice_rates_now[~todel]
-        try:
-            slope_now, intercept_now = np.polyfit(np.log2(reward_rates_now), np.log2(choice_rates_now), 1)
-            slopes.append(slope_now)
-            intercepts.append(intercept_now)
-            trial_number.append(center_trial)
-        except:
-            pass
+    #% --- calculating local matching, bias, reward rate ---
+    if local_matching['calculate_local_matching']:
+        kernel = np.ones(movingwindow)/movingwindow
+        p1 = np.asarray(np.max([df_behaviortrial['p_reward_right'],df_behaviortrial['p_reward_left']],0),float)
+        p0 = np.asarray(np.min([df_behaviortrial['p_reward_right'],df_behaviortrial['p_reward_left']],0),float)
         
+        m_star_greedy = np.floor(np.log(1-p1+1e-10)/np.log(1-p0+1e-10))
+        p_star_greedy = p1 + (1-(1-p0)**(m_star_greedy+1)-p1**2)/(m_star_greedy+1)
         
-    df_behaviortrial['local_efficiency']=local_efficiency
-    df_behaviortrial['local_matching_slope'] = np.nan
-    df_behaviortrial.loc[trial_number,'local_matching_slope']=slopes
-    df_behaviortrial['local_matching_bias'] = np.nan
-    df_behaviortrial.loc[trial_number,'local_matching_bias']=intercepts
+        local_reward_rate = np.convolve(df_behaviortrial['outcome']=='hit',kernel,'same')
+        max_reward_rate = np.convolve(p_star_greedy,kernel,'same')
+        local_efficiency = local_reward_rate/max_reward_rate
+        choice_right = np.asarray(df_behaviortrial['trial_choice']=='right')
+        choice_left = np.asarray(df_behaviortrial['trial_choice']=='left')
+        choice_middle = np.asarray(df_behaviortrial['trial_choice']=='middle')
+        
+        reward_rate_right =np.asarray((df_behaviortrial['trial_choice']=='right') &(df_behaviortrial['outcome']=='hit'))
+        reward_rate_left =np.asarray((df_behaviortrial['trial_choice']=='left') &(df_behaviortrial['outcome']=='hit'))
+        reward_rate_middle =np.asarray((df_behaviortrial['trial_choice']=='middle') &(df_behaviortrial['outcome']=='hit'))
+        
+    # =============================================================================
+    #     choice_fraction_right = np.convolve(choice_right,kernel,'same')/np.convolve(choice_right+choice_left+choice_middle,kernel,'same')
+    #     reward_fraction_right = np.convolve(reward_rate_right,kernel,'same')/local_reward_rate
+    # =============================================================================
+        with np.errstate(divide='ignore'):
+            choice_rate_right= np.convolve(choice_right,kernel,'same')/(np.convolve(choice_left+choice_middle,kernel,'same') )
+            reward_rate_right = np.convolve(reward_rate_right,kernel,'same')/(np.convolve(reward_rate_left+reward_rate_middle,kernel,'same') )
+        slopes = list()
+        intercepts = list()
+        trial_number = list()
+        for center_trial in np.arange(np.round(fit_window/2),len(df_behaviortrial),fit_step):
+            #%
+            reward_rates_now = reward_rate_right[int(np.round(center_trial-fit_window/2)):int(np.round(center_trial+fit_window/2))]
+            choice_rates_now = choice_rate_right[int(np.round(center_trial-fit_window/2)):int(np.round(center_trial+fit_window/2))]
+            todel = (reward_rates_now==0) | (choice_rates_now==0)
+            reward_rates_now = reward_rates_now[~todel]
+            choice_rates_now = choice_rates_now[~todel]
+            try:
+                x, y = np.log2(reward_rates_now), np.log2(choice_rates_now)
+                idx = np.isfinite(x) & np.isfinite(y)
+                slope_now, intercept_now = np.polyfit(x[idx], y[idx], 1)
+                slopes.append(slope_now)
+                intercepts.append(intercept_now)
+                trial_number.append(center_trial)
+            except:
+                pass
+            
+            
+        df_behaviortrial['local_efficiency']=local_efficiency
+        df_behaviortrial['local_matching_slope'] = np.nan
+        df_behaviortrial.loc[trial_number,'local_matching_slope']=slopes
+        df_behaviortrial['local_matching_bias'] = np.nan
+        df_behaviortrial.loc[trial_number,'local_matching_bias']=intercepts
     #%%
+    
     return df_behaviortrial
 
 #%%
@@ -200,9 +217,9 @@ def plot_rt_iti(df_behaviortrial,
                 kernel = np.ones(10)/10):
     
         
-    blockswitches = np.where(np.diff(df_behaviortrial['session'].values)>0)[0]
-    if len(blockswitches)>0:
-        for trialnum_now in blockswitches:
+    sessionswitches = np.where(np.diff(df_behaviortrial['session'].values)>0)[0]
+    if len(sessionswitches)>0:
+        for trialnum_now in sessionswitches:
             ax1.plot([df_behaviortrial['trial'][trialnum_now],df_behaviortrial['trial'][trialnum_now]],[0,1000],'b--')    
             ax2.plot([df_behaviortrial['trial'][trialnum_now],df_behaviortrial['trial'][trialnum_now]],[0,1000],'b--')    
     
@@ -221,7 +238,7 @@ def plot_rt_iti(df_behaviortrial,
     ax11.set_ylabel('Ignore rate',color='g')
     ax11.spines["right"].set_color("green")
     
-    multicolor_ylabel(ax1,('Delay (s)', ' ITI (s)','Reaction time (ms)'),('k','r','m'),axis='y',size=12)
+    multicolor_ylabel(ax1,('Delay (s)', ' ITI (s)','Reaction time (ms)'),('k','r','m'),axis='y')
     
     ax2.plot(df_behaviortrial['trial'],np.convolve(df_behaviortrial['early_count'],kernel,'same'),'y-')
     ax2.set_ylim([0,2])
@@ -234,7 +251,7 @@ def plot_rt_iti(df_behaviortrial,
     ax22.set_ylim([-1,1])
     ax22.set_ylabel('Reward rate',color='r')
     ax22.spines["right"].set_color("red")
-
+    ax2.set_xlabel('Trial #')
 #%%
 def plot_trials(df_behaviortrial,
                 ax1,
@@ -281,9 +298,9 @@ def plot_trials(df_behaviortrial,
     rewarded = (df_behaviortrial['outcome']=='hit')
     unrewarded = (df_behaviortrial['outcome']=='miss')
     
-    blockswitches = np.where(np.diff(df_behaviortrial['session'].values)>0)[0]
-    if len(blockswitches)>0:
-        for trialnum_now in blockswitches:
+    sessionswitches = np.where(np.diff(df_behaviortrial['session'].values)>0)[0]
+    if len(sessionswitches)>0:
+        for trialnum_now in sessionswitches:
             ax1.plot([df_behaviortrial['trial'][trialnum_now],df_behaviortrial['trial'][trialnum_now]],[-.15,1.15],'b--')
             
     if plottype == '2lickport':
@@ -315,13 +332,18 @@ def plot_trials(df_behaviortrial,
         if plottype == '3lickport':
             ax2.plot(df_behaviortrial['trial'],df_behaviortrial['p_reward_middle'],'g-')
         ax2.set_ylabel('Reward probability')
-        ax2.set_xlabel('Trial #')
+        
         if plottype == '3lickport':
             legenda = ['left','right','middle']
         else:
             legenda = ['left','right']
         ax2.legend(legenda,fontsize='small',loc = 'upper right')
-        ax2.set_xlim([np.min(df_behaviortrial['trial'])-10,np.max(df_behaviortrial['trial'])+10])    
+        ax2.set_xlim([np.min(df_behaviortrial['trial'])-10,np.max(df_behaviortrial['trial'])+10])  
+        ax2.set(ylim=(-0.1, 1.1))
+        
+        if len(sessionswitches)>0:
+            for trialnum_now in sessionswitches:
+                ax2.plot([df_behaviortrial['trial'][trialnum_now],df_behaviortrial['trial'][trialnum_now]],[-.15,1.15],'b--')
         #%%
     return ax1, ax2
     
@@ -332,6 +354,7 @@ def plot_efficiency_matching_bias(ax3,
                                   sessions = (5,11),
                                   show_bias_check_trials = True,
                                   plot_efficiency_type='ideal'):
+    
     
     subject_id = (lab.WaterRestriction()&'water_restriction_number = "{}"'.format(wr_name)).fetch1('subject_id')
     if show_bias_check_trials:
@@ -350,7 +373,8 @@ def plot_efficiency_matching_bias(ax3,
     session_start_trial_nums = list()
     session_end_trial_nums = list()
     for session in unique_sessions:
-        total_trials_so_far = (foraging_analysis.SessionStats()&'subject_id = {}'.format(subject_id) &'session < {}'.format(session)).fetch('session_total_trial_num')
+        total_trials_so_far = (foraging_analysis.SessionStats()&'subject_id = {}'.format(subject_id) 
+                               &'session < {}'.format(session) &'session >= {}'.format(sessions[0])).fetch('session_total_trial_num')
         #bias_check_trials_now = (foraging_analysis.SessionStats()&'subject_id = {}'.format(subject_id) &'session = {}'.format(session)).fetch1('session_bias_check_trial_num')
         total_trials_so_far =sum(total_trials_so_far)
         session_start_trial_nums.append(total_trials_so_far)
@@ -385,7 +409,7 @@ def plot_efficiency_matching_bias(ax3,
     session_switch_trial_nums.append(session_end_trial_nums[-1])
     for session_switch_trial_num in session_switch_trial_nums:
         ax3.plot([session_switch_trial_num,session_switch_trial_num],[-.15,1.15],'b--')
-    ax3.set_xlim([np.min(session_switch_trial_nums)-10,np.max(session_switch_trial_nums)+10]) 
+    ax3.set_xlim([0,np.max(session_switch_trial_nums)+10]) 
     
     # Session matching
     q_session_matching = (foraging_analysis.SessionMatching.WaterPortMatching * foraging_analysis.SessionStats
@@ -414,7 +438,7 @@ def plot_efficiency_matching_bias(ax3,
     ax33.set_ylabel('Bias',color='y')
     ax33.spines["right"].set_color("yellow")
     #ax33.tick_params(axis='y', colors='yellow')
-    multicolor_ylabel(ax3,('Efficiency', ' Matching '),('r','k'),axis='y',size=12)
+    multicolor_ylabel(ax3,('Efficiency', ' Matching '),('r','k'),axis='y')
     #%%
     return ax3
 
@@ -422,9 +446,9 @@ def plot_efficiency_matching_bias(ax3,
 def plot_local_efficiency_matching_bias(df_behaviortrial,ax3):
     
     ax3.plot(df_behaviortrial['trial'],df_behaviortrial['local_efficiency'],'k-')     
-    blockswitches = np.where(np.diff(df_behaviortrial['session'].values)>0)[0]
-    if len(blockswitches)>0:
-        for trialnum_now in blockswitches:
+    sessionswitches = np.where(np.diff(df_behaviortrial['session'].values)>0)[0]
+    if len(sessionswitches)>0:
+        for trialnum_now in sessionswitches:
             ax3.plot([df_behaviortrial['trial'][trialnum_now],df_behaviortrial['trial'][trialnum_now]],[-.15,1.15],'b--')
      
 
@@ -441,6 +465,453 @@ def plot_local_efficiency_matching_bias(df_behaviortrial,ax3):
     ax33.spines["right"].set_color("yellow")
     ax3.set_xlim([np.min(df_behaviortrial['trial'])-10,np.max(df_behaviortrial['trial'])+10]) 
     #ax33.tick_params(axis='y', colors='yellow')
-    multicolor_ylabel(ax3,('Efficiency', ' Matching '),('r','k'),axis='y',size=12)
+    multicolor_ylabel(ax3,('Efficiency', ' Matching '),('r','k'),axis='y')
     #%%
     return ax3
+
+def plot_training_summary(use_days_from_start=False):
+    #%%
+    sns.set(style="darkgrid", context="talk", font_scale=1.2)
+    sns.set_palette("muted")
+    all_wr = lab.WaterRestriction().fetch('water_restriction_number', order_by=('wr_start_date', 'water_restriction_number'))
+
+    exclude = []
+    # exclude = ['HH01', 'HH04', 'HH06', 'HH07']
+    # highlight = {('FOR01', 'FOR02', 'FOR03', 'FOR04'): dict(color='b'),
+    #              ('FOR11', 'FOR12'): dict(color='g'),
+    #              }
+    # highlight = {('FOR01', 'FOR02', 'FOR03', 'FOR04'): dict(color='r'),
+    #               ('HH01', 'HH04', 'HH06', 'HH07'): dict(color='b'),
+    #               }
+    highlight = {('HH01', 'HH04'): dict(marker='.'),
+                  ('HH06', 'HH07'): dict(marker='o')
+                  }
+    
+    fig1 = plt.figure(figsize=(20,12))
+    ax = fig1.subplots(2,3)
+    fig1.subplots_adjust(hspace=0.5, wspace=0.3)
+
+    fig2 = plt.figure(figsize=(20,12))
+    ax2 = fig2.subplots(2,3)
+    fig2.subplots_adjust(hspace=0.5, wspace=0.3)
+    
+    fig3 = plt.figure(figsize=(16,12))
+    ax3 = fig3.subplots(2,2)
+    fig3.subplots_adjust(hspace=0.5, wspace=0.3)
+
+    # Only mice who started with 2lp task
+    for wr_name in all_wr:
+        if wr_name in exclude:
+            continue
+        
+        q_two_lp_foraging_sessions = (foraging_analysis.SessionTaskProtocol * lab.WaterRestriction
+                                    & 'session_task_protocol=100'
+                                    & 'water_restriction_number="{}"'.format(wr_name))
+
+        # Skip this mice if it did not started with 2lp task
+        two_lp_foraging_sessions = q_two_lp_foraging_sessions.fetch('session')
+        if len(two_lp_foraging_sessions) == 0 or min(two_lp_foraging_sessions) > 1:
+            continue
+    
+        # -- Get data --
+        # Basic stats
+        this_mouse_session_stats_raw = (foraging_analysis.SessionStats 
+                                        * (foraging_analysis.SessionMatching.WaterPortMatching.proj('match_idx', 'bias') & 'water_port="right"') 
+                                        & q_two_lp_foraging_sessions
+                                        ).fetch(
+                                            order_by='session', format='frame').reset_index()
+        
+        if use_days_from_start:  # Use the actual day from the first training day
+            training_day = (experiment.Session & q_two_lp_foraging_sessions).fetch('session_date')
+            training_day = ((training_day - min(training_day))/timedelta(days=1)).astype(int) + 1
+            
+            # Insert nans if no training day
+            x = np.arange(1, max(training_day)+1)
+            this_mouse_session_stats = pd.DataFrame(np.nan, index=x, columns=this_mouse_session_stats_raw.columns)
+            this_mouse_session_stats.loc[training_day] = this_mouse_session_stats_raw.values
+
+        else:  # Use continuous session number
+            x = this_mouse_session_stats_raw['session']
+            this_mouse_session_stats = this_mouse_session_stats_raw
+        
+        total_trial_num = this_mouse_session_stats['session_pure_choices_num'].values
+        foraging_eff = this_mouse_session_stats['session_foraging_eff_optimal'].values * 100
+        foraging_eff_random_seed = this_mouse_session_stats['session_foraging_eff_optimal_random_seed'].to_numpy(dtype=np.float) * 100
+        early_lick_ratio = this_mouse_session_stats['session_early_lick_ratio'].values * 100
+        reward_sum_mean = this_mouse_session_stats['session_mean_reward_sum'].values
+        reward_contrast_mean = this_mouse_session_stats['session_mean_reward_contrast'].values
+        block_length_mean = (this_mouse_session_stats['session_total_trial_num'] / this_mouse_session_stats['session_block_num']).values
+        
+        double_dip = this_mouse_session_stats['session_double_dipping_ratio'].to_numpy(dtype=np.float) * 100
+        double_dip_hit = this_mouse_session_stats['session_double_dipping_ratio_hit'].to_numpy(dtype=np.float) * 100
+        double_dip_miss = this_mouse_session_stats['session_double_dipping_ratio_miss'].to_numpy(dtype=np.float) * 100
+        
+        matching_idx = this_mouse_session_stats['match_idx'] 
+        matching_bias = this_mouse_session_stats['bias']        
+        
+        # Plot settings
+        plot_setting = None        
+        for h_wr in highlight:
+            if wr_name in h_wr:
+                plot_setting = {**highlight[h_wr], 'label': wr_name}
+        
+        if plot_setting is None:
+            plot_setting = dict(lw=0.5, color='grey')
+            
+        # -- 1. Total finished trials --
+        ax[0,0].plot(x, total_trial_num, **plot_setting)
+        
+        # -- 2. Session-wise foraging efficiency (optimal) --
+        ax[0,1].plot(x, foraging_eff, **plot_setting)
+        ax[0,2].plot(x, foraging_eff_random_seed, **plot_setting)
+        ax2[0,0].plot(total_trial_num, foraging_eff, **plot_setting)
+        ax2[0,2].plot(foraging_eff, foraging_eff_random_seed, '.')
+        
+        # -- 3. Matching bias --
+        ax[1,0].plot(x, abs(matching_bias.astype(float)), **plot_setting)
+        ax2[0,1].plot(matching_idx, foraging_eff, '.')
+        
+        # -- 4. Early lick ratio --
+        ax[1,1].plot(x, early_lick_ratio, **plot_setting)
+        
+        # -- 5. Reward schedule and block structure --
+        ax2[1,0].plot(x, reward_sum_mean, **plot_setting)
+        ax2[1,1].plot(x, reward_contrast_mean, **plot_setting)
+        ax2[1,2].plot(x, block_length_mean, **plot_setting)
+        
+        # -- 6. Double dipping ratio --
+        ax3[0,0].plot(x, double_dip, **plot_setting)
+        ax3[0,1].plot(x, double_dip_hit, **plot_setting)
+        ax3[1,0].plot(x, double_dip_miss, **plot_setting)
+        ax3[1,1].plot(double_dip_hit, double_dip_miss, **plot_setting)
+                
+    x_name = 'Days from start' if use_days_from_start else 'Session number'
+        
+    ax[0,0].set(xlabel=x_name, title='Total finished trials')
+    ax[0,0].legend()
+    
+    ax[0,1].set(xlabel=x_name, title='Foraging efficiency (optimal) %')
+    ax[0,2].set(xlabel=x_name, title='Foraging efficiency (optimal_random_seed) %')
+    ax[1,0].set(xlabel=x_name, title='abs(matching bias)', ylim=(-0.1, 5))
+    ax[1,1].set(xlabel=x_name, title='Early lick trials %')
+    
+    ax2[0,0].set(xlabel='Total finished trials', ylabel='Foraging efficiency (optimal) %')
+    ax2[0,1].set(xlabel='Matching slope', ylabel='Foraging efficiency (optimal) %')
+    ax2[0,2].set(xlabel='Foraging eff optimal', ylabel='Foraging eff random seed')
+    ax2[0,2].plot([0,100], [0,100], 'k--')
+    ax2[1,0].set(xlabel=x_name, title='Mean reward prob sum')
+    ax2[1,0].legend()
+    ax2[1,1].set(xlabel=x_name, title='Mean reward prob contrast', ylim=(0,10))
+    ax2[1,2].set(xlabel=x_name, title='Mean block length')
+    
+    ax3[0,0].set(xlabel=x_name, title='Double dipping all (%)')
+    ax3[0,0].legend()
+    ax3[0,1].set(xlabel=x_name, title='Double dipping if hit (%)')
+    ax3[1,0].set(xlabel=x_name, title='Double dipping if miss (%)')
+    ax3[1,1].set(title='Double dipping (%)', xlabel='if hit', ylabel='if miss')
+    ax3[1,1].plot([0,100], [0,100], 'k--')
+
+    #%%
+    
+def plot_session_trial_events(key_subject_id_session = dict(subject_id=472184, session=14)):  # Plot all trial events of one specific session
+    #%% 
+    sns.set(style="darkgrid", context="talk", font_scale=1.2)
+    sns.set_palette("muted")
+    fig = plt.figure(figsize=(20,12))
+    gs = GridSpec(5, 1, wspace=0.4, hspace=0.4, bottom=0.07, top=0.95, left=0.1, right=0.9) 
+    
+    ax1 = fig.add_subplot(gs[0:3, :])
+    ax2 = fig.add_subplot(gs[3, :])
+    ax3 = fig.add_subplot(gs[4, :])
+    ax1.get_shared_x_axes().join(ax1, ax2, ax3)
+    
+    # Plot settings
+    plot_setting = {'left lick':'red', 'right lick':'blue'}  
+    
+    # -- Get event times --
+    go_cue_times = (experiment.TrialEvent() & key_subject_id_session & 'trial_event_type="go"').fetch('trial_event_time', order_by='trial').astype(float)
+    lick_times = pd.DataFrame((experiment.ActionEvent() & key_subject_id_session).fetch(order_by='trial'))
+    
+    trial_num = len(go_cue_times)
+    all_trial_num = np.arange(1, trial_num+1).tolist()
+    all_trial_start = [[-x] for x in go_cue_times]
+    all_lick = dict()
+    for event_type in plot_setting:
+        all_lick[event_type] = []
+        for i, trial_start in enumerate(all_trial_start):
+            all_lick[event_type].append((lick_times[(lick_times['trial']==i+1) & (lick_times['action_event_type']==event_type)]['action_event_time'].values.astype(float) + trial_start).tolist())
+    
+    # -- All licking events (Ordered by trials) --
+    ax1.plot([0, 0], [0, trial_num], 'k', lw=0.5)   # Aligned by go cue
+    ax1.set(ylabel='Trial number', xlim=(-3, 3), xticks=[])
+
+    # Batch plotting to speed up    
+    ax1.eventplot(lineoffsets=all_trial_num, positions=all_trial_start, color='k')   # Aligned by go cue
+    for event_type in plot_setting:
+        ax1.eventplot(lineoffsets=all_trial_num, 
+                     positions=all_lick[event_type],
+                     color=plot_setting[event_type],
+                     linewidth=2)   # Trial start
+    
+    # -- Histogram of all licks --
+    for event_type in plot_setting:
+        sns.histplot(np.hstack(all_lick[event_type]), binwidth=0.01, alpha=0.5, 
+                     ax=ax2, color=plot_setting[event_type], label=event_type)  # 10-ms window
+    
+    ymax_tmp = max(ax2.get_ylim())  
+    sns.histplot(-go_cue_times, binwidth=0.01, color='k', ax=ax2, label='trial start')  # 10-ms window
+    ax2.axvline(x=0, color='k', lw=0.5)
+    ax2.set(ylim=(0, ymax_tmp), xticks=[], title='All events') # Fix the ylim of left and right licks
+    ax2.legend()
+    
+    # -- Histogram of reaction time (first lick after go cue) --   
+    plot_setting = {'LEFT':'red', 'RIGHT':'blue'}  
+    for water_port in plot_setting:
+        this_RT = (foraging_analysis.TrialStats() & key_subject_id_session & (experiment.WaterPortChoice() & 'water_port="{}"'.format(water_port))).fetch('reaction_time').astype(float)
+        sns.histplot(this_RT, binwidth=0.01, alpha=0.5, 
+                     ax=ax3, color=plot_setting[water_port], label=water_port)  # 10-ms window
+    ax3.axvline(x=0, color='k', lw=0.5)
+    ax3.set(xlabel='Time to Go Cue (s)', title='Reaction time') # Fix the ylim of left and right licks
+    ax3.legend()
+    
+def plot_foragingWebGUI_subject(wr_name_selected='HH07', session_selected=17, show_others=True, use_days_from_start=False):
+    #%%
+    sns.set(style="darkgrid", context="talk", font_scale=1.2)
+    sns.set_palette("muted")
+    all_wr = lab.WaterRestriction().fetch('water_restriction_number', order_by=('wr_start_date', 'water_restriction_number'))
+
+    fig1 = plt.figure(figsize=(10,20))
+    ax = fig1.subplots(4,2)
+    fig1.subplots_adjust(hspace=0.5, wspace=0.3)
+
+    # Only mice who started with 2lp task
+    for wr_name in all_wr:
+        if not show_others and wr_name != wr_name_selected:
+            continue
+        
+        q_two_lp_foraging_sessions = (foraging_analysis.SessionTaskProtocol * lab.WaterRestriction
+                                    & 'session_task_protocol=100'
+                                    & 'water_restriction_number="{}"'.format(wr_name))
+
+        # Skip this mice if it did not started with 2lp task
+        two_lp_foraging_sessions = q_two_lp_foraging_sessions.fetch('session')
+        if len(two_lp_foraging_sessions) == 0 or min(two_lp_foraging_sessions) > 1:
+            continue
+    
+        # -- Get data --
+        # Basic stats
+        this_mouse_session_stats_raw = (foraging_analysis.SessionStats 
+                                        * (foraging_analysis.SessionMatching.WaterPortMatching.proj('match_idx', 'bias') & 'water_port="right"') 
+                                        & q_two_lp_foraging_sessions
+                                        ).fetch(
+                                            order_by='session', format='frame').reset_index()
+        
+        if use_days_from_start:  # Use the actual day from the first training day
+            training_day = (experiment.Session & q_two_lp_foraging_sessions).fetch('session_date')
+            training_day = ((training_day - min(training_day))/timedelta(days=1)).astype(int) + 1
+            
+            # Insert nans if no training day
+            x = np.arange(1, max(training_day)+1)
+            this_mouse_session_stats = pd.DataFrame(np.nan, index=x, columns=this_mouse_session_stats_raw.columns)
+            this_mouse_session_stats.loc[training_day] = this_mouse_session_stats_raw.values
+
+        else:  # Use continuous session number
+            x = this_mouse_session_stats_raw['session']
+            this_mouse_session_stats = this_mouse_session_stats_raw
+        
+        total_trial_num = this_mouse_session_stats['session_pure_choices_num'].values
+        foraging_eff = this_mouse_session_stats['session_foraging_eff_optimal'].values * 100
+        # foraging_eff_random_seed = this_mouse_session_stats['session_foraging_eff_optimal_random_seed'].to_numpy(dtype=np.float) * 100
+        early_lick_ratio = this_mouse_session_stats['session_early_lick_ratio'].values * 100
+        reward_sum_mean = this_mouse_session_stats['session_mean_reward_sum'].values
+        reward_contrast_mean = this_mouse_session_stats['session_mean_reward_contrast'].values
+        block_length_mean = (this_mouse_session_stats['session_total_trial_num'] / this_mouse_session_stats['session_block_num']).values
+        
+        double_dip = this_mouse_session_stats['session_double_dipping_ratio'].to_numpy(dtype=np.float) * 100
+        # double_dip_hit = this_mouse_session_stats['session_double_dipping_ratio_hit'].to_numpy(dtype=np.float) * 100
+        # double_dip_miss = this_mouse_session_stats['session_double_dipping_ratio_miss'].to_numpy(dtype=np.float) * 100
+        
+        # matching_idx = this_mouse_session_stats['match_idx'] 
+        matching_bias = this_mouse_session_stats['bias']        
+        
+        # Plot settings
+        if wr_name == wr_name_selected:
+            plot_setting = dict(lw=2, color='b')
+            selected_idx = np.where(this_mouse_session_stats['session'] == session_selected)[0][0]
+        else:
+            plot_setting = dict(lw=0.5, color='grey')
+            
+        # -- 1. Total finished trials --
+        ax[0,0].plot(x, total_trial_num, **plot_setting)
+        if wr_name == wr_name_selected: ax[0,0].plot(x[selected_idx], total_trial_num[selected_idx], **plot_setting, marker='o', label=wr_name)
+        
+        # -- 2. Session-wise foraging efficiency (optimal) --
+        ax[0,1].plot(x, foraging_eff, **plot_setting)
+        if wr_name == wr_name_selected: ax[0,1].plot(x[selected_idx], foraging_eff[selected_idx], **plot_setting, marker='o', label=wr_name)
+        
+        # -- 3. Matching bias --
+        ax[1,0].plot(x, abs(matching_bias.astype(float)), **plot_setting)
+        if wr_name == wr_name_selected: ax[1,0].plot(x[selected_idx], abs(matching_bias.astype(float)[selected_idx]), **plot_setting, marker='o', label=wr_name)
+        
+        # -- 4. Early lick ratio --
+        ax[1,1].plot(x, early_lick_ratio, **plot_setting)
+        if wr_name == wr_name_selected: ax[1,1].plot(x[selected_idx], early_lick_ratio[selected_idx], **plot_setting, marker='o', label=wr_name)
+        
+        # -- 5. Reward schedule and block structure --
+        ax[2,1].plot(x, reward_sum_mean, **plot_setting)
+        ax[3,0].plot(x, reward_contrast_mean, **plot_setting)
+        ax[3,1].plot(x, block_length_mean, **plot_setting)
+
+        if wr_name == wr_name_selected:
+            ax[2,1].plot(x[selected_idx], reward_sum_mean[selected_idx], **plot_setting, marker='o', label=wr_name)
+            ax[3,0].plot(x[selected_idx], reward_contrast_mean[selected_idx], **plot_setting, marker='o', label=wr_name)
+            ax[3,1].plot(x[selected_idx], block_length_mean[selected_idx], **plot_setting, marker='o', label=wr_name)
+        
+        # -- 6. Double dipping ratio --
+        ax[2,0].plot(x, double_dip, **plot_setting)
+        if wr_name == wr_name_selected: ax[2,0].plot(x[selected_idx], double_dip[selected_idx], **plot_setting, marker='o', label=wr_name)
+        #  ax[0,1].plot(x, double_dip_hit, **plot_setting)
+              
+    x_name = 'Days from start' if use_days_from_start else 'Session number'
+        
+    ax[0,0].set(xlabel=x_name, title='Total finished trials')
+    ax[0,0].legend()
+    
+    ax[0,1].set(xlabel=x_name, title='Foraging efficiency (optimal) %')
+    ax[1,0].set(xlabel=x_name, title='abs(matching bias)', ylim=(-0.1, 5))
+    ax[1,1].set(xlabel=x_name, title='Early lick trials %')
+    
+    ax[2,1].set(xlabel=x_name, title='Mean reward prob sum')
+    ax[2,1].legend()
+    ax[3,0].set(xlabel=x_name, title='Mean reward prob contrast', ylim=(0,10))
+    ax[3,1].set(xlabel=x_name, title='Mean block length')
+    
+    ax[2,0].set(xlabel=x_name, title='Double dipping all (%)')
+    ax[2,0].legend()
+    # ax3[0,1].set(xlabel=x_name, title='Double dipping if hit (%)')
+    #%%
+
+def plot_foragingWebGUI_session(wr_name_selected='HH07', session_selected=17):  # Plot all trial events of one specific session
+    # Reuse Marton's code with default parameters
+    sns.set(style="darkgrid", context="talk", font_scale=1.2)
+    sns.set_palette("muted")
+
+    fig=plt.figure()
+    
+    ax1=fig.add_axes([0,0,2,.8])
+    ax1.set_title(f'{wr_name_selected}, session {session_selected}')
+
+    ax2=fig.add_axes([0,-.6,2,.4])
+    ax3=fig.add_axes([0,-1.6,2,.8])
+    ax4=fig.add_axes([0,-2.6,2,.8])
+    ax5 = fig.add_axes([0,-3.6,2,.8])
+    
+    choice_averaging_window = 10
+    choice_kernel = np.ones(choice_averaging_window)/choice_averaging_window
+    
+    # invoke plot functions   
+    filters = {'ignore_rate_max':100,
+               'averaging_window':choice_averaging_window}
+    
+    local_matching = {'calculate_local_matching': True,
+                     'sliding_window':100,
+                     'matching_window':300,
+                     'matching_step':30,
+                     'efficiency_type':'ideal'}
+    
+    df_behaviortrial = extract_trials(plottype = '2lickport',
+                                      wr_name = wr_name_selected,
+                                      sessions = [session_selected, session_selected],
+                                      show_bias_check_trials =  True,
+                                      kernel = choice_kernel,
+                                      filters = filters,
+                                      local_matching = local_matching)
+    
+    plot_trials(df_behaviortrial,
+                ax1,
+                ax2,
+                plottype = '2lickport',
+                wr_name = wr_name_selected,
+                sessions = [session_selected, session_selected],
+                plot_every_choice= True,
+                show_bias_check_trials =  True,
+                choice_filter = choice_kernel)
+    
+    plot_local_efficiency_matching_bias(df_behaviortrial,
+                                            ax3)
+    
+    plot_rt_iti(df_behaviortrial,
+                ax4,
+                ax5,
+                plottype = '2lickport',
+                wr_name = wr_name_selected,
+                sessions = [session_selected, session_selected],
+                show_bias_check_trials =  True,
+                kernel = choice_kernel
+                )
+    
+    
+
+def plot_foragingWebGUI_trial(wr_name_selected='HH07', session_selected=17):  # Plot all trial events of one specific session
+    #%% 
+    fig = plt.figure(figsize=(20,12))
+    fig.suptitle(f'{wr_name_selected}, session {session_selected}')
+    gs = GridSpec(5, 1, wspace=0.4, hspace=0.4, bottom=0.07, top=0.95, left=0.1, right=0.9) 
+    
+    ax1 = fig.add_subplot(gs[0:3, :])
+    ax2 = fig.add_subplot(gs[3, :])
+    ax3 = fig.add_subplot(gs[4, :])
+    ax1.get_shared_x_axes().join(ax1, ax2, ax3)
+    
+    # Plot settings
+    plot_setting = {'left lick':'red', 'right lick':'blue'}  
+    
+    # -- Get event times --
+    key_subject_id_session = (experiment.Session() & (lab.WaterRestriction() & 'water_restriction_number="{}"'.format(wr_name_selected)) 
+                              & 'session="{}"'.format(session_selected)).fetch1("KEY")
+    go_cue_times = (experiment.TrialEvent() & key_subject_id_session & 'trial_event_type="go"').fetch('trial_event_time', order_by='trial').astype(float)
+    lick_times = pd.DataFrame((experiment.ActionEvent() & key_subject_id_session).fetch(order_by='trial'))
+    
+    trial_num = len(go_cue_times)
+    all_trial_num = np.arange(1, trial_num+1).tolist()
+    all_trial_start = [[-x] for x in go_cue_times]
+    all_lick = dict()
+    for event_type in plot_setting:
+        all_lick[event_type] = []
+        for i, trial_start in enumerate(all_trial_start):
+            all_lick[event_type].append((lick_times[(lick_times['trial']==i+1) & (lick_times['action_event_type']==event_type)]['action_event_time'].values.astype(float) + trial_start).tolist())
+    
+    # -- All licking events (Ordered by trials) --
+    ax1.plot([0, 0], [0, trial_num], 'k', lw=0.5)   # Aligned by go cue
+    ax1.set(ylabel='Trial number', xlim=(-3, 3), xticks=[])
+
+    # Batch plotting to speed up    
+    ax1.eventplot(lineoffsets=all_trial_num, positions=all_trial_start, color='k')   # Aligned by go cue
+    for event_type in plot_setting:
+        ax1.eventplot(lineoffsets=all_trial_num, 
+                     positions=all_lick[event_type],
+                     color=plot_setting[event_type],
+                     linewidth=2)   # Trial start
+    
+    # -- Histogram of all licks --
+    for event_type in plot_setting:
+        sns.histplot(np.hstack(all_lick[event_type]), binwidth=0.01, alpha=0.5, 
+                     ax=ax2, color=plot_setting[event_type], label=event_type)  # 10-ms window
+    
+    ymax_tmp = max(ax2.get_ylim())  
+    sns.histplot(-go_cue_times, binwidth=0.01, color='k', ax=ax2, label='trial start')  # 10-ms window
+    ax2.axvline(x=0, color='k', lw=0.5)
+    ax2.set(ylim=(0, ymax_tmp), xticks=[], title='All events') # Fix the ylim of left and right licks
+    ax2.legend()
+    
+    # -- Histogram of reaction time (first lick after go cue) --   
+    plot_setting = {'LEFT':'red', 'RIGHT':'blue'}  
+    for water_port in plot_setting:
+        this_RT = (foraging_analysis.TrialStats() & key_subject_id_session & (experiment.WaterPortChoice() & 'water_port="{}"'.format(water_port))).fetch('reaction_time').astype(float)
+        sns.histplot(this_RT, binwidth=0.01, alpha=0.5, 
+                     ax=ax3, color=plot_setting[water_port], label=water_port)  # 10-ms window
+    ax3.axvline(x=0, color='k', lw=0.5)
+    ax3.set(xlabel='Time to Go Cue (s)', title='First lick (reaction time)') # Fix the ylim of left and right licks
+    ax3.legend()
+    
+        
