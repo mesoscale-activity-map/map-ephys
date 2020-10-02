@@ -425,6 +425,113 @@ class BlockEfficiency(dj.Computed):  # bias check excluded
 
         self.insert1({**key, **block_efficiency_data})
 
+@schema
+class BlockRunLengthPartitions(dj.Lookup):
+    definition = """
+    # User-defined ranges of block partition for runlength analysis
+    partition_idx: varchar(50)  # Description of partition method (e.g. first 70 pct trials)
+    ---
+    partition_start: decimal(8,4) # If it's an integer, use as trial number; if it's smaller than 1, use as proportion
+    partition_end: decimal(8,4)  # e.g. 70
+    """
+    contents = [
+         ('first 70 pct trials', 0, 0.7),
+         ('last 70 pct trials', 0.3, 1)
+         ]
+    
+@schema # TODO remove bias check?
+class BlockRunLengthAnalysis(dj.Computed):
+    definition = """ # For runlenth analysis (Fig.5 in Lau 2005)
+    -> experiment.SessionBlock  
+    -> BlockRunLengthPartitions  # For each percentile of trials
+    ---
+    m_star=null : int # number of trials in block
+    choice_ratio=null: decimal(8,4) # hits / (hits + misses)
+    mean_runlength_rich=null: decimal(8,4)
+    mean_runlength_lean=null: decimal(8,4)
+    trial_num_this_partition=null: int
+    """
+    
+    min_trial_length = 50
+    key_source = (experiment.SessionBlock & (SessionTaskProtocol & 'session_task_protocol=100' & 'session_real_foraging=1')
+                 & (BlockStats & f'block_trial_num >= {min_trial_length}'))
+
+    def make(self, key):
+        
+    # def analyze_runlength_Lau2005(choice_history, p_reward, min_trial = 50, block_partitions = [70, 70]):
+        '''
+        Runlength analysis in Fig.5, Lau2005
+        '''
+        #%%
+        q_p_reward = (experiment.SessionBlock.WaterPortRewardProbability & key)
+        p_R = float((q_p_reward & 'water_port="right"').fetch1('reward_probability'))
+        p_L = float((q_p_reward & 'water_port="left"').fetch1('reward_probability'))
+        p_rich, p_lean = max(p_R, p_L), min(p_R, p_L)
+    
+        this_block_choice = (experiment.WaterPortChoice * experiment.SessionBlock.BlockTrial 
+                             & key & 'water_port is not Null').proj(choice='water_port="right"').fetch('choice', order_by='trial')  # L = 0, R = 1
+        this_block_p_base_ratio =  p_R/p_L   # R/L
+        
+        # Flip choices such that 1 = rich arm, 0 = lean arm
+        if p_R < p_L: # if rich arm = Left
+            this_block_choice = 1 - this_block_choice
+            
+        # Define block partitions
+        block_len = len(this_block_choice)
+        block_partitions = (BlockRunLengthPartitions & key).fetch1()
+        this_part_choice = this_block_choice[int(block_partitions['partition_start']*block_len):int(block_partitions['partition_end']* block_len)]
+                        
+            
+        # Get runlength for the best (rich) and the worst (lean) arm
+        # These two magic lines below are correct, believe it or not :)
+        this_runlength_rich =  np.diff(np.where(np.hstack((999,np.diff(np.where(this_part_choice==1)[0]),999))>1))[0]
+        this_runlength_lean = np.diff(np.where(np.hstack((999,np.diff(np.where(this_part_choice==0)[0]),999))>1))[0]
+        # assert(np.sum(this_runlength_rich) == np.sum(this_part_choice == 1))
+        # assert(np.sum(this_runlength_lean) == np.sum(this_part_choice == 0))
+
+        # Remove the first and the last run (due to slicing of the blocks/halves)
+        if this_part_choice[0] == 1:
+            this_runlength_rich = this_runlength_rich[1:]
+        else:
+            this_runlength_lean = this_runlength_lean[1:]
+        
+        if this_part_choice[-1] == 1:
+            this_runlength_rich = this_runlength_rich[:-1]
+        else:
+            this_runlength_lean = this_runlength_lean[:-1]
+        
+        # Some facts
+        n_choice_rich = np.sum(this_part_choice == 1)  # In the sense of ground truth
+        n_choice_lean = np.sum(this_part_choice == 0)
+        
+        if n_choice_rich * n_choice_lean == 0:
+            this_choice_ratio = np.inf
+        else:
+            # In terms of ground-truth rich (could be smaller than 1, meaning that the animal chose the wrong arm)
+            this_choice_ratio = n_choice_rich / n_choice_lean    
+
+            # Align everything to subjective rich (always larger than 1. I believe Hattori should have used this)
+            if this_choice_ratio < 1: 
+                this_choice_ratio = 1/this_choice_ratio
+                this_runlength_rich, this_runlength_lean = this_runlength_lean, this_runlength_rich
+        
+        if p_lean == 0 or p_rich >= 1: 
+            this_m_star = np.inf
+        else:
+            this_m_star = np.floor(np.log(1-p_rich)/np.log(1-p_lean)) # Ideal-p-hat-greed
+                
+        if len(this_runlength_rich) * len(this_runlength_lean) == 0: 
+            return   # Exclude extreme bias block
+           
+        run_length_this_part = dict(m_star = this_m_star,
+                                 p_base_ratio = this_block_p_base_ratio,
+                                 choice_ratio = this_choice_ratio,
+                                 mean_runlength_rich = np.mean(this_runlength_rich),
+                                 mean_runlength_lean = np.mean(this_runlength_lean), 
+                                 trial_num = len(this_part_choice))
+        
+            
+        self.insert1({**key, **run_length_this_part})    
 
    
 # ====================== HELPER FUNCTIONS ==========================     
@@ -507,3 +614,4 @@ def foraging_eff(reward_rate, p_Ls, p_Rs, random_number_L=None, random_number_R=
             for_eff_optimal_random_seed = np.nan
     
     return for_eff_optimal, for_eff_optimal_random_seed
+
