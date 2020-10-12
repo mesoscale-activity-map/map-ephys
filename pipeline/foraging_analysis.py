@@ -39,7 +39,7 @@ class TrialStats(dj.Computed):
         trial_stats['double_dipping'] = len(np.unique(q_all_licks_after_go_cue.fetch('action_event_type'))) > 1
         
 
-        self.insert1({**key, **trial_stats})
+        self.insert1({**key, **trial_stats}, skip_duplicates=True )
             
 @schema # TODO remove bias check?
 class BlockStats(dj.Computed):
