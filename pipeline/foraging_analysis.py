@@ -40,7 +40,8 @@ class TrialStats(dj.Computed):
         
 
         self.insert1({**key, **trial_stats})
-            
+
+
 @schema # TODO remove bias check?
 class BlockStats(dj.Computed):
     definition = """ # All blocks including bias check
@@ -186,6 +187,7 @@ class SessionStats(dj.Computed):
                                  session_mean_reward_contrast = p_contrast_mean)
             
         self.insert1({**key, **session_stats})
+
             
 @schema
 class SessionTaskProtocol(dj.Computed):
@@ -365,7 +367,8 @@ class SessionMatching(dj.Computed):  # bias check removed,
         # can't do list comprehension for batch insert because "session_matching" may have different fields
         for k, v in session_matching.items():
             self.WaterPortMatching.insert1({**key, 'water_port': k, **v})
-            
+
+
 @schema
 class BlockEfficiency(dj.Computed):  # bias check excluded
     definition = """
@@ -426,7 +429,6 @@ class BlockEfficiency(dj.Computed):  # bias check excluded
         self.insert1({**key, **block_efficiency_data})
 
 
-   
 # ====================== HELPER FUNCTIONS ==========================     
    
 def draw_bs_pairs_linreg(x, y, size=1): 
