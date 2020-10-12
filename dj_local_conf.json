@@ -10,6 +10,7 @@
 	"display.limit": 30,
 	"display.width": 30,
 	"display.show_tuple_count": true,
+	"enable_python_native_blobs": true,
 	"history": [],
 	"do_unittest": false,
 	"nuclear_option": true,
@@ -27,10 +28,17 @@
     	"logfile": "log.txt"
     },
 	"stores": {
-    	"report_store": {
-    	"protocol": "s3",
-    	"stage": "/tmp/stage",
-    	"bucket": "foo",
-    	"location": "/"}
+        "report_store":
+        {
+            "protocol": "file",
+            "location": "D:/Han_Sync/Svoboda/Scripts/map-ephys/report",
+            "stage": "D:/Han_Sync/Svoboda/Scripts/map-ephys/report"
+        },
+        "archive_store":
+        {
+            "protocol": "file",
+            "location": "D:/Han_Sync/Svoboda/Scripts/map-ephys/report",
+            "stage": "D:/Han_Sync/Svoboda/Scripts/map-ephys/report"
+        }    	
 	}
 }
