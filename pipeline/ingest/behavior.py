@@ -202,8 +202,7 @@ class BehaviorIngest(dj.Imported):
                 with dj.conn().transaction:
                     self.make(k)
             except Exception as e:
-                log.warning('session key {} error: {}'.format(
-                    key, repr(e))
+                log.warning('session key {} error: {}'.format(k, repr(e)))
                 if not kwargs.get('reserve_jobs', False):
                     raise
 
@@ -750,8 +749,7 @@ class BehaviorBpodIngest(dj.Imported):
                 with dj.conn().transaction:
                     self.make(k)
             except Exception as e:
-                log.warning('session key {} error: {}'.format(
-                    key, repr(e))
+                log.warning('session key {} error: {}'.format(k, repr(e)))
                 if not kwargs.get('reserve_jobs', False):
                     raise
 
