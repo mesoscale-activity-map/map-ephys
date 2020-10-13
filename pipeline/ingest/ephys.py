@@ -133,8 +133,9 @@ class EphysIngest(dj.Imported):
 
         # scale amplitudes by uV/bit scaling factor (for kilosort2)
         if method in ['kilosort2']:
-            bit_volts = npx_bit_volts[re.match('neuropixels (\d.0)', npx_meta.probe_model).group()]
-            unit_amp = unit_amp * bit_volts
+            if 'qc' not in clustering_label:
+                bit_volts = npx_bit_volts[re.match('neuropixels (\d.0)', npx_meta.probe_model).group()]
+                unit_amp = unit_amp * bit_volts
 
         # Determine trial (re)numbering for ephys:
         #
