@@ -36,7 +36,7 @@ def undo_bitvolt_scaling(insertion_keys={}):
     This is a one-time operation only - Oct 2020
     """
 
-    units2fix = ephys.Unit * ephys.ClusteringLabel & insertion_keys & 'quality_control = 1'
+    units2fix = ephys.Unit * ephys.ClusteringLabel & insertion_keys & 'quality_control = 1'  # only on QC results
     units2fix = units2fix - (UndoBitVoltScalingAmpUnit & 'fixed=1')  # exclude those that were already fixed
 
     if not units2fix:
