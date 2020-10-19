@@ -748,6 +748,8 @@ class ProjectLevelProbeTrack(dj.Computed):
 # ---------- HELPER FUNCTIONS --------------
 
 report_tables = [SessionLevelReport,
+                 SessionLevelForagingSummary,
+                 SessionLevelForagingLickingPSTH,
                  ProbeLevelReport,
                  ProbeLevelPhotostimEffectReport,
                  UnitLevelEphysReport,
