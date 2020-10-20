@@ -16,7 +16,8 @@ from pymysql.err import OperationalError
 
 from pipeline import (lab, experiment, tracking, ephys, psth, ccf, histology, export, publication, globus, get_schema_name)
 
-pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth]
+pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth,
+                    publication]
 
 log = logging.getLogger(__name__)
 
