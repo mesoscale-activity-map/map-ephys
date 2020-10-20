@@ -10,13 +10,14 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.mplot3d import Axes3D
+import seaborn as sns
 
 import io
 from PIL import Image
 import itertools
 
-from pipeline import experiment, ephys, psth, tracking, lab, histology, ccf
-from pipeline.plot import behavior_plot, unit_characteristic_plot, unit_psth, histology_plot, PhotostimError
+from pipeline import experiment, ephys, psth, tracking, lab, histology, ccf, foraging_analysis
+from pipeline.plot import behavior_plot, unit_characteristic_plot, unit_psth, histology_plot, PhotostimError, foraging_plot
 from pipeline import get_schema_name
 from pipeline.plot.util import _plot_with_sem, _jointplot_w_hue
 from pipeline.util import _get_trial_event_times
@@ -31,6 +32,7 @@ os.environ['DJ_SUPPORT_FILEPATH_MANAGEMENT'] = "TRUE"
 
 store_stage = pathlib.Path(dj.config['stores']['report_store']['stage'])
 
+# todo: fill in with defaults so unconfigured import works
 if dj.config['stores']['report_store']['protocol'] == 's3':
     store_location = (pathlib.Path(dj.config['stores']['report_store']['bucket'])
                       / pathlib.Path(dj.config['stores']['report_store']['location']))
@@ -261,6 +263,168 @@ class SessionLevelProbeTrack(dj.Computed):
         self.insert1({**key, **fig_dict, 'probe_track_count': len(probe_tracks), 'probe_tracks': probe_tracks})
 
 
+@schema
+class SessionLevelForagingSummary(dj.Computed):
+    definition = """
+    # Marton's foraging inspector with default settings
+    -> experiment.Session
+    ---
+    session_foraging_summary: filepath@report_store
+    """
+    
+    # Only 2-lp plots
+    key_source = experiment.Session & (experiment.BehaviorTrial & 'task = "foraging"')
+    
+    # Default settings for plots
+    choice_averaging_window = 10
+    choice_kernel = np.ones(choice_averaging_window) / choice_averaging_window
+    # invoke plot functions   
+    filters = {'ignore_rate_max': 100,
+               'averaging_window': choice_averaging_window}
+    local_matching = {'calculate_local_matching': True,
+                      'sliding_window': 100,
+                      'matching_window': 300,
+                      'matching_step': 30,
+                      'efficiency_type': 'ideal'}
+    
+    def make(self, key):
+        water_res_num, sess_date = get_wr_sessdate(key)
+        sess_dir = store_stage / water_res_num / sess_date
+        sess_dir.mkdir(parents=True, exist_ok=True)
+        
+        # --- the plot part ---
+        fig = plt.figure(figsize=(15,20))
+        gs = GridSpec(9, 1, wspace=0.4, hspace=0.4, bottom=0.07, top=0.95, left=0.1, right=0.9) 
+        ax1 = fig.add_subplot(gs[0:2, :])
+        ax1.set_title(f'{water_res_num}, session {key["session"]}')
+        ax2 = fig.add_subplot(gs[2, :])
+        ax3 = fig.add_subplot(gs[3:5, :])
+        ax4 = fig.add_subplot(gs[5:7, :])
+        ax5 = fig.add_subplot(gs[7:9, :])
+        ax1.get_shared_x_axes().join(ax1, ax2, ax3, ax4, ax5)
+
+        df_behaviortrial = foraging_plot.extract_trials(plottype = '2lickport',
+                                          wr_name = water_res_num,
+                                          sessions = [key['session'], key['session']],
+                                          show_bias_check_trials = True,
+                                          kernel = self.choice_kernel,
+                                          filters = self.filters,
+                                          local_matching = self.local_matching)
+        
+        foraging_plot.plot_trials(df_behaviortrial,
+                    ax1,
+                    ax2,
+                    plottype = '2lickport',
+                    wr_name = water_res_num,
+                    sessions = [key['session'], key['session']],
+                    plot_every_choice = True,
+                    show_bias_check_trials = True,
+                    choice_filter = self.choice_kernel)
+        
+        foraging_plot.plot_local_efficiency_matching_bias(df_behaviortrial,
+                                            ax3)
+        foraging_plot.plot_rt_iti(df_behaviortrial,
+                    ax4,
+                    ax5,
+                    plottype = '2lickport',
+                    wr_name = water_res_num,
+                    sessions = [key['session'], key['session']],
+                    show_bias_check_trials = True,
+                    kernel = self.choice_kernel
+                    )
+        
+        # ---- Save fig and insert ----
+        fn_prefix = f'{water_res_num}_{sess_date}_'
+        fig_dict = save_figs((fig,), ('session_foraging_summary',), sess_dir, fn_prefix)
+        plt.close('all')
+        self.insert1({**key, **fig_dict})
+        
+        
+@schema
+class SessionLevelForagingLickingPSTH(dj.Computed):
+    definition = """
+    # Licking events aligned with the GO cue
+    -> experiment.Session
+    ---
+    session_foraging_licking_psth: filepath@report_store
+    """
+    
+    # Only 2-lp plots
+    key_source = experiment.Session & (experiment.BehaviorTrial & 'task = "foraging"')
+        
+    def make(self, key):
+        water_res_num, sess_date = get_wr_sessdate(key)
+        sess_dir = store_stage / water_res_num / sess_date
+        sess_dir.mkdir(parents=True, exist_ok=True)
+
+        # -- Plotting --
+        fig = plt.figure(figsize=(20,12))
+        fig.suptitle(f'{water_res_num}, session {key["session"]}')
+        gs = GridSpec(5, 1, wspace=0.4, hspace=0.4, bottom=0.07, top=0.95, left=0.1, right=0.9) 
+        
+        ax1 = fig.add_subplot(gs[0:3, :])
+        ax2 = fig.add_subplot(gs[3, :])
+        ax3 = fig.add_subplot(gs[4, :])
+        ax1.get_shared_x_axes().join(ax1, ax2, ax3)
+        
+        # Plot settings
+        plot_setting = {'left lick':'red', 'right lick':'blue'}  
+        
+        # -- Get event times --
+        key_subject_id_session = (experiment.Session() & (lab.WaterRestriction() & 'water_restriction_number="{}"'.format(water_res_num)) 
+                                  & 'session="{}"'.format(key['session'])).fetch1("KEY")
+        go_cue_times = (experiment.TrialEvent() & key_subject_id_session & 'trial_event_type="go"').fetch('trial_event_time', order_by='trial').astype(float)
+        lick_times = pd.DataFrame((experiment.ActionEvent() & key_subject_id_session).fetch(order_by='trial'))
+        
+        trial_num = len(go_cue_times)
+        all_trial_num = np.arange(1, trial_num+1).tolist()
+        all_trial_start = [[-x] for x in go_cue_times]
+        all_lick = dict()
+        for event_type in plot_setting:
+            all_lick[event_type] = []
+            for i, trial_start in enumerate(all_trial_start):
+                all_lick[event_type].append((lick_times[(lick_times['trial']==i+1) & (lick_times['action_event_type']==event_type)]['action_event_time'].values.astype(float) + trial_start).tolist())
+        
+        # -- All licking events (Ordered by trials) --
+        ax1.plot([0, 0], [0, trial_num], 'k', lw=0.5)   # Aligned by go cue
+        ax1.set(ylabel='Trial number', xlim=(-3, 3), xticks=[])
+    
+        # Batch plotting to speed up    
+        ax1.eventplot(lineoffsets=all_trial_num, positions=all_trial_start, color='k')   # Aligned by go cue
+        for event_type in plot_setting:
+            ax1.eventplot(lineoffsets=all_trial_num, 
+                         positions=all_lick[event_type],
+                         color=plot_setting[event_type],
+                         linewidth=2)   # Trial start
+        
+        # -- Histogram of all licks --
+        for event_type in plot_setting:
+            sns.histplot(np.hstack(all_lick[event_type]), binwidth=0.01, alpha=0.5, 
+                         ax=ax2, color=plot_setting[event_type], label=event_type)  # 10-ms window
+        
+        ymax_tmp = max(ax2.get_ylim())  
+        sns.histplot(-go_cue_times, binwidth=0.01, color='k', ax=ax2, label='trial start')  # 10-ms window
+        ax2.axvline(x=0, color='k', lw=0.5)
+        ax2.set(ylim=(0, ymax_tmp), xticks=[], title='All events') # Fix the ylim of left and right licks
+        ax2.legend()
+        
+        # -- Histogram of reaction time (first lick after go cue) --   
+        plot_setting = {'LEFT':'red', 'RIGHT':'blue'}  
+        for water_port in plot_setting:
+            this_RT = (foraging_analysis.TrialStats() & key_subject_id_session & (experiment.WaterPortChoice() & 'water_port="{}"'.format(water_port))).fetch('reaction_time').astype(float)
+            sns.histplot(this_RT, binwidth=0.01, alpha=0.5, 
+                         ax=ax3, color=plot_setting[water_port], label=water_port)  # 10-ms window
+        ax3.axvline(x=0, color='k', lw=0.5)
+        ax3.set(xlabel='Time to Go Cue (s)', title='First lick (reaction time)') # Fix the ylim of left and right licks
+        ax3.legend()
+        
+        # ---- Save fig and insert ----
+        fn_prefix = f'{water_res_num}_{sess_date}_'
+        fig_dict = save_figs((fig,), ('session_foraging_licking_psth',), sess_dir, fn_prefix)
+        plt.close('all')
+        self.insert1({**key, **fig_dict})
+        
+        
 # ============================= PROBE LEVEL ====================================
 
 
@@ -421,6 +585,38 @@ class ProbeLevelDriftMap(dj.Computed):
             plt.close('all')
             self.insert1({**key, **fig_dict, 'shank': shank})
 
+
+@schema
+class ProbeLevelCoronalSlice(dj.Computed):
+    definition = """
+    -> ephys.ProbeInsertion
+    shank: int
+    ---
+    coronal_slice: filepath@report_store
+    """
+
+    # Only process ProbeInsertion with Histology and ElectrodeCCFPosition known
+    key_source = ephys.ProbeInsertion & histology.ElectrodeCCFPosition
+
+    def make(self, key):
+        water_res_num, sess_date = get_wr_sessdate(key)
+        probe_dir = store_stage / water_res_num / sess_date / str(key['insertion_number'])
+        probe_dir.mkdir(parents=True, exist_ok=True)
+
+        probe_insertion = ephys.ProbeInsertion & key
+
+        shanks = probe_insertion.aggr(lab.ElectrodeConfig.Electrode * lab.ProbeType.Electrode,
+                                      shanks='GROUP_CONCAT(DISTINCT shank SEPARATOR ", ")').fetch1('shanks')
+        shanks = np.array(shanks.split(', ')).astype(int)
+
+        for shank in shanks:
+            fig = unit_characteristic_plot.plot_pseudocoronal_slice(probe_insertion, shank_no=shank)
+            # ---- Save fig and insert ----
+            fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{shank}_'
+            fig_dict = save_figs((fig,), ('coronal_slice',), probe_dir, fn_prefix)
+            plt.close('all')
+            self.insert1({**key, **fig_dict, 'shank': shank})
+
 # ============================= UNIT LEVEL ====================================
 
 
@@ -552,6 +748,8 @@ class ProjectLevelProbeTrack(dj.Computed):
 # ---------- HELPER FUNCTIONS --------------
 
 report_tables = [SessionLevelReport,
+                 SessionLevelForagingSummary,
+                 SessionLevelForagingLickingPSTH,
                  ProbeLevelReport,
                  ProbeLevelPhotostimEffectReport,
                  UnitLevelEphysReport,
@@ -559,7 +757,8 @@ report_tables = [SessionLevelReport,
                  SessionLevelCDReport,
                  SessionLevelProbeTrack,
                  ProjectLevelProbeTrack,
-                 ProbeLevelDriftMap]
+                 ProbeLevelDriftMap,
+                 ProbeLevelCoronalSlice]
 
 
 def get_wr_sessdate(key):

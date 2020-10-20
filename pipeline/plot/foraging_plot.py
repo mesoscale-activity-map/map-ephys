@@ -98,7 +98,7 @@ def extract_trials(plottype = '2lickport',
         p_reward_this = (q_session_block_trial * experiment.SessionBlock.WaterPortRewardProbability 
                                                       & 'water_port = "{}"'.format(water_port)).fetch(
                                                           'reward_probability', order_by=('session','trial')).astype(float)
-        if len(p_reward_this):
+        if len(p_reward_this) == len(df_behaviortrial):
             df_behaviortrial[f'p_reward_{water_port}'] = p_reward_this
 
 
@@ -151,6 +151,7 @@ def extract_trials(plottype = '2lickport',
         
     #% --- calculating local matching, bias, reward rate ---
     if local_matching['calculate_local_matching']:
+        movingwindow = min(movingwindow, len(df_behaviortrial))
         kernel = np.ones(movingwindow)/movingwindow
         p1 = np.asarray(np.max([df_behaviortrial['p_reward_right'],df_behaviortrial['p_reward_left']],0),float)
         p0 = np.asarray(np.min([df_behaviortrial['p_reward_right'],df_behaviortrial['p_reward_left']],0),float)
@@ -195,7 +196,6 @@ def extract_trials(plottype = '2lickport',
                 trial_number.append(center_trial)
             except:
                 pass
-            
             
         df_behaviortrial['local_efficiency']=local_efficiency
         df_behaviortrial['local_matching_slope'] = np.nan
@@ -461,7 +461,7 @@ def plot_local_efficiency_matching_bias(df_behaviortrial,ax3):
     ax3.set_ylim([-.1,1.1])
     ax33 = ax3.twinx()
     ax33.plot(trialnums,local_matching_bias,'yo-')
-    ax33.set_ylim(np.asarray([-1.1,1.1])*np.nanmin([np.nanmax(np.abs(local_matching_bias)),4]))
+    ax33.set_ylim(np.asarray([-1.1,1.1])*np.nanmin([np.nanmax(np.abs(local_matching_bias.values).tolist() + [0]),4]))
     ax33.set_ylabel('Bias',color='y')
     ax33.spines["right"].set_color("yellow")
     ax3.set_xlim([np.min(df_behaviortrial['trial'])-10,np.max(df_behaviortrial['trial'])+10]) 
