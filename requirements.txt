@@ -4,7 +4,7 @@ h5py
 globus-sdk
 tifffile
 pandas
-seaborn
+seaborn==0.11.0
 matplotlib==3.1.3
 pillow
 tqdm
