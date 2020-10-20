@@ -14,7 +14,9 @@ import datajoint as dj
 from pymysql.err import OperationalError
 
 
-from pipeline import (lab, experiment, tracking, ephys, psth, ccf, histology, export, publication, globus, get_schema_name)
+from pipeline import (lab, experiment, tracking, ephys, psth, ccf,
+                      histology, export, publication, globus, foraging_analysis,
+                      get_schema_name)
 
 pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth]
 
@@ -327,6 +329,29 @@ def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': T
     psth.UnitSelectivity.populate(**populate_settings)
 
 
+def populate_foraging_analysis(populate_settings={'reserve_jobs': True, 'display_progress': True}):
+    log.info('foraging_analysis.TrialStats.populate()')
+    foraging_analysis.TrialStats.populate(**populate_settings)
+
+    log.info('foraging_analysis.BlockStats.populate()')
+    foraging_analysis.BlockStats.populate(**populate_settings)
+
+    log.info('foraging_analysis.SessionTaskProtocol.populate()')
+    foraging_analysis.SessionTaskProtocol.populate(**populate_settings)
+
+    log.info('foraging_analysis.SessionStats.populate()')
+    foraging_analysis.SessionStats.populate(**populate_settings)
+
+    log.info('foraging_analysis.BlockFraction.populate()')
+    foraging_analysis.BlockFraction.populate(**populate_settings)
+
+    log.info('foraging_analysis.SessionMatching.populate()')
+    foraging_analysis.SessionMatching.populate(**populate_settings)
+
+    log.info('foraging_analysis.BlockEfficiency.populate()')
+    foraging_analysis.BlockEfficiency.populate(**populate_settings)
+
+
 def generate_report(populate_settings={'reserve_jobs': True, 'display_progress': True}):
     from pipeline import report
     for report_tbl in report.report_tables:
@@ -432,6 +457,7 @@ def automate_computation():
         log.info('Populate for: Ephys - PSTH - Report')
         populate_ephys(populate_settings)
         populate_psth(populate_settings)
+        populate_foraging_analysis(populate_settings)
         generate_report(populate_settings)
 
         log.info('report.delete_outdated_session_plots()')
