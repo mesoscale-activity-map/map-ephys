@@ -112,6 +112,7 @@ class EphysIngest(dj.Imported):
         # create probe insertion records
         if into_archive:
             probe_insertion_exists = True
+
         try:
             insertion_key, e_config_key = _gen_probe_insert(sinfo, probe, npx_meta, probe_insertion_exists=probe_insertion_exists)
         except (NotImplementedError, dj.DataJointError) as e:
@@ -133,8 +134,9 @@ class EphysIngest(dj.Imported):
 
         # scale amplitudes by uV/bit scaling factor (for kilosort2)
         if method in ['kilosort2']:
-            bit_volts = npx_bit_volts[re.match('neuropixels (\d.0)', npx_meta.probe_model).group()]
-            unit_amp = unit_amp * bit_volts
+            if 'qc' not in clustering_label:
+                bit_volts = npx_bit_volts[re.match('neuropixels (\d.0)', npx_meta.probe_model).group()]
+                unit_amp = unit_amp * bit_volts
 
         # Determine trial (re)numbering for ephys:
         #
@@ -204,12 +206,11 @@ class EphysIngest(dj.Imported):
 
         q_electrodes = lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode & e_config_key
         site2electrode_map = {}
-        for recorded_site in np.unique(np.concatenate([spike_sites, vmax_unit_site])):
-            shank, shank_col, shank_row, _ = npx_meta.shankmap['data'][recorded_site - 1]  # subtract 1 because npx_meta shankmap is 0-indexed
-            site2electrode_map[recorded_site] = (q_electrodes
-                                                 & {'shank': shank + 1,  # this is a 1-indexed pipeline
-                                                    'shank_col': shank_col + 1,
-                                                    'shank_row': shank_row + 1}).fetch1('KEY')
+        for recorded_site, (shank, shank_col, shank_row, _) in enumerate(npx_meta.shankmap['data']):
+            site2electrode_map[recorded_site + 1] = (q_electrodes
+                                                     & {'shank': shank + 1,  # this is a 1-indexed pipeline
+                                                        'shank_col': shank_col + 1,
+                                                        'shank_row': shank_row + 1}).fetch1('KEY')
 
         spike_sites = np.array([site2electrode_map[s]['electrode'] for s in spike_sites])
         unit_spike_sites = np.array([spike_sites[np.where(units == u)] for u in set(units)])
@@ -454,7 +455,7 @@ def do_ephys_ingest(session_key, replace=False, probe_insertion_exists=False, in
                 loader = cluster_loader_map[cluster_method]
                 dj.conn().ping()
                 EphysIngest()._load(loader(sinfo, *f), probe_no, npx_meta, rigpath,
-                                    probe_insertion_exists=probe_insertion_exists, into_archive =into_archive)
+                                    probe_insertion_exists=probe_insertion_exists, into_archive=into_archive)
             except (ProbeInsertionError, ClusterMetricError, FileNotFoundError) as e:
                 dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
                 if isinstance(e, ProbeInsertionError):
