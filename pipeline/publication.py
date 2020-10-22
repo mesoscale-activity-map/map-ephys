@@ -103,7 +103,7 @@ class FileType(dj.Lookup):
 
         A list of 3-tuples of file_type, file_glob, file_descr.
 
-        Should be kept
+        XXX: move to csv?
         '''
 
         data = [('unknown',
@@ -188,6 +188,160 @@ class FileType(dj.Lookup):
                  3B Probe concatenated AP channels low pass filtered at
                  300Hz and sampled at 2.5kHz - file metadata
                  '''),
+                ('ephys-raw-matlab-misc',
+                 '*.mat',
+                 '''
+                 Miscellaneous Raw-Ephys related MATLAB file
+                 '''),
+                # Kilosort 2 files
+                # ================
+                # best known reference:
+                # https://github.com/kwikteam/phy-contrib/blob/master/docs/template-gui.md
+                ('ephys-raw-ks2-FIXME-amplitudes',
+                 'amplitudes.npy',
+                 '''
+                 Kilosort2 Amplitudes file
+                 '''),
+                ('ephys-raw-ks2-channel-map',
+                 'channel_map.npy',
+                 '''
+                 Kilosort2 Channel Mapping File
+                 '''),
+                ('ephys-raw-ks2-channel-positions',
+                 'channel_positions.npy',
+                 '''
+                 Kilosort2 Channel Position File
+                 '''),
+                ('ephys-raw-ks2-cluster-amplitudes',
+                 'cluster_Amplitude.tsv',
+                 '''
+                 Kilosort2 Cluster Amplitude File
+                 '''),
+                ('ephys-raw-ks2-cluster-contam',
+                 'cluster_ContamPct.tsv',
+                 '''
+                 Kilosort2 Cluster Contamination File
+                 '''),
+                ('ephys-raw-ks2-cluster-grouping',
+                 'cluster_group.tsv',
+                 '''
+                 Kilosort2 Cluster Grouping File
+                 '''),
+                ('ephys-raw-ks2-cluster-labeling',
+                 'cluster_KSLabel.tsv',
+                 '''
+                 Kilosort2 Cluster Labeling File
+                 '''),
+                ('ephys-raw-ks2-cluster-snr',
+                 'cluster_snr.npy',
+                 '''
+                 Kilosort2 Cluster Signal-to-Noise Ratio file
+                 '''),
+                ('ephys-raw-ks2-cluster-table', # XXX: xcheck: real ks2 file?
+                 'clus_Table.npy',
+                 '''
+                 Kilosort2 Cluster Table File
+                 '''),
+                ('ephys-raw-ks2-mean-waveforms',
+                 'mean_waveforms.npy',
+                 '''
+                 Kilosort2 Mean Waveforms File
+                 '''),
+                ('ephys-raw-ks2-cluster-metrics',  # XXX: xcheck: real ks2 file?
+                 'metrics.csv',
+                 '''
+                 Kilosort2 Cluster Metrics File
+                 '''),
+                # FIXME: dup type - missing or mispasted?
+                # XXX: old_params.py? kept by UI or no?
+                ('ephys-raw-ks2-cluster-metrics',  # XXX: xcheck: real ks2 file?
+                 'metrics.csv',
+                 '''
+                 Kilosort2 Cluster Metrics File
+                 '''),
+                ('ephys-raw-ks2-overlap-matrix',
+                 'overlap_matrix.npy',
+                 '''
+                 Kilosort2 Overlap Matrix File
+                 '''),
+                ('ephys-raw-ks2-overlap-summ-npy',
+                 'overlap_summary.npy',
+                 '''
+                 Kilosort2 Overlap Summary File (npy)
+                 '''),
+                ('ephys-raw-ks2-overlap-summ-csv',
+                 'overlap_summary.csv',
+                 '''
+                 Kilosort2 Overlap Summary File (csv)
+                 '''),
+                ('ephys-raw-ks2-parameters',
+                 'params.npy',
+                 '''
+                 Kilosort2 Parameters File
+                 '''),
+                # FIXME: dup type - missing or mispasted?
+                ('ephys-raw-ks2-parameters',
+                 'params.py',
+                 '''
+                 Kilosort2 Parameters File
+                 '''),
+                ('ephys-raw-ks2-pc-features',
+                 'pc_features.py',
+                 '''
+                 Kilosort2 Spike PC Features file
+                 '''),
+                ('ephys-raw-ks2-pc-features-ind',
+                 'pc_features_ind.py',
+                 '''
+                 Kilosort2 Spike PC Features Index file
+                 '''),
+                ('ephys-raw-ks2-results',
+                 'rez.mat',
+                 '''
+                 Kilosort2 Results File
+                 '''),
+                ('ephys-raw-ks2-similar',
+                 'similar_templates.npy',
+                 '''
+                 Kilosort2 Template Similarity Score file
+                 '''),
+                ('ephys-raw-ks2-spike-times',
+                 'spike_times.npy',
+                 '''
+                 Kilosort2 Spike Times File
+                 '''),
+                ('ephys-raw-ks2-ftemplate',
+                 'template_features.npy',
+                 '''
+                 Kilosort2 Template Features File
+                 '''),
+                ('ephys-raw-ks2-ftemplate-ind',
+                 'template_features_ind.npy',
+                 '''
+                 Kilosort2 Template Features Index File
+                 '''),
+                ('ephys-raw-ks2-whitening-mat',
+                 'template_features_ind.npy',
+                 '''
+                 Kilosort2 Whitening Matrix File
+                 '''),
+                ('ephys-raw-ks2-whitening-mat-inv',
+                 'template_features_ind.npy',
+                 '''
+                 Kilosort2 Inverse Whitening Matrix File
+                 '''),
+                ('ephys-raw-ks2-spike-clusters',
+                 'spke_clusters.npy',
+                 '''
+                 Kilosort2 Spike Clusters file
+                 '''),
+                ('ephys-raw-ks2-cluster-groups',
+                 'spke_clusters.npy',
+                 '''
+                 Kilosort2 Cluster Groups File
+                 '''),
+                # tracking-video filetypes
+                # ========================
                 ('tracking-video-unknown',
                  '',  # deliberately non-matching pattern for manual tagging
                  '''
@@ -240,7 +394,7 @@ class FileType(dj.Lookup):
             if fnmatch(fname, v['file_glob']):
                 isknown[k] = v  # a file_glob matching file name
 
-        # return type match or unknown type
+        # return singular matching type or unknown type
         return (list(isknown.values())[0] if len(isknown) == 1 else (
             list(unknown.values())[0] if len(unknown) == 1 else (
                 ftmap['unknown'] if 'unknown' in ftmap else (
