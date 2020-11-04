@@ -348,7 +348,7 @@ def plot_pseudocoronal_slice(probe_insertion, shank_no=1):
         'ccf_y', 'ccf_x', 'color_code')
 
     # ---- paint annotation color code ----
-    coronal_slice = np.full((dv_max, lr_max, 3), np.nan)
+    coronal_slice = np.full((dv_max + 1, lr_max + 1, 3), np.nan)
     for color in set(colors):
         matched_ind = np.where(colors == color)[0]
         dv_ind = dv_pts[matched_ind]  # rows
