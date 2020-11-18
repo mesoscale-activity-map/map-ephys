@@ -107,7 +107,7 @@ class EphysIngest(dj.Imported):
 
         log.info('-- Start insertions for probe: {} - Clustering method: {} - Label: {}'.format(probe, method, clustering_label))
 
-        assert len(trial_start) == len(trial_go)
+        assert len(trial_start) == len(trial_go), 'Unequal number of bitcode "trial_start" ({}) and "trial_go" ({})'.format(len(trial_start), len(trial_go))
 
         # create probe insertion records
         if into_archive:
@@ -166,6 +166,8 @@ class EphysIngest(dj.Imported):
             # "trials" here is just the 0-based indices of the behavioral trials
             behav_trials = (experiment.SessionTrial & skey).fetch('trial', order_by='trial')
             trials = behav_trials[trial_indices]
+
+        assert len(trial_start) == len(trials), 'Unequal number of bitcode "trial_start" ({}) and ingested behavior trials ({})'.format(len(trial_start), len(trials))
 
         # trialize the spikes & subtract go cue
         t, trial_spikes, trial_units = 0, [], []
@@ -448,8 +450,12 @@ def do_ephys_ingest(session_key, replace=False, probe_insertion_exists=False, in
             raise IdenticalClusterResultError(identical_clustering_results)
 
     def do_insert():
-        # do the insertion per probe
+        # do the insertion per probe for all probes
         for probe_no, (f, cluster_method, npx_meta) in clustering_files.items():
+            insertion_key = {'subject_id': sinfo['subject_id'], 'session': sinfo['session'], 'insertion_number': probe_no}
+            if probe_insertion_exists and (ephys.Unit & insertion_key):
+                # if probe_insertion exists and there exists also units for this insertion_key, skip over it
+                continue
             try:
                 log.info('------ Start loading clustering results for probe: {} ------'.format(probe_no))
                 loader = cluster_loader_map[cluster_method]
@@ -1433,18 +1439,23 @@ def extend_ephys_ingest(session_key):
                 return
 
 
-def archive_ingested_clustering_results(session_key):
+def archive_ingested_clustering_results(key):
     """
+    The input-argument "key" should be at the level of ProbeInsertion or its anscestor.
+
     1. Copy to ephys.ArchivedUnit
     2. Delete ephys.Unit
     """
+    insertion_keys = (ephys.ProbeInsertion & key).fetch('KEY')
+    log.info('Archiving {} probe insertion(s): {}'.format(len(insertion_keys), insertion_keys))
+
     archival_time = datetime.now()
 
     q_archived_clusterings, q_ephys_files, q_archived_units, \
     q_archived_units_stat, q_archived_cluster_metrics,\
     q_archived_waveform_metrics = [], [], [], [], [], []
 
-    for insert_key in (ephys.ProbeInsertion & session_key).fetch('KEY'):
+    for insert_key in insertion_keys:
         q_archived_clustering = (ephys.ProbeInsertion.proj() & insert_key).aggr(
             ephys.ClusteringLabel * ephys.ClusteringMethod, ...,
             clustering_method='clustering_method', clustering_time='clustering_time',
@@ -1476,7 +1487,7 @@ def archive_ingested_clustering_results(session_key):
         log.info('This set of clustering results has already been archived, skip archiving...')
     else:
         # preparing spike_times and trial_spike
-        tr_no, tr_start = (experiment.SessionTrial & session_key).fetch(
+        tr_no, tr_start = (experiment.SessionTrial & key).fetch(
             'trial', 'start_time', order_by='trial')
         tr_stop = np.append(tr_start[1:], np.inf)
 
@@ -1503,8 +1514,8 @@ def archive_ingested_clustering_results(session_key):
 
         if not is_archived:
             # server-side copy
-            log.info('Archiving {} units from {} probe insertions'.format(len(ephys.Unit & session_key),
-                                                                          len(ephys.ProbeInsertion & session_key)))
+            log.info('Archiving {} units from {} probe insertions'.format(len(ephys.Unit & key),
+                                                                          len(ephys.ProbeInsertion & key)))
             insert_settings = dict(ignore_extra_fields=True, allow_direct_insert=True)
 
             [ephys.ArchivedClustering.insert(clustering, **insert_settings)
@@ -1521,12 +1532,12 @@ def archive_ingested_clustering_results(session_key):
 
         with dj.config(safemode=False):
             log.info('Delete clustering data and associated analysis results')
-            (ephys.Unit & session_key).delete()
-            (EphysIngest.EphysFile & session_key).delete(force=True)
-            (report.SessionLevelCDReport & session_key).delete()
-            (report.ProbeLevelPhotostimEffectReport & session_key).delete()
-            (report.ProbeLevelReport & session_key).delete()
-            (report.ProbeLevelDriftMap & session_key).delete()
+            (ephys.Unit & key).delete()
+            (EphysIngest.EphysFile & key).delete(force=True)
+            (report.SessionLevelCDReport & key).delete()
+            (report.ProbeLevelPhotostimEffectReport & key).delete()
+            (report.ProbeLevelReport & key).delete()
+            (report.ProbeLevelDriftMap & key).delete()
 
     # the copy, delete part
     if dj.conn().in_transaction:
