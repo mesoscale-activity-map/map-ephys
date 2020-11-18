@@ -40,7 +40,7 @@ class GlobusStorageLocation(dj.Lookup):
 
         return (('raw-ephys',
                  '5b875fda-4185-11e8-bb52-0ac6873fc732',
-                 '/4ElectrodeRig_Ephys'),  # TODO: updated/final path
+                 '/ePhys'),
                 ('raw-video',
                  '5b875fda-4185-11e8-bb52-0ac6873fc732',
                  '/'))
@@ -96,6 +96,8 @@ class FileType(dj.Lookup):
     file_descr:           varchar(255)          # file type long description
     """
 
+    _cache = {}
+
     @property
     def contents(self):
         '''
@@ -116,88 +118,46 @@ class FileType(dj.Lookup):
                  '''
                  Unknown Raw-Ephys File Type
                  '''),
-                ('ephys-raw-3a-ap-trial',
-                 '*_g0_t[0-9]*.imec.ap.bin',
+                ('ephys-raw-neuropixels-ap-bin',
+                 '*.ap.bin',
                  '''
-                 3A Probe per-trial AP channels high pass filtered at
-                 300Hz and sampled at 30kHz - recording file
+                 Neuropixels AP Data
                  '''),
-                ('ephys-raw-3a-ap-trial-meta',
-                 '*_g0_t[0-9]*.imec.ap.meta',
+                ('ephys-raw-neuropixels-ap-meta',
+                 '*.ap.meta',
                  '''
-                 3A Probe per-trial AP channels high pass
-                 filtered at 300Hz and sampled at 30kHz - file metadata
+                 Neuropixels AP Metadata
                  '''),
-                ('ephys-raw-3a-lf-trial',
-                 '*_g0_t[0-9]*.imec.lf.bin',
+                ('ephys-raw-neuropixels-lf-bin',
+                 '*.lf.bin',
                  '''
-                 3A Probe per-trial AP channels low pass filtered at
-                 300Hz and sampled at 2.5kHz - recording file
+                 Neuropixels LF Data
                  '''),
-                ('ephys-raw-3a-lf-trial-meta',
-                 '*_g0_t[0-9]*.imec.lf.meta',
+                ('ephys-raw-neuropixels-lf-meta',
+                 '*.lf.meta',
                  '''
-                 3A Probe per-trial AP channels low pass filtered at
-                 300Hz and sampled at 2.5kHz - file metadata
+                 Neuropixels LF Metadata
                  '''),
-                ('ephys-raw-3b-ap-trial',
-                 '*_????????_g?_t[0-9]*.imec.ap.bin',
+                ('ephys-raw-neuropixels-sy',
+                 '*.imec*.SY*.txt',
                  '''
-                 3B Probe per-trial AP channels high pass filtered at
-                 300Hz and sampled at 30kHz - recording file
-                 '''),
-                ('ephys-raw-3b-ap-trial-meta',
-                 '*_????????_g?_t[0-9]*.imec.ap.meta',
-                 '''
-                 3B Probe per-trial AP channels high pass
-                 filtered at 300Hz and sampled at 30kHz - file metadata
-                 '''),
-                ('ephys-raw-3b-lf-trial',
-                 '*_????????_g?_t[0-9]*.imec.lf.bin',
-                 '''
-                 3B Probe per-trial AP channels low pass filtered at
-                 300Hz and sampled at 2.5kHz - recording file
-                 '''),
-                ('ephys-raw-3b-lf-trial-meta',
-                 '*_????????_g?_t[0-9]*.imec.lf.meta',
-                 '''
-                 3B Probe per-trial AP channels low pass filtered at
-                 300Hz and sampled at 2.5kHz - file metadata
-                 '''),
-                ('ephys-raw-3b-ap-concat',
-                 '*_????????_g?_tcat.imec.ap.bin',
-                 '''
-                 3B Probe concatenated AP channels high pass filtered at
-                 300Hz and sampled at 30kHz - recording file
-                 '''),
-                ('ephys-raw-3b-ap-concat-meta',
-                 '*_??????_g?_tcat.imec.ap.meta',
-                 '''
-                 3B Probe concatenated AP channels high pass
-                 filtered at 300Hz and sampled at 30kHz - file metadata
-                 '''),
-                ('ephys-raw-3b-lf-concat',
-                 '*_????????_g?_tcat.imec.lf.bin',
-                 '''
-                 3B Probe concatenated AP channels low pass filtered at
-                 300Hz and sampled at 2.5kHz - recording file
-                 '''),
-                ('ephys-raw-3b-lf-concat-meta',
-                 '*_????????_g?_tcat.imec.lf.meta',
-                 '''
-                 3B Probe concatenated AP channels low pass filtered at
-                 300Hz and sampled at 2.5kHz - file metadata
+                 Neuropixels SY Metadata
                  '''),
                 ('ephys-raw-matlab-misc',
                  '*.mat',
                  '''
                  Miscellaneous Raw-Ephys related MATLAB file
                  '''),
+                ('ephys-raw-nidq',
+                 '*.nidq.*',
+                 '''
+                 nidq file
+                 '''),
                 # Kilosort 2 files
                 # ================
                 # best known reference:
                 # https://github.com/kwikteam/phy-contrib/blob/master/docs/template-gui.md
-                ('ephys-raw-ks2-FIXME-amplitudes',
+                ('ephys-raw-ks2-amplitude-scaling',
                  'amplitudes.npy',
                  '''
                  Kilosort2 Amplitudes file
@@ -275,23 +235,17 @@ class FileType(dj.Lookup):
                  Kilosort2 Overlap Summary File (csv)
                  '''),
                 ('ephys-raw-ks2-parameters',
-                 'params.npy',
-                 '''
-                 Kilosort2 Parameters File
-                 '''),
-                # FIXME: dup type - missing or mispasted?
-                ('ephys-raw-ks2-parameters',
-                 'params.py',
+                 'params.*py',
                  '''
                  Kilosort2 Parameters File
                  '''),
                 ('ephys-raw-ks2-pc-features',
-                 'pc_features.py',
+                 'pc_features.npy',
                  '''
                  Kilosort2 Spike PC Features file
                  '''),
                 ('ephys-raw-ks2-pc-features-ind',
-                 'pc_features_ind.py',
+                 'pc_feature_ind.npy',
                  '''
                  Kilosort2 Spike PC Features Index file
                  '''),
@@ -316,27 +270,42 @@ class FileType(dj.Lookup):
                  Kilosort2 Template Features File
                  '''),
                 ('ephys-raw-ks2-ftemplate-ind',
-                 'template_features_ind.npy',
+                 'template_feature_ind.npy',
                  '''
                  Kilosort2 Template Features Index File
                  '''),
+                ('ephys-raw-ks2-spike-template',
+                 'spike_templates.npy',
+                 '''
+                 Kilosort 2 Spike Templates
+                 '''),
+                ('ephys-raw-ks2-template',
+                 'templates.npy',
+                 '''
+                 Kilosort 2 Templates
+                 '''),
+                ('ephys-raw-ks2-template-ind',
+                 'templates_ind.npy',
+                 '''
+                 Kilosort 2 Template Indices
+                 '''),
                 ('ephys-raw-ks2-whitening-mat',
-                 'template_features_ind.npy',
+                 'whitening_mat.npy',
                  '''
                  Kilosort2 Whitening Matrix File
                  '''),
                 ('ephys-raw-ks2-whitening-mat-inv',
-                 'template_features_ind.npy',
+                 'whitening_mat_inv.npy',
                  '''
                  Kilosort2 Inverse Whitening Matrix File
                  '''),
                 ('ephys-raw-ks2-spike-clusters',
-                 'spke_clusters.npy',
+                 'spike_clusters.npy',
                  '''
                  Kilosort2 Spike Clusters file
                  '''),
                 ('ephys-raw-ks2-cluster-groups',
-                 'spke_clusters.npy',
+                 'cluster_groups.csv',
                  '''
                  Kilosort2 Cluster Groups File
                  '''),
@@ -383,22 +352,32 @@ class FileType(dj.Lookup):
         '''
         self = cls()
 
-        ftmap = {t['file_type']: t for t in (
-            self & "file_type like '{}%%'".format(file_type_filter))}
+        if file_type_filter in self._cache:
+            ftmap = cls._cache[file_type_filter]
+        else:
+            ftmap = {t['file_type']: t for t in (
+                self & "file_type like '{}%%'".format(file_type_filter))}
 
-        unknown, isknown = {}, {}  # unknown filetypes, known filetype matches.
+            cls._cache[file_type_filter] = ftmap
 
+        unknown, isknown = None, None # unknown filetypes, known filetypes
+
+        # match against list
         for k, v in ftmap.items():
+            # log.debug('testing {} against {} ({})'.format(
+            #     fname, v['file_type'], v['file_glob']))
             if 'unknown' in k and file_type_filter in k:
-                unknown[k] = v  # a file_type_filter matching unknown file type
+                unknown = v  # file_type_filter's 'unkown' type
             if fnmatch(fname, v['file_glob']):
-                isknown[k] = v  # a file_glob matching file name
+                isknown = v  # a file_glob matching file name
+                break
 
-        # return singular matching type or unknown type
-        return (list(isknown.values())[0] if len(isknown) == 1 else (
-            list(unknown.values())[0] if len(unknown) == 1 else (
-                ftmap['unknown'] if 'unknown' in ftmap else (
-                    self & {'file_type': 'unknown'}).fetch1())))
+        return isknown if isknown else (
+            unknown if unknown else {  # FIXME: use a reference value
+                'file_type': 'unknown',
+                'file_glob': '',
+                'file_descr': 'Unknown File Type'
+            })
 
 
 @schema
@@ -429,6 +408,7 @@ class ArchivedRawEphys(dj.Imported):
     key_source = experiment.Session & ephys.Unit
 
     gsm = None  # for GlobusStorageManager
+    globus_alias = 'raw-ephys'
 
     def get_gsm(self):
         log.debug('ArchivedRawEphysTrial.get_gsm()')
@@ -438,8 +418,34 @@ class ArchivedRawEphys(dj.Imported):
 
         return self.gsm
 
+    def get_session_path(self, h2o, sess_rec, nth=0):
+        ''' 
+        get a filesystem path for a given session record
+
+        assumes single-session per day layout (nth=0).
+
+        if 'nth' is provided, session path will be for the nth session
+        for that day.
+        '''
+        # session: <root>/<h2o>/catgt_<h2o>_<mdy>_g0/
+        # probe: <root>/<h2o>/catgt_<h2o>_<mdy>_g0/<h2o>_<mdy>_imecN
+
+        sdate_mdy = sess_rec['session_date'].strftime('%m%d%g')
+        return '/'.join([h2o, 'catgt_{}_{}_g0'.format(h2o, sdate_mdy)])
+
     @classmethod
-    def discover(cls):
+    def discover(cls, *restrictions):
+
+        self = cls()
+        keys = self.key_source - self
+
+        log.info('attempting discovery for {} sessions'.format(len(keys)))
+
+        for key in keys:
+            log.debug('discover calling make_discover for {}'.format(key))
+            self.make_discover(key)
+
+    def make_discover(self, key):
         """
         Discover files on globus and attempt to register them.
         """
@@ -447,7 +453,7 @@ class ArchivedRawEphys(dj.Imported):
             log.debug('discover: build_session {}'.format(key))
 
             gsm = self.get_gsm()
-            globus_alias = 'raw-ephys'
+            globus_alias = self.globus_alias
 
             ra, rep, rep_sub = (
                 GlobusStorageLocation() & {'globus_alias': globus_alias}
@@ -537,20 +543,13 @@ class ArchivedRawEphys(dj.Imported):
                 self.insert1({**key, **data[0]}, ignore_extra_fields=True,
                              allow_direct_insert=True)
 
-        self = cls()
-        keys = self.key_source - self
+        log.info('.. make_discover {} {}'.format(
+            key['subject_id'], key['session']))
 
-        log.info('attempting discovery for {} sessions'.format(len(keys)))
+        data = build_session(self, key)
 
-        for key in keys:
-
-            log.info('.. inspecting {} {}'.format(
-                key['subject_id'], key['session']))
-
-            data = build_session(self, key)
-
-            if data:
-                commit_session(self, key, data)
+        if data:
+            commit_session(self, key, data)
 
     def make(self, key):
         """
