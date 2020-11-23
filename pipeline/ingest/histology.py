@@ -360,6 +360,7 @@ def archive_electrode_histology(insertion_key, note='', delete=False):
                 (histology.LabeledProbeTrack & insertion_key).delete()
                 (report.ProbeLevelDriftMap & insertion_key).delete()
                 (report.ProbeLevelCoronalSlice & insertion_key).delete()
+                (HistologyIngest & insertion_key).delete()
 
 
 class HistologyFileError(Exception):
