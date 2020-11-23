@@ -1,7 +1,7 @@
 import datajoint as dj
 
 from . import lab, experiment, ccf, ephys
-from . import get_schema_name
+from . import get_schema_name, dict_to_hash
 [lab, experiment, ccf, ephys]  # schema imports only
 
 schema = dj.schema(get_schema_name('histology'))
@@ -113,3 +113,59 @@ class EphysCharacteristic(dj.Imported):
     mua: float
     photstim_effect: float
     """
+
+
+@schema
+class ArchivedElectrodeHistology(dj.Manual):
+    definition = """
+    -> ephys.ProbeInsertion
+    archival_time: datetime  # time of archiving
+    ---
+    archival_note='': varchar(2000)  # user notes about this particular Electrode CCF being archived
+    archival_hash: varchar(32)        # hash of Electrode CCF position, prevent duplicated archiving
+    unique index (archival_hash)
+    """
+
+    class ElectrodePosition(dj.Part):
+        definition = """
+        -> master
+        -> lab.ElectrodeConfig.Electrode
+        -> ccf.CCF
+        ---
+        mri_x=null  : float  # (mm)
+        mri_y=null  : float  # (mm)
+        mri_z=null  : float  # (mm)
+        """
+
+    class ElectrodePositionError(dj.Part):
+        definition = """
+        -> master
+        -> lab.ElectrodeConfig.Electrode
+        -> ccf.CCFLabel
+        ccf_x       : int   # (um)
+        ccf_y       : int   # (um)
+        ccf_z       : int   # (um)
+        ---
+        mri_x=null  : float  # (mm)
+        mri_y=null  : float  # (mm)
+        mri_z=null  : float  # (mm)
+        """
+
+    class LabeledProbeTrack(dj.Part):
+        definition = """
+        -> master
+        ---
+        labeling_date=NULL:         date
+        dye_color=NULL:             varchar(32)
+        """
+
+    class ProbeTrackPoint(dj.Part):
+        definition = """
+        -> master.LabeledProbeTrack
+        order: int
+        shank: int
+        ---
+        ccf_x: float  # (um)
+        ccf_y: float  # (um)
+        ccf_z: float  # (um)    
+        """
