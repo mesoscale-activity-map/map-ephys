@@ -17,7 +17,7 @@ def adjust_electrode_ccf_position_tables():
     pk_alter_cmd = 'alter table {} drop primary key, add {}'
 
     mri_alter_cmd = ("alter table {} modify column `mri_{}` "
-                     "float not null default '0' comment '(mm)'")
+                     "float default NULL comment '(mm)'")
 
     with dj.conn().transaction as conn:
 

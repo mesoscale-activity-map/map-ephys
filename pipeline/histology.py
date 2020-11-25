@@ -60,9 +60,9 @@ class ElectrodeCCFPosition(dj.Manual):
         -> lab.ElectrodeConfig.Electrode
         -> ccf.CCF
         ---
-        mri_x=nullable: float  # (mm)
-        mri_y=nullable: float  # (mm)
-        mri_z=nullable: float  # (mm)
+        mri_x=null: float  # (mm)
+        mri_y=null: float  # (mm)
+        mri_z=null: float  # (mm)
         """
 
     class ElectrodePositionError(dj.Part):
@@ -74,9 +74,9 @@ class ElectrodeCCFPosition(dj.Manual):
         ccf_y: int   # (um)
         ccf_z: int   # (um)
         ---
-        mri_x=nullable: float  # (mm)
-        mri_y=nullable: float  # (mm)
-        mri_z=nullable: float  # (mm)
+        mri_x=null: float  # (mm)
+        mri_y=null: float  # (mm)
+        mri_z=null: float  # (mm)
         """
 
 
