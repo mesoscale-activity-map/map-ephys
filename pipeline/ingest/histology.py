@@ -3,6 +3,8 @@ import logging
 import pathlib
 import csv
 import re
+import json
+import math
 
 import numpy as np
 import scipy.io as scio
@@ -34,6 +36,12 @@ def get_histology_paths():
         }
         ...
       }
+
+    Histology paths should be layed out as follows:
+
+      {histology_data_path}/{h2o}/histology/{files}
+
+    Expected files are documented in HistologyIngest._search_histology_files.
     """
     return dj.config.get('custom', {}).get('histology_data_paths', None)
 
@@ -118,6 +126,7 @@ class HistologyIngest(dj.Imported):
             dj.conn().cancel_transaction()
             return
 
+
         try:
             trk_ingested = self._load_histology_track()
         except FileNotFoundError as e:
@@ -134,68 +143,180 @@ class HistologyIngest(dj.Imported):
 
     def _load_histology_ccf(self):
 
-        sz = 20   # 20um voxel size
+        sz = ccf.CCFLabel.CCF_R3_20UM_RESOLUTION   # 20um voxel size
 
         log.info('... probe {} position ingest.'.format(self.probe))
-        probefiles, shanks = self._search_histology_files('landmark_file')
+        found = self._search_histology_files('landmark_file')
 
-        log.info('... found probe {} histology file(s) {}'.format(
-            self.probe, probefiles))
+        if found['format'] == 1:
 
-        for probepath, shank_no in zip(probefiles, shanks):
-            hist = scio.loadmat(probepath, struct_as_record=False, squeeze_me=True)['site']
+            probefiles = found['histology_files']
+            shanks = found['corresponding_shanks']
 
-            # probe CCF 3D positions
-            pos_xyz = np.vstack([hist.pos.x, hist.pos.y, hist.pos.z,
-                                 hist.warp.x, hist.warp.y, hist.warp.z]).T * sz
+            log.info('... found probe {} histology file(s) {}'.format(
+                self.probe, probefiles))
 
-            # probe CCF regions
-            ont_ids = np.where(np.isnan(hist.ont.id), 0, hist.ont.id)
+            for probepath, shank_no in zip(probefiles, shanks):
+                hist = scio.loadmat(probepath, struct_as_record=False, squeeze_me=True)['site']
 
-            probe_electrodes = (ephys.ProbeInsertion.proj() * lab.ProbeType.Electrode & self.egroup
-                                & {'shank': shank_no}).fetch(as_dict=True, order_by='electrode asc')
+                # probe CCF 3D positions
+                pos_xyz = np.vstack([hist.pos.x, hist.pos.y, hist.pos.z,
+                                     hist.warp.x, hist.warp.y, hist.warp.z]).T * sz
 
-            if len(ont_ids) < len(probe_electrodes):
-                raise HistologyFileError('Expecting at minimum {} electrodes - found {}'.format(
-                    len(probe_electrodes), len(ont_ids)))
+                # probe CCF regions
+                ont_ids = np.where(np.isnan(hist.ont.id), 0, hist.ont.id)
 
-            ont_ids = ont_ids[:len(probe_electrodes)]
-            pos_xyz = pos_xyz[:len(probe_electrodes), :]
+                probe_electrodes = (ephys.ProbeInsertion.proj() * lab.ProbeType.Electrode & self.egroup
+                                    & {'shank': shank_no}).fetch(as_dict=True, order_by='electrode asc')
 
-            inserted_electrodes = (ephys.ProbeInsertion.proj() * lab.ElectrodeConfig.Electrode.proj()
-                                   * lab.ProbeType.Electrode.proj('shank')
-                                   & self.egroup & {'shank': shank_no}).fetch('electrode', order_by='electrode asc')
+                if len(ont_ids) < len(probe_electrodes):
+                    raise HistologyFileError('Expecting at minimum {} electrodes - found {}'.format(
+                        len(probe_electrodes), len(ont_ids)))
 
-            recs = ({**electrode, **self.egroup, 'ccf_label_id': ccf.CCFLabel.CCF_R3_20UM_ID,
-                     'ccf_x': ccf_x, 'ccf_y': ccf_y, 'ccf_z': ccf_z, 'mri_x': mri_x, 'mri_y': mri_y, 'mri_z': mri_z}
-                    for electrode, (ccf_x, ccf_y, ccf_z, mri_x, mri_y, mri_z), ont_id in
-                    zip(probe_electrodes, pos_xyz, ont_ids)
-                    if ont_id > 0 and electrode['electrode'] in inserted_electrodes)
+                ont_ids = ont_ids[:len(probe_electrodes)]
+                pos_xyz = pos_xyz[:len(probe_electrodes), :]
 
-            # ideally ElectrodePosition.insert(...) but some are outside of CCF...
-            log.info('inserting channel ccf position')
-            histology.ElectrodeCCFPosition.insert1(self.egroup, ignore_extra_fields=True,
-                                                   skip_duplicates=True)
+                inserted_electrodes = (ephys.ProbeInsertion.proj() * lab.ElectrodeConfig.Electrode.proj()
+                                       * lab.ProbeType.Electrode.proj('shank')
+                                       & self.egroup & {'shank': shank_no}).fetch('electrode', order_by='electrode asc')
 
-            for r in recs:
-                log.debug('... adding probe/position: {}'.format(r))
+                recs = ({**electrode, **self.egroup, 'ccf_label_id': ccf.CCFLabel.CCF_R3_20UM_ID,
+                         'ccf_x': ccf_x, 'ccf_y': ccf_y, 'ccf_z': ccf_z, 'mri_x': mri_x, 'mri_y': mri_y, 'mri_z': mri_z}
+                        for electrode, (ccf_x, ccf_y, ccf_z, mri_x, mri_y, mri_z), ont_id in
+                        zip(probe_electrodes, pos_xyz, ont_ids)
+                        if ont_id > 0 and electrode['electrode'] in inserted_electrodes)
+
+                # ideally ElectrodePosition.insert(...) but some are outside of CCF...
+                log.info('inserting channel ccf position')
+                histology.ElectrodeCCFPosition.insert1(self.egroup, ignore_extra_fields=True,
+                                                       skip_duplicates=True)
+
+                for r in recs:
+                    log.debug('... adding probe/position: {}'.format(r))
+                    try:
+                        histology.ElectrodeCCFPosition.ElectrodePosition.insert1(
+                            r, ignore_extra_fields=True, allow_direct_insert=True)
+                    except Exception as e:  # XXX: no way to be more precise in dj
+                        # log.warning('... ERROR!: {}'.format(repr(e)))
+                        histology.ElectrodeCCFPosition.ElectrodePositionError.insert1(
+                            r, ignore_extra_fields=True, allow_direct_insert=True)
+
+                log.info('... ok.')
+
+            return True
+
+        if found['format'] == 2:
+
+            # load data,
+            cloc_data = {}
+            cloc_file = found['channel_locations']
+
+            log.debug('loading format 2 channels from {}'.format(cloc_file))
+            with open(cloc_file, 'r') as fh:
+                cloc_raw = json.loads(fh.read())
+
+            cloc_data['origin'] = cloc_raw['origin']
+
+            if len(cloc_data['origin'].keys()) > 1:
+                log.error('> 1 origin region found ({}). skipping.'.format(
+                    cloc_data['origin']))
+
+                return
+
+            # ensuring channel data is sorted;
+            cloc_keymap = {int(k.split('_')[1]): k for k
+                           in cloc_raw.keys() if 'channel_' in k}
+
+            cloc_data['channels'] = np.array(
+                [tuple(cloc_raw[cloc_keymap[k]].values()) for k in sorted(
+                    cloc_keymap.keys())],
+                dtype=[
+                    ('x', np.float), ('y', np.float), ('z', np.float),
+                    ('axial', np.float), ('lateral', np.float),
+                    ('brain_region_id', np.int), ('brain_region', np.object)])
+
+            # get/scale xyz positions
+            pos_xyz_raw = np.array([cloc_data['channels'][i]
+                                    for i in ('x', 'y', 'z')]).T
+
+            pos_origin = cloc_data['origin'][
+                list(cloc_data['origin'].keys())[0]]
+
+            pos_xyz = np.copy(pos_xyz_raw)
+
+            # by adjusting xyz axes & offsetting from origin position
+            pos_xyz[:, 0] = pos_origin[0] + pos_xyz_raw[:, 0]
+            pos_xyz[:, 1] = pos_origin[2] - pos_xyz_raw[:, 2]
+            pos_xyz[:, 2] = pos_origin[1] - pos_xyz_raw[:, 1]
+
+            # and quantizing to CCF voxel size;
+            pos_xyz = sz * np.around(pos_xyz / sz)
+
+            # get recording geometry,
+            probe_electrodes = (lab.ProbeType.Electrode
+                                & (ephys.ProbeInsertion
+                                   & self.egroup)).fetch(
+                                       order_by='electrode asc')
+
+            rec_electrodes = np.array(
+                [cloc_data['channels']['lateral'],
+                 cloc_data['channels']['axial']]).T
+
+            # adjusting to boundaries, # FIXME: WHY, ISOK?
+            # also: example session was -= 11; this seems more robust.
+            rec_electrodes[:, 0] = (
+                16 * (np.around(rec_electrodes[:, 0] / 16) - 1))
+
+            # to find corresponding electrodes,
+            elec_coord = np.array(
+                [probe_electrodes['x_coord'], probe_electrodes['y_coord']]).T
+
+            elec_coord_map = {tuple(i[1]): i[0]
+                              for i in enumerate(elec_coord)}
+
+            rec_to_elec_idx = np.array([elec_coord_map[tuple(i)]
+                                        for i in rec_electrodes])
+
+            # and then insert the ElectrodeCCFPosition records.
+            log.debug('... adding ElectrodeCCFPosition: {}'.format(
+                self.egroup))
+
+            ElectrodeCCFPosition = histology.ElectrodeCCFPosition
+            ElectrodePosition = ElectrodeCCFPosition.ElectrodePosition
+            ElectrodePositionError = (
+                ElectrodeCCFPosition.ElectrodePositionError)
+
+            ElectrodeCCFPosition.insert1(
+                self.egroup, ignore_extra_fields=True, skip_duplicates=True)
+
+            for z in zip(probe_electrodes[rec_to_elec_idx]['electrode'],
+                         pos_xyz[:, 0], pos_xyz[:, 1], pos_xyz[:, 2]):
+
+                z = [int(i) for i in z]  # integer CCF voxels, electrodes.
+                rec = {**self.egroup, 'electrode': z[0],
+                       'ccf_label_id': ccf.CCFLabel.CCF_R3_20UM_ID,
+                       'ccf_x': z[1], 'ccf_y': z[2], 'ccf_z': z[3]}
+                        # via nullable: 'mri_x': 0, 'mri_y': 0, 'mri_z': 0
+
+                log.debug('...... adding ElectrodePosition: {}'.format(rec))
+
                 try:
-                    histology.ElectrodeCCFPosition.ElectrodePosition.insert1(
-                        r, ignore_extra_fields=True, allow_direct_insert=True)
+                    ElectrodePosition.insert1(rec)
                 except Exception as e:  # XXX: no way to be more precise in dj
-                    # log.warning('... ERROR!: {}'.format(repr(e)))
-                    histology.ElectrodeCCFPosition.ElectrodePositionError.insert1(
-                        r, ignore_extra_fields=True, allow_direct_insert=True)
+                    log.warning('...... ElectrodePositionError: {}'.format(
+                        repr(e)))
+                    ElectrodePositionError.insert1(rec)
 
-            log.info('... ok.')
-
-        return True
+            return True
 
     def _load_histology_track(self):
 
-        log.info('... probe {} probe-track ingest.'.format(self.probe))
+        log.info('... probe {} probe-track ingest.'.format(str(self.probe)))
 
-        trackpaths, shanks = self._search_histology_files('histology_file')
+        found = self._search_histology_files('histology_file')
+
+        trackpaths = found['histology_files']
+        shanks = found['corresponding_shanks']
 
         if trackpaths:
             log.info('... found probe {} histology file(s): {}'.format(
@@ -251,10 +372,43 @@ class HistologyIngest(dj.Imported):
 
     def _search_histology_files(self, file_type):
         """
-        :param file_type, either:
-        + histology_file - format: landmarks_{water_res_number}_{session_date}_{session_time}_{probe_no}_{shank_no}.csv
-        + landmark_file - format landmarks_{water_res_number}_{session_date}_{session_time}_{probe_no}_{shank_no}_siteInfo.mat
-        Returns a list of files (1 file for SS, 4 for MS)
+        :param file_type: either 'landmark_file' or 'histology_file'.
+
+        FIXME name (original) format:
+
+          + histology_file - format: landmarks_{water_res_number}_{session_date}_{session_time}_{probe_no}_{shank_no}.csv
+          + landmark_file - format landmarks_{water_res_number}_{session_date}_{session_time}_{probe_no}_{shank_no}_siteInfo.mat
+
+          Returns a list of files (1 file for SS, 4 for MS)
+
+        FIXME name (new) format will also include:
+
+          + SC030_20191002_1_channel_locations.json
+          + SC030_20191002_1_channels.localCoordinates.npy
+          + channels.rawInd.npy
+
+        if available.
+
+        returns values of the form:
+
+            {
+                'format': 1,
+                'histology_files': histology_files,
+                'corresponding_shanks': corresponding_shanks
+            }
+
+        for FIXME name (original) format, and:
+
+            {
+                'format': 2,
+                'histology_files': histology_files,
+                'corresponding_shanks': corresponding_shanks
+                'raw_ind': rawInd file
+                'channel_locations': channel_locations.json file
+                'channel_local_coordinates': localCoordinates.npy file
+            }
+
+        for FIXME name (new) format.
         """
 
         file_format_map = {'landmark_file': '_siteInfo.mat',
@@ -311,7 +465,39 @@ class HistologyIngest(dj.Imported):
             corresponding_shanks = [int(re.search('landmarks_.*_(\d)_(\d){}'.format(file_format_map[file_type]),
                                                   f.as_posix()).groups()[1]) for f in histology_sesstime_files]
 
-        return histology_files, corresponding_shanks
+        res = {
+            'format': 1,
+            'histology_files': histology_files,
+            'corresponding_shanks': corresponding_shanks
+        }
+
+        if (self.directory / 'channels.rawInd.npy').exists():
+
+            res['format'] = 2
+
+            log.debug('format 2 detected..')
+
+            new_histology_files = [
+                (self.directory / 'channels.rawInd.npy'),
+                (self.directory / '{}_{}_{}_channel_locations.json'.format(
+                    self.water, self.session_date_str, self.probe)),
+                (self.directory /
+                 '{}_{}_{}_channels.localCoordinates.npy'.format(
+                     self.water, self.session_date_str, self.probe)),
+            ]
+
+            new_histology_files_state = [i.exists() for i in histology_files]
+
+            if not all(new_histology_files_state):
+                log.warning(
+                    'new format incomplete: expected: {}, status: {}'.format(
+                        histology_files, new_histology_files_state))
+
+            res['raw_ind'] = new_histology_files[0]
+            res['channel_locations'] = new_histology_files[1]
+            res['channel_local_coordinates'] = new_histology_files[2]
+
+        return res
 
 
 class HistologyFileError(Exception):
