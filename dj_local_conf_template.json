@@ -12,5 +12,12 @@
     "display.show_tuple_count": true,
     "history": [],
     "do_unittest": false,
-    "custom": {}
+    "custom": {
+        "behavior_data_paths": [
+            ["RRig", "./data/rigs/rrig", 0]
+        ],
+        "ephys_data_paths": [
+            "./data/rigs/rrig"
+        ]
+    }
 }

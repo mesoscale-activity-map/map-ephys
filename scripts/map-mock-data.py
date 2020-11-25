@@ -17,10 +17,14 @@ from pipeline import lab
 from pipeline import ccf
 from pipeline import experiment
 from pipeline import ephys
+from pipeline import publication
+from pipeline import report
+from pipeline import foraging_analysis
 from pipeline import histology
 from pipeline import tracking
+from pipeline import psth
 from pipeline import get_schema_name
-
+from pipeline import shell
 
 def usage_exit():
     print("usage: {p} [{c}]"
@@ -31,14 +35,12 @@ def usage_exit():
 
 def dropdbs():
     print('dropping databases')
-    for d in ['ingest_histology', 'ingest_ephys', 'ingest_tracking',
-              'ingest_behavior', 'publication', 'psth', 'tracking',
-              'histology', 'ephys', 'experiment', 'ccf', 'lab']:
-        dname = get_schema_name(d)
-        print('..  {} ({})'.format(d, dname))
+    if 'nuclear_option' not in dj.config:
+        print('skipping database drop')
+    else:
         try:
-            schema = dj.schema(dname)
-            schema.drop(force=True)
+            shell.nuke_all()
+            lab.schema.drop()
         except Exception as e:
             print("....  couldn't drop database {} : {}".format(d, repr(e)))
 
@@ -67,6 +69,12 @@ def mockdata():
             'fullname': 'Susu Chen'},
             skip_duplicates=True
         )
+        lab.Person().insert1({
+            'username': 'tn',
+            'fullname': 'Thinh Nguyen'},
+            skip_duplicates=True
+        )
+
         lab.ModifiedGene().insert1({
             'gene_modification': 'VGAT-Chr2-EYFP Jax',
             'gene_modification_description': 'VGAT'},
@@ -623,6 +631,26 @@ def mockdata():
             'wr_start_weight': 26.5},
             skip_duplicates=True
         )
+
+        # Subject 460432 / SC030
+        lab.Subject().insert1({
+            'subject_id': 456773,
+            'username': 'susu',
+            'cage_number': 171857,
+            'date_of_birth': '2019-05-29',
+            'sex': 'M',
+            'animal_source': 'Jackson Labs'},
+            skip_duplicates=True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 456773,
+            'water_restriction_number': 'SC030',
+            'cage_number': 171857,
+            'wr_start_date': '2019-08-08',
+            'wr_start_weight': 25.700},
+            skip_duplicates=True
+        )
+
         # Subject 460432 / SC032
         lab.Subject().insert1({
             'subject_id': 460432,
