@@ -1,4 +1,3 @@
-
 import logging
 import pathlib
 import csv
@@ -9,15 +8,12 @@ import math
 import numpy as np
 import scipy.io as scio
 import datajoint as dj
+from datetime import datetime
 
-from pipeline import lab
-from pipeline import ephys
-from pipeline import experiment
-from pipeline import ccf
-from pipeline import histology
+from pipeline import lab, ephys, experiment, ccf, histology, report
+from pipeline import get_schema_name, dict_to_hash
+
 from pipeline.ingest import behavior as behavior_ingest
-
-from .. import get_schema_name
 
 schema = dj.schema(get_schema_name('ingest_histology'))
 
@@ -498,6 +494,60 @@ class HistologyIngest(dj.Imported):
             res['channel_local_coordinates'] = new_histology_files[2]
 
         return res
+
+
+# ================== HELPER FUNCTIONS ====================
+
+
+def archive_electrode_histology(insertion_key, note='', delete=False):
+    """
+    For the specified "insertion_key" copy from histology.ElectrodeCCFPosition and histology.LabeledProbeTrack
+     (and their respective part tables) to histology.ArchivedElectrodeHistology
+    If "delete" == True - delete the records associated with the "insertion_key" from:
+        + histology.ElectrodeCCFPosition
+        + histology.LabeledProbeTrack
+        + report.ProbeLevelDriftMap
+        + report.ProbeLevelCoronalSlice
+    """
+
+    e_ccfs = {d['electrode']: d
+              for d in (histology.ElectrodeCCFPosition.ElectrodePosition & insertion_key).fetch(as_dict=True)}
+    e_error_ccfs = {d['electrode']: d
+                    for d in (histology.ElectrodeCCFPosition.ElectrodePositionError & insertion_key).fetch(as_dict=True)}
+    e_ccfs_hash = dict_to_hash({**e_ccfs, **e_error_ccfs})
+
+    if histology.ArchivedElectrodeHistology & {'archival_hash': e_ccfs_hash}:
+        if delete:
+            if dj.utils.user_choice('The specified ElectrodeCCF has already been archived!\nProceed with delete?') != 'yes':
+                return
+        else:
+            print('An identical set of the specified ElectrodeCCF has already been archived')
+            return
+
+    archival_time = datetime.now()
+    with histology.ArchivedElectrodeHistology.connection.transaction:
+        histology.ArchivedElectrodeHistology.insert1({**insertion_key, 'archival_time': archival_time,
+                                                      'archival_note': note, 'archival_hash': e_ccfs_hash})
+        histology.ArchivedElectrodeHistology.ElectrodePosition.insert(
+            (histology.ElectrodeCCFPosition.ElectrodePosition & insertion_key).proj(
+                ..., archival_time='"{}"'.format(archival_time)))
+        histology.ArchivedElectrodeHistology.ElectrodePositionError.insert(
+            (histology.ElectrodeCCFPosition.ElectrodePositionError & insertion_key).proj(
+                ..., archival_time='"{}"'.format(archival_time)))
+        histology.ArchivedElectrodeHistology.LabeledProbeTrack.insert(
+            (histology.LabeledProbeTrack & insertion_key).proj(
+                ..., archival_time='"{}"'.format(archival_time)))
+        histology.ArchivedElectrodeHistology.ProbeTrackPoint.insert(
+            (histology.LabeledProbeTrack.Point & insertion_key).proj(
+                ..., archival_time='"{}"'.format(archival_time)))
+
+        if delete:
+            with dj.config(safemode=False):
+                (histology.ElectrodeCCFPosition & insertion_key).delete()
+                (histology.LabeledProbeTrack & insertion_key).delete()
+                (report.ProbeLevelDriftMap & insertion_key).delete()
+                (report.ProbeLevelCoronalSlice & insertion_key).delete()
+                (HistologyIngest & insertion_key).delete()
 
 
 class HistologyFileError(Exception):
