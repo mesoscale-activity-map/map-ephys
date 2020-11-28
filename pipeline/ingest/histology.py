@@ -467,16 +467,18 @@ class HistologyIngest(dj.Imported):
             'corresponding_shanks': corresponding_shanks
         }
 
-        if (self.directory / 'channels.rawInd.npy').exists():
+        chan_loc_file = '{}_{}_{}_channel_locations.json'.format(
+            self.water, self.session_date_str, self.probe)
+
+        if (self.directory / chan_loc_file).exists():
 
             res['format'] = 2
 
             log.debug('format 2 detected..')
 
             new_histology_files = [
+                (self.directory / chan_loc_file),
                 (self.directory / 'channels.rawInd.npy'),
-                (self.directory / '{}_{}_{}_channel_locations.json'.format(
-                    self.water, self.session_date_str, self.probe)),
                 (self.directory /
                  '{}_{}_{}_channels.localCoordinates.npy'.format(
                      self.water, self.session_date_str, self.probe)),
