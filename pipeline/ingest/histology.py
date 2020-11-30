@@ -476,24 +476,26 @@ class HistologyIngest(dj.Imported):
 
             log.debug('format 2 detected..')
 
-            new_histology_files = [
-                (self.directory / chan_loc_file),
-                (self.directory / 'channels.rawInd.npy'),
-                (self.directory /
-                 '{}_{}_{}_channels.localCoordinates.npy'.format(
-                     self.water, self.session_date_str, self.probe)),
-            ]
+            new_histology_files = {
+                'channel_locations': (self.directory / chan_loc_file),
+                'raw_ind': (self.directory / 'channels.rawInd.npy'),
+                'channel_local_coordinates': (
+                    self.directory /
+                    '{}_{}_{}_channels.localCoordinates.npy'.format(
+                        self.water, self.session_date_str, self.probe))
+            }
 
-            new_histology_files_state = [i.exists() for i in histology_files]
+            new_histology_files_state = {i: new_histology_files[i].exists()
+                                         for i in histology_files}
 
-            if not all(new_histology_files_state):
+            if not all(new_histology_files_state.values()):
                 log.warning(
-                    'new format incomplete: expected: {}, status: {}'.format(
-                        histology_files, new_histology_files_state))
+                    'new format incomplete: status: {}'.format(
+                        new_histology_files_state))
 
-            res['raw_ind'] = new_histology_files[0]
-            res['channel_locations'] = new_histology_files[1]
-            res['channel_local_coordinates'] = new_histology_files[2]
+            for s in (s for s in new_histology_files_state
+                      if new_histology_files_state[s]):
+                res[s] = new_histology_files[s]
 
         return res
 
