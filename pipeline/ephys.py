@@ -10,6 +10,23 @@ from scipy.interpolate import CubicSpline
 schema = dj.schema(get_schema_name('ephys'))
 [lab, experiment, ccf]  # NOQA flake8
 
+DEFAULT_ARCHIVE_STORE = {
+    "protocol": "s3",
+    "endpoint": "s3.amazonaws.com",
+    "bucket": "map-cluster-archive",
+    "location": "/cluster_archive",
+    "stage": "./data/archive_stage",
+    "access_key": "",
+    "secret_key": ""
+}
+
+
+if 'stores' not in dj.config:
+    dj.config['stores'] = {}
+
+if 'archive_store' not in dj.config['stores']:
+    dj.config['stores']['archive_store'] = DEFAULT_ARCHIVE_STORE
+
 
 @schema
 class ProbeInsertion(dj.Manual):

@@ -115,7 +115,7 @@ main pipeline documentation.
                 ["RRig2", "/data/rig2", 1],
                 ["Tower-3", "/data/tower3", 2]
             ]
-    }            
+    }
    ```
 
    After any necessary configuration, behavior ingest is run using
@@ -145,7 +145,7 @@ main pipeline documentation.
                     "/path/to/bpod/Tower-2/Foraging_homecage"
                 ]
             },
-    }          
+    }
    ```
 
    After any necessary configuration, behavior ingest is run using
@@ -180,7 +180,7 @@ main pipeline documentation.
                 ["RRig1", "/data/rig1"],
                 ["RRig2", "/data/rig2"]
             ]
-    }          
+    }
    ```
 
    After any necessary configuration, behavior ingest is run using
@@ -209,7 +209,7 @@ main pipeline documentation.
    ```json
     "custom": {
         "ephys_data_paths": ["/path/to/ephys", "/path/to/ephys2"]
-    }          
+    }
    ```
        
    After any necessary configuration, ephys ingest is run using
@@ -243,7 +243,7 @@ main pipeline documentation.
    volume used in the MAP pipeline is the Allen Institute CCF r3
    20 uM Dataset tiff stack. This is done manually once prior to
    ingest of any histology data, see section (5) below.
-   
+
    If needed, users can additionally configure a dj.config['custom']
    variable to adjust local data paths for session histology data:
 
@@ -256,8 +256,16 @@ main pipeline documentation.
    ```json
     "custom": {
         "histology_data_paths": ["/path/to/histology"]
-    }          
+    }
    ```
+
+   Histology paths should be layed out as follows:
+
+     {histology_data_path}/{h2o}/histology/{files}
+
+   Expected files are documented in the function:
+   
+     pipeline.ingest.histologyHistologyIngest._search_histology_files
 
    After any necessary configuration, histology ingest is run using
    the 'ingest-histology' mapshell command:
@@ -269,22 +277,27 @@ main pipeline documentation.
    is available.
 
 5) CCF Ingest
-    
-    New ingestion of CCF is rarely needed, typically only applicable when a
-     new CCF Annotation version is available and the `ccf.CCFBrainRegion` and `ccf.CCFAnnotation` 
-     tables are required to be updated.
-     
-    To do CCF ingestion, set up `dj_local_conf.json` to contain 
-    
-       >>> from pipeline import ccf
-       >>> dj.config['custom']['ccf_data_paths'] = {'version_name': 'CCF_2017',
-                                                    'region_csv': '/data/ccf/mousebrainontology_2.csv',
-                                                    'hexcode_csv': '/data/ccf/hexcode.csv',
-                                                    'annotation_tif': '/data/ccf/Annotation_new_10_ds222_32bit.tif'}
-       >>> ccf.CCFBrainRegion.load_regions()
-       >>> ccf.CCFAnnotation.load_ccf_annotation()
-       
-    Or users can setup the `ccf_data_paths` in `dj_local_conf.json` as above and run:
-    
-        $ mapshell.py ccfload
-        
+
+   New ingestion of CCF is rarely needed, typically only applicable when a
+   new CCF Annotation version is available and the `ccf.CCFBrainRegion` 
+   and `ccf.CCFAnnotation` tables are required to be updated.
+
+   To do CCF ingestion, set up `dj_local_conf.json` to contain:
+   
+      >>> from pipeline import ccf
+      >>> dj.config['custom']['ccf_data_paths'] = {
+          'version_name': 'CCF_2017',
+          'region_csv': '/data/ccf/mousebrainontology_2.csv',
+          'hexcode_csv': '/data/ccf/hexcode.csv',
+          'annotation_nrrd: '/data/ccf/annotation_10.nrrd",
+      }
+      >>> ccf.CCFBrainRegion.load_regions()
+      >>> ccf.CCFAnnotation.load_ccf_annotation()
+
+   The ingest expects the Allen 10 uM input volume and downscales to 20 uM
+   precision on ingest.
+
+   Or, users can setup the `ccf_data_paths` in `dj_local_conf.json` 
+   as above and run:
+   
+       $ mapshell.py ccfload

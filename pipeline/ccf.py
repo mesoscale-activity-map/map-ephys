@@ -39,6 +39,7 @@ class CCFLabel(dj.Lookup):
 
 @schema
 class CCF(dj.Lookup):
+    # Note: normative CCF has {x: AP, y: DV, z: ML}
     definition = """
     # Common Coordinate Framework
     -> CCFLabel
@@ -50,7 +51,7 @@ class CCF(dj.Lookup):
 
 @schema
 class AnnotationVersion(dj.Lookup):
-    definition = """ 
+    definition = """
     annotation_version: varchar(32)  # e.g. CCF_2017
     ---
     annotation_desc='': varchar(255)
@@ -102,7 +103,7 @@ class CCFAnnotation(dj.Manual):
                 }
             }
 
-        see also: 
+        see also:
 
         http://download.alleninstitute.org/informatics-archive/current-release/mouse_ccf/annotation/ccf_2017
 
