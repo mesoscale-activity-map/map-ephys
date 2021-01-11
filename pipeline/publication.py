@@ -40,10 +40,10 @@ class GlobusStorageLocation(dj.Lookup):
 
         return (('raw-ephys',
                  '5b875fda-4185-11e8-bb52-0ac6873fc732',
-                 '/4ElectrodeRig_Ephys'),  # TODO: updated/final path
+                 '/ePhys'),
                 ('raw-video',
                  '5b875fda-4185-11e8-bb52-0ac6873fc732',
-                 '/'))
+                 '/Videos'))
 
     @classmethod
     def local_endpoint(cls, globus_alias=None):
@@ -345,7 +345,7 @@ class ArchivedRawEphys(dj.Imported):
 
                     dsfile = {
                         'file_subpath': '{}/{}'.format(
-                            dirname.lstrip(rep_sub), basename),
+                            dirname.replace(rep_sub, '', 1), basename),
                         'file_type': ftype['file_type']
                     }
 
@@ -556,9 +556,9 @@ class ArchivedRawEphys(dj.Imported):
         log.info('local_endpoint: {}:{} -> {}'.format(lep, lep_sub, lep_dir))
         log.info('remote_endpoint: {}:{}'.format(rep, rep_sub))
 
-        # get dataset file information
-        finfo = (DataSet * DataSet.PhysicalFile
-                 & (self & key).proj()).fetch(as_dict=True)
+        # filter file and session attributes by key
+        finfo = ((DataSet * DataSet.PhysicalFile & key)
+                 & (self & key)).fetch(as_dict=True)
 
         gsm = self.get_gsm()
         gsm.activate_endpoint(lep)  # XXX: cache this / prevent duplicate RPC?
@@ -586,7 +586,7 @@ class ArchivedTrackingVideo(dj.Imported):
 
     Directory locations of the form::
 
-      <Water restriction number>\<Session Date in MMDDYYYY>\video
+      <Water restriction number>/<Session Date in MMDDYYYY>/video
 
     with file naming convention of the form:
 
@@ -650,7 +650,7 @@ class ArchivedTrackingVideo(dj.Imported):
             ).fetch1().values()
 
             sdate = key['session_date']
-            sdate_mdy = sdate.strftime('%m%d%G')
+            sdate_mdy = sdate.strftime('%Y%m%d')
 
             h2o = (lab.WaterRestriction & lab.Subject.proj() & key).fetch1()
             h2o = h2o['water_restriction_number']
@@ -664,7 +664,7 @@ class ArchivedTrackingVideo(dj.Imported):
             if len(msess) == 1:
                 log.info('processing single session/day case')
 
-                rpath = '/'.join((rep_sub, h2o, sdate_mdy, 'video'))
+                rpath = '/'.join((rep_sub, h2o, sdate_mdy))
 
                 rep_tgt = '{}:{}'.format(rep, rpath)
 
@@ -693,7 +693,7 @@ class ArchivedTrackingVideo(dj.Imported):
 
                     dsfile = {
                         'file_subpath': '{}/{}'.format(
-                            dirname.lstrip(rep_sub), basename),
+                            dirname.replace(rep_sub, '', 1), basename),
                         'file_type': ftype['file_type']
                     }
 
@@ -751,7 +751,7 @@ class ArchivedTrackingVideo(dj.Imported):
                      * experiment.Session() & key).fetch1()
 
             sdate = sinfo['session_date']
-            sdate_mdy = sdate.strftime('%m%d%Y')
+            sdate_mdy = sdate.strftime('%Y%m%d')
 
             h2o = (lab.WaterRestriction & lab.Subject.proj() & key).fetch1()
             h2o = h2o['water_restriction_number']
@@ -776,7 +776,7 @@ class ArchivedTrackingVideo(dj.Imported):
 
                 # <root>/<h2o>/MMDDYYYY/video/<h2o>_<campos>_NNN-NNN.{avi}
 
-                lpath = os.path.join(lep_dir, h2o, sdate_mdy, 'video')
+                lpath = os.path.join((lep_dir, h2o, sdate_mdy))
 
                 if not os.path.exists(lpath):
                     log.warning('session directory {} not found'.format(
@@ -893,9 +893,9 @@ class ArchivedTrackingVideo(dj.Imported):
         log.info('local_endpoint: {}:{} -> {}'.format(lep, lep_sub, lep_dir))
         log.info('remote_endpoint: {}:{}'.format(rep, rep_sub))
 
-        # get dataset file information
-        finfo = (DataSet * DataSet.PhysicalFile
-                 & (self & key).proj()).fetch(as_dict=True)
+        # filter file and session attributes by key
+        finfo = ((DataSet * DataSet.PhysicalFile & key)
+                 & (self & key)).fetch(as_dict=True)
 
         gsm = self.get_gsm()
         gsm.activate_endpoint(lep)  # XXX: cache this / prevent duplicate RPC?
