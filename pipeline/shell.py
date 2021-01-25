@@ -226,25 +226,33 @@ def load_meta_foraging():
     print('Adding experimenters...')
     df_experimenters = pd.read_csv(pathlib.Path(meta_lab_dir) / 'Experimenter.csv')
     
+    duplicate_num = 0
     for experimenter in df_experimenters.iterrows():
         experimenter = experimenter[1]
         experimenternow = {'username':experimenter['username'],'fullname':experimenter['fullname']}
         try:
             lab.Person().insert1(experimenternow)
+            print('  added experimenter: ',experimenternow['username'])
         except dj.errors.DuplicateError:
-            print('  duplicate. experimenter: ',experimenternow['username'], ' already exists')
+            duplicate_num += 1
+            #  print('  duplicate. experimenter: ',experimenternow['username'], ' already exists')
+    print(f'  {duplicate_num} experimenters already exist')
     
     # --- Add rigs ---
     print('Adding rigs... ')
     df_rigs = pd.read_csv(pathlib.Path(meta_lab_dir) / 'Rig.csv')
     
+    duplicate_num = 0
     for rig in df_rigs.iterrows():
         rig = rig[1]
         rignow = {'rig':rig['rig'],'room':rig['room'],'rig_description':rig['rig_description']}
         try:
             lab.Rig().insert1(rignow)
+            print('  added rig: ', rignow['rig'])
         except dj.errors.DuplicateError:
-            print('  duplicate. rig: ',rignow['rig'], ' already exists')
+            duplicate_num += 1
+            # print('  duplicate. rig: ',rignow['rig'], ' already exists')
+    print(f'  {duplicate_num} rigs already exist')
             
     # --- Add viruses ---
     # Not implemented for now.  Han
@@ -254,6 +262,9 @@ def load_meta_foraging():
     df_surgery = pd.read_csv(pathlib.Path(meta_dir) / 'Surgery.csv')
     
     # For each entry
+    duplicate_subject_num = 0
+    duplicate_WR_num = 0
+
     for item in df_surgery.iterrows():
         item = item[1]
         
@@ -269,9 +280,10 @@ def load_meta_foraging():
                     }
             try:
                 lab.Subject().insert1(subjectdata)
-                
+                print('  added subject: ', item['animal#'])
             except dj.errors.DuplicateError:
-                print('  duplicate. animal :',item['animal#'], ' already exists')
+                duplicate_subject_num += 1
+                # print('  duplicate. animal :',item['animal#'], ' already exists')
                 
             # -- Add lab.Surgery() --
             # Not implemented. Han
@@ -298,9 +310,13 @@ def load_meta_foraging():
                         }
                 try:
                     lab.WaterRestriction().insert1(wrdata)
+                    print('  added WR: ', item['ID'])
                 except dj.errors.DuplicateError:
-                    print('  duplicate. water restriction:', item['ID'], ' already exists')
-
+                    duplicate_WR_num += 1
+                    # print('  duplicate. water restriction:', item['ID'], ' already exists')
+                    
+    print(f'  {duplicate_subject_num} subjects and {duplicate_WR_num} WRs already exist')
+    
 
 def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': True}):
 
