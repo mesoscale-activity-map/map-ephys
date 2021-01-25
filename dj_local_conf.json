@@ -16,14 +16,14 @@
 	"nuclear_option": true,
 	"custom": {
     	"behavior_bpod": {
-    	"meta_dir": "\\\\10.102.22.22/Documents/Data_for_ingestion/Metadata",
-	"meta_lab_dir": "\\\\10.102.22.22/Documents/Data_for_ingestion/Metadata_lab",
+    	"meta_dir": "D:/Data/Data_for_ingestion/Metadata",
+	"meta_lab_dir": "D:/Data/Data_for_ingestion/Metadata_lab",
    		"project_paths": [
-        	"\\\\10.102.22.22/Documents/Data_for_ingestion/Behavior_rigs/Tower-1/Foraging",
-        	"\\\\10.102.22.22/Documents/Data_for_ingestion/Behavior_rigs/Tower-2/Foraging",
-            "\\\\10.102.22.22/Documents/Data_for_ingestion/Behavior_rigs/Tower-2/Foraging_again",
-			"\\\\10.102.22.22/Documents/Data_for_ingestion/Behavior_rigs/Tower-2/Foraging_homecage",
-			"\\\\10.102.22.22/Documents/Data_for_ingestion/Behavior_rigs/Tower-3/Foraging_homecage"]
+        	"D:/Data/Data_for_ingestion/Behavior_rigs/Tower-1/Foraging",
+        	"D:/Data/Data_for_ingestion/Behavior_rigs/Tower-2/Foraging",
+            "D:/Data/Data_for_ingestion/Behavior_rigs/Tower-2/Foraging_again",
+			"D:/Data/Data_for_ingestion/Behavior_rigs/Tower-2/Foraging_homecage",
+			"D:/Data/Data_for_ingestion/Behavior_rigs/Tower-3/Foraging_homecage"]
 		},
     	"logfile": "log.txt"
     },
