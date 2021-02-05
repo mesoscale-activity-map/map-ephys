@@ -274,6 +274,7 @@ class BehaviorIngest(dj.Imported):
         if 'StimTrials' in SessionData._fieldnames:
             log.debug('StimTrials detected in session - will include')
             AllStimTrials = SessionData.StimTrials
+            # TODO - fix - check 4 conditions
             assert(AllStimTrials.shape[0] == AllStateTimestamps.shape[0])
         else:
             log.debug('StimTrials not detected in session - will skip')
@@ -488,7 +489,7 @@ class BehaviorIngest(dj.Imported):
             bkey['outcome'] = outcome
 
             # Determine free/autowater (Autowater 1 == enabled, 2 == disabled)
-            bkey['auto_water'] = True if gui.Autowater == 1 else False
+            bkey['auto_water'] = gui.Autowater == 1 or np.any(t.settings.GaveFreeReward[:1])
             bkey['free_water'] = t.free
 
             rows['behavior_trial'].append(bkey)
@@ -536,6 +537,9 @@ class BehaviorIngest(dj.Imported):
                     ekey['duration'] = s_end - s_start
                     rows['trial_event'].append(ekey)
 
+                    if trial_event_type == 'delay':
+                        this_trial_delay_duration = s_end - s_start
+
             # ==== ActionEvents ====
 
             #
@@ -570,7 +574,12 @@ class BehaviorIngest(dj.Imported):
             # Photostim Events
             #
 
-            if t.stim:
+            if photostim_period == 'early-delay':
+                valid_protocol = protocol_type == 5
+            elif protocol_type == 'late-delay':
+                valid_protocol = protocol_type > 4
+
+            if t.stim and valid_protocol and gui.Autolearn == 4 and this_trial_delay_duration == 1.2:
                 log.debug('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
                 rows['photostim_trial'].append(tkey)
                 if photostim_period == 'early-delay':  # same as the delay-onset
