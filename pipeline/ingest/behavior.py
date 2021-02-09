@@ -274,7 +274,6 @@ class BehaviorIngest(dj.Imported):
         if 'StimTrials' in SessionData._fieldnames:
             log.debug('StimTrials detected in session - will include')
             AllStimTrials = SessionData.StimTrials
-            # TODO - fix - check 4 conditions
             assert(AllStimTrials.shape[0] == AllStateTimestamps.shape[0])
         else:
             log.debug('StimTrials not detected in session - will skip')
