@@ -41,15 +41,11 @@ This fix goes through each trial currently labeled as photostim trial,
 
 @schema
 class FixPhotostimTrial(dj.Manual):
-    """
-    This table accompanies fix_0013, keeping track of the units with waveform fixed.
-    This tracking is not extremely important, as a rerun of this fix_0013 will still yield the correct results
-    """
-    definition = """ # This table accompanies fix_0013
+    definition = """ # This table accompanies fix_0017
     -> FixHistory
     -> experiment.SessionTrial
     ---
-    is_removed: bool
+    is_removed: bool  # was this trial incorrectly labeled as photostim and needed to be removed from PhotostimTrial
     """
 
 
@@ -67,10 +63,13 @@ def fix_photostim_trial(session_keys={}):
                     'fix_timestamp': datetime.now()}
 
     for key in sessions_2_update.fetch('KEY'):
-        success = _fix_one_session(key)
+        success, invalid_photostim_trials = _fix_one_session(key)
         if success:
+            removed_photostim_trials = [t['trial'] for t in invalid_photostim_trials]
             FixHistory.insert1(fix_hist_key, skip_duplicates=True)
-            FixPhotostimTrial.insert([{**fix_hist_key, **ukey, 'fixed': 1} for ukey in (ephys.Unit & key).fetch('KEY')])
+            FixPhotostimTrial.insert([{**fix_hist_key, **tkey,
+                                       'is_removed': 1 if tkey['trial'] in removed_photostim_trials else 0}
+                                      for tkey in (experiment.SessionTrial & key).fetch('KEY')])
 
 
 def _fix_one_session(key):
@@ -94,7 +93,7 @@ def _fix_one_session(key):
 
         if photostim_period == 'early-delay':
             valid_protocol = protocol_type == 5
-        elif protocol_type == 'late-delay':
+        elif photostim_period == 'late-delay':
             valid_protocol = protocol_type > 4
 
         delay_duration = (experiment.TrialEvent & trial_key & 'trial_event_type = "delay"').fetch(
@@ -111,7 +110,7 @@ def _fix_one_session(key):
             # delete ProbeLevelPhotostimEffectReport figures associated with this session
             (report.ProbeLevelPhotostimEffectReport & key).delete()
 
-    return True
+    return True, invalid_photostim_trials
 
 
 if __name__ == '__main__':
