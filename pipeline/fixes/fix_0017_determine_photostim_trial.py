@@ -6,7 +6,7 @@ from decimal import Decimal
 import datajoint as dj
 import re
 
-from pipeline import lab, experiment, ephys, report
+from pipeline import lab, experiment, report
 from pipeline.ingest import behavior as behavior_ingest
 from pipeline.fixes import schema, FixHistory
 
@@ -51,9 +51,10 @@ class FixPhotostimTrial(dj.Manual):
 
 def fix_photostim_trial(session_keys={}):
     """
-
+    This fix applies to sessions ingested with the BehaviorIngest's make() only,
+    as opposed to BehaviorBpodIngest (for Foraging Task)
     """
-    sessions_2_update = (experiment.Session & experiment.PhotostimTrial & session_keys)
+    sessions_2_update = (experiment.Session & behavior_ingest.BehaviorIngest & experiment.PhotostimTrial & session_keys)
     sessions_2_update = sessions_2_update - FixPhotostimTrial
 
     if not sessions_2_update:
@@ -62,6 +63,7 @@ def fix_photostim_trial(session_keys={}):
     fix_hist_key = {'fix_name': pathlib.Path(__file__).name,
                     'fix_timestamp': datetime.now()}
 
+    log.info('Fixing {} session(s)'.format(len(sessions_2_update)))
     for key in sessions_2_update.fetch('KEY'):
         success, invalid_photostim_trials = _fix_one_session(key)
         if success:
@@ -73,6 +75,7 @@ def fix_photostim_trial(session_keys={}):
 
 
 def _fix_one_session(key):
+    log.info('Running fix for session: {}'.format(key))
     # determine if this session's photostim is: `early-delay` or `late-delay`
     path = (behavior_ingest.BehaviorIngest.BehaviorFile & key).fetch('behavior_file')[0]
     h2o = (lab.WaterRestriction & key).fetch1('water_restriction_number')
@@ -103,6 +106,7 @@ def _fix_one_session(key):
             # all criteria not met, this trial should not have been a photostim trial
             invalid_photostim_trials.append(trial_key)
 
+    log.info('Deleting {} incorrectly labeled PhotostimTrial'.format(len(invalid_photostim_trials)))
     if len(invalid_photostim_trials):
         with dj.config(safemode=False):
             # delete invalid photostim trials

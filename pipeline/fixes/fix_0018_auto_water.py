@@ -3,10 +3,8 @@ import logging
 import pathlib
 from datetime import datetime
 import datajoint as dj
-import numpy as np
-import scipy.io as spio
 
-from pipeline import lab, experiment, ephys, report
+from pipeline import experiment
 from pipeline.ingest import behavior as behavior_ingest
 from pipeline.ingest.behavior import get_behavior_paths
 
@@ -41,9 +39,10 @@ class FixAutoWater(dj.Manual):
 
 def fix_autowater_trial(session_keys={}):
     """
-
+    This fix applies to sessions ingested with the BehaviorIngest's make() only,
+    as opposed to BehaviorBpodIngest (for Foraging Task)
     """
-    sessions_2_update = (experiment.Session & experiment.PhotostimTrial & session_keys)
+    sessions_2_update = (experiment.Session & behavior_ingest.BehaviorIngest & session_keys)
     sessions_2_update = sessions_2_update - FixAutoWater
 
     if not sessions_2_update:
@@ -52,6 +51,7 @@ def fix_autowater_trial(session_keys={}):
     fix_hist_key = {'fix_name': pathlib.Path(__file__).name,
                     'fix_timestamp': datetime.now()}
 
+    log.info('Fixing {} session(s)'.format(len(sessions_2_update)))
     for key in sessions_2_update.fetch('KEY'):
         success, incorrect_autowater_trials = _fix_one_session(key)
         needed_fix_trials = [t['trial'] for t, _ in incorrect_autowater_trials]
@@ -63,6 +63,7 @@ def fix_autowater_trial(session_keys={}):
 
 
 def _fix_one_session(key):
+    log.info('Running fix for session: {}'.format(key))
     # get filepath of the behavior file for this session - and read the .mat file
     rel_paths = (behavior_ingest.BehaviorIngest.BehaviorFile & key).fetch('behavior_file')
     if len(rel_paths) > 1:
@@ -97,6 +98,7 @@ def _fix_one_session(key):
             incorrect_autowater_trials.append((tkey, auto_water))
 
     # transactional update for this session
+    log.info('Correcting auto_water for {} trials'.format(len(incorrect_autowater_trials)))
     if len(incorrect_autowater_trials):
         with experiment.BehaviorTrial.connection.transaction:
             for tkey, auto_water in incorrect_autowater_trials:
