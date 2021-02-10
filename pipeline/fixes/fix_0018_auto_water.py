@@ -39,7 +39,7 @@ class FixAutoWater(dj.Manual):
     """
 
 
-def fix_photostim_trial(session_keys={}):
+def fix_autowater_trial(session_keys={}):
     """
 
     """
@@ -103,3 +103,7 @@ def _fix_one_session(key):
                 (experiment.BehaviorTrial & tkey)._update('auto_water', auto_water)
 
     return True, incorrect_autowater_trials
+
+
+if __name__ == '__main__':
+    fix_autowater_trial()
