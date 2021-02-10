@@ -58,8 +58,8 @@ def fix_autowater_trial(session_keys={}):
         if success:
             FixHistory.insert1(fix_hist_key, skip_duplicates=True)
             FixAutoWater.insert([{**fix_hist_key, **tkey,
-                                       'auto_water_needed_fix': 1 if tkey['trial'] in needed_fix_trials else 0}
-                                      for tkey in (experiment.BehaviorTrial & key).fetch('KEY')])
+                                  'auto_water_needed_fix': 1 if tkey['trial'] in needed_fix_trials else 0}
+                                 for tkey in (experiment.BehaviorTrial & key).fetch('KEY')])
 
 
 def _fix_one_session(key):
