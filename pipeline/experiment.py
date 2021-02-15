@@ -255,7 +255,7 @@ class BehaviorTrial(dj.Imported):
     -> EarlyLick
     -> Outcome
     auto_water=0: bool  # water given after response-time, regardless of correct/incorrect
-    free_water=0: bool  # "empty" trial with water given
+    free_water=0: bool  # "empty" trial with water given (go-cue not played, no trial structure) 
     """
 
 
