@@ -21,7 +21,6 @@ from pipeline import (lab, experiment, tracking, ephys, report, psth, ccf,
 pipeline_modules = [lab, ccf, experiment, ephys, publication, report,
                     foraging_analysis, histology, tracking, psth]
 
-
 log = logging.getLogger(__name__)
 
 

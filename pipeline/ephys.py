@@ -74,6 +74,16 @@ class ProbeInsertion(dj.Manual):
 
 
 @schema
+class ProbeInsertionQuality(dj.Manual):
+    definition = """  # Indication of insertion quality (good/bad) - for various reasons: lack of unit, poor behavior, poor histology
+    -> ProbeInsertion
+    ---
+    insertion_quality: enum('good', 'bad')
+    comment: varchar(1000)  # comment/reason for the 'good'/'bad' label
+    """
+
+
+@schema
 class LFP(dj.Imported):
     definition = """
     -> ProbeInsertion

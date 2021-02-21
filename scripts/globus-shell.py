@@ -2,6 +2,7 @@
 
 import sys
 import logging
+import posixpath as path
 
 import datajoint as dj
 
@@ -19,35 +20,50 @@ class GlobusShell:
         self._cep = None                        # Current Endpoint
         self._cwd = '/'                         # Current Directory
 
+    def _getpath(self, ep=None, wd=None):
+
+        ep = ep if ep else self._cep
+        wd = wd if wd else self._cwd
+
+        if ep == self._cep:
+            wd = wd if wd.startswith('/') else path.join(self._cwd, wd)
+        else:
+            wd = path.join('/', wd)
+
+        return ep, wd
+
     def env(self):
         print(self._env)
 
-    def pwd(self):
-        print('{}:{}'.format(self._cep, self._cwd))
+    def cd(self, ep=None, wd='/'):
+        ep, wd = self._getpath(ep, wd)
 
-    def cd(self, ep=None, path=None):
-        ep = ep if ep else self._cep
-        path = (path if (ep == self._cep and path.startswith('/'))
-                else '/'.join((self._cwd, path)))
+        log.debug('cd: {}:{}'.format(ep, wd))
 
         if ep not in self._aep:
             self._gsm.activate_endpoint(ep)
             self._aep = self._aep.union({(ep)})
 
         self._cep = ep
-        self._cwd = '/' + path.lstrip('/')
+        self._cwd = wd
 
-    def ls(self, ep=None, path=None):
-        # TODO: should strip cwd from each pathname..
+    def pwd(self):
+        print('{}:{}'.format(self._cep, self._cwd))
 
-        ep = ep if ep else self._cep
-        path = path if path else self._cwd
+    def mkdir(self, ep, wd):
+        ep, wd = self._getpath(ep, wd)
 
-        # todo: support ls with arg and also no path cwd
-        # path1 = (path1 if path1.startswith('/')
-        #          else '{}/{}'.format(self._cwd, path1))
+        log.debug('mkdir: {}:{}'.format(ep, wd))
 
-        lsdat = self._gsm.ls('{}:{}'.format(ep, path))
+        return self._gsm.mkdir('{}:{}'.format(ep, wd))
+
+    def ls(self, ep=None, wd=None):
+        ep, wd = self._getpath(ep, wd)
+
+        log.debug('ls: {}:{}'.format(ep, wd))
+
+        lsdat = self._gsm.ls('{}:{}'.format(ep, wd))
+
         for i in iter(lsdat):
             if i['type'] == 'file':
                 print('f: {}'.format(i['name']))
@@ -56,13 +72,69 @@ class GlobusShell:
 
         return True
 
-    def find(self, ep=None, path=None):
+    def rm(self, ep, wd):
+        ep, wd = self._getpath(ep, wd)
 
-        ep = ep if ep else self._cep
-        path = path if path else self._cwd
-        path = '/' if path is None else path
+        log.debug('rm: {}:{}'.format(ep, wd))
 
-        for ep, dirname, node in self._gsm.fts('{}:{}'.format(ep, path)):
+        return self._gsm.rm('{}:{}'.format(ep, wd))
+
+    def rmdir(self, ep, wd):
+        ep, wd = self._getpath(ep, wd)
+
+        log.debug('rmdir: {}:{}'.format(ep, wd))
+
+        return self._gsm.rmdir('{}:{}'.format(ep, wd))
+
+    def rm_r(self, ep, wd):
+        # XXX: drop when shell gets 'args' support & add -r flag
+        ep, wd = self._getpath(ep, wd)
+
+        log.debug('rm_r: {}:{}'.format(ep, wd))
+
+        return self._gsm.rm('{}:{}'.format(ep, wd), recursive=True)
+
+    def mv(self, ep1, wd1, ep2, wd2):
+
+        ep1, wd1 = self._getpath(ep1, wd1)
+        ep2, wd2 = self._getpath(ep2, wd2)
+
+        if ep1 != ep2:
+            return False
+
+        log.debug('mv: {}:{} -> {}:{}'.format(ep1, wd1, ep2, wd2))
+
+        return self._gsm.rename('{}:{}'.format(ep1, wd1),
+                                '{}:{}'.format(ep2, wd2))
+
+    def cp(self, ep1, wd1, ep2, wd2):
+        # XXX: delete_destination_xtra for mirroring?
+
+        ep1, wd1 = self._getpath(ep1, wd1)
+        ep2, wd2 = self._getpath(ep2, wd2)
+
+        log.debug('cp: {}:{} -> {}:{}'.format(ep1, wd1, ep2, wd2))
+
+        return self._gsm.cp('{}:{}'.format(ep1, wd1),
+                            '{}:{}'.format(ep2, wd2))
+
+    def cp_r(self, ep1, wd1, ep2, wd2):
+
+        ep1, wd1 = self._getpath(ep1, wd1)
+        ep2, wd2 = self._getpath(ep2, wd2)
+
+        log.debug('cp_r: {}:{} -> {}:{}'.format(ep1, wd1, ep2, wd2))
+
+        return self._gsm.cp('{}:{}'.format(ep1, wd1), 
+                            '{}:{}'.format(ep2, wd2),
+                            recursive=True)
+
+    def find(self, ep=None, wd=None):
+        ep, wd = self._getpath(ep, wd)
+
+        log.debug('find: {}:{}'.format(ep, wd))
+
+        for ep, dirname, node in self._gsm.fts('{}:{}'.format(ep, wd)):
 
             if node['DATA_TYPE'] == 'file':
                 t, basename = 'f', node['name']
@@ -72,70 +144,9 @@ class GlobusShell:
             print('{}: {}:{}/{}'.format(t, ep, dirname, basename)
                   if t == 'f' else '{}: {}:{}'.format(t, ep, dirname))
 
-    def mv(self, ep1, path1, ep2, path2):
-
-        ep1 = ep1 if ep1 else self._cep
-        ep2 = ep2 if ep2 else self._cep
-
-        if ep1 != ep2:
-            return False
-
-        path1 = (path1 if path1.startswith('/')
-                 else '{}/{}'.format(self._cwd, path1))
-
-        path2 = (path2 if path2.startswith('/')
-                 else '{}/{}'.format(self._cwd, path2))
-
-        return self._gsm.rename('{}:/{}'.format(ep1, path1),
-                                '{}:/{}'.format(ep2, path2))
-
-    def rm(self, ep, path):
-
-        ep = ep if ep else self._cep
-        path = (path if path.startswith('/')
-                else '{}/{}'.format(self._cwd, path))
-
-        return self._gsm.rmdir('{}:/{}'.format(ep, path))
-
-    def rm(self, ep, path):
-
-        ep = ep if ep else self._cep
-        path = (path if path.startswith('/')
-                else '{}/{}'.format(self._cwd, path))
-
-        return self._gsm.rm('{}:/{}'.format(ep, path))
-
-    def rm_r(self, ep, path):
-        # XXX: drop when shell gets 'args' support & add -r flag
-        ep = ep if ep else self._cep
-        path = (path if path.startswith('/')
-                else '{}/{}'.format(self._cwd, path))
-
-        return self._gsm.rm('{}:/{}'.format(ep, path), recursive=True)
-
-    def cp(self, ep1, path1, ep2, path2, recursive=False):
-        # XXX: delete_destination_xtra for mirroring?
-        # XXX: recursive -> make flag - false required for file,
-        # true reqd? (or at least accepted) for dirs
-        print('cp', ep1, path1, ep2, path2, recursive)
-
-        ep1 = ep1 if ep1 else self._cep
-        ep2 = ep2 if ep2 else self._cep
-
-        path1 = (path1 if path1.startswith('/')
-                 else '{}/{}'.format(self._cwd, path1))
-
-        path2 = (path2 if path2.startswith('/')
-                 else '{}/{}'.format(self._cwd, path2))
-
-        return self._gsm.cp('{}:/{}'.format(ep1, path1),
-                            '{}:/{}'.format(ep2, path2), recursive)
-
-    def mkdir(self):
-        raise NotImplementedError('mkdef() plox')
-
     def sh(self, prompt='globus% '):
-        cmds = set(('env', 'pwd', 'cd', 'ls', 'find', 'cp', 'mv', 'rm', 'rm_r'))
+        cmds = set(('env', 'pwd', 'cd', 'ls', 'find', 'cp', 'cp_r', 'mkdir',
+                    'mv', 'rm', 'rmdir', 'rm_r'))
 
         while True:
             try:
@@ -145,7 +156,7 @@ class GlobusShell:
 
             cmd, args = data[0], data[1:]
 
-            log.debug('cmd input: {} -> ({}, {}'.format(data, cmd, args))
+            log.debug('cmd input: {} -> {}, {}'.format(data, cmd, args))
 
             if not cmd or cmd.startswith('#'):
                 continue
@@ -163,10 +174,13 @@ class GlobusShell:
                 except Exception as e:
                     print(repr(e))
             else:
-                print('commands: {}'.format(cmds))
+                print('commands: \n  - {}'.format('\n  - '.join(cmds)))
 
 
 if __name__ == '__main__':
+
+    log.setLevel(logging.DEBUG)
+    logging.basicConfig(level=logging.ERROR)
 
     leps = dj.config.get('custom', {}).get('globus.storage_locations', None)
     peps = GlobusStorageLocation().fetch(as_dict=True)
