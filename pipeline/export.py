@@ -134,7 +134,9 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     trial_spikes = (ephys.Unit.TrialSpikes & insert_key).fetch(order_by='trial asc')
 
-    behav = (experiment.BehaviorTrial & insert_key).fetch(order_by='trial asc')
+    behav = (experiment.BehaviorTrial & insert_key).aggr(
+        experiment.TrialNote & 'trial_note_type="autolearn"',
+        ..., auto_learn='trial_note', keep_all_rows=True).fetch(order_by='trial asc')
 
     trials = behav['trial']
 
@@ -143,7 +145,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
                'neuron_unit_info', 'neuron_unit_quality_control',
                'behavior_report', 'behavior_early_report',
                'behavior_lick_times', 'behavior_lick_directions',
-               'behavior_is_free_water', 'behavior_is_auto_water',
+               'behavior_is_free_water', 'behavior_is_auto_water', 'behavior_auto_learn',
                'task_trial_type', 'task_stimulation', 'trial_end_time',
                'task_sample_time', 'task_delay_time', 'task_cue_time',
                'tracking', 'histology']
@@ -264,6 +266,14 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     print('... behavior_is_auto_water:', end='')
 
     edata['behavior_is_auto_water'] = np.array([i for i in behav['auto_water']])
+
+    print('ok.')
+
+    # behavior_auto_learn
+    # ---------------------
+    print('... behavior_auto_learn:', end='')
+
+    edata['behavior_auto_learn'] = np.array([i or 'n/a' for i in behav['auto_learn']])
 
     print('ok.')
 
