@@ -10,13 +10,13 @@ Visit [here](doc/intro.md) for full documentation of this project
 ## The MAP Navigator
 
 A website dedicated for data browsing and results visualization for MAP project can be accessed at
- [https://map-navigator.datajoint.io/](http://map-navigator.datajoint.io/)
+ [https://navigator.mesoscale-activity-map.org/](http://navigator.mesoscale-activity-map.org/)
 
 
 ## Access via Jupyter Hub
 
 A MAP-dedicated Jupyter Hub can be accessed at
- [https://map-jupyter.datajoint.io/](https://map-jupyter.datajoint.io/)
+ [https://jupyter.mesoscale-activity-map.org/](https://jupyter.mesoscale-activity-map.org/)
 
 Users can sign in using their GitHub account. Please contact chris@vathes.com for database credential if you don't already have one.
 

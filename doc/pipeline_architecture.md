@@ -164,7 +164,7 @@ The `psth.UnitSelectivity` table aggregates the 3 period-selectivity for each un
 ![report](static/pipeline_architecture/report_all.svg)
 
 Tables in the `report` schema are at the leaf level of this pipeline, computing and storing the figures
- used for visualization and reporting (via the [MAP Web GUI](http://map-navigator.datajoint.io/))
+ used for visualization and reporting (via the [MAP Web GUI](http://navigator.mesoscale-activity-map.org/))
 
 As shown in the diagram, report figures are categorized into 4 levels.
 
