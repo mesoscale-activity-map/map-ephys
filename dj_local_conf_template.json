@@ -1,5 +1,5 @@
 {
-    "database.host": "mesoscale-activity.datajoint.io",
+    "database.host": "datajoint.mesoscale-activity-map.org",
     "database.password": "this-is-a-placeholder",
     "database.user": "bogus-example-user",
     "database.port": 3306,
