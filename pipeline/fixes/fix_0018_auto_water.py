@@ -81,7 +81,12 @@ def _fix_one_session(key):
     else:
         rig_path = rig_path[0]
 
-    path = pathlib.Path(rig_path) / rel_path
+    paths = list(pathlib.Path(rig_path).rglob(f'*/{rel_path}'))
+
+    if len(paths) != 1:
+        raise FileNotFoundError(f'Unable to identify/resolve behavior file - Found {len(paths)}: {paths}')
+    else:
+        path = paths[0]
 
     # extract trial data from behavior file to compare "auto_water" value stored in db
     skey, rows = behavior_ingest.BehaviorIngest._load(session, path)
