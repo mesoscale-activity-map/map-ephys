@@ -309,11 +309,13 @@ class BehaviorIngest(dj.Imported):
         (no table insertion is done here)
 
         :param key: session_key
-        :param path: filepath of the behavior file (.mat)
+        :param path: (str) filepath of the behavior file (.mat)
         :return: skey, rows
             + skey: session_key
             + rows: a dictionary containing all per-trial information to be inserted
         """
+        path = pathlib.Path(path)
+
         subject_id = key['subject_id']
         h2o = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1(
             'water_restriction_number')
@@ -329,7 +331,7 @@ class BehaviorIngest(dj.Imported):
         skey['username'] = get_session_user()
         skey['rig'] = key['rig']
 
-        mat = spio.loadmat(path, squeeze_me=True, struct_as_record=False)
+        mat = spio.loadmat(path.as_posix(), squeeze_me=True, struct_as_record=False)
         SessionData = mat['SessionData']
 
         # parse session datetime
