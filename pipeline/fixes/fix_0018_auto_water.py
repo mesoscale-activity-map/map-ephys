@@ -100,7 +100,7 @@ def _fix_one_session(key):
     for tkey, auto_water, behavior_trial_data in zip(trial_keys, auto_waters, rows['behavior_trial']):
         assert tkey['trial'] == behavior_trial_data['trial']
         if auto_water != behavior_trial_data['auto_water']:
-            incorrect_autowater_trials.append((tkey, auto_water))
+            incorrect_autowater_trials.append((tkey, behavior_trial_data['auto_water']))
 
     # transactional update for this session
     log.info('Correcting auto_water for {} trials'.format(len(incorrect_autowater_trials)))
