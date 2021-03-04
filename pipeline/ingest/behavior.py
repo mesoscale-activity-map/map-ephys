@@ -577,7 +577,7 @@ class BehaviorIngest(dj.Imported):
             bkey['outcome'] = outcome
 
             # Determine free/autowater (Autowater 1 == enabled, 2 == disabled)
-            bkey['auto_water'] = gui.Autowater == 1 or np.any(t.settings.GaveFreeReward[:1])
+            bkey['auto_water'] = gui.Autowater == 1 or np.any(t.settings.GaveFreeReward[:2])
             bkey['free_water'] = t.free
 
             rows['behavior_trial'].append(bkey)
