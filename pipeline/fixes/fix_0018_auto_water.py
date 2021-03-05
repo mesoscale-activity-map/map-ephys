@@ -81,7 +81,12 @@ def _fix_one_session(key):
     else:
         rig_path = rig_path[0]
 
-    path = pathlib.Path(rig_path) / rel_path
+    paths = list(pathlib.Path(rig_path).rglob(f'*/{rel_path}'))
+
+    if len(paths) != 1:
+        raise FileNotFoundError(f'Unable to identify/resolve behavior file - Found {len(paths)}: {paths}')
+    else:
+        path = paths[0]
 
     # extract trial data from behavior file to compare "auto_water" value stored in db
     skey, rows = behavior_ingest.BehaviorIngest._load(session, path)
@@ -95,7 +100,7 @@ def _fix_one_session(key):
     for tkey, auto_water, behavior_trial_data in zip(trial_keys, auto_waters, rows['behavior_trial']):
         assert tkey['trial'] == behavior_trial_data['trial']
         if auto_water != behavior_trial_data['auto_water']:
-            incorrect_autowater_trials.append((tkey, auto_water))
+            incorrect_autowater_trials.append((tkey, behavior_trial_data['auto_water']))
 
     # transactional update for this session
     log.info('Correcting auto_water for {} trials'.format(len(incorrect_autowater_trials)))
