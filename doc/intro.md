@@ -107,7 +107,7 @@ This pipeline features a library of specialized functions for:
 
 This section is dedicated for the running and management of this pipeline, including details for:
 + Setup and launching of workers for automated tasks
-+ Setup and launching of the MAP [Web-GUI](http://map-navigator.datajoint.io/)
++ Setup and launching of the MAP [Web-GUI](http://navigator.mesoscale-activity-map.org/)
 + Database administration
 + AWS resource management
 
