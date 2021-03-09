@@ -166,7 +166,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     q_trial_spikes = (experiment.SessionTrial.proj() * ephys.Unit.proj() & insert_key).aggr(
         ephys.Unit.TrialSpikes, ..., spike_times='spike_times', keep_all_rows=True)
 
-    trial_spikes = q_trial_spikes.fetch(format='frame').reset_index()
+    trial_spikes = q_trial_spikes.fetch(format='frame', order_by='trial asc').reset_index()
 
     # replace None with np.array([])
     isna = trial_spikes.spike_times.isna()
