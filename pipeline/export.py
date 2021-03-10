@@ -132,8 +132,6 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     units = q_unit.fetch(order_by='unit')
 
-    trial_spikes = (ephys.Unit.TrialSpikes & insert_key).fetch(order_by='trial asc')
-
     behav = (experiment.BehaviorTrial & insert_key).aggr(
         experiment.TrialNote & 'trial_note_type="autolearn"',
         ..., auto_learn='trial_note', keep_all_rows=True).fetch(order_by='trial asc')
@@ -165,20 +163,23 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     # [[u0t0.spikes, ..., u0tN.spikes], ..., [uNt0.spikes, ..., uNtN.spikes]]
     print('... neuron_single_units:', end='')
 
-    _su = defaultdict(list)
+    q_trial_spikes = (experiment.SessionTrial.proj() * ephys.Unit.proj() & insert_key).aggr(
+        ephys.Unit.TrialSpikes, ..., spike_times='spike_times', keep_all_rows=True)
 
-    ts = trial_spikes[['unit', 'trial', 'spike_times']]
+    trial_spikes = q_trial_spikes.fetch(format='frame', order_by='trial asc').reset_index()
 
-    for u, t in ((u, t) for t in trials for u in units['unit']):
-        ud = ts[np.logical_and(ts['unit'] == u, ts['trial'] == t)]
-        if ud:
-            _su[u].append(ud['spike_times'][0])
-        else:
-            _su[u].append(np.array([]))
+    # replace None with np.array([])
+    isna = trial_spikes.spike_times.isna()
+    trial_spikes.loc[isna, 'spike_times'] = pd.Series([np.array([])] * isna.sum()).values
 
-    ndarray_object = np.empty((len(_su.keys()), 1), dtype=np.object)
-    for idx, i in enumerate(sorted(_su.keys())):
-        ndarray_object[idx, 0] = np.array(_su[i], ndmin=2).T
+    single_units = defaultdict(list)
+    for u in set(trial_spikes.unit):
+        single_units[u] = trial_spikes.spike_times[trial_spikes.unit == u].values.tolist()
+
+    # reformat to a MATLAB compatible form
+    ndarray_object = np.empty((len(single_units.keys()), 1), dtype=np.object)
+    for idx, i in enumerate(sorted(single_units.keys())):
+        ndarray_object[idx, 0] = np.array(single_units[i], ndmin=2).T
 
     edata['neuron_single_units'] = ndarray_object
 
