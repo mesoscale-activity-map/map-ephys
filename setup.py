@@ -11,7 +11,7 @@ see README.md for further information.
 """
 
 with open(path.join(here, 'requirements.txt')) as f:
-    requirements = f.read().split()
+    requirements = [r.rstrip().split('#')[0].rstrip() for r in f]
 
 setup(
     name='mapephys',
