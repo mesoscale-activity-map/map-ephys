@@ -152,6 +152,7 @@ class SessionLevelCDReport(dj.Computed):
                 label = (ephys.ProbeInsertion & probe).aggr(ephys.ProbeInsertion.RecordableBrainRegion.proj(
                     brain_region='CONCAT(hemisphere, " ", brain_area)'),
                     brain_regions='GROUP_CONCAT(brain_region SEPARATOR", ")').fetch1('brain_regions')
+                label = '({}) {}'.format(probe['insertion_number'], label)
 
                 _, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], units, 'good_noearlylick_hit')
 
