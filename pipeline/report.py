@@ -30,15 +30,33 @@ schema = dj.schema(get_schema_name('report'))
 
 os.environ['DJ_SUPPORT_FILEPATH_MANAGEMENT'] = "TRUE"
 
-store_stage = pathlib.Path(dj.config['stores']['report_store']['stage'])
+DEFAULT_REPORT_STORE = {
+    "protocol": "s3",
+    "endpoint": "s3.amazonaws.com",
+    "bucket": "map-report",
+    "location": "report/v2",
+    "stage": "./data/report_stage",
+    "access_key": "",
+    "secret_key": ""
+}
 
-# todo: fill in with defaults so unconfigured import works
-if dj.config['stores']['report_store']['protocol'] == 's3':
-    store_location = (pathlib.Path(dj.config['stores']['report_store']['bucket'])
-                      / pathlib.Path(dj.config['stores']['report_store']['location']))
+if 'stores' not in dj.config:
+    dj.config['stores'] = {}
+
+if 'report_store' not in dj.config['stores']:
+    dj.config['stores']['report_store'] = DEFAULT_REPORT_STORE
+
+report_cfg = dj.config['stores']['report_store']
+
+if report_cfg['protocol'] == 's3':
+    store_location = (pathlib.Path(report_cfg['bucket'])
+                      / pathlib.Path(report_cfg['location']))
     store_location = 'S3: ' + str(store_location)
 else:
-    store_location = pathlib.Path(dj.config['stores']['report_store']['location'])
+    store_location = pathlib.Path(report_cfg['location'])
+
+
+store_stage = pathlib.Path(report_cfg['stage'])
 
 mpl.rcParams['font.size'] = 16
 
@@ -134,6 +152,7 @@ class SessionLevelCDReport(dj.Computed):
                 label = (ephys.ProbeInsertion & probe).aggr(ephys.ProbeInsertion.RecordableBrainRegion.proj(
                     brain_region='CONCAT(hemisphere, " ", brain_area)'),
                     brain_regions='GROUP_CONCAT(brain_region SEPARATOR", ")').fetch1('brain_regions')
+                label = '({}) {}'.format(probe['insertion_number'], label)
 
                 _, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], units, 'good_noearlylick_hit')
 

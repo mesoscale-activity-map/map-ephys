@@ -14,11 +14,12 @@ import datajoint as dj
 from pymysql.err import OperationalError
 
 
-from pipeline import (lab, experiment, tracking, ephys, psth, ccf,
+from pipeline import (lab, experiment, tracking, ephys, report, psth, ccf,
                       histology, export, publication, globus, foraging_analysis,
                       get_schema_name)
 
-pipeline_modules = [lab, ccf, experiment, ephys, histology, tracking, psth]
+pipeline_modules = [lab, ccf, experiment, ephys, publication, report,
+                    foraging_analysis, histology, tracking, psth]
 
 log = logging.getLogger(__name__)
 

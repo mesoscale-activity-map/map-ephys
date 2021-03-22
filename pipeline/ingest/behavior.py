@@ -209,6 +209,113 @@ class BehaviorIngest(dj.Imported):
     def make(self, key):
         log.info('BehaviorIngest.make(): key: {key}'.format(key=key))
 
+        # File paths conform to the pattern:
+        # dl7/TW_autoTrain/Session Data/dl7_TW_autoTrain_20180104_132813.mat
+        # which is, more generally:
+        # {h2o}/{training_protocol}/Session Data/{h2o}_{training protocol}_{YYYYMMDD}_{HHMMSS}.mat
+
+        path = pathlib.Path(key['rig_data_path'], key['subpath'])
+
+        if os.stat(path).st_size/1024 < 1000:
+            log.info('skipping file {} - too small'.format(path))
+            return
+
+        log.debug('loading file {}'.format(path))
+
+        # Read from behavior file and parse all trial info (the heavy lifting here)
+        skey, rows = BehaviorIngest._load(key, path)
+
+        # Session Insertion
+
+        log.info('BehaviorIngest.make(): adding session record')
+        experiment.Session.insert1(skey)
+
+        # Behavior Insertion
+
+        log.info('BehaviorIngest.make(): bulk insert phase')
+
+        log.info('BehaviorIngest.make(): saving ingest {d}'.format(d=key))
+        self.insert1(key, ignore_extra_fields=True, allow_direct_insert=True)
+
+        log.info('BehaviorIngest.make(): ... experiment.Session.Trial')
+        experiment.SessionTrial.insert(
+            rows['trial'], ignore_extra_fields=True, allow_direct_insert=True)
+
+        log.info('BehaviorIngest.make(): ... experiment.BehaviorTrial')
+        experiment.BehaviorTrial.insert(
+            rows['behavior_trial'], ignore_extra_fields=True,
+            allow_direct_insert=True)
+
+        log.info('BehaviorIngest.make(): ... experiment.TrialNote')
+        experiment.TrialNote.insert(
+            rows['trial_note'], ignore_extra_fields=True,
+            allow_direct_insert=True)
+
+        log.info('BehaviorIngest.make(): ... experiment.TrialEvent')
+        experiment.TrialEvent.insert(
+            rows['trial_event'], ignore_extra_fields=True,
+            allow_direct_insert=True, skip_duplicates=True)
+
+        log.info('BehaviorIngest.make(): ... experiment.ActionEvent')
+        experiment.ActionEvent.insert(
+            rows['action_event'], ignore_extra_fields=True,
+            allow_direct_insert=True)
+
+        # Photostim Insertion
+
+        photostim_ids = np.unique(
+            [r['photo_stim'] for r in rows['photostim_trial_event']])
+
+        unknown_photostims = np.setdiff1d(
+            photostim_ids, list(photostims.keys()))
+
+        if unknown_photostims:
+            raise ValueError(
+                'Unknown photostim protocol: {}'.format(unknown_photostims))
+
+        if photostim_ids.size > 0:
+            log.info('BehaviorIngest.make(): ... experiment.Photostim')
+            for stim in photostim_ids:
+                experiment.Photostim.insert1(
+                    dict(skey, **photostims[stim]), ignore_extra_fields=True)
+
+                experiment.Photostim.PhotostimLocation.insert(
+                    (dict(skey, **loc,
+                          photo_stim=photostims[stim]['photo_stim'])
+                     for loc in photostims[stim]['locations']),
+                    ignore_extra_fields=True)
+
+        log.info('BehaviorIngest.make(): ... experiment.PhotostimTrial')
+        experiment.PhotostimTrial.insert(rows['photostim_trial'],
+                                         ignore_extra_fields=True,
+                                         allow_direct_insert=True)
+
+        log.info('BehaviorIngest.make(): ... experiment.PhotostimTrialEvent')
+        experiment.PhotostimEvent.insert(rows['photostim_trial_event'],
+                                         ignore_extra_fields=True,
+                                         allow_direct_insert=True)
+
+        # Behavior Ingest Insertion
+
+        log.info('BehaviorIngest.make(): ... BehaviorIngest.BehaviorFile')
+        BehaviorIngest.BehaviorFile.insert1(
+            dict(key, behavior_file=os.path.basename(key['subpath'])),
+            ignore_extra_fields=True, allow_direct_insert=True)
+
+    @classmethod
+    def _load(cls, key, path):
+        """
+        Method to load the behavior file (.mat), parse trial info and prepare for insertion
+        (no table insertion is done here)
+
+        :param key: session_key
+        :param path: (str) filepath of the behavior file (.mat)
+        :return: skey, rows
+            + skey: session_key
+            + rows: a dictionary containing all per-trial information to be inserted
+        """
+        path = pathlib.Path(path)
+
         subject_id = key['subject_id']
         h2o = (lab.WaterRestriction() & {'subject_id': subject_id}).fetch1(
             'water_restriction_number')
@@ -224,24 +331,7 @@ class BehaviorIngest(dj.Imported):
         skey['username'] = get_session_user()
         skey['rig'] = key['rig']
 
-        # File paths conform to the pattern:
-        # dl7/TW_autoTrain/Session Data/dl7_TW_autoTrain_20180104_132813.mat
-        # which is, more generally:
-        # {h2o}/{training_protocol}/Session Data/{h2o}_{training protocol}_{YYYYMMDD}_{HHMMSS}.mat
-
-        path = pathlib.Path(key['rig_data_path'], key['subpath'])
-
-        if experiment.Session() & skey:
-            log.info("note: session exists for {h2o} on {d}".format(
-                h2o=h2o, d=ymd))
-
-        if os.stat(path).st_size/1024 < 1000:
-            log.info('skipping file {} - too small'.format(path))
-            return
-
-        log.debug('loading file {}'.format(path))
-
-        mat = spio.loadmat(path, squeeze_me=True, struct_as_record=False)
+        mat = spio.loadmat(path.as_posix(), squeeze_me=True, struct_as_record=False)
         SessionData = mat['SessionData']
 
         # parse session datetime
@@ -327,7 +417,6 @@ class BehaviorIngest(dj.Imported):
 
         log.info('generated session id: {session}'.format(session=session))
         skey['session'] = session
-        key = dict(key, **skey)
 
         #
         # Actually load the per-trial data
@@ -488,7 +577,7 @@ class BehaviorIngest(dj.Imported):
             bkey['outcome'] = outcome
 
             # Determine free/autowater (Autowater 1 == enabled, 2 == disabled)
-            bkey['auto_water'] = True if gui.Autowater == 1 else False
+            bkey['auto_water'] = gui.Autowater == 1 or np.any(t.settings.GaveFreeReward[:2])
             bkey['free_water'] = t.free
 
             rows['behavior_trial'].append(bkey)
@@ -536,6 +625,9 @@ class BehaviorIngest(dj.Imported):
                     ekey['duration'] = s_end - s_start
                     rows['trial_event'].append(ekey)
 
+                    if trial_event_type == 'delay':
+                        this_trial_delay_duration = s_end - s_start
+
             # ==== ActionEvents ====
 
             #
@@ -570,7 +662,12 @@ class BehaviorIngest(dj.Imported):
             # Photostim Events
             #
 
-            if t.stim:
+            if photostim_period == 'early-delay':
+                valid_protocol = protocol_type == 5
+            elif photostim_period == 'late-delay':
+                valid_protocol = protocol_type > 4
+
+            if t.stim and valid_protocol and gui.Autolearn == 4 and this_trial_delay_duration == 1.2:
                 log.debug('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
                 rows['photostim_trial'].append(tkey)
                 if photostim_period == 'early-delay':  # same as the delay-onset
@@ -590,82 +687,7 @@ class BehaviorIngest(dj.Imported):
 
             # end of trial loop.
 
-        # Session Insertion
-
-        log.info('BehaviorIngest.make(): adding session record')
-        experiment.Session.insert1(skey)
-
-        # Behavior Insertion
-
-        log.info('BehaviorIngest.make(): bulk insert phase')
-
-        log.info('BehaviorIngest.make(): saving ingest {d}'.format(d=key))
-        self.insert1(key, ignore_extra_fields=True, allow_direct_insert=True)
-
-        log.info('BehaviorIngest.make(): ... experiment.Session.Trial')
-        experiment.SessionTrial.insert(
-            rows['trial'], ignore_extra_fields=True, allow_direct_insert=True)
-
-        log.info('BehaviorIngest.make(): ... experiment.BehaviorTrial')
-        experiment.BehaviorTrial.insert(
-            rows['behavior_trial'], ignore_extra_fields=True,
-            allow_direct_insert=True)
-
-        log.info('BehaviorIngest.make(): ... experiment.TrialNote')
-        experiment.TrialNote.insert(
-            rows['trial_note'], ignore_extra_fields=True,
-            allow_direct_insert=True)
-
-        log.info('BehaviorIngest.make(): ... experiment.TrialEvent')
-        experiment.TrialEvent.insert(
-            rows['trial_event'], ignore_extra_fields=True,
-            allow_direct_insert=True, skip_duplicates=True)
-
-        log.info('BehaviorIngest.make(): ... experiment.ActionEvent')
-        experiment.ActionEvent.insert(
-            rows['action_event'], ignore_extra_fields=True,
-            allow_direct_insert=True)
-
-        # Photostim Insertion
-
-        photostim_ids = np.unique(
-            [r['photo_stim'] for r in rows['photostim_trial_event']])
-
-        unknown_photostims = np.setdiff1d(
-            photostim_ids, list(photostims.keys()))
-
-        if unknown_photostims:
-            raise ValueError(
-                'Unknown photostim protocol: {}'.format(unknown_photostims))
-
-        if photostim_ids.size > 0:
-            log.info('BehaviorIngest.make(): ... experiment.Photostim')
-            for stim in photostim_ids:
-                experiment.Photostim.insert1(
-                    dict(skey, **photostims[stim]), ignore_extra_fields=True)
-
-                experiment.Photostim.PhotostimLocation.insert(
-                    (dict(skey, **loc,
-                          photo_stim=photostims[stim]['photo_stim'])
-                     for loc in photostims[stim]['locations']),
-                    ignore_extra_fields=True)
-
-        log.info('BehaviorIngest.make(): ... experiment.PhotostimTrial')
-        experiment.PhotostimTrial.insert(rows['photostim_trial'],
-                                         ignore_extra_fields=True,
-                                         allow_direct_insert=True)
-
-        log.info('BehaviorIngest.make(): ... experiment.PhotostimTrialEvent')
-        experiment.PhotostimEvent.insert(rows['photostim_trial_event'],
-                                         ignore_extra_fields=True,
-                                         allow_direct_insert=True)
-
-        # Behavior Ingest Insertion
-
-        log.info('BehaviorIngest.make(): ... BehaviorIngest.BehaviorFile')
-        BehaviorIngest.BehaviorFile.insert1(
-            dict(key, behavior_file=os.path.basename(key['subpath'])),
-            ignore_extra_fields=True, allow_direct_insert=True)
+        return skey, rows
 
 
 @schema
