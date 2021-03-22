@@ -1,5 +1,5 @@
 {
-	"database.host": "mesoscale-activity.datajoint.io",
+	"database.host": "datajoint.mesoscale-activity-map.org",
   	"database.user": "hanhou",
   	"database.password": "han_datajoint",	
 	"database.port": 3306,
@@ -7,8 +7,8 @@
 	"database.reconnect": false,
 	"loglevel": "INFO",
 	"safemode": true,
-	"display.limit": 30,
-	"display.width": 30,
+	"display.limit": 15,
+	"display.width": 50,
 	"display.show_tuple_count": true,
 	"enable_python_native_blobs": true,
 	"history": [],
@@ -16,29 +16,34 @@
 	"nuclear_option": true,
 	"custom": {
     	"behavior_bpod": {
-    	"meta_dir": "D:/Data/Data_for_ingestion/Metadata",
-	"meta_lab_dir": "D:/Data/Data_for_ingestion/Metadata_lab",
-   		"project_paths": [
-        	"D:/Data/Data_for_ingestion/Behavior_rigs/Tower-1/Foraging",
-        	"D:/Data/Data_for_ingestion/Behavior_rigs/Tower-2/Foraging",
-            "D:/Data/Data_for_ingestion/Behavior_rigs/Tower-2/Foraging_again",
-			"D:/Data/Data_for_ingestion/Behavior_rigs/Tower-2/Foraging_homecage",
-			"D:/Data/Data_for_ingestion/Behavior_rigs/Tower-3/Foraging_homecage"]
-		},
+            "meta_dir": "E:/Data_for_ingestion/Foraging_behavior/Metadata",
+            "meta_lab_dir": "E:/Data_for_ingestion/Foraging_behavior/Metadata_lab",
+            "project_paths": [
+                "E:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-1/Foraging",
+				"E:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-1/Foraging_homecage",
+                "E:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-2/Foraging",
+                "E:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-2/Foraging_again",
+                "E:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-2/Foraging_homecage",
+                "E:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-3/Foraging_homecage",
+				"E:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Ephys-Han/Foraging_ephys"]
+                        },
+        "ephys_data_paths": [
+            "E:/Data_for_ingestion/Foraging_ephys"
+        ],
     	"logfile": "log.txt"
     },
 	"stores": {
         "report_store":
         {
             "protocol": "file",
-            "location": "D:/Han_Sync/Svoboda/Scripts/map-ephys/report",
-            "stage": "D:/Han_Sync/Svoboda/Scripts/map-ephys/report"
+            "location": "E:/Pipeline_report",
+            "stage": "E:/Pipeline_report"
         },
         "archive_store":
         {
             "protocol": "file",
-            "location": "D:/Han_Sync/Svoboda/Scripts/map-ephys/report",
-            "stage": "D:/Han_Sync/Svoboda/Scripts/map-ephys/report"
+            "location": "E:/Pipeline_report",
+            "stage": "E:/Pipeline_report"
         }    	
 	}
 }
