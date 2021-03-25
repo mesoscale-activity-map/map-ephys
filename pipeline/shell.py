@@ -126,7 +126,7 @@ def ingest_all(*args):
 
 
 def load_animal(excel_fp, sheet_name='Sheet1'):
-    df = pd.read_excel(excel_fp, sheet_name)
+    df = pd.read_excel(excel_fp, sheet_name, engine='openpyxl')
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
 
     subjects, water_restrictions, subject_ids = [], [], []
@@ -153,7 +153,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     from pipeline.ingest import behavior as behav_ingest
     log.info('loading probe insertions from spreadsheet {}'.format(excel_fp))
 
-    df = pd.read_excel(excel_fp, sheet_name)
+    df = pd.read_excel(excel_fp, sheet_name, engine='openpyxl')
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
 
     insertion_locations = []
