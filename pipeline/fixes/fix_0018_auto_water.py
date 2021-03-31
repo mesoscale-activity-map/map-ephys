@@ -51,15 +51,18 @@ def fix_autowater_trial(session_keys={}):
     fix_hist_key = {'fix_name': pathlib.Path(__file__).name,
                     'fix_timestamp': datetime.now()}
 
-    log.info('Fixing {} session(s)'.format(len(sessions_2_update)))
+    log.info('--- Fixing {} session(s) ---'.format(len(sessions_2_update)))
     for key in sessions_2_update.fetch('KEY'):
         success, incorrect_autowater_trials = _fix_one_session(key)
-        needed_fix_trials = [t['trial'] for t, _ in incorrect_autowater_trials]
         if success:
+            needed_fix_trials = [t['trial'] for t, _ in incorrect_autowater_trials]
             FixHistory.insert1(fix_hist_key, skip_duplicates=True)
             FixAutoWater.insert([{**fix_hist_key, **tkey,
                                   'auto_water_needed_fix': 1 if tkey['trial'] in needed_fix_trials else 0}
                                  for tkey in (experiment.BehaviorTrial & key).fetch('KEY')])
+            log.info('\tAuto-water fixing for session {} finished'.format(key))
+        else:
+            log.info('\t!!! Fixing session {} failed! Skipping...'.format(key))
 
 
 def _fix_one_session(key):
@@ -107,7 +110,7 @@ def _fix_one_session(key):
     if len(incorrect_autowater_trials):
         with experiment.BehaviorTrial.connection.transaction:
             for tkey, auto_water in incorrect_autowater_trials:
-                (experiment.BehaviorTrial & tkey)._update('auto_water', auto_water)
+                (experiment.BehaviorTrial & tkey)._update('auto_water', int(auto_water))
 
     return True, incorrect_autowater_trials
 

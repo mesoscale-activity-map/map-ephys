@@ -126,7 +126,7 @@ def ingest_all(*args):
 
 
 def load_animal(excel_fp, sheet_name='Sheet1'):
-    df = pd.read_excel(excel_fp, sheet_name)
+    df = pd.read_excel(excel_fp, sheet_name, engine='openpyxl')
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
 
     subjects, water_restrictions, subject_ids = [], [], []
@@ -153,7 +153,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     from pipeline.ingest import behavior as behav_ingest
     log.info('loading probe insertions from spreadsheet {}'.format(excel_fp))
 
-    df = pd.read_excel(excel_fp, sheet_name)
+    df = pd.read_excel(excel_fp, sheet_name, engine='openpyxl')
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
 
     insertion_locations = []
@@ -519,6 +519,31 @@ def sync_and_external_cleanup():
         print("allow_external_cleanup disabled, set dj.config['custom']['allow_external_cleanup'] = True to enable")
 
 
+def loop(*args):
+    ''' run subsequent 'cmd args ..'. command in a loop '''
+    cmd, *newargs = args
+
+    cmd_fn = actions[cmd][0]
+
+    log.info('running {} in a loop'.format(cmd))
+
+    nruns = nerrs = 0
+
+    while True:
+        log.info('{} loop round {} (nerrs: {})'.format(cmd, nruns, nerrs))
+        try:
+            cmd_fn(*args)
+        except Exception as e:
+            log.info('{} loop round {} recieved error: {}'.format(
+                cmd, nruns, repr(e)))
+            nerrs += 1
+
+        nruns += 1
+
+        log.info('{} loop - waiting 5 seconds before next round'.format(cmd))
+        time.sleep(5)
+
+
 actions = {
     'ingest-behavior': (ingest_behavior, 'ingest behavior data'),
     'ingest-foraging': (ingest_behavior, 'ingest foraging behavior data'),
@@ -548,5 +573,6 @@ actions = {
     'load-insertion-location': (load_insertion_location,
                                 'load ProbeInsertions from .xlsx'),
     'load-animal': (load_animal, 'load subject data from .xlsx'),
-    'load-meta-foraging': (load_meta_foraging, 'load foraging meta information from .csv')
+    'load-meta-foraging': (load_meta_foraging, 'load foraging meta information from .csv'),
+    'loop': (loop, 'run subsequent command and args in a loop')
 }

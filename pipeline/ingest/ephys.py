@@ -568,7 +568,7 @@ def _decode_notes(fh, notes):
                 '\x00\x00': 'all'}  # 'all' is default / null label
     decoded_notes = []
     for n in notes:
-        note_val = str().join(chr(c) for c in fh[n])
+        note_val = str().join(chr(int(c)) for c in fh[n])
         match = [k for k in note_map if re.match(k, note_val)]
         decoded_notes.append(note_map[match[0]] if len(match) > 0 else 'all')
 
