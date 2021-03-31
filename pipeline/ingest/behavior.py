@@ -234,8 +234,8 @@ class BehaviorIngest(dj.Imported):
 
         log.info('BehaviorIngest.make(): bulk insert phase')
 
-        log.info('BehaviorIngest.make(): saving ingest {d}'.format(d=key))
-        self.insert1(key, ignore_extra_fields=True, allow_direct_insert=True)
+        log.info('BehaviorIngest.make(): saving ingest {d}'.format(d=skey))
+        self.insert1(skey, ignore_extra_fields=True, allow_direct_insert=True)
 
         log.info('BehaviorIngest.make(): ... experiment.Session.Trial')
         experiment.SessionTrial.insert(
@@ -299,7 +299,7 @@ class BehaviorIngest(dj.Imported):
 
         log.info('BehaviorIngest.make(): ... BehaviorIngest.BehaviorFile')
         BehaviorIngest.BehaviorFile.insert1(
-            dict(key, behavior_file=os.path.basename(key['subpath'])),
+            dict(skey, behavior_file=os.path.basename(key['subpath'])),
             ignore_extra_fields=True, allow_direct_insert=True)
 
     @classmethod
@@ -577,7 +577,7 @@ class BehaviorIngest(dj.Imported):
             bkey['outcome'] = outcome
 
             # Determine free/autowater (Autowater 1 == enabled, 2 == disabled)
-            bkey['auto_water'] = gui.Autowater == 1 or np.any(t.settings.GaveFreeReward[:2])
+            bkey['auto_water'] = int(gui.Autowater == 1 or np.any(t.settings.GaveFreeReward[:2]))
             bkey['free_water'] = t.free
 
             rows['behavior_trial'].append(bkey)
