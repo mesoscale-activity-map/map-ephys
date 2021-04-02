@@ -796,6 +796,7 @@ class BehaviorBpodIngest(dj.Imported):
                             sessions_now.append(session)
                             session_start_times_now.append(session.started)
                             experimentnames_now.append(exp.name)
+                            
         bpodsess_order = np.argsort(session_start_times_now)
         
         # --- Handle missing BPod session ---
@@ -860,6 +861,8 @@ class BehaviorBpodIngest(dj.Imported):
                     setupname = 'Training-Tower-3'
                 elif session.setup_name.lower() in ['tower-1']:
                     setupname = 'Training-Tower-1'
+                elif session.setup_name.lower() in ['ephys_han']:
+                    setupname = 'Ephys-Han'
                 else:
                     log.info('ERROR: unhandled setup name {} (from {}). Skipping...'.format(session.setup_name, session.path))
                     continue   # Another integrity check here
@@ -1016,6 +1019,13 @@ class BehaviorBpodIngest(dj.Imported):
                     rows['trial_note'].append({**sess_trial_key,
                                                'trial_note_type': 'random_seed_start',
                                                'trial_note': str(df_behavior_trial['MSG'][seedidx])})
+                    
+                # add randomID (TrialBitCode)
+                if any(df_behavior_trial['MSG'] == 'TrialBitCode: '):
+                    bitcode_ind = (df_behavior_trial['MSG'] == 'TrialBitCode: ').idxmax() + 1
+                    rows['trial_note'].append({**sess_trial_key,
+                                               'trial_note_type': 'bitcode',
+                                               'trial_note': str(df_behavior_trial['MSG'][bitcode_ind])})
 
                 # ---- Behavior Trial ----
                 rows['behavior_trial'].append({**sess_trial_key,
