@@ -189,6 +189,21 @@ class Unit(dj.Imported):
 
 
 @schema
+class UnitNote(dj.Imported):
+    definition = """
+    -> Unit
+    note_source: varchar(36)  # e.g. "sort", "Davesort", "Han-sort"
+    ---
+    note_value: varchar(128)
+    """
+
+    key_source = ProbeInsertion & Unit
+
+    def make(self, key):
+        pass
+
+
+@schema
 class ClusteringLabel(dj.Imported):
     definition = """
     -> Unit
@@ -373,6 +388,27 @@ class WaveformMetric(dj.Imported):
     velocity_above=null: float
     velocity_below=null: float   
     """
+
+
+@schema
+class MAPClusterMetric(dj.Computed):
+    definition = """
+    -> Unit
+    """
+
+    class DriftMetric(dj.Part):
+        definition = """
+        -> master
+        ---
+        drift_metric: float
+        """
+
+    def make(self, key):
+        # do computation
+        #
+        # self.insert1(key)
+        # self.DriftMetric.insert1({**key, 'drift_metric': 0})
+        pass
 
 
 # TODO: confirm the logic/need for this table
