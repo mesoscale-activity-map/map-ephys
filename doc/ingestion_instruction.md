@@ -44,6 +44,10 @@ and other administrative tasks.
 These functions are also made available in the `mapshell.py` script
 which can be used as a command line utility for common tasks.
 
+This chapter is written with the stand-alone mapshell.py method in mind.
+If you wish to use the shell as a module, please see shell.py's 'actions'
+variable for the functions corresponding to the shell commands.
+
 Account setup, test & usage synopsis using the shell is as follows:
 
     $ mapshell.py shell
@@ -72,9 +76,12 @@ Account setup, test & usage synopsis using the shell is as follows:
     Connecting user@server:3306
     usage: mapshell.py [ingest-behavior|ingest-ephys|ingest-tracking|ingest-histology|auto-ingest|populate-psth|publish|export-recording|generate-report|sync-report|shell|erd|ccfload|automate-computation|automate-sync-and-cleanup|load-insertion-location|load-animal] <args>
 
-This section is written with the stand-alone mapshell.py method in mind.
-If you wish to use the shell as a module, please see shell.py's 'actions'
-variable for the functions corresponding to the shell commands.
+The mapshell.py script and pipeline.shell module support
+runtime-configurable logging via the environment variable MAP_LOGLEVEL
+and dj.config['loglevel'].  Possible values and logging configuration
+are processed by the 'pipeline.shell.logsetup' function, which will also
+enable logging to the file specified in dj.config['custom']['logfile'],
+if this setting is present.
 
 ## Data Ingestion
 
