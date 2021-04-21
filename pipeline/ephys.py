@@ -204,6 +204,22 @@ class UnitNote(dj.Imported):
 
 
 @schema
+class UnitNoiseLabel(dj.Imported):
+    definition = """  
+    # labeling based on the "noiseTemplate" module 
+    # (https://github.com/jenniferColonell/ecephys_spike_sorting/tree/master/ecephys_spike_sorting/modules/noise_templates)
+    -> Unit
+    ---
+    noise: enum('good', 'noise')
+    """
+
+    key_source = ProbeInsertion & Unit
+
+    def make(self, key):
+        pass
+
+
+@schema
 class ClusteringLabel(dj.Imported):
     definition = """
     -> Unit
