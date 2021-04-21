@@ -225,12 +225,14 @@ class EphysIngest(dj.Imported):
             archive_key = {**skey, 'insertion_number': probe,
                            'clustering_method': method, 'clustering_time': creation_time}
 
-            ephys.ArchivedClustering.insert1({**archive_key, 'quality_control': bool('qc' in clustering_label),
-                                              'manual_curation': bool('curated' in clustering_label),
-                                              'archival_time': archival_time}, allow_direct_insert=True)
-            ephys.ArchivedClustering.EphysFile.insert1({**archive_key,
-                                                        'ephys_file': str(ef_path.relative_to(rigpath))},
-                                                       allow_direct_insert=True)
+            ephys.ArchivedClustering.insert1({
+                **archive_key, 'quality_control': bool('qc' in clustering_label),
+                'manual_curation': bool('curated' in clustering_label),
+                'archival_time': archival_time}, allow_direct_insert=True)
+            ephys.ArchivedClustering.EphysFile.insert1({
+                **archive_key,
+                'ephys_file': ef_path.relative_to(rigpath).as_posix()},
+                allow_direct_insert=True)
 
             unit_spike_trial_num = np.array([spike_trial_num[np.where(units == u)] for u in set(units)])
 
@@ -389,7 +391,7 @@ class EphysIngest(dj.Imported):
             self.insert1(skey, skip_duplicates=True, allow_direct_insert=True)
             self.EphysFile.insert1(
                 {**skey, 'probe_insertion_number': probe,
-                 'ephys_file': str(ef_path.relative_to(rigpath))}, allow_direct_insert=True)
+                 'ephys_file': ef_path.relative_to(rigpath).as_posix()}, allow_direct_insert=True)
 
             log.info('-- ephys ingest for {} - probe {} complete'.format(skey, probe))
 
