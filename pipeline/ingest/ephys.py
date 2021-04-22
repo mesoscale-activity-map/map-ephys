@@ -225,12 +225,14 @@ class EphysIngest(dj.Imported):
             archive_key = {**skey, 'insertion_number': probe,
                            'clustering_method': method, 'clustering_time': creation_time}
 
-            ephys.ArchivedClustering.insert1({**archive_key, 'quality_control': bool('qc' in clustering_label),
-                                              'manual_curation': bool('curated' in clustering_label),
-                                              'archival_time': archival_time}, allow_direct_insert=True)
-            ephys.ArchivedClustering.EphysFile.insert1({**archive_key,
-                                                        'ephys_file': str(ef_path.relative_to(rigpath))},
-                                                       allow_direct_insert=True)
+            ephys.ArchivedClustering.insert1({
+                **archive_key, 'quality_control': bool('qc' in clustering_label),
+                'manual_curation': bool('curated' in clustering_label),
+                'archival_time': archival_time}, allow_direct_insert=True)
+            ephys.ArchivedClustering.EphysFile.insert1({
+                **archive_key,
+                'ephys_file': ef_path.relative_to(rigpath).as_posix()},
+                allow_direct_insert=True)
 
             unit_spike_trial_num = np.array([spike_trial_num[np.where(units == u)] for u in set(units)])
 
@@ -389,7 +391,7 @@ class EphysIngest(dj.Imported):
             self.insert1(skey, skip_duplicates=True, allow_direct_insert=True)
             self.EphysFile.insert1(
                 {**skey, 'probe_insertion_number': probe,
-                 'ephys_file': str(ef_path.relative_to(rigpath))}, allow_direct_insert=True)
+                 'ephys_file': ef_path.relative_to(rigpath).as_posix()}, allow_direct_insert=True)
 
             log.info('-- ephys ingest for {} - probe {} complete'.format(skey, probe))
 
@@ -1184,6 +1186,14 @@ class Kilosort:
         'cluster_KSLabel.tsv'
     ]
 
+    ks_cluster_files = [
+        'cluster_Amplitude.tsv',
+        'cluster_ContamPct.tsv',
+        'cluster_group.tsv',
+        'cluster_KSLabel.tsv',
+        'cluster_info.tsv'
+    ]
+
     # keys to self.files, .data are file name e.g. self.data['params'], etc.
     ks_keys = [path.splitext(i)[0] for i in ks_files]
 
@@ -1239,11 +1249,22 @@ class Kilosort:
             self._data['cluster_groups'] = np.array(df['group'].values)
             self._data['cluster_ids'] = np.array(df['cluster_id'].values)
         elif (self._dname / 'cluster_KSLabel.tsv').exists():
-            df = pd.read_csv(self._dname / 'cluster_KSLabel.tsv', sep = "\t", header = 0)
+            df = pd.read_csv(self._dname / 'cluster_KSLabel.tsv', sep="\t", header=0)
             self._data['cluster_groups'] = np.array(df['KSLabel'].values)
             self._data['cluster_ids'] = np.array(df['cluster_id'].values)
         else:
             raise FileNotFoundError('Neither cluster_groups.csv nor cluster_KSLabel.tsv found!')
+
+    def extract_curated_cluster_notes(self):
+        curated_cluster_notes = {}
+        for cluster_file in pathlib.Path(self._dname).glob('cluster_*.tsv'):
+            if cluster_file.name not in self.ks_cluster_files:
+                curation_source = ''.join(cluster_file.stem.split('_')[1:])
+                df = pd.read_csv(cluster_file, sep="\t", header=0)
+                curated_cluster_notes[curation_source] = dict(
+                    cluster_ids=np.array(df['cluster_id'].values),
+                    cluster_notes=np.array(df[curation_source].values))
+        return curated_cluster_notes
 
     def extract_spike_depths(self):
         """ Reimplemented from https://github.com/cortex-lab/spikes/blob/master/analysis/ksDriftmap.m """
