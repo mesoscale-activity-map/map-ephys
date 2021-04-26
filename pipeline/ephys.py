@@ -205,8 +205,8 @@ class UnitNote(dj.Imported):
 
 @schema
 class UnitNoiseLabel(dj.Imported):
-    definition = """  
-    # labeling based on the noiseTemplate module 
+    definition = """
+    # labeling based on the noiseTemplate module
     # (https://github.com/jenniferColonell/ecephys_spike_sorting/tree/master/ecephys_spike_sorting/modules/noise_templates)
     -> Unit
     ---
@@ -423,30 +423,30 @@ class MAPClusterMetric(dj.Computed):
 
     def make(self, key):
         # -- get trial-spikes
-        trial_spikes, trial_starts, trial_stops = (
-                Unit.TrialSpikes * experiment.SessionTrial & key).fetch(
-            'spike_times', 'start_time', 'stop_time', order_by='trial')
-        mean_spike_rate = (UnitStat & key).fetch1('avg_firing_rate')
+        trial_spikes, trial_durations = (
+                Unit.TrialSpikes
+                * (experiment.TrialEvent & 'trial_event_type = "trialend"')
+                & key).fetch('spike_times', 'trial_event_time', order_by='trial')
         # -- compute trial spike-rates
-        trial_durations = (trial_stops - trial_starts).astype(float)
-        trial_spike_rates = [len(s) for s in trial_spikes] / trial_durations  # spikes/sec
+        trial_spike_rates = [len(s) for s in trial_spikes] / trial_durations.astype(float)  # spikes/sec
+        # mean_spike_rate = (UnitStat & key).fetch1('avg_firing_rate')
+        mean_spike_rate = np.mean(trial_spike_rates)
         # -- moving-average
         window_size = 6  # sample
         kernel = np.ones(window_size) / window_size
         processed_trial_spike_rates = np.convolve(trial_spike_rates, kernel, 'same')
         # -- down-sample
         ds_factor = 6
-        processed_trial_spike_rates = signal.resample(
-            processed_trial_spike_rates, int(len(processed_trial_spike_rates) / ds_factor))
+        processed_trial_spike_rates = processed_trial_spike_rates[::ds_factor]
         # -- compute drift_qc from poisson distribution
         poisson_cdf = poisson.cdf(processed_trial_spike_rates, mean_spike_rate)
-        drift_qc = np.logical_or(poisson_cdf > 0.95, poisson_cdf < 0.05).sum() / len(poisson_cdf)
+        instability = np.logical_or(poisson_cdf > 0.95, poisson_cdf < 0.05).sum() / len(poisson_cdf)
         # -- insert
         self.insert1(key)
-        self.DriftMetric.insert1({**key, 'drift_metric': drift_qc})
+        self.DriftMetric.insert1({**key, 'drift_metric': instability})
 
 
-# TODO: confirm the logic/need for this table
+#TODO: confirm the logic/need for this table
 @schema
 class UnitCCF(dj.Computed):
     definition = """ 
