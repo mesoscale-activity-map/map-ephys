@@ -1432,12 +1432,13 @@ def load_multi_target_licking_matfile(skey, matlab_filepath):
         rows['trial_note'].append(nkey)
 
         #
-        # Add 'bitcode' note TODO: use 8-bit encoding of the trial-number
+        # Add 'bitcode' note
         #
+        # binary representation of the trial-number as a string
         if 'randomID' in gui._fieldnames:
             nkey = dict(tkey)
             nkey['trial_note_type'] = 'bitcode'
-            nkey['trial_note'] = str(gui.randomID)
+            nkey['trial_note'] = np.binary_repr(tkey['trial'], 10)[::-1]
             rows['trial_note'].append(nkey)
 
         # ==== TrialEvents ====
