@@ -28,3 +28,10 @@ class IdenticalClusterResultError(Exception):
                 for n, d in identical_clustering_results]
         super().__init__('Identical clustering time found for:\n{}{}'.format(''.join(emsg), msg))
     pass
+
+
+class InvalidBehaviorTrialError(Exception):
+    """Raise when error encountered when extracting behavior trials data"""
+    def __init__(self, msg=None):
+        super().__init__('Behavior Trial Error: \n{}'.format(msg))
+    pass
