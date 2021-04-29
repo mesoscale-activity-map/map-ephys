@@ -35,7 +35,7 @@ class Task(dj.Lookup):
         ('audio mem', 'auditory working memory task'),
         ('s1 stim', 'S1 photostimulation task (2AFC)'),
         ('foraging', 'foraging task based on Bari-Cohen 2019'),
-        ('foraging 3lp', 'foraging task based on Bari-Cohen 2019 with variable delay period')
+        ('foraging 3lp', 'foraging task based on Bari-Cohen 2019 with variable delay period'),
         ('multi-target-licking', 'multi-target-licking task')
     ]
 
