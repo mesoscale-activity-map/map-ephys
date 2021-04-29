@@ -26,7 +26,7 @@ class Session(dj.Manual):
 class Task(dj.Lookup):
     definition = """
     # Type of tasks
-    task            : varchar(12)                  # task type
+    task            : varchar(24)                  # task type
     ----
     task_description : varchar(4000)
     """
