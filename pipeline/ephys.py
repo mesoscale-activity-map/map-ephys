@@ -197,7 +197,7 @@ class UnitNote(dj.Imported):
     note_value: varchar(128)
     """
 
-    key_source = ProbeInsertion & Unit
+    key_source = ProbeInsertion & Unit.proj()
 
     def make(self, key):
         pass
@@ -213,7 +213,7 @@ class UnitNoiseLabel(dj.Imported):
     noise: enum('good', 'noise')
     """
 
-    key_source = ProbeInsertion & Unit
+    key_source = ProbeInsertion & Unit.proj()
 
     def make(self, key):
         pass
