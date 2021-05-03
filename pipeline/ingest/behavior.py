@@ -298,6 +298,26 @@ class BehaviorIngest(dj.Imported):
                                          ignore_extra_fields=True,
                                          allow_direct_insert=True)
 
+        if task_type == 'multi-target-licking':
+            # Multi-target-licking specifics
+            log.info('BehaviorIngest.make(): ... experiment.MultiTargetLickingSessionBlock')
+            experiment.MultiTargetLickingSessionBlock.insert(
+                rows['session_block'],
+                ignore_extra_fields=True,
+                allow_direct_insert=True)
+
+            log.info('BehaviorIngest.make(): ... experiment.MultiTargetLickingSessionBlock.WaterPort')
+            experiment.MultiTargetLickingSessionBlock.WaterPort.insert(
+                rows['session_block_waterport'],
+                ignore_extra_fields=True,
+                allow_direct_insert=True)
+
+            log.info('BehaviorIngest.make(): ... experiment.MultiTargetLickingSessionBlock.BlockTrial')
+            experiment.MultiTargetLickingSessionBlock.BlockTrial.insert(
+                rows['session_block_trial'],
+                ignore_extra_fields=True,
+                allow_direct_insert=True)
+
         # Behavior Ingest Insertion
 
         log.info('BehaviorIngest.make(): ... BehaviorIngest.BehaviorFile')
