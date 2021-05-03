@@ -1409,7 +1409,7 @@ def load_multi_target_licking_matfile(skey, matlab_filepath):
             })
         else:
             auto_water = False
-            block_trial_number = rows['session_block_waterport'][-1]['block_trial_number'] + 1
+            block_trial_number = rows['session_block_trial'][-1]['block_trial_number'] + 1
 
         # block's trial details
         rows['session_block_trial'].append({
