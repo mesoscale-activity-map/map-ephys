@@ -26,7 +26,7 @@ class Session(dj.Manual):
 class Task(dj.Lookup):
     definition = """
     # Type of tasks
-    task            : varchar(12)                  # task type
+    task            : varchar(24)                  # task type
     ----
     task_description : varchar(4000)
     """
@@ -35,7 +35,8 @@ class Task(dj.Lookup):
         ('audio mem', 'auditory working memory task'),
         ('s1 stim', 'S1 photostimulation task (2AFC)'),
         ('foraging', 'foraging task based on Bari-Cohen 2019'),
-        ('foraging 3lp', 'foraging task based on Bari-Cohen 2019 with variable delay period')
+        ('foraging 3lp', 'foraging task based on Bari-Cohen 2019 with variable delay period'),
+        ('multi-target-licking', 'multi-target-licking task')
     ]
 
 
@@ -59,7 +60,9 @@ class TaskProtocol(dj.Lookup):
         ('s1 stim', 8, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample period'),
         ('s1 stim', 9, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample period'),
         ('foraging', 100, 'moving lickports, delay period, early lick punishment, sound GO cue then free choice'),
-        ('foraging 3lp', 101, 'moving lickports, delay period, early lick punishment, sound GO cue then free choice from three lickports')
+        ('foraging 3lp', 101, 'moving lickports, delay period, early lick punishment, sound GO cue then free choice from three lickports'),
+        ('multi-target-licking', 1, 'multi-target-licking task - 2D'),
+        ('multi-target-licking', 2, 'multi-target-licking task - Spontaneous')
     ]
 
 
@@ -69,7 +72,10 @@ class WaterPort(dj.Lookup):
     water_port: varchar(16)  # e.g. left, right, middle, top-left, purple
     """
 
-    contents = zip(['left', 'right', 'middle'])
+    contents = zip(['left', 'right', 'middle',
+                    'mtl-1', 'mtl-2', 'mtl-3',    # The "mtl-" refers to multi-target-licking
+                    'mtl-4', 'mtl-5', 'mtl-6',    # water ports, arranged in a 3x3 "number-pad"
+                    'mtl-7', 'mtl-8', 'mtl-9'])   # fashion, with the numbering as shown here
 
 
 @schema
@@ -150,7 +156,8 @@ class TrialNoteType(dj.Lookup):
     definition = """
     trial_note_type : varchar(24)
     """
-    contents = zip(('autolearn', 'protocol #', 'bad', 'bitcode', 'autowater', 'random_seed_start'))
+    contents = zip(('autolearn', 'protocol #', 'bad',
+                    'bitcode', 'autowater', 'random_seed_start'))
 
 
 @schema
@@ -229,7 +236,7 @@ class Outcome(dj.Lookup):
     definition = """
     outcome : varchar(32)
     """
-    contents = zip(('hit', 'miss', 'ignore'))
+    contents = zip(('hit', 'miss', 'ignore', 'N/A'))
 
 
 @schema
@@ -317,6 +324,7 @@ class ActionEvent(dj.Imported):
 @schema
 class SessionBlock(dj.Imported):
     definition = """
+    # Session block for Foraging experiment
     -> Session
     block : smallint 		# block number
     ---
@@ -343,7 +351,7 @@ class WaterPortSetting(dj.Imported):
     definition = """  
     -> BehaviorTrial
     ----
-    water_port_lateral_pos=null: int # position value of the motor
+    water_port_lateral_pos=null: int # position value of the motor 
     water_port_rostrocaudal_pos=null: int # position value of the motor
     water_port_dorsoventral_pos=null: int # position value of the motor
     """
@@ -365,6 +373,44 @@ class TrialAvailableReward(dj.Imported):
     ---
     reward_available: bool
     """
+
+# ---- Multi-target-licking paradigm specifics ----
+
+
+@schema
+class MultiTargetLickingSessionBlock(dj.Imported):
+    definition = """
+    # Session block for multi-target-licking experiments
+    -> Session
+    block : smallint 		# block number
+    ---
+    block_start_time : decimal(10, 4)  # (s) relative to session beginning
+    trial_count: int                   # total number of trials in this block
+    num_licks_for_reward: smallint     # how many licks are needed to trigger a water release. The mouse can collect the water drop on num_licks_for_reward +1 lick
+    roll_deg: double                   # roll angle of the lickport positions in deg. Positve roll means the mouse is turning its head towards its right shoulder
+    position_x_bins=3: int             # number of water port possible positions in X
+    position_y_bins=1: int             # number of water port possible positions in Y
+    position_z_bins=3: int             # number of water port possible positions in Z
+    """
+
+    class WaterPort(dj.Part):
+        definition = """
+        # the water port used for all trials in a given block
+        -> master
+        ---
+        -> WaterPort
+        position_x: float  # X position of this water port (in motor unit) - lateral
+        position_y: float  # Y position of this water port (in motor unit) - rostrocaudal
+        position_z: float  # Z position of this water port (in motor unit) - dorsoventral
+        """
+
+    class BlockTrial(dj.Part):
+        definition = """
+        -> master
+        -> BehaviorTrial
+        ---
+        block_trial_number: int  # the ordering of this trial in this block
+        """
 
 
 # ---- Photostim trials ----
