@@ -73,9 +73,9 @@ class WaterPort(dj.Lookup):
     """
 
     contents = zip(['left', 'right', 'middle',
-                    'mtl-1', 'mtl-2', 'mtl-3',
-                    'mtl-4', 'mtl-5', 'mtl-6',
-                    'mtl-7', 'mtl-8', 'mtl-9'])
+                    'mtl-1', 'mtl-2', 'mtl-3',    # The "mtl-" refers to multi-target-licking
+                    'mtl-4', 'mtl-5', 'mtl-6',    # water ports, arranged in a 3x3 "number-pad"
+                    'mtl-7', 'mtl-8', 'mtl-9'])   # fashion, with the numbering as shown here
 
 
 @schema
