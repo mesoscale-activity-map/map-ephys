@@ -112,7 +112,7 @@ class TrackingIngest(dj.Imported):
                 log.info('Video-Trial mapper file (.txt) not found - Using one-to-one trial mapping')
                 tmap = {tr: tr for tr in trials}  # one-to-one map
                 for tpos_name in self.camera_position_mapper[cam_pos]:
-                    camtrial_fn = '{}*_{}_*-*.csv'.format(h2o, tpos_name)
+                    camtrial_fn = '{}*_{}_[0-9]*-*.csv'.format(h2o, tpos_name)
                     log.info('trying camera position trial map: {}'.format(tpath / camtrial_fn))
                     if list(tpath.glob(camtrial_fn)):
                         tpos = tpos_name
