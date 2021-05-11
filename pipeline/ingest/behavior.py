@@ -994,7 +994,7 @@ def load_delay_response_matfile(skey, matlab_filepath):
                   'state_names', 'state_data', 'event_data',
                   'event_times', 'trial_start', 'trial_raw_events'))
 
-    i = 0  # trial numbering starts at 1
+    trial_number = 0  # trial numbering starts at 1
     for t in trials:
 
         #
@@ -1002,9 +1002,9 @@ def load_delay_response_matfile(skey, matlab_filepath):
         #
 
         t = trial(*t)  # convert list of items to a 'trial' structure
-        i += 1  # increment trial counter
+        trial_number += 1  # increment trial counter
 
-        log.debug('BehaviorIngest.make(): parsing trial {i}'.format(i=i))
+        log.debug('BehaviorIngest.make(): parsing trial {i}'.format(i=trial_number))
 
         # covert state data names into a lookup dictionary
         #
@@ -1026,7 +1026,7 @@ def load_delay_response_matfile(skey, matlab_filepath):
 
         if len(missing):
             log.warning('skipping trial {i}; missing {m}'
-                        .format(i=i, m=missing))
+                        .format(i=trial_number, m=missing))
             continue
 
         gui = t.settings.GUI
@@ -1039,13 +1039,13 @@ def load_delay_response_matfile(skey, matlab_filepath):
 
         if 'ProtocolType' not in gui._fieldnames:
             log.warning('skipping trial {i}; protocol undefined'
-                        .format(i=i))
+                        .format(i=trial_number))
             continue
 
         protocol_type = gui.ProtocolType
         if gui.ProtocolType < 3:
             log.warning('skipping trial {i}; protocol {n} < 3'
-                        .format(i=i, n=gui.ProtocolType))
+                        .format(i=trial_number, n=gui.ProtocolType))
             continue
 
         #
@@ -1063,17 +1063,17 @@ def load_delay_response_matfile(skey, matlab_filepath):
 
         if not (len(startindex) and len(endindex)):
             log.warning('skipping {}: start/end mismatch: {}/{}'.format(
-                i, str(startindex), str(endindex)))
+                trial_number, str(startindex), str(endindex)))
             continue
 
         try:
-            tkey['trial'] = i
-            tkey['trial_uid'] = i
+            tkey['trial'] = trial_number
+            tkey['trial_uid'] = trial_number
             tkey['start_time'] = t.trial_start
             tkey['stop_time'] = t.trial_start + t.state_times[endindex][0]
         except IndexError:
             log.warning('skipping {}: IndexError: {}/{} -> {}'.format(
-                i, str(startindex), str(endindex), str(t.state_times)))
+                trial_number, str(startindex), str(endindex), str(t.state_times)))
             continue
 
         log.debug('tkey' + str(tkey))
@@ -1266,6 +1266,11 @@ def load_multi_target_licking_matfile(skey, matlab_filepath):
     session_datetime = datetime.strptime(
         session_datetime_str, '%d-%b-%Y %H:%M:%S')
 
+    valid_trial_ind = np.where(SessionData.MATLABStartTimes != 0)[0]
+    valid_trial_mapper = {trial_number: orig_trial_number
+                          for trial_number, orig_trial_number
+                          in zip(np.arange(len(valid_trial_ind)) + 1, valid_trial_ind + 1)} # "+ 1" as trial numbering starts at 1
+
     AllTrialTypes = SessionData.TrialTypes
     AllTrialSettings = SessionData.TrialSettings
     AllTrialStarts = SessionData.TrialStartTimestamp
@@ -1282,6 +1287,11 @@ def load_multi_target_licking_matfile(skey, matlab_filepath):
 
     # assign SessionBlock and SessionTrial association
     AllBlockTrials = np.cumsum(np.where(SessionData.TrialBlockOrder == 1, 1, 0))
+
+    # index to only valid trials
+    AllTrialTypes = AllTrialTypes[valid_trial_ind]
+    AllTrialSettings = AllTrialSettings[valid_trial_ind]
+    AllBlockTrials = AllBlockTrials[valid_trial_ind]
 
     # verify trial-related data arrays are all same length
     assert (all((x.shape[0] == AllStateTimestamps.shape[0] for x in
@@ -1345,7 +1355,7 @@ def load_multi_target_licking_matfile(skey, matlab_filepath):
                         'state_names', 'state_data', 'event_data',
                         'event_times', 'trial_start', 'trial_raw_events', 'trial_block'))
 
-    i = 0  # trial numbering starts at 1
+    trial_number = 0  # trial numbering starts at 1
     for t in trials:
 
         #
@@ -1353,9 +1363,9 @@ def load_multi_target_licking_matfile(skey, matlab_filepath):
         #
 
         t = trial(*t)  # convert list of items to a 'trial' structure
-        i += 1  # increment trial counter
+        trial_number += 1  # increment trial counter
 
-        log.debug('BehaviorIngest.make(): parsing trial {i}'.format(i=i))
+        log.debug('BehaviorIngest.make(): parsing trial {i}'.format(i=trial_number))
 
         states = {k: (v + 1) for v, k in enumerate(t.state_names)}
 
@@ -1377,17 +1387,17 @@ def load_multi_target_licking_matfile(skey, matlab_filepath):
 
         if not (len(startindex) and len(endindex)):
             log.warning('skipping {}: start/end mismatch: {}/{}'.format(
-                i, str(startindex), str(endindex)))
+                trial_number, str(startindex), str(endindex)))
             continue
 
         try:
-            tkey['trial'] = i
-            tkey['trial_uid'] = i
+            tkey['trial'] = trial_number
+            tkey['trial_uid'] = trial_number
             tkey['start_time'] = t.trial_start
             tkey['stop_time'] = t.trial_start + t.state_times[endindex][0]
         except IndexError:
             log.warning('skipping {}: IndexError: {}/{} -> {}'.format(
-                i, str(startindex), str(endindex), str(t.state_times)))
+                trial_number, str(startindex), str(endindex), str(t.state_times)))
             continue
 
         log.debug('tkey' + str(tkey))
@@ -1418,14 +1428,14 @@ def load_multi_target_licking_matfile(skey, matlab_filepath):
                 'position_z_bins': gui.num_bins
             })
             # block's water-port details
-            row_idx, col_idx = np.where(SessionData.trial_type_mat[i-1] == t.ttype)
+            row_idx, col_idx = np.where(SessionData.trial_type_mat[trial_number-1] == t.ttype)
 
             rows['session_block_waterport'].append({
                 **block_key,
                 'water_port': 'mtl-{}'.format(t.ttype),
-                'position_x': SessionData.X_positions_mat[i-1][row_idx[0], col_idx[0]],
+                'position_x': SessionData.X_positions_mat[trial_number-1][row_idx[0], col_idx[0]],
                 'position_y': gui.Y_center,
-                'position_z': SessionData.Z_positions_mat[i-1][row_idx[0], col_idx[0]]
+                'position_z': SessionData.Z_positions_mat[trial_number-1][row_idx[0], col_idx[0]]
             })
         else:
             auto_water = False
@@ -1474,11 +1484,12 @@ def load_multi_target_licking_matfile(skey, matlab_filepath):
         # Add 'bitcode' note
         #
         # binary representation of the trial-number as a string
-        if 'randomID' in gui._fieldnames:
-            nkey = dict(tkey)
-            nkey['trial_note_type'] = 'bitcode'
-            nkey['trial_note'] = np.binary_repr(tkey['trial'], 10)[::-1]
-            rows['trial_note'].append(nkey)
+        # using the original trial numbering (to match with ephys's bitcode)
+        orig_trial_number = valid_trial_mapper[tkey['trial']]
+        nkey = dict(tkey)
+        nkey['trial_note_type'] = 'bitcode'
+        nkey['trial_note'] = np.binary_repr(orig_trial_number, 10)[::-1]
+        rows['trial_note'].append(nkey)
 
         # ==== TrialEvents ====
         trial_event_types = [('TrialEnd', 'trialend')]
