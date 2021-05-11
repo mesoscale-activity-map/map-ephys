@@ -68,7 +68,7 @@ class TrackingIngest(dj.Imported):
         '''
         TrackingIngest .make() function
         '''
-        log.info('\n======================================================')
+        log.info('\n==================================================================')
         log.info('TrackingIngest().make(): key: {k}'.format(k=key))
 
         session = (lab.WaterRestriction.proj('water_restriction_number') * experiment.Session.proj(
@@ -78,7 +78,6 @@ class TrackingIngest(dj.Imported):
         trials = (experiment.SessionTrial & session).fetch('trial')
 
         log.info('got session: {} ({} trials)'.format(session, len(trials)))
-        log.info('\n-----------')
 
         paths = get_tracking_paths()
         devices = tracking.TrackingDevice.fetch(as_dict=True)
@@ -86,13 +85,14 @@ class TrackingIngest(dj.Imported):
         # paths like: <root>/<h2o>/YYYY-MM-DD/tracking
         tracking_files = []
         for p, d in ((p, d) for d in devices for p in paths):
+            log.info('\n---------------------')
 
             tdev = d['tracking_device']
             cam_pos = d['tracking_position']
-            tdat = p[-1]
+            tracking_root_dir = p[-1]
 
             try:
-                tpath, sdate_sml = _get_sess_tracking_dir(tdat, session)
+                tracking_sess_dir, sdate_sml = _get_sess_tracking_dir(tracking_root_dir, session)
             except FileNotFoundError as e:
                 log.warning('{} - skipping'.format(str(e)))
                 continue
@@ -101,9 +101,9 @@ class TrackingIngest(dj.Imported):
             tpos = None
             for tpos_name in self.camera_position_mapper[cam_pos]:
                 camtrial_fn = '{}_{}_{}.txt'.format(h2o, sdate_sml, tpos_name)
-                log.info('trying camera position trial map: {}'.format(tpath / camtrial_fn))
-                if (tpath / camtrial_fn).exists():
-                    campath = tpath / camtrial_fn
+                log.info('trying camera position trial map: {}'.format(tracking_sess_dir / camtrial_fn))
+                if (tracking_sess_dir / camtrial_fn).exists():
+                    campath = tracking_sess_dir / camtrial_fn
                     tpos = tpos_name
                     log.info('Matched! Using {}'.format(tpos))
                     break
@@ -113,8 +113,8 @@ class TrackingIngest(dj.Imported):
                 tmap = {tr: tr for tr in trials}  # one-to-one map
                 for tpos_name in self.camera_position_mapper[cam_pos]:
                     camtrial_fn = '{}*_{}_[0-9]*-*.csv'.format(h2o, tpos_name)
-                    log.info('trying camera position trial map: {}'.format(tpath / camtrial_fn))
-                    if list(tpath.glob(camtrial_fn)):
+                    log.info('trying camera position trial map: {}'.format(tracking_sess_dir / camtrial_fn))
+                    if list(tracking_sess_dir.glob(camtrial_fn)):
                         tpos = tpos_name
                         log.info('Matched! Using {}'.format(tpos))
                         break
@@ -122,7 +122,7 @@ class TrackingIngest(dj.Imported):
                 tmap = self.load_campath(campath)  # file:trial
 
             if tpos is None:
-                log.warning('No tracking data for camera: {}.. skipping'.format(cam_pos))
+                log.warning('No tracking data for camera: {}... skipping'.format(cam_pos))
                 continue
 
             n_tmap = len(tmap)
@@ -147,18 +147,20 @@ class TrackingIngest(dj.Imported):
                               .format(i, n_tmap, t, (i/n_tmap)*100))
 
                 # ex: dl59_side_1-0000.csv / h2o_position_tn-0000.csv
-                tfile = '{}*_{}_{}-*.csv'.format(h2o, tpos, t)
-                tfull = list(tpath.glob(tfile))
+                tracking_trial_filename = '{}*_{}_{}-*.csv'.format(h2o, tpos, t)
+                tracking_trial_filepath = list(tracking_sess_dir.glob(tracking_trial_filename))
 
-                if not tfull or len(tfull) > 1:
-                    log.debug('file mismatch: file: {} trial: {} ({})'.format(t, tmap[t], tfull))
+                if not tracking_trial_filepath or len(tracking_trial_filepath) > 1:
+                    log.debug('file mismatch: file: {} trial: {} ({})'.format(
+                        t, tmap[t], tracking_trial_filepath))
                     continue
 
-                tfull = tfull[-1]
+                tracking_trial_filepath = tracking_trial_filepath[-1]
                 try:
-                    trk = self.load_tracking(tfull)
+                    trk = self.load_tracking(tracking_trial_filepath)
                 except Exception as e:
-                    log.warning('Error loading .csv: {}\n{}'.format(tfull, str(e)))
+                    log.warning('Error loading .csv: {}\n{}'.format(
+                        tracking_trial_filepath, str(e)))
                     raise e
 
                 recs = {}
@@ -221,16 +223,18 @@ class TrackingIngest(dj.Imported):
                 tracking.Tracking.WhiskerTracking.insert([{**recs[k], 'whisker_name': k}
                                                           for k in whisker_keys], allow_direct_insert=True)
 
-                tracking_files.append({**key, 'trial': tmap[t], 'tracking_device': tdev,
-                                       'tracking_file': str(tfull.relative_to(tdat))})
+                tracking_files.append({
+                    **key, 'trial': tmap[t], 'tracking_device': tdev,
+                    'tracking_file': tracking_trial_filepath.relative_to(tracking_root_dir).as_posix()})
 
             log.info('... completed {}/{} items.'.format(i, n_tmap))
 
+        log.info('\n---------------------')
         if tracking_files:
             self.insert1(key)
             self.TrackingFile.insert(tracking_files)
 
-            log.info('... done.')
+            log.info('Tracking ingestion completed: {k}'.format(k=key))
 
     @staticmethod
     def load_campath(campath):
