@@ -80,7 +80,14 @@ class TrackingIngest(dj.Imported):
         log.info('got session: {} ({} trials)'.format(session, len(trials)))
 
         paths = get_tracking_paths()
-        devices = tracking.TrackingDevice.fetch(as_dict=True)
+
+        # camera 3, 4, 5 are for multi-target-licking task - with RRig-MTL
+        session_rig = (experiment.Session & key).fetch1('rig')
+        camera_restriction = ('tracking_device in ("Camera 3", "Camera 4", "Camera 5")'
+                              if session_rig == 'RRig-MTL'
+                              else 'tracking_device in ("Camera 0", "Camera 1", "Camera 2")')
+
+        devices = (tracking.TrackingDevice & camera_restriction).fetch(as_dict=True)
 
         # paths like: <root>/<h2o>/YYYY-MM-DD/tracking
         tracking_files = []
@@ -218,6 +225,10 @@ class TrackingIngest(dj.Imported):
                            if k not in fmap},
                         **{fmap[k]: v for k, v in recs['paw_right'].items()
                            if k in fmap}}, allow_direct_insert=True)
+
+                if 'lickport' in recs:
+                    tracking.Tracking.JawTracking.insert1(
+                        recs['lickport'], allow_direct_insert=True)
 
                 # special handling for whisker(s)
                 whisker_keys = [k for k in recs if 'whisker' in k]
