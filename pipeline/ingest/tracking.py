@@ -227,7 +227,7 @@ class TrackingIngest(dj.Imported):
                            if k in fmap}}, allow_direct_insert=True)
 
                 if 'lickport' in recs:
-                    tracking.Tracking.JawTracking.insert1(
+                    tracking.Tracking.LickPortTracking.insert1(
                         recs['lickport'], allow_direct_insert=True)
 
                 # special handling for whisker(s)
@@ -313,7 +313,8 @@ def _get_sess_tracking_dir(tracking_path, session):
 
     day_sessions = (experiment.Session & {'subject_id': session['subject_id'],
                                           'session_date': sess_datetime.date()})
-    ordered_sess_numbers = day_sessions.fetch('session', order_by='session_time')
+    ordered_sess_numbers, _ = day_sessions.fetch(
+        'session', 'session_time', order_by='session_time')  # TODO: remove 'session_time' when datajoint fix completed
     _, session_nth, _ = np.intersect1d(ordered_sess_numbers, session['session'],
                                        assume_unique=True, return_indices=True)
     session_nth = session_nth[0] + 1  # 1-based indexing
