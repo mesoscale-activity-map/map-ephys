@@ -105,7 +105,7 @@ class TrackingIngest(dj.Imported):
                 if (tracking_sess_dir / camtrial_fn).exists():
                     campath = tracking_sess_dir / camtrial_fn
                     tpos = tpos_name
-                    log.info('Matched! Using {}'.format(tpos))
+                    log.info('Matched! Using "{}"'.format(tpos))
                     break
 
             if campath is None:
@@ -113,10 +113,10 @@ class TrackingIngest(dj.Imported):
                 tmap = {tr: tr for tr in trials}  # one-to-one map
                 for tpos_name in self.camera_position_mapper[cam_pos]:
                     camtrial_fn = '{}*_{}_[0-9]*-*.csv'.format(h2o, tpos_name)
-                    log.info('trying camera position trial map: {}'.format(tracking_sess_dir / camtrial_fn))
+                    log.info('Trying camera position trial map: {}'.format(tracking_sess_dir / camtrial_fn))
                     if list(tracking_sess_dir.glob(camtrial_fn)):
                         tpos = tpos_name
-                        log.info('Matched! Using {}'.format(tpos))
+                        log.info('Matched! Using "{}"'.format(tpos))
                         break
             else:
                 tmap = self.load_campath(campath)  # file:trial
@@ -139,12 +139,6 @@ class TrackingIngest(dj.Imported):
                     continue
 
                 i += 1
-                if i % 50 == 0:
-                    log.info('item {}/{}, trial #{} ({:.2f}%)'
-                             .format(i, n_tmap, t, (i/n_tmap)*100))
-                else:
-                    log.debug('item {}/{}, trial #{} ({:.2f}%)'
-                              .format(i, n_tmap, t, (i/n_tmap)*100))
 
                 # ex: dl59_side_1-0000.csv / h2o_position_tn-0000.csv
                 tracking_trial_filename = '{}*_{}_{}-*.csv'.format(h2o, tpos, t)
@@ -154,6 +148,13 @@ class TrackingIngest(dj.Imported):
                     log.debug('file mismatch: file: {} trial: {} ({})'.format(
                         t, tmap[t], tracking_trial_filepath))
                     continue
+
+                if i % 50 == 0:
+                    log.info('item {}/{}, trial #{} ({:.2f}%)'
+                             .format(i, n_tmap, t, (i/n_tmap)*100))
+                else:
+                    log.debug('item {}/{}, trial #{} ({:.2f}%)'
+                              .format(i, n_tmap, t, (i/n_tmap)*100))
 
                 tracking_trial_filepath = tracking_trial_filepath[-1]
                 try:
@@ -220,8 +221,9 @@ class TrackingIngest(dj.Imported):
 
                 # special handling for whisker(s)
                 whisker_keys = [k for k in recs if 'whisker' in k]
-                tracking.Tracking.WhiskerTracking.insert([{**recs[k], 'whisker_name': k}
-                                                          for k in whisker_keys], allow_direct_insert=True)
+                tracking.Tracking.WhiskerTracking.insert([
+                    {**recs[k], 'whisker_name': k} for k in whisker_keys],
+                    allow_direct_insert=True)
 
                 tracking_files.append({
                     **key, 'trial': tmap[t], 'tracking_device': tdev,
