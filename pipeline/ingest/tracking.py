@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 
 def get_tracking_paths():
-    '''
+    """
     retrieve behavior rig paths from dj.config
     config should be in dj.config of the format:
 
@@ -38,8 +38,7 @@ def get_tracking_paths():
         }
         ...
       }
-
-    '''
+    """
     return dj.config.get('custom', {}).get('tracking_data_paths', None)
 
 
@@ -79,33 +78,41 @@ class TrackingIngest(dj.Imported):
 
         log.info('got session: {} ({} trials)'.format(session, len(trials)))
 
-        paths = get_tracking_paths()
-        devices = tracking.TrackingDevice.fetch(as_dict=True)
-
-        # paths like: <root>/<h2o>/YYYY-MM-DD/tracking
-        tracking_files = []
-        for p, d in ((p, d) for d in devices for p in paths):
-            log.info('\n---------------------')
-
-            tdev = d['tracking_device']
-            cam_pos = d['tracking_position']
-            tracking_root_dir = p[-1]
-
+        for tracking_path in get_tracking_paths():
+            tracking_root_dir = tracking_path[-1]
             try:
                 tracking_sess_dir, sdate_sml = _get_sess_tracking_dir(tracking_root_dir, session)
             except FileNotFoundError as e:
                 log.warning('{} - skipping'.format(str(e)))
                 continue
+            else:
+                break
+        else:
+            log.warning('No tracking data directory found for {} - skipping'.format(key))
+            return
+
+        # camera 3, 4, 5 are for multi-target-licking task - with RRig-MTL
+        session_rig = (experiment.Session & key).fetch1('rig')
+        camera_restriction = ('tracking_device in ("Camera 3", "Camera 4", "Camera 5")'
+                              if session_rig == 'RRig-MTL'
+                              else 'tracking_device in ("Camera 0", "Camera 1", "Camera 2")')
+
+        tracking_files = []
+        for device in (tracking.TrackingDevice & camera_restriction).fetch(as_dict=True):
+            log.info('\n---------------------')
+
+            tdev = device['tracking_device']
+            cam_pos = device['tracking_position']
 
             campath = None
             tpos = None
             for tpos_name in self.camera_position_mapper[cam_pos]:
                 camtrial_fn = '{}_{}_{}.txt'.format(h2o, sdate_sml, tpos_name)
-                log.info('trying camera position trial map: {}'.format(tracking_sess_dir / camtrial_fn))
+                log.info('Trying camera position trial map: {}'.format(tracking_sess_dir / camtrial_fn))
                 if (tracking_sess_dir / camtrial_fn).exists():
                     campath = tracking_sess_dir / camtrial_fn
                     tpos = tpos_name
-                    log.info('Matched! Using {}'.format(tpos))
+                    log.info('Matched! Using "{}"'.format(tpos))
                     break
 
             if campath is None:
@@ -113,10 +120,10 @@ class TrackingIngest(dj.Imported):
                 tmap = {tr: tr for tr in trials}  # one-to-one map
                 for tpos_name in self.camera_position_mapper[cam_pos]:
                     camtrial_fn = '{}*_{}_[0-9]*-*.csv'.format(h2o, tpos_name)
-                    log.info('trying camera position trial map: {}'.format(tracking_sess_dir / camtrial_fn))
+                    log.info('Trying camera position trial map: {}'.format(tracking_sess_dir / camtrial_fn))
                     if list(tracking_sess_dir.glob(camtrial_fn)):
                         tpos = tpos_name
-                        log.info('Matched! Using {}'.format(tpos))
+                        log.info('Matched! Using "{}"'.format(tpos))
                         break
             else:
                 tmap = self.load_campath(campath)  # file:trial
@@ -139,12 +146,6 @@ class TrackingIngest(dj.Imported):
                     continue
 
                 i += 1
-                if i % 50 == 0:
-                    log.info('item {}/{}, trial #{} ({:.2f}%)'
-                             .format(i, n_tmap, t, (i/n_tmap)*100))
-                else:
-                    log.debug('item {}/{}, trial #{} ({:.2f}%)'
-                              .format(i, n_tmap, t, (i/n_tmap)*100))
 
                 # ex: dl59_side_1-0000.csv / h2o_position_tn-0000.csv
                 tracking_trial_filename = '{}*_{}_{}-*.csv'.format(h2o, tpos, t)
@@ -154,6 +155,13 @@ class TrackingIngest(dj.Imported):
                     log.debug('file mismatch: file: {} trial: {} ({})'.format(
                         t, tmap[t], tracking_trial_filepath))
                     continue
+
+                if i % 50 == 0:
+                    log.info('item {}/{}, trial #{} ({:.2f}%)'
+                             .format(i, n_tmap, t, (i/n_tmap)*100))
+                else:
+                    log.debug('item {}/{}, trial #{} ({:.2f}%)'
+                              .format(i, n_tmap, t, (i/n_tmap)*100))
 
                 tracking_trial_filepath = tracking_trial_filepath[-1]
                 try:
@@ -218,10 +226,15 @@ class TrackingIngest(dj.Imported):
                         **{fmap[k]: v for k, v in recs['paw_right'].items()
                            if k in fmap}}, allow_direct_insert=True)
 
+                if 'lickport' in recs:
+                    tracking.Tracking.LickPortTracking.insert1(
+                        recs['lickport'], allow_direct_insert=True)
+
                 # special handling for whisker(s)
                 whisker_keys = [k for k in recs if 'whisker' in k]
-                tracking.Tracking.WhiskerTracking.insert([{**recs[k], 'whisker_name': k}
-                                                          for k in whisker_keys], allow_direct_insert=True)
+                tracking.Tracking.WhiskerTracking.insert([
+                    {**recs[k], 'whisker_name': k} for k in whisker_keys],
+                    allow_direct_insert=True)
 
                 tracking_files.append({
                     **key, 'trial': tmap[t], 'tracking_device': tdev,
@@ -300,8 +313,10 @@ def _get_sess_tracking_dir(tracking_path, session):
 
     day_sessions = (experiment.Session & {'subject_id': session['subject_id'],
                                           'session_date': sess_datetime.date()})
-    ordered_sess_numbers = day_sessions.fetch('session', order_by='session_time')
-    _, session_nth, _ = np.intersect1d(ordered_sess_numbers, session['session'], assume_unique=True, return_indices=True)
+    ordered_sess_numbers, _ = day_sessions.fetch(
+        'session', 'session_time', order_by='session_time')  # TODO: remove 'session_time' when datajoint fix completed
+    _, session_nth, _ = np.intersect1d(ordered_sess_numbers, session['session'],
+                                       assume_unique=True, return_indices=True)
     session_nth = session_nth[0] + 1  # 1-based indexing
 
     session_nth_str = '_{}'.format(session_nth) if session_nth > 1 else ''
@@ -319,5 +334,5 @@ def _get_sess_tracking_dir(tracking_path, session):
         log.info('Found {}'.format(legacy_dir.relative_to(tracking_path)))
         return legacy_dir, sess_datetime.date().strftime('%Y%m%d') + session_nth_str
     else:
-        raise FileNotFoundError('Neither ({}) nor ({}) found'.format(dir.relative_to(tracking_path),
-                                                                     legacy_dir.relative_to(tracking_path)))
+        raise FileNotFoundError('Neither ({}) nor ({}) found'.format(
+            dir.relative_to(tracking_path), legacy_dir.relative_to(tracking_path)))
