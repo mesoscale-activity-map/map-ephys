@@ -121,11 +121,13 @@ class TrackingIngest(dj.Imported):
                     log.info('Matched! Using "{}"'.format(tpos))
                     break
 
+            csv_file_ending = '' if session_rig == 'RRig-MTL' else '-*'  # csv filename containing '-0000' or not
+
             if campath is None:
                 log.info('Video-Trial mapper file (.txt) not found - Using one-to-one trial mapping')
-                tmap = {tr: tr for tr in trials}  # one-to-one map
+                tmap = {tr - (1 if session_rig == 'RRig-MTL' else 0): tr for tr in trials}  # one-to-one map
                 for tpos_candidate in self.camera_position_mapper[cam_pos]:
-                    camtrial_fn = '{}*_{}_[0-9]*-*.csv'.format(h2o, tpos_candidate)
+                    camtrial_fn = '{}*_{}_[0-9]*{}.csv'.format(h2o, tpos_candidate, csv_file_ending)
                     log.info('Trying camera position trial map: {}'.format(tracking_sess_dir / camtrial_fn))
                     if list(tracking_sess_dir.glob(camtrial_fn)):
                         tpos = tpos_candidate
@@ -153,8 +155,8 @@ class TrackingIngest(dj.Imported):
 
                 i += 1
 
-                # ex: dl59_side_1-0000.csv / h2o_position_tn-0000.csv
-                tracking_trial_filename = '{}*_{}_{}-*.csv'.format(h2o, tpos, t)
+                # ex: dl59_side_1(-0000).csv
+                tracking_trial_filename = '{}*_{}_{}{}.csv'.format(h2o, tpos, t, csv_file_ending)
                 tracking_trial_filepath = list(tracking_sess_dir.glob(tracking_trial_filename))
 
                 if not tracking_trial_filepath or len(tracking_trial_filepath) > 1:
