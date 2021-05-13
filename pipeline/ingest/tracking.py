@@ -75,54 +75,60 @@ class TrackingIngest(dj.Imported):
 
         h2o = session['water_restriction_number']
         trials = (experiment.SessionTrial & session).fetch('trial')
-
-        log.info('got session: {} ({} trials)'.format(session, len(trials)))
-
-        for tracking_path in get_tracking_paths():
-            tracking_root_dir = tracking_path[-1]
-            try:
-                tracking_sess_dir, sdate_sml = _get_sess_tracking_dir(tracking_root_dir, session)
-            except FileNotFoundError as e:
-                log.warning('{} - skipping'.format(str(e)))
-                continue
-            else:
-                break
-        else:
-            log.warning('No tracking data directory found for {} - skipping'.format(key))
-            return
-
-        # camera 3, 4, 5 are for multi-target-licking task - with RRig-MTL
         session_rig = (experiment.Session & key).fetch1('rig')
+
+        log.info('\tgot session: {} - {} trials - {}'.format(session, len(trials), session_rig))
+
+        # Camera 3, 4, 5 are for multi-target-licking task - with RRig-MTL
         camera_restriction = ('tracking_device in ("Camera 3", "Camera 4", "Camera 5")'
                               if session_rig == 'RRig-MTL'
                               else 'tracking_device in ("Camera 0", "Camera 1", "Camera 2")')
 
         tracking_files = []
         for device in (tracking.TrackingDevice & camera_restriction).fetch(as_dict=True):
-            log.info('\n---------------------')
-
             tdev = device['tracking_device']
             cam_pos = device['tracking_position']
 
+            log.info('\n-------------------------------------')
+            log.info('\nSearching for session tracking data directory for: {} ({})'.format(tdev, cam_pos))
+
+            for tracking_path in get_tracking_paths():
+                tracking_root_dir = tracking_path[-1]
+                try:
+                    if session_rig == 'RRig-MTL':
+                        tracking_sess_dir, sdate_sml = _get_MTL_sess_tracking_dir(
+                            tracking_root_dir, session, cam_pos)
+                    else:
+                        tracking_sess_dir, sdate_sml = _get_sess_tracking_dir(
+                            tracking_root_dir, session)
+                except FileNotFoundError as e:
+                    log.warning('{} - skipping'.format(str(e)))
+                    continue
+                else:
+                    break
+            else:
+                log.warning('\tNo tracking directory found for {} ({}) - skipping...'.format(tdev, cam_pos))
+                continue
+
             campath = None
             tpos = None
-            for tpos_name in self.camera_position_mapper[cam_pos]:
-                camtrial_fn = '{}_{}_{}.txt'.format(h2o, sdate_sml, tpos_name)
+            for tpos_candidate in self.camera_position_mapper[cam_pos]:
+                camtrial_fn = '{}_{}_{}.txt'.format(h2o, sdate_sml, tpos_candidate)
                 log.info('Trying camera position trial map: {}'.format(tracking_sess_dir / camtrial_fn))
                 if (tracking_sess_dir / camtrial_fn).exists():
                     campath = tracking_sess_dir / camtrial_fn
-                    tpos = tpos_name
+                    tpos = tpos_candidate
                     log.info('Matched! Using "{}"'.format(tpos))
                     break
 
             if campath is None:
                 log.info('Video-Trial mapper file (.txt) not found - Using one-to-one trial mapping')
                 tmap = {tr: tr for tr in trials}  # one-to-one map
-                for tpos_name in self.camera_position_mapper[cam_pos]:
-                    camtrial_fn = '{}*_{}_[0-9]*-*.csv'.format(h2o, tpos_name)
+                for tpos_candidate in self.camera_position_mapper[cam_pos]:
+                    camtrial_fn = '{}*_{}_[0-9]*-*.csv'.format(h2o, tpos_candidate)
                     log.info('Trying camera position trial map: {}'.format(tracking_sess_dir / camtrial_fn))
                     if list(tracking_sess_dir.glob(camtrial_fn)):
-                        tpos = tpos_name
+                        tpos = tpos_candidate
                         log.info('Matched! Using "{}"'.format(tpos))
                         break
             else:
@@ -301,38 +307,86 @@ class TrackingIngest(dj.Imported):
 
 # ======== Helpers for directory navigation ========
 
+def _get_same_day_session_order(session):
+    """
+    Given the session information, return the ordering of that session for that animal in the day
+    - e.g. 1st or 2nd or 3rd ... session
+    :param session: session dictionary (from experiment.Session.fetch1())
+    :return: (int) 1-based session ordering
+    """
+    day_sessions = (experiment.Session & {'subject_id': session['subject_id'],
+                                          'session_date': session['session_datetime'].date()})
+    ordered_sess_numbers, _ = day_sessions.fetch(
+        'session', 'session_time', order_by='session_time')  # TODO: remove 'session_time' when datajoint fix completed
+    _, session_nth, _ = np.intersect1d(ordered_sess_numbers, session['session'],
+                                       assume_unique=True, return_indices=True)
+    return session_nth[0] + 1  # 1-based indexing
+
+
 def _get_sess_tracking_dir(tracking_path, session):
+    """
+    Given the session information and a tracking root data directory,
+    search and return:
+     i) the directory containing the session's tracking data
+     ii) the format of the session directory name
+
+    Two directory structure conventions supported:
+    1. tracking_path / h2o / h2o_mmddyy / *.csv(s)
+    2. tracking_path / h2o / YYYYmmdd / tracking / *.csv(s)
+    """
     tracking_path = pathlib.Path(tracking_path)
     h2o = session['water_restriction_number']
-    sess_datetime = session['session_datetime']
+    sess_date = session['session_datetime'].date()
 
     if (tracking_path / h2o).exists():
         log.info('Checking for tracking data at: {}'.format(tracking_path / h2o))
     else:
         raise FileNotFoundError('{} not found'.format(tracking_path / h2o))
 
-    day_sessions = (experiment.Session & {'subject_id': session['subject_id'],
-                                          'session_date': sess_datetime.date()})
-    ordered_sess_numbers, _ = day_sessions.fetch(
-        'session', 'session_time', order_by='session_time')  # TODO: remove 'session_time' when datajoint fix completed
-    _, session_nth, _ = np.intersect1d(ordered_sess_numbers, session['session'],
-                                       assume_unique=True, return_indices=True)
-    session_nth = session_nth[0] + 1  # 1-based indexing
-
+    session_nth = _get_same_day_session_order(session)
     session_nth_str = '_{}'.format(session_nth) if session_nth > 1 else ''
 
-    sess_dirname = '{}_{}'.format(h2o, sess_datetime.date().strftime('%m%d%y')) + session_nth_str
-    legacy_sess_dirname = sess_datetime.date().strftime('%Y%m%d') + session_nth_str
-
+    sess_dirname = '{}_{}'.format(h2o, sess_date.strftime('%m%d%y')) + session_nth_str
     dir = tracking_path / h2o / sess_dirname
+
+    legacy_sess_dirname = sess_date.strftime('%Y%m%d') + session_nth_str
     legacy_dir = tracking_path / h2o / legacy_sess_dirname / 'tracking'
 
     if dir.exists():
         log.info('Found {}'.format(dir.relative_to(tracking_path)))
-        return dir, sess_datetime.date().strftime('%m%d%y') + session_nth_str
+        return dir, sess_date.strftime('%m%d%y') + session_nth_str
     elif legacy_dir.exists():
         log.info('Found {}'.format(legacy_dir.relative_to(tracking_path)))
-        return legacy_dir, sess_datetime.date().strftime('%Y%m%d') + session_nth_str
+        return legacy_dir, sess_date.strftime('%Y%m%d') + session_nth_str
     else:
         raise FileNotFoundError('Neither ({}) nor ({}) found'.format(
             dir.relative_to(tracking_path), legacy_dir.relative_to(tracking_path)))
+
+
+def _get_MTL_sess_tracking_dir(tracking_path, session, camera_position):
+    """
+    Specialized directory searching method for "multi-target-licking" tracking data (recorded from RRig-MTL at Baylor)
+    Given the session information, a tracking root data directory, and the camera position
+    search and return:
+     i) the directory containing the session's tracking data
+     ii) the format of the session directory name
+
+    The directory structure conventions supported:
+        tracking_path / camera_position / h2o / YYYY_mm_dd / *.csv(s)
+    """
+    tracking_path = pathlib.Path(tracking_path)
+    h2o = session['water_restriction_number']
+    sess_date = session['session_datetime'].date()
+
+    session_nth = _get_same_day_session_order(session)
+    session_nth_str = '_{}'.format(session_nth) if session_nth > 1 else ''
+
+    for tpos_candidate in TrackingIngest.camera_position_mapper[camera_position]:
+        sess_dirname = sess_date.strftime('%Y_%m_%d') + session_nth_str
+        dir = tracking_path / tpos_candidate / h2o / sess_dirname
+
+        if dir.exists() and list(dir.glob('*{}*.csv'.format(tpos_candidate))):
+            return dir, sess_date.strftime('%Y_%m_%d') + session_nth_str
+
+    raise FileNotFoundError(
+        'Multi-target-licking tracking data dir ({}) not found'.format(dir.relative_to(tracking_path)))
