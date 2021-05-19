@@ -393,11 +393,12 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
         except ValueError as e:
             raise ValueError(str(e) + '\nPlease specify one with the kwarg "clustering_method"')
 
-    units = (ephys.Unit * lab.ElectrodeConfig.Electrode & probe_insertion & {'clustering_method': clustering_method} & 'unit_quality != "all"')
-    units = (units.proj('spike_times', 'spike_depths', 'unit_posy') * ephys.ProbeInsertion.proj()
+    units = (ephys.Unit * lab.ElectrodeConfig.Electrode
+             & probe_insertion & {'clustering_method': clustering_method}
+             & 'unit_quality != "all"')
+    units = (units.proj('spike_times', 'spike_depths', 'unit_posy')
+             * ephys.ProbeInsertion.proj()
              * lab.ProbeType.Electrode.proj('shank') & {'shank': shank_no})
-
-    dv_loc = float((ephys.ProbeInsertion.InsertionLocation & probe_insertion).fetch1('depth'))
 
     # ---- ccf region ----
     annotated_electrodes = (lab.ElectrodeConfig.Electrode * lab.ProbeType.Electrode
@@ -405,7 +406,10 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
                             * histology.ElectrodeCCFPosition.ElectrodePosition
                             * ccf.CCFAnnotation * ccf.CCFBrainRegion.proj(..., annotation='region_name')
                             & probe_insertion & {'shank': shank_no})
-    pos_y, color_code = annotated_electrodes.fetch('y_coord', 'color_code', order_by='y_coord DESC')
+    pos_y, ccf_y, color_code = annotated_electrodes.fetch(
+        'y_coord', 'ccf_y', 'color_code', order_by='y_coord DESC')
+
+    y_ref = -ccf_y.max()  # CCF position of most ventral recording site
 
     # ---- spikes ----
     spike_times, spike_depths = units.fetch('spike_times', 'spike_depths', order_by='unit')
@@ -486,7 +490,7 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
 
     # -- plot colored region annotation
     ax_anno.imshow(region_rgba, aspect='auto',
-                   extent=[0, 10, (anno_depth_bins[-1] + dv_loc) / 1000, (anno_depth_bins[0] + dv_loc) / 1000])
+                   extent=[0, 10, (anno_depth_bins[-1] + y_ref) / 1000, (anno_depth_bins[0] + y_ref) / 1000])
 
     ax_anno.invert_yaxis()
 
