@@ -408,15 +408,13 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
         'y_coord', 'ccf_y', 'color_code', order_by='y_coord DESC')
 
     # CCF position of most ventral recording site
-    last_electrode_site = annotated_electrodes.fetch(
-        'ccf_x', 'ccf_y', 'ccf_z', order_by='ccf_y DESC', limit=1)
-    last_electrode_site = np.array([*last_electrode_site]).squeeze()
-
+    last_electrode_site = np.array((histology.InterpolatedShankTrack.DeepestElectrodePoint
+                                    & probe_insertion & {'shank': shank_no}).fetch1(
+        'ccf_x', 'ccf_y', 'ccf_z'))
     # CCF position of the brain surface where this shank crosses
-    brain_surface_site = (histology.InterpolatedShankTrack.Point
-                          & probe_insertion & {'shank': shank_no}).fetch(
-        'ccf_x', 'ccf_y', 'ccf_z', order_by='ccf_y ASC', limit=1)
-    brain_surface_site = np.array([*brain_surface_site]).squeeze()
+    brain_surface_site = np.array((histology.InterpolatedShankTrack.BrainSurfacePoint
+                                   & probe_insertion & {'shank': shank_no}).fetch1(
+        'ccf_x', 'ccf_y', 'ccf_z'))
 
     # CCF position of most ventral recording site, with respect to the brain surface
     y_ref = -np.linalg.norm(last_electrode_site - brain_surface_site)

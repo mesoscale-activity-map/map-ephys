@@ -111,8 +111,22 @@ class InterpolatedShankTrack(dj.Computed):
     """
 
     class Point(dj.Part):
-        definition = """
+        definition = """  # CCF coordinates of all points on this interpolated shank track
         -> master
+        -> ccf.CCF  
+        """
+
+    class BrainSurfacePoint(dj.Part):
+        definition = """  # CCF coordinates of the brain surface intersection point with this shank
+        -> master
+        ---
+        -> ccf.CCF  
+        """
+
+    class DeepestElectrodePoint(dj.Part):
+        definition = """  # CCF coordinates of the most ventral recording electrode site (deepest in the brain)
+        -> master
+        ---
         -> ccf.CCF  
         """
 
@@ -123,15 +137,31 @@ class InterpolatedShankTrack(dj.Computed):
                                       shanks='GROUP_CONCAT(DISTINCT shank SEPARATOR ", ")').fetch1('shanks')
         shanks = np.array(shanks.split(', ')).astype(int)
 
-        shank_points = []
+        shank_points, brain_surface_points, last_electrode_points = [], [], []
         for shank in shanks:
+            # shank points
             _, shank_ccfs = retrieve_pseudocoronal_slice(probe_insertion, shank)
-            shank_points.extend([{**key, 'shank': shank, 'ccf_label_id': 0,
-                                  'ccf_x': ml, 'ccf_y': dv, 'ccf_z': ap}
-                                 for ml, dv, ap in shank_ccfs])
+            points = [{**key, 'shank': shank, 'ccf_label_id': 0,
+                       'ccf_x': ml, 'ccf_y': dv, 'ccf_z': ap} for ml, dv, ap in shank_ccfs]
+            shank_points.extend(points)
+            # brain surface site
+            brain_surface_points.append(points[0])
+            # last electrode site
+            last_electrode_site = (
+                    lab.ElectrodeConfig.Electrode * lab.ProbeType.Electrode
+                    * ephys.ProbeInsertion * ElectrodeCCFPosition.ElectrodePosition
+                    & key & {'shank': shank}).fetch(
+                'ccf_x', 'ccf_y', 'ccf_z', order_by='ccf_y DESC', limit=1)
+            last_electrode_site = np.array([*last_electrode_site]).squeeze()
+            last_electrode_points.append({**key, 'shank': shank, 'ccf_label_id': 0,
+                                          'ccf_x': last_electrode_site[0],
+                                          'ccf_y': last_electrode_site[1],
+                                          'ccf_z': last_electrode_site[2]})
 
         self.insert({**key, 'shank': shank} for shank in shanks)
         self.Point.insert(shank_points)
+        self.BrainSurfacePoint.insert(brain_surface_points)
+        self.DeepestElectrodePoint.insert(last_electrode_points)
 
 
 @schema
