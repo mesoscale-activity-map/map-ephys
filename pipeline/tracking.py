@@ -24,7 +24,11 @@ class TrackingDevice(dj.Lookup):
     contents = [
         ('Camera 0', 'side', 1/0.0034, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)'),
         ('Camera 1', 'bottom', 1/0.0034, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)'),
-        ('Camera 2', 'body', 1/0.01, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)')]
+        ('Camera 2', 'body', 1/0.01, 'Chameleon3 CM3-U3-13Y3M-CS (FLIR)'),
+        ('Camera 3', 'side', 1 / 0.0034, 'Blackfly S BFS-U3-04S2M-CS (FLIR)'),
+        ('Camera 4', 'bottom', 1 / 0.0034, 'Blackfly S BFS-U3-04S2M-CS (FLIR)'),
+        ('Camera 5', 'body', 1 / 0.01, 'Blackfly S BFS-U3-04S2M-CS (FLIR)'),
+    ]
 
 
 @schema
@@ -39,7 +43,7 @@ class Tracking(dj.Imported):
     -> experiment.SessionTrial
     -> TrackingDevice
     ---
-    tracking_samples:           int             # number of events (possibly frame number, relative to the start of the trial)
+    tracking_samples: int             # number of events (possibly frame number, relative to the start of the trial)
     """
 
     class NoseTracking(dj.Part):
@@ -87,6 +91,15 @@ class Tracking(dj.Imported):
         right_paw_likelihood:   longblob        # right_paw location likelihood
         """
 
+    class LickPortTracking(dj.Part):
+        definition = """
+        -> Tracking
+        ---
+        lickport_x:            longblob        # right paw x location (px)
+        lickport_y:            longblob        # right_paw y location (px)
+        lickport_likelihood:   longblob        # right_paw location likelihood
+        """
+
     class WhiskerTracking(dj.Part):
         definition = """
         -> Tracking
@@ -104,6 +117,7 @@ class Tracking(dj.Imported):
                 'JawTracking': Tracking.JawTracking,
                 'LeftPawTracking': Tracking.LeftPawTracking,
                 'RightPawTracking': Tracking.RightPawTracking,
+                'LickPortTracking': Tracking.LickPortTracking,
                 'WhiskerTracking': Tracking.WhiskerTracking}
 
 
@@ -118,3 +132,4 @@ class TrackedWhisker(dj.Manual):
         -> master
         -> lab.Whisker
         """
+

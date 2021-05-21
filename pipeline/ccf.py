@@ -190,6 +190,7 @@ class AnnotatedBrainSurface(dj.Manual):
 
 
 # ========= HELPER METHODS ======
+_ccf_xyz_max = None
 
 
 def get_ontology_regions():
@@ -200,3 +201,11 @@ def get_ontology_regions():
 
     return pd.concat([regions, hexcode], axis=1)
 
+
+def get_ccf_xyz_max():
+    global _ccf_xyz_max
+    if _ccf_xyz_max is None:
+        _ccf_xyz_max = CCFLabel.aggr(CCF, xmax='max(ccf_x)',
+                                     ymax='max(ccf_y)',
+                                     zmax='max(ccf_z)').fetch1('xmax', 'ymax', 'zmax')
+    return _ccf_xyz_max
