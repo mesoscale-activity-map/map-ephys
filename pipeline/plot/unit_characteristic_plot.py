@@ -413,7 +413,8 @@ def plot_driftmap(probe_insertion, clustering_method=None, shank_no=1):
     last_electrode_site = np.array([*last_electrode_site]).squeeze()
 
     # CCF position of the brain surface where this shank crosses
-    brain_surface_site = (histology.InterpolatedShankTrack.Point & {'shank': shank_no}).fetch(
+    brain_surface_site = (histology.InterpolatedShankTrack.Point
+                          & probe_insertion & {'shank': shank_no}).fetch(
         'ccf_x', 'ccf_y', 'ccf_z', order_by='ccf_y ASC', limit=1)
     brain_surface_site = np.array([*brain_surface_site]).squeeze()
 
