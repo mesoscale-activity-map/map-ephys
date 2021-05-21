@@ -122,7 +122,6 @@ class HistologyIngest(dj.Imported):
             dj.conn().cancel_transaction()
             return
 
-
         try:
             trk_ingested = self._load_histology_track()
         except FileNotFoundError as e:
@@ -139,7 +138,7 @@ class HistologyIngest(dj.Imported):
 
     def _load_histology_ccf(self):
 
-        sz = ccf.CCFLabel.CCF_R3_20UM_RESOLUTION   # 20um voxel size
+        ccf_res = ccf.CCFLabel.CCF_R3_20UM_RESOLUTION   # 20um voxel size
 
         log.info('... probe {} position ingest.'.format(self.probe))
         found = self._search_histology_files('landmark_file')
@@ -154,10 +153,16 @@ class HistologyIngest(dj.Imported):
 
             for probepath, shank_no in zip(probefiles, shanks):
                 hist = scio.loadmat(probepath, struct_as_record=False, squeeze_me=True)['site']
+                px_res = int(hist.pos.mmPerPixel * 1000)
 
                 # probe CCF 3D positions
-                pos_xyz = np.vstack([hist.pos.x, hist.pos.y, hist.pos.z,
-                                     hist.warp.x, hist.warp.y, hist.warp.z]).T * sz
+                ccf_xyz = np.vstack([hist.pos.x, hist.pos.y, hist.pos.z]).T * px_res
+                # and quantizing to CCF voxel size;
+                ccf_xyz = ccf_res * np.around(ccf_xyz / ccf_res)
+
+                # bundle with MRI position
+                mri_xyz = np.vstack([hist.warp.x, hist.warp.y, hist.warp.z]).T * px_res
+                pos_xyz = np.hstack([ccf_xyz, mri_xyz])
 
                 # probe CCF regions
                 ont_ids = np.where(np.isnan(hist.ont.id), 0, hist.ont.id)
@@ -172,15 +177,17 @@ class HistologyIngest(dj.Imported):
                 ont_ids = ont_ids[:len(probe_electrodes)]
                 pos_xyz = pos_xyz[:len(probe_electrodes), :]
 
-                inserted_electrodes = (ephys.ProbeInsertion.proj() * lab.ElectrodeConfig.Electrode.proj()
-                                       * lab.ProbeType.Electrode.proj('shank')
-                                       & self.egroup & {'shank': shank_no}).fetch('electrode', order_by='electrode asc')
+                recording_electrodes = (ephys.ProbeInsertion.proj() * lab.ElectrodeConfig.Electrode.proj()
+                                        * lab.ProbeType.Electrode.proj('shank')
+                                        & self.egroup & {'shank': shank_no}).fetch(
+                    'electrode', order_by='electrode asc')
 
                 recs = ({**electrode, **self.egroup, 'ccf_label_id': ccf.CCFLabel.CCF_R3_20UM_ID,
-                         'ccf_x': ccf_x, 'ccf_y': ccf_y, 'ccf_z': ccf_z, 'mri_x': mri_x, 'mri_y': mri_y, 'mri_z': mri_z}
+                         'ccf_x': int(ccf_x), 'ccf_y': int(ccf_y), 'ccf_z': int(ccf_z),
+                         'mri_x': mri_x, 'mri_y': mri_y, 'mri_z': mri_z}
                         for electrode, (ccf_x, ccf_y, ccf_z, mri_x, mri_y, mri_z), ont_id in
                         zip(probe_electrodes, pos_xyz, ont_ids)
-                        if ont_id > 0 and electrode['electrode'] in inserted_electrodes)
+                        if ont_id > 0 and electrode['electrode'] in recording_electrodes)
 
                 # ideally ElectrodePosition.insert(...) but some are outside of CCF...
                 log.info('inserting channel ccf position')
@@ -246,7 +253,7 @@ class HistologyIngest(dj.Imported):
             pos_xyz[:, 2] = pos_origin[1] - pos_xyz_raw[:, 1]
 
             # and quantizing to CCF voxel size;
-            pos_xyz = sz * np.around(pos_xyz / sz)
+            pos_xyz = ccf_res * np.around(pos_xyz / ccf_res)
 
             # get recording geometry,
             probe_electrodes = (lab.ProbeType.Electrode

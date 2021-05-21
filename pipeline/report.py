@@ -583,7 +583,7 @@ class ProbeLevelDriftMap(dj.Computed):
     """
 
     # Only process ProbeInsertion with Histology and InsertionLocation known
-    key_source = (ephys.ProbeInsertion * ephys.ClusteringMethod & ephys.Unit.proj()) & ephys.ProbeInsertion.InsertionLocation & histology.ElectrodeCCFPosition
+    key_source = (ephys.ProbeInsertion * ephys.ClusteringMethod & ephys.Unit.proj()) & histology.InterpolatedShankTrack
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
