@@ -275,7 +275,7 @@ def retrieve_pseudocoronal_slice(probe_insertion, shank_no=1):
     ml_fit = np.linalg.solve(XtX, Xty)
 
     # ---- predict x coordinates ----
-    voxel_res = ccf.get_ccf_vox_res()
+    voxel_res = ccf.CCFLabel.CCF_R3_20UM_RESOLUTION
     lr_max, dv_max, _ = ccf.get_ccf_xyz_max()
 
     dv_coords = np.arange(0, dv_max, voxel_res)

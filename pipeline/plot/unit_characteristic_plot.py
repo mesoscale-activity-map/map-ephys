@@ -321,7 +321,7 @@ def plot_pseudocoronal_slice(probe_insertion, shank_no=1):
                                              & probe_insertion & {'shank': shank_no}).fetch(
         'ccf_z', 'ccf_y', 'ccf_x', order_by='ccf_y'))))
 
-    voxel_res = ccf.get_ccf_vox_res()
+    voxel_res = ccf.CCFLabel.CCF_R3_20UM_RESOLUTION
     lr_max, dv_max, _ = ccf.get_ccf_xyz_max()
 
     pseudocoronal_points, shank_ccfs = histology.retrieve_pseudocoronal_slice(probe_insertion, shank_no)
