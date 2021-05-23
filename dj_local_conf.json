@@ -28,7 +28,8 @@
 				"E:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Ephys-Han/Foraging_ephys"]
                         },
         "ephys_data_paths": [
-            "E:/Data_for_ingestion/Foraging_ephys"
+            "E:/Data_for_ingestion/Foraging_ephys",
+            "F:/catGT"
         ],
     	"logfile": "log.txt"
     },

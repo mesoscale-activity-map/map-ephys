@@ -66,7 +66,8 @@ class EphysIngest(dj.Imported):
         ephys_file:                     varchar(255)    # rig file subpath
         """
 
-    key_source = experiment.Session - ephys.ProbeInsertion
+    # key_source = experiment.Session - ephys.ProbeInsertion
+    key_source = experiment.Session & (experiment.TrialNote() & 'trial_note_type = "bitcode"')
 
     def make(self, key):
         '''
