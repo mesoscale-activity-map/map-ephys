@@ -1010,6 +1010,34 @@ def read_bitcode(bitcode_dir, h2o, skey):
     return sync_behav, sync_ephys, trial_fix, trial_go, trial_start
 
 
+def build_bitcode(bitcode_dir):
+    bitcode_dir = pathlib.Path(bitcode_dir)
+
+    with open(next(bitcode_dir.glob('*.XA_0_0.txt', 'r'))) as f:
+        trial_starts = f.read()
+        trial_starts = trial_starts.strip().split('\n')
+        trial_starts = np.array(trial_starts).astype(float)
+
+    with open(next(bitcode_dir.glob('*.XA_1_2.txt', 'r'))) as f:
+        bitcodes = f.read()
+        bitcodes = bitcodes.strip().split('\n')
+        bitcodes = np.array(bitcodes).astype(float)
+
+    trial_ends = np.concatenate([trial_starts[1:], [trial_starts[-1] + 20]])
+
+    bitcode_strings = []
+    for trial_idx, (trial_start, trial_end) in enumerate(zip(trial_starts, trial_ends)):
+        trial_bitcodes = bitcodes[np.logical_and(bitcodes >= trial_start, bitcodes < trial_end)]
+        trial_bitcodes = np.concatenate([[trial_start + 0.05 - 0.007], trial_bitcodes])
+        high_bit_ind = np.cumsum(np.round(np.diff(trial_bitcodes) / 0.007)).astype(int) - 1
+        bitcode = np.zeros(10).astype(int)
+        bitcode[high_bit_ind] = 1
+        bitcode = ''.join(bitcode.astype(str))
+        bitcode_strings.append(bitcode)
+
+    return bitcode_strings
+
+
 def handle_string(value):
     if isinstance(value, str):
         try:
