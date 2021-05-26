@@ -851,6 +851,7 @@ def delete_outdated_project_plots(project_name='MAP'):
 
     if plotted_track_count != latest_track_count:
         uuid_byte = (ProjectLevelProbeTrack & {'project_name': project_name}).proj(ub='(tracks_plot)').fetch1('ub')
+        print('uuid_byte:', str(uuid_byte))
         ext_key = {'hash': uuid.UUID(bytes=uuid_byte)}
 
         with dj.config(safemode=False):
