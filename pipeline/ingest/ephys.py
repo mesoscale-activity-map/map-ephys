@@ -957,7 +957,8 @@ def _match_probe_to_ephys(h2o, dpath, dglob):
         if len(clustering_results) < 1:
             raise FileNotFoundError('Error - No clustering results found at {}'.format(probe_dir))
         elif len(clustering_results) > 1:
-            log.warning('Found multiple clustering results at {probe_dir}. Prioritize JRC4 > JRC3 > KS2'.format(probe_dir))
+            log.warning('Found multiple clustering results at {probe_dir}.'
+                        ' Prioritize JRC4 > JRC3 > KS2'.format(probe_dir))
 
         fp, loader = clustering_results[0]
         clustered_probes[probe_number] = (fp, loader, NeuropixelsMeta(meta_file))
@@ -973,69 +974,115 @@ def read_bitcode(bitcode_dir, h2o, skey):
     bitcode_dir = pathlib.Path(bitcode_dir)
     try:
         bf_path = next(bitcode_dir.glob('{}_*bitcode.mat'.format(h2o)))
+        bitcode_format = 'bitcode.mat'
+        log.info('.... loading bitcode file: {}'.format(str(bf_path)))
     except StopIteration:
-        raise FileNotFoundError('No bitcode for {} found in {}'.format(h2o, bitcode_dir))
+        try:
+            next(bitcode_dir.parent.glob('*.XA_0_0.txt'))
+            bf_path = next(bitcode_dir.parent.glob('*.XA_1_2.txt'))
+            bitcode_format = 'nidq.XA.txt'
+            log.info('.... loading bitcode file: {}'.format(str(bf_path)))
+        except StopIteration:
+            raise FileNotFoundError(
+                'Reading bitcode failed. Neither (*bitcode.mat) nor (nidq.XA*.txt)'
+                ' bitcode file for {} found in {}'.format(h2o, bitcode_dir.parent))
 
-    log.info('.... loading bitcode file: {}'.format(str(bf_path)))
+    behav_trials, behavior_bitcodes = (experiment.TrialNote
+                                       & {**skey, 'trial_note_type': 'bitcode'}).fetch(
+        'trial', 'trial_note', order_by='trial')
 
-    bf = spio.loadmat(str(bf_path))
+    if bitcode_format == 'bitcode.mat':
+        bf = spio.loadmat(str(bf_path))
 
-    trial_start = bf['sTrig'].flatten()  # trial start
-    trial_go = bf['goCue'].flatten()  # trial go cues
+        ephys_trial_start_times = bf['sTrig'].flatten()  # trial start
+        ephys_trial_ref_times = bf['goCue'].flatten()  # trial go cues
 
-    # check if there are `FreeWater` trials (i.e. no trial_go), if so, set those with trial_go value of NaN
-    if len(trial_go) < len(trial_start):
+        # check if there are `FreeWater` trials (i.e. no trial_go), if so, set those with trial_go value of NaN
+        if len(ephys_trial_ref_times) < len(ephys_trial_start_times):
 
-        if len(experiment.BehaviorTrial & skey) != len(trial_start):
-            raise BitCodeError('Mismatch sTrig ({} elements) and total behavior trials ({} trials)'.format(
-                len(trial_start), len(experiment.BehaviorTrial & skey)))
+            if len(experiment.BehaviorTrial & skey) != len(ephys_trial_start_times):
+                raise BitCodeError('Mismatch sTrig ({} elements) and total behavior trials ({} trials)'.format(
+                    len(ephys_trial_start_times), len(experiment.BehaviorTrial & skey)))
 
-        if len(experiment.BehaviorTrial & skey & 'free_water = 0') != len(trial_go):
-            raise BitCodeError('Mismatch goCue ({} elements) and non-FreeWater trials ({} trials)'.format(
-                len(trial_go), len(experiment.BehaviorTrial & skey & 'free_water = 0')))
+            if len(experiment.BehaviorTrial & skey & 'free_water = 0') != len(ephys_trial_ref_times):
+                raise BitCodeError('Mismatch goCue ({} elements) and non-FreeWater trials ({} trials)'.format(
+                    len(ephys_trial_ref_times), len(experiment.BehaviorTrial & skey & 'free_water = 0')))
 
-        all_tr = (experiment.BehaviorTrial & skey).fetch('trial', order_by='trial')
-        no_free_water_tr = (experiment.BehaviorTrial & skey & 'free_water = 0').fetch('trial', order_by='trial')
-        is_go_trial = np.in1d(all_tr, no_free_water_tr)
+            all_tr = (experiment.BehaviorTrial & skey).fetch('trial', order_by='trial')
+            no_free_water_tr = (experiment.BehaviorTrial & skey & 'free_water = 0').fetch('trial', order_by='trial')
+            is_go_trial = np.in1d(all_tr, no_free_water_tr)
 
-        trial_go_full = np.full_like(trial_start, np.nan)
-        trial_go_full[is_go_trial] = trial_go
-        trial_go = trial_go_full
+            trial_go_full = np.full_like(ephys_trial_start_times, np.nan)
+            trial_go_full[is_go_trial] = ephys_trial_ref_times
+            ephys_trial_ref_times = trial_go_full
 
-    sync_ephys = bf['bitCodeS']  # ephys sync codes
-    sync_behav = (experiment.TrialNote()  # behavior sync codes
-                  & {**skey, 'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial')
-    trial_fix = bf['trialNum'].flatten() if 'trialNum' in bf else None
+        ephys_bitcodes = bf['bitCodeS']  # ephys sync codes
+        trial_numbers = bf['trialNum'].flatten() if 'trialNum' in bf else None
+    elif bitcode_format == 'nidq.XA.txt':
+        bitcodes, trial_start_times = build_bitcode(bitcode_dir.parent)
+        if (experiment.BehaviorTrial & 'task = "multi-target-licking"' & skey):
+            # multi-target-licking task: spiketimes w.r.t trial-start
+            go_times = np.zeros_like(behav_trials)
+        else:
+            # delay-response or foraging task: spiketimes w.r.t go-cue
+            go_times = (experiment.TrialEvent & skey & 'trial_event_type = "go"').fetch(
+                'trial_event_time', order_by='trial').astype(float)
+            assert len(go_times) == len(behav_trials)
 
-    return sync_behav, sync_ephys, trial_fix, trial_go, trial_start
+        ephys_bitcodes, ephys_trials, ephys_starts, ephys_trial_ref_times = [], [], [], []
+        for bitcode, start_time in zip(bitcodes, trial_start_times):
+            matched_trial_idx = np.where(behavior_bitcodes == bitcode)[0]
+            if len(matched_trial_idx):
+                matched_trial_idx = matched_trial_idx[0]
+                ephys_starts.append(start_time)
+                ephys_bitcodes.append(bitcode)
+                ephys_trials.append(behav_trials[matched_trial_idx])
+                ephys_trial_ref_times.append(start_time + go_times[matched_trial_idx])
+
+        trial_numbers = ephys_trials
+        ephys_trial_start_times = ephys_starts
+
+    else:
+        raise ValueError('Unknown bitcode format: {}'.format(bitcode_format))
+
+    return behavior_bitcodes, ephys_bitcodes, trial_numbers, ephys_trial_ref_times, ephys_trial_start_times
 
 
 def build_bitcode(bitcode_dir):
+    time_to_first_high_bit = 0.05
+    inter_bit_interval = 0.007
+
     bitcode_dir = pathlib.Path(bitcode_dir)
 
-    with open(next(bitcode_dir.glob('*.XA_0_0.txt', 'r'))) as f:
-        trial_starts = f.read()
-        trial_starts = trial_starts.strip().split('\n')
-        trial_starts = np.array(trial_starts).astype(float)
+    try:
+        with open(next(bitcode_dir.glob('*.XA_0_0.txt')), 'r') as f:
+            trial_starts = f.read()
+            trial_starts = trial_starts.strip().split('\n')
+            trial_starts = np.array(trial_starts).astype(float)
+        with open(next(bitcode_dir.glob('*.XA_1_2.txt')), 'r') as f:
+            bitcode_times = f.read()
+            bitcode_times = bitcode_times.strip().split('\n')
+            bitcode_times = np.array(bitcode_times).astype(float)
+    except StopIteration:
+        raise FileNotFoundError('Generate bitcode failed. No bitcode file'
+                                ' "*.XA_0_0.txt" or "*.XA_1_2.txt"'
+                                ' for found in {}'.format(bitcode_dir))
 
-    with open(next(bitcode_dir.glob('*.XA_1_2.txt', 'r'))) as f:
-        bitcodes = f.read()
-        bitcodes = bitcodes.strip().split('\n')
-        bitcodes = np.array(bitcodes).astype(float)
+    trial_ends = np.concatenate([trial_starts[1:], [trial_starts[-1] + 99]])  # the last trial to be arbitrarily long
 
-    trial_ends = np.concatenate([trial_starts[1:], [trial_starts[-1] + 20]])
-
-    bitcode_strings = []
-    for trial_idx, (trial_start, trial_end) in enumerate(zip(trial_starts, trial_ends)):
-        trial_bitcodes = bitcodes[np.logical_and(bitcodes >= trial_start, bitcodes < trial_end)]
-        trial_bitcodes = np.concatenate([[trial_start + 0.05 - 0.007], trial_bitcodes])
-        high_bit_ind = np.cumsum(np.round(np.diff(trial_bitcodes) / 0.007)).astype(int) - 1
+    bitcodes = []
+    for trial_start, trial_end in zip(trial_starts, trial_ends):
+        trial_bitcode_times = bitcode_times[np.logical_and(bitcode_times >= trial_start,
+                                                           bitcode_times < trial_end)]
+        trial_bitcode_times = np.concatenate(
+            [[trial_start + time_to_first_high_bit - inter_bit_interval], trial_bitcode_times])
+        high_bit_ind = np.cumsum(np.round(np.diff(trial_bitcode_times) / inter_bit_interval)).astype(int) - 1
         bitcode = np.zeros(10).astype(int)
         bitcode[high_bit_ind] = 1
         bitcode = ''.join(bitcode.astype(str))
-        bitcode_strings.append(bitcode)
+        bitcodes.append(bitcode)
 
-    return bitcode_strings
+    return bitcodes, trial_starts
 
 
 def handle_string(value):
@@ -1209,9 +1256,7 @@ class Kilosort:
         'templates_ind.npy',
         'whitening_mat.npy',
         'whitening_mat_inv.npy',
-        'spike_clusters.npy',
-        'cluster_groups.csv',
-        'cluster_KSLabel.tsv'
+        'spike_clusters.npy'
     ]
 
     ks_cluster_files = [
