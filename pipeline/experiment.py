@@ -1,11 +1,15 @@
 
 import datajoint as dj
 import numpy as np
+import pathlib
 
 from . import lab, ccf
 from . import get_schema_name
+from .ingest import readSGLX
 
 schema = dj.schema(get_schema_name('experiment'))
+
+ephys = dj.create_virtual_module('ephys', get_schema_name('ephys'))  # avoid circular dependency
 
 
 @schema
@@ -411,6 +415,64 @@ class MultiTargetLickingSessionBlock(dj.Imported):
         ---
         block_trial_number: int  # the ordering of this trial in this block
         """
+
+
+@schema
+class Breathing(dj.Imported):
+    definition = """
+    -> SessionTrial
+    ---
+    breathing: longblob
+    breathing_timestamps: longblob  # (s) relative to the start of the trial
+    """
+
+    key_source = Session & ephys.ProbeInsertion & (BehaviorTrial & 'task = "multi-target-licking"')
+
+    def make(self, key):
+        from pipeline.ingest import ephys as ephys_ingest
+
+        h2o = (lab.WaterRestriction & key).fetch1('water_restriction_number')
+        sess_datetime = (Session & key).proj(
+            sess_datetime="cast(concat(session_date, ' ', session_time) as datetime)").fetch1('sess_datetime')
+
+        rigpaths = ephys_ingest.get_ephys_paths()
+        for rigpath in rigpaths:
+            session_ephys_dir, dglob = ephys_ingest._get_sess_dir(rigpath, h2o, sess_datetime)
+            if session_ephys_dir is not None:
+                break
+        else:
+            raise FileNotFoundError('Error - No session folder found for {}/{}'.format(h2o, sess_datetime))
+
+        bitcodes, trial_start_times = ephys_ingest.build_bitcode(session_ephys_dir)
+
+        binFullPath = pathlib.Path(r'F:\map\test_data_full\ephys\DL004\catgt_20210308_g0\20210308_g0_t0.nidq.bin')
+
+        chanList = [2]  # channel 2 is for breathing data
+        meta = readSGLX.readMeta(binFullPath)
+        sRate = readSGLX.SampRate(meta)
+
+        rawData = readSGLX.makeMemMapRaw(binFullPath, meta)
+
+        trial_starts_indices = (trial_start_times * sRate).astype(int)
+
+        breathing_data = rawData[chanList, :]
+
+        if meta['typeThis'] == 'imec':
+            # apply gain correction and convert to uV
+            breathing_data = 1e6 * readSGLX.GainCorrectIM(breathing_data, chanList, meta)
+        else:
+            # apply gain correction and convert to mV
+            breathing_data = 1e3 * readSGLX.GainCorrectNI(breathing_data, chanList, meta)
+
+        # segment to per-trial
+        all_trials_data = []
+        for idx in range(len(trial_starts_indices)):
+            start_idx = trial_starts_indices[idx]
+            end_idx = trial_starts_indices[idx + 1] if start_idx < trial_starts_indices[-1] else -1
+            trial_data = breathing_data[:, start_idx:end_idx].flatten()
+            all_trials_data.append(trial_data)
+
+        self.insert[all_trials_data]
 
 
 # ---- Photostim trials ----
