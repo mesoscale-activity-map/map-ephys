@@ -23,6 +23,7 @@ from pipeline import lab, experiment, ephys, report
 from pipeline import InsertBuffer, dict_value_to_hash
 
 from .. import get_schema_name
+from . import readSGLX
 from . import ProbeInsertionError, ClusterMetricError, BitCodeError, IdenticalClusterResultError
 
 schema = dj.schema(get_schema_name('ingest_ephys'))
@@ -892,12 +893,19 @@ cluster_loader_map = {'jrclust_v3': _load_jrclust_v3,
 
 # ======== Helpers for directory navigation ========
 def _get_sess_dir(rigpath, h2o, sess_datetime):
+    rigpath = pathlib.Path(rigpath)
     dpath, dglob = None, None
-    if pathlib.Path(rigpath, h2o, sess_datetime.date().strftime('%Y%m%d')).exists():
-        dpath = pathlib.Path(rigpath, h2o, sess_datetime.date().strftime('%Y%m%d'))
+    if (rigpath / h2o / sess_datetime.date().strftime('%Y%m%d')).exists():
+        dpath = rigpath / h2o / sess_datetime.date().strftime('%Y%m%d')
         dglob = '[0-9]/{}'  # probe directory pattern
+    elif (rigpath / h2o / 'catgt_{}_g0'.format(
+            sess_datetime.date().strftime('%Y%m%d'))).exists():
+        dpath = rigpath / h2o / 'catgt_{}_g0'.format(
+            sess_datetime.date().strftime('%Y%m%d'))
+        dglob = '{}_*_imec[0-9]'.format(
+            sess_datetime.date().strftime('%Y%m%d'))
     else:
-        sess_dirs = list(pathlib.Path(rigpath, h2o).glob('*{}_{}_*'.format(
+        sess_dirs = list((rigpath / h2o).glob('*{}_{}_*'.format(
             h2o, sess_datetime.date().strftime('%m%d%y'))))
         for sess_dir in sess_dirs:
             try:
@@ -1475,6 +1483,20 @@ def extract_clustering_info(cluster_output_dir, cluster_method):
     label = ''.join([curation_prefix, qc_prefix])
 
     return creation_time, label
+
+
+def read_SGLX_bin(sglx_bin_fp, chan_list):
+    meta = readSGLX.readMeta(sglx_bin_fp)
+    sampling_rate = readSGLX.SampRate(meta)
+    raw_data = readSGLX.makeMemMapRaw(sglx_bin_fp, meta)
+    data = raw_data[chan_list, :]
+    if meta['typeThis'] == 'imec':
+        # apply gain correction and convert to uV
+        data = 1e6 * readSGLX.GainCorrectIM(data, chan_list, meta)
+    else:
+        # apply gain correction and convert to mV
+        data = 1e3 * readSGLX.GainCorrectNI(data, chan_list, meta)
+    return data, sampling_rate
 
 
 # ====== Methods for reprocessing of ephys ingestion ======

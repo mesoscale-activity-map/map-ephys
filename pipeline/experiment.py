@@ -5,7 +5,6 @@ import pathlib
 
 from . import lab, ccf
 from . import get_schema_name
-from .ingest import readSGLX
 
 schema = dj.schema(get_schema_name('experiment'))
 
@@ -429,50 +428,35 @@ class Breathing(dj.Imported):
     key_source = Session & ephys.ProbeInsertion & (BehaviorTrial & 'task = "multi-target-licking"')
 
     def make(self, key):
-        from pipeline.ingest import ephys as ephys_ingest
+        # channel 2 is for breathing data
+        breathing_trials_data = extract_nidq_trial_data(key, channel=2)
+        for d in breathing_trials_data:
+            d['breathing'] = d.pop('data')
+            d['breathing_timestamps'] = d.pop('timestamps')
 
-        h2o = (lab.WaterRestriction & key).fetch1('water_restriction_number')
-        sess_datetime = (Session & key).proj(
-            sess_datetime="cast(concat(session_date, ' ', session_time) as datetime)").fetch1('sess_datetime')
+        self.insert(breathing_trials_data)
 
-        rigpaths = ephys_ingest.get_ephys_paths()
-        for rigpath in rigpaths:
-            session_ephys_dir, dglob = ephys_ingest._get_sess_dir(rigpath, h2o, sess_datetime)
-            if session_ephys_dir is not None:
-                break
-        else:
-            raise FileNotFoundError('Error - No session folder found for {}/{}'.format(h2o, sess_datetime))
 
-        bitcodes, trial_start_times = ephys_ingest.build_bitcode(session_ephys_dir)
+@schema
+class Piezoelectric(dj.Imported):
+    definition = """
+    -> SessionTrial
+    ---
+    piezoelectric: longblob
+    piezoelectric_timestamps: longblob  # (s) relative to the start of the trial
+    """
 
-        binFullPath = pathlib.Path(r'F:\map\test_data_full\ephys\DL004\catgt_20210308_g0\20210308_g0_t0.nidq.bin')
+    key_source = Session & ephys.ProbeInsertion & (
+                BehaviorTrial & 'task = "multi-target-licking"')
 
-        chanList = [2]  # channel 2 is for breathing data
-        meta = readSGLX.readMeta(binFullPath)
-        sRate = readSGLX.SampRate(meta)
+    def make(self, key):
+        # channel 3 is for piezoelectric data
+        piezoelectric_trials_data = extract_nidq_trial_data(key, channel=3)
+        for d in piezoelectric_trials_data:
+            d['piezoelectric'] = d.pop('data')
+            d['piezoelectric_timestamps'] = d.pop('timestamps')
 
-        rawData = readSGLX.makeMemMapRaw(binFullPath, meta)
-
-        trial_starts_indices = (trial_start_times * sRate).astype(int)
-
-        breathing_data = rawData[chanList, :]
-
-        if meta['typeThis'] == 'imec':
-            # apply gain correction and convert to uV
-            breathing_data = 1e6 * readSGLX.GainCorrectIM(breathing_data, chanList, meta)
-        else:
-            # apply gain correction and convert to mV
-            breathing_data = 1e3 * readSGLX.GainCorrectNI(breathing_data, chanList, meta)
-
-        # segment to per-trial
-        all_trials_data = []
-        for idx in range(len(trial_starts_indices)):
-            start_idx = trial_starts_indices[idx]
-            end_idx = trial_starts_indices[idx + 1] if start_idx < trial_starts_indices[-1] else -1
-            trial_data = breathing_data[:, start_idx:end_idx].flatten()
-            all_trials_data.append(trial_data)
-
-        self.insert[all_trials_data]
+        self.insert(piezoelectric_trials_data)
 
 
 # ---- Photostim trials ----
@@ -537,3 +521,52 @@ class Project(dj.Lookup):
     """
 
     contents = [('MAP', 'The Mesoscale Activity Map project', '')]
+
+
+# ============================= HELPER METHODS ==========================
+
+def extract_nidq_trial_data(session_key, channel):
+    from pipeline.ingest import ephys as ephys_ingest
+
+    h2o = (lab.WaterRestriction & session_key).fetch1('water_restriction_number')
+    sess_datetime = (Session & session_key).proj(
+        sess_datetime="cast(concat(session_date, ' ', session_time) as datetime)").fetch1(
+        'sess_datetime')
+
+    rigpaths = ephys_ingest.get_ephys_paths()
+    for rigpath in rigpaths:
+        session_ephys_dir, dglob = ephys_ingest._get_sess_dir(rigpath, h2o, sess_datetime)
+        if session_ephys_dir is not None:
+            break
+    else:
+        raise FileNotFoundError(
+            'Error - No session folder found for {}/{}'.format(h2o, sess_datetime))
+
+    try:
+        nidq_bin_fp = next(session_ephys_dir.glob('*.nidq.bin'))
+    except StopIteration:
+        raise FileNotFoundError('*.nidq.bin file not found in {}'.format(session_ephys_dir))
+
+    ephys_bitcodes, trial_start_times = ephys_ingest.build_bitcode(session_ephys_dir)
+    behav_trials, behavior_bitcodes = (TrialNote
+                                       & {**session_key, 'trial_note_type': 'bitcode'}).fetch(
+        'trial', 'trial_note', order_by='trial')
+
+    chan_list = [channel]
+    breathing_data, sampling_rate = ephys_ingest.read_SGLX_bin(nidq_bin_fp, chan_list)
+
+    trial_starts_indices = (trial_start_times * sampling_rate).astype(int)
+    # segment to per-trial
+    all_trials_data = []
+    for idx in range(len(trial_starts_indices)):
+        start_idx = trial_starts_indices[idx]
+        end_idx = trial_starts_indices[idx + 1] if start_idx < trial_starts_indices[-1] else -1
+        trial_data = breathing_data[:, start_idx:end_idx].flatten()
+
+        ephys_bitcode = ephys_bitcodes[idx]
+        matched_trial_idx = np.where(behavior_bitcodes == ephys_bitcode)[0][0]
+
+        all_trials_data.append({
+            **session_key, 'trial': behav_trials[matched_trial_idx],
+            'data': trial_data,
+            'timestamps': np.arange(len(trial_data)) / sampling_rate})
