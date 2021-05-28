@@ -79,6 +79,12 @@ class EphysIngest(dj.Imported):
 
         do_ephys_ingest(key)
 
+        if (experiment.Session
+                & (experiment.BehaviorTrial & 'task = "multi-target-licking"')
+                & key):
+            experiment.Breathing.populate(key)
+            experiment.Piezoelectric.populate(key)
+
     def _load(self, data, probe, npx_meta, rigpath, probe_insertion_exists=False, into_archive=False):
 
         sinfo = data['sinfo']
