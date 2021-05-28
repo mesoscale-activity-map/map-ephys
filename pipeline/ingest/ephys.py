@@ -80,10 +80,11 @@ class EphysIngest(dj.Imported):
         do_ephys_ingest(key)
 
         if (experiment.Session
+                & ephys.ProbeInsertion
                 & (experiment.BehaviorTrial & 'task = "multi-target-licking"')
                 & key):
-            experiment.Breathing.populate(key)
-            experiment.Piezoelectric.populate(key)
+            experiment.Breathing().make(key)
+            experiment.Piezoelectric().make(key)
 
     def _load(self, data, probe, npx_meta, rigpath, probe_insertion_exists=False, into_archive=False):
 
@@ -909,7 +910,7 @@ def _get_sess_dir(rigpath, h2o, sess_datetime):
         dpath = rigpath / h2o / 'catgt_{}_g0'.format(
             sess_datetime.date().strftime('%Y%m%d'))
         dglob = '{}_*_imec[0-9]'.format(
-            sess_datetime.date().strftime('%Y%m%d'))
+            sess_datetime.date().strftime('%Y%m%d')) + '/{}'
     else:
         sess_dirs = list((rigpath / h2o).glob('*{}_{}_*'.format(
             h2o, sess_datetime.date().strftime('%m%d%y'))))
@@ -941,7 +942,7 @@ def _match_probe_to_ephys(h2o, dpath, dglob):
     }
     """
     # npx ap.meta: '{}_*.imec.ap.meta'.format(h2o)
-    npx_meta_files = list(dpath.glob(dglob.format('{}_*.ap.meta'.format(h2o))))
+    npx_meta_files = list(dpath.glob(dglob.format('*.ap.meta')))
     if not npx_meta_files:
         raise FileNotFoundError('Error - no ap.meta files at {}'.format(dpath))
 
@@ -1043,18 +1044,19 @@ def read_bitcode(bitcode_dir, h2o, skey):
                 'trial_event_time', order_by='trial').astype(float)
             assert len(go_times) == len(behav_trials)
 
-        ephys_bitcodes, ephys_trials, ephys_starts, ephys_trial_ref_times = [], [], [], []
+        ephys_bitcodes, trial_numbers, ephys_trial_start_times, ephys_trial_ref_times = [], [], [], []
         for bitcode, start_time in zip(bitcodes, trial_start_times):
             matched_trial_idx = np.where(behavior_bitcodes == bitcode)[0]
             if len(matched_trial_idx):
                 matched_trial_idx = matched_trial_idx[0]
-                ephys_starts.append(start_time)
+                ephys_trial_start_times.append(start_time)
                 ephys_bitcodes.append(bitcode)
-                ephys_trials.append(behav_trials[matched_trial_idx])
+                trial_numbers.append(behav_trials[matched_trial_idx])
                 ephys_trial_ref_times.append(start_time + go_times[matched_trial_idx])
 
-        trial_numbers = ephys_trials
-        ephys_trial_start_times = ephys_starts
+        ephys_trial_ref_times = np.array(ephys_trial_ref_times)
+        trial_numbers = np.array(trial_numbers)
+        ephys_trial_start_times = np.array(ephys_trial_start_times)
 
     else:
         raise ValueError('Unknown bitcode format: {}'.format(bitcode_format))
@@ -1328,7 +1330,7 @@ class Kilosort:
             if ext == '.npy':
                 log.debug('loading npy {}'.format(f))
                 d = np.load(f, mmap_mode='r', allow_pickle=False, fix_imports=False)
-                self._data[base] = np.reshape(d, d.shape[0]) if d.ndim == 2 and d.shape[1] == 1 else d
+                self._data[base] = d.squeeze()
 
         # Read the Cluster Groups
         if (self._dname / 'cluster_groups.csv').exists():

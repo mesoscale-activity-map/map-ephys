@@ -434,7 +434,7 @@ class Breathing(dj.Imported):
             d['breathing'] = d.pop('data')
             d['breathing_timestamps'] = d.pop('timestamps')
 
-        self.insert(breathing_trials_data)
+        self.insert(breathing_trials_data, allow_direct_insert=True)
 
 
 @schema
@@ -456,7 +456,7 @@ class Piezoelectric(dj.Imported):
             d['piezoelectric'] = d.pop('data')
             d['piezoelectric_timestamps'] = d.pop('timestamps')
 
-        self.insert(piezoelectric_trials_data)
+        self.insert(piezoelectric_trials_data, allow_direct_insert=True)
 
 
 # ---- Photostim trials ----
@@ -570,3 +570,4 @@ def extract_nidq_trial_data(session_key, channel):
             **session_key, 'trial': behav_trials[matched_trial_idx],
             'data': trial_data,
             'timestamps': np.arange(len(trial_data)) / sampling_rate})
+    return all_trials_data
