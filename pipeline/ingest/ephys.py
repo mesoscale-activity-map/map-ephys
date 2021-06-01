@@ -23,6 +23,7 @@ from pipeline import lab, experiment, ephys, report
 from pipeline import InsertBuffer, dict_value_to_hash
 
 from .. import get_schema_name
+from . import readSGLX
 from . import ProbeInsertionError, ClusterMetricError, BitCodeError, IdenticalClusterResultError
 
 schema = dj.schema(get_schema_name('ingest_ephys'))
@@ -77,6 +78,13 @@ class EphysIngest(dj.Imported):
         log.info('EphysIngest().make(): key: {k}'.format(k=key))
 
         do_ephys_ingest(key)
+
+        if (experiment.Session
+                & ephys.ProbeInsertion
+                & (experiment.BehaviorTrial & 'task = "multi-target-licking"')
+                & key):
+            experiment.Breathing().make(key)
+            experiment.Piezoelectric().make(key)
 
     def _load(self, data, probe, npx_meta, rigpath, probe_insertion_exists=False, into_archive=False):
 
@@ -892,12 +900,19 @@ cluster_loader_map = {'jrclust_v3': _load_jrclust_v3,
 
 # ======== Helpers for directory navigation ========
 def _get_sess_dir(rigpath, h2o, sess_datetime):
+    rigpath = pathlib.Path(rigpath)
     dpath, dglob = None, None
-    if pathlib.Path(rigpath, h2o, sess_datetime.date().strftime('%Y%m%d')).exists():
-        dpath = pathlib.Path(rigpath, h2o, sess_datetime.date().strftime('%Y%m%d'))
+    if (rigpath / h2o / sess_datetime.date().strftime('%Y%m%d')).exists():
+        dpath = rigpath / h2o / sess_datetime.date().strftime('%Y%m%d')
         dglob = '[0-9]/{}'  # probe directory pattern
+    elif (rigpath / h2o / 'catgt_{}_g0'.format(
+            sess_datetime.date().strftime('%Y%m%d'))).exists():
+        dpath = rigpath / h2o / 'catgt_{}_g0'.format(
+            sess_datetime.date().strftime('%Y%m%d'))
+        dglob = '{}_*_imec[0-9]'.format(
+            sess_datetime.date().strftime('%Y%m%d')) + '/{}'
     else:
-        sess_dirs = list(pathlib.Path(rigpath, h2o).glob('*{}_{}_*'.format(
+        sess_dirs = list((rigpath / h2o).glob('*{}_{}_*'.format(
             h2o, sess_datetime.date().strftime('%m%d%y'))))
         for sess_dir in sess_dirs:
             try:
@@ -927,7 +942,7 @@ def _match_probe_to_ephys(h2o, dpath, dglob):
     }
     """
     # npx ap.meta: '{}_*.imec.ap.meta'.format(h2o)
-    npx_meta_files = list(dpath.glob(dglob.format('{}_*.ap.meta'.format(h2o))))
+    npx_meta_files = list(dpath.glob(dglob.format('*.ap.meta')))
     if not npx_meta_files:
         raise FileNotFoundError('Error - no ap.meta files at {}'.format(dpath))
 
@@ -957,7 +972,8 @@ def _match_probe_to_ephys(h2o, dpath, dglob):
         if len(clustering_results) < 1:
             raise FileNotFoundError('Error - No clustering results found at {}'.format(probe_dir))
         elif len(clustering_results) > 1:
-            log.warning('Found multiple clustering results at {probe_dir}. Prioritize JRC4 > JRC3 > KS2'.format(probe_dir))
+            log.warning('Found multiple clustering results at {probe_dir}.'
+                        ' Prioritize JRC4 > JRC3 > KS2'.format(probe_dir))
 
         fp, loader = clustering_results[0]
         clustered_probes[probe_number] = (fp, loader, NeuropixelsMeta(meta_file))
@@ -973,41 +989,116 @@ def read_bitcode(bitcode_dir, h2o, skey):
     bitcode_dir = pathlib.Path(bitcode_dir)
     try:
         bf_path = next(bitcode_dir.glob('{}_*bitcode.mat'.format(h2o)))
+        bitcode_format = 'bitcode.mat'
+        log.info('.... loading bitcode file: {}'.format(str(bf_path)))
     except StopIteration:
-        raise FileNotFoundError('No bitcode for {} found in {}'.format(h2o, bitcode_dir))
+        try:
+            next(bitcode_dir.parent.glob('*.XA_0_0.txt'))
+            bf_path = next(bitcode_dir.parent.glob('*.XA_1_2.txt'))
+            bitcode_format = 'nidq.XA.txt'
+            log.info('.... loading bitcode file: {}'.format(str(bf_path)))
+        except StopIteration:
+            raise FileNotFoundError(
+                'Reading bitcode failed. Neither (*bitcode.mat) nor (nidq.XA*.txt)'
+                ' bitcode file for {} found in {}'.format(h2o, bitcode_dir.parent))
 
-    log.info('.... loading bitcode file: {}'.format(str(bf_path)))
+    behav_trials, behavior_bitcodes = (experiment.TrialNote
+                                       & {**skey, 'trial_note_type': 'bitcode'}).fetch(
+        'trial', 'trial_note', order_by='trial')
 
-    bf = spio.loadmat(str(bf_path))
+    if bitcode_format == 'bitcode.mat':
+        bf = spio.loadmat(str(bf_path))
 
-    trial_start = bf['sTrig'].flatten()  # trial start
-    trial_go = bf['goCue'].flatten()  # trial go cues
+        ephys_trial_start_times = bf['sTrig'].flatten()  # trial start
+        ephys_trial_ref_times = bf['goCue'].flatten()  # trial go cues
 
-    # check if there are `FreeWater` trials (i.e. no trial_go), if so, set those with trial_go value of NaN
-    if len(trial_go) < len(trial_start):
+        # check if there are `FreeWater` trials (i.e. no trial_go), if so, set those with trial_go value of NaN
+        if len(ephys_trial_ref_times) < len(ephys_trial_start_times):
 
-        if len(experiment.BehaviorTrial & skey) != len(trial_start):
-            raise BitCodeError('Mismatch sTrig ({} elements) and total behavior trials ({} trials)'.format(
-                len(trial_start), len(experiment.BehaviorTrial & skey)))
+            if len(experiment.BehaviorTrial & skey) != len(ephys_trial_start_times):
+                raise BitCodeError('Mismatch sTrig ({} elements) and total behavior trials ({} trials)'.format(
+                    len(ephys_trial_start_times), len(experiment.BehaviorTrial & skey)))
 
-        if len(experiment.BehaviorTrial & skey & 'free_water = 0') != len(trial_go):
-            raise BitCodeError('Mismatch goCue ({} elements) and non-FreeWater trials ({} trials)'.format(
-                len(trial_go), len(experiment.BehaviorTrial & skey & 'free_water = 0')))
+            if len(experiment.BehaviorTrial & skey & 'free_water = 0') != len(ephys_trial_ref_times):
+                raise BitCodeError('Mismatch goCue ({} elements) and non-FreeWater trials ({} trials)'.format(
+                    len(ephys_trial_ref_times), len(experiment.BehaviorTrial & skey & 'free_water = 0')))
 
-        all_tr = (experiment.BehaviorTrial & skey).fetch('trial', order_by='trial')
-        no_free_water_tr = (experiment.BehaviorTrial & skey & 'free_water = 0').fetch('trial', order_by='trial')
-        is_go_trial = np.in1d(all_tr, no_free_water_tr)
+            all_tr = (experiment.BehaviorTrial & skey).fetch('trial', order_by='trial')
+            no_free_water_tr = (experiment.BehaviorTrial & skey & 'free_water = 0').fetch('trial', order_by='trial')
+            is_go_trial = np.in1d(all_tr, no_free_water_tr)
 
-        trial_go_full = np.full_like(trial_start, np.nan)
-        trial_go_full[is_go_trial] = trial_go
-        trial_go = trial_go_full
+            trial_go_full = np.full_like(ephys_trial_start_times, np.nan)
+            trial_go_full[is_go_trial] = ephys_trial_ref_times
+            ephys_trial_ref_times = trial_go_full
 
-    sync_ephys = bf['bitCodeS']  # ephys sync codes
-    sync_behav = (experiment.TrialNote()  # behavior sync codes
-                  & {**skey, 'trial_note_type': 'bitcode'}).fetch('trial_note', order_by='trial')
-    trial_fix = bf['trialNum'].flatten() if 'trialNum' in bf else None
+        ephys_bitcodes = bf['bitCodeS']  # ephys sync codes
+        trial_numbers = bf['trialNum'].flatten() if 'trialNum' in bf else None
+    elif bitcode_format == 'nidq.XA.txt':
+        bitcodes, trial_start_times = build_bitcode(bitcode_dir.parent)
+        if (experiment.BehaviorTrial & 'task = "multi-target-licking"' & skey):
+            # multi-target-licking task: spiketimes w.r.t trial-start
+            go_times = np.zeros_like(behav_trials)
+        else:
+            # delay-response or foraging task: spiketimes w.r.t go-cue
+            go_times = (experiment.TrialEvent & skey & 'trial_event_type = "go"').fetch(
+                'trial_event_time', order_by='trial').astype(float)
+            assert len(go_times) == len(behav_trials)
 
-    return sync_behav, sync_ephys, trial_fix, trial_go, trial_start
+        ephys_bitcodes, trial_numbers, ephys_trial_start_times, ephys_trial_ref_times = [], [], [], []
+        for bitcode, start_time in zip(bitcodes, trial_start_times):
+            matched_trial_idx = np.where(behavior_bitcodes == bitcode)[0]
+            if len(matched_trial_idx):
+                matched_trial_idx = matched_trial_idx[0]
+                ephys_trial_start_times.append(start_time)
+                ephys_bitcodes.append(bitcode)
+                trial_numbers.append(behav_trials[matched_trial_idx])
+                ephys_trial_ref_times.append(start_time + go_times[matched_trial_idx])
+
+        ephys_trial_ref_times = np.array(ephys_trial_ref_times)
+        trial_numbers = np.array(trial_numbers)
+        ephys_trial_start_times = np.array(ephys_trial_start_times)
+
+    else:
+        raise ValueError('Unknown bitcode format: {}'.format(bitcode_format))
+
+    return behavior_bitcodes, ephys_bitcodes, trial_numbers, ephys_trial_ref_times, ephys_trial_start_times
+
+
+def build_bitcode(bitcode_dir):
+    time_to_first_high_bit = 0.05
+    inter_bit_interval = 0.007
+
+    bitcode_dir = pathlib.Path(bitcode_dir)
+
+    try:
+        with open(next(bitcode_dir.glob('*.XA_0_0.txt')), 'r') as f:
+            trial_starts = f.read()
+            trial_starts = trial_starts.strip().split('\n')
+            trial_starts = np.array(trial_starts).astype(float)
+        with open(next(bitcode_dir.glob('*.XA_1_2.txt')), 'r') as f:
+            bitcode_times = f.read()
+            bitcode_times = bitcode_times.strip().split('\n')
+            bitcode_times = np.array(bitcode_times).astype(float)
+    except StopIteration:
+        raise FileNotFoundError('Generate bitcode failed. No bitcode file'
+                                ' "*.XA_0_0.txt" or "*.XA_1_2.txt"'
+                                ' for found in {}'.format(bitcode_dir))
+
+    trial_ends = np.concatenate([trial_starts[1:], [trial_starts[-1] + 99]])  # the last trial to be arbitrarily long
+
+    bitcodes = []
+    for trial_start, trial_end in zip(trial_starts, trial_ends):
+        trial_bitcode_times = bitcode_times[np.logical_and(bitcode_times >= trial_start,
+                                                           bitcode_times < trial_end)]
+        trial_bitcode_times = np.concatenate(
+            [[trial_start + time_to_first_high_bit - inter_bit_interval], trial_bitcode_times])
+        high_bit_ind = np.cumsum(np.round(np.diff(trial_bitcode_times) / inter_bit_interval)).astype(int) - 1
+        bitcode = np.zeros(10).astype(int)
+        bitcode[high_bit_ind] = 1
+        bitcode = ''.join(bitcode.astype(str))
+        bitcodes.append(bitcode)
+
+    return bitcodes, trial_starts
 
 
 def handle_string(value):
@@ -1181,9 +1272,7 @@ class Kilosort:
         'templates_ind.npy',
         'whitening_mat.npy',
         'whitening_mat_inv.npy',
-        'spike_clusters.npy',
-        'cluster_groups.csv',
-        'cluster_KSLabel.tsv'
+        'spike_clusters.npy'
     ]
 
     ks_cluster_files = [
@@ -1241,7 +1330,7 @@ class Kilosort:
             if ext == '.npy':
                 log.debug('loading npy {}'.format(f))
                 d = np.load(f, mmap_mode='r', allow_pickle=False, fix_imports=False)
-                self._data[base] = np.reshape(d, d.shape[0]) if d.ndim == 2 and d.shape[1] == 1 else d
+                self._data[base] = d.squeeze()
 
         # Read the Cluster Groups
         if (self._dname / 'cluster_groups.csv').exists():
@@ -1402,6 +1491,20 @@ def extract_clustering_info(cluster_output_dir, cluster_method):
     label = ''.join([curation_prefix, qc_prefix])
 
     return creation_time, label
+
+
+def read_SGLX_bin(sglx_bin_fp, chan_list):
+    meta = readSGLX.readMeta(sglx_bin_fp)
+    sampling_rate = readSGLX.SampRate(meta)
+    raw_data = readSGLX.makeMemMapRaw(sglx_bin_fp, meta)
+    data = raw_data[chan_list, :]
+    if meta['typeThis'] == 'imec':
+        # apply gain correction and convert to uV
+        data = 1e6 * readSGLX.GainCorrectIM(data, chan_list, meta)
+    else:
+        # apply gain correction and convert to mV
+        data = 1e3 * readSGLX.GainCorrectNI(data, chan_list, meta)
+    return data, sampling_rate
 
 
 # ====== Methods for reprocessing of ephys ingestion ======

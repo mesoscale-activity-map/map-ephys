@@ -411,8 +411,8 @@ def compute_insta_phase_amp(data, fs, freq_band=(5, 15)):
     :param fs: sampling rate
     :param freq_band: frequency band for bandpass
     """
-
-    if data.ndim > 1:
+    orig_ndim = data.ndim
+    if orig_ndim > 1:
         trial_count, time_count = data.shape
         # flatten
         data = data.reshape(-1)
@@ -425,7 +425,7 @@ def compute_insta_phase_amp(data, fs, freq_band=(5, 15)):
     insta_amp = np.abs(analytic_signal)
     insta_phase = np.angle(analytic_signal)
 
-    if data.ndim > 1:
+    if orig_ndim > 1:
         return insta_amp.reshape((trial_count, time_count)), insta_phase.reshape((trial_count, time_count))
     else:
         return insta_amp, insta_phase
