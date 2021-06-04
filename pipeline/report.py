@@ -850,7 +850,8 @@ def delete_outdated_project_plots(project_name='MAP'):
     latest_track_count = SessionLevelProbeTrack.fetch('probe_track_count').sum().astype(int)
 
     if plotted_track_count != latest_track_count:
-        uuid_byte = (ProjectLevelProbeTrack & {'project_name': project_name}).proj(ub='(tracks_plot)').fetch1('ub')
+        uuid_byte = (ProjectLevelProbeTrack & {'project_name': project_name}).proj(
+            ub='CONCAT(tracks_plot , "")').fetch1('ub')
         print('project_name', project_name, 'uuid_byte:', str(uuid_byte))
         ext_key = {'hash': uuid.UUID(bytes=uuid_byte)}
 
