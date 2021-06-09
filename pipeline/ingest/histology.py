@@ -431,7 +431,7 @@ class HistologyIngest(dj.Imported):
 
         format_number = 2 if (self.directory / '{}channel_locations.json'.format(filename_prefix)).exists() else 1
 
-        if format_number == 1:
+        if format_number == 1 or file_type == 'histology_file':
             file_format_map = {'landmark_file': '_siteInfo.mat',
                                'histology_file': '.csv'}
 
@@ -490,8 +490,7 @@ class HistologyIngest(dj.Imported):
                 'histology_files': histology_files,
                 'corresponding_shanks': corresponding_shanks
             }
-
-        if format_number == 2:
+        elif format_number == 2:
             res = {'format': 2}
             log.debug('format 2 detected..')
 
