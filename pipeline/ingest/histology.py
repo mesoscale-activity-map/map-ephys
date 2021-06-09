@@ -84,6 +84,7 @@ class HistologyIngest(dj.Imported):
 
         self.water = self.session['water_restriction_number']
         self.probe = key['insertion_number']
+        self.rig = self.session['rig']
         self.session_date_str = self.session['session_date'].strftime('%Y%m%d')
 
         # electrode configuration
@@ -97,14 +98,21 @@ class HistologyIngest(dj.Imported):
 
         self.q_behavior_file = (behavior_ingest.BehaviorIngest.BehaviorFile & key)
 
-        self.directory = None
         for rigpath in rigpaths:
-            directory = pathlib.Path(rigpath, self.water, 'histology')
-            if directory.exists():
-                self.directory = directory
-                break
-
-        if self.directory is None:
+            if self.rig == 'RRig-MTL':
+                directory = pathlib.Path(rigpath, self.water) / '{}_{}'.format(
+                    self.session_date_str, self.probe)
+                try:
+                    self.directory = next(directory.rglob('channel_locations.json')).parent
+                    break
+                except StopIteration:
+                    pass
+            else:
+                directory = pathlib.Path(rigpath, self.water, 'histology')
+                if directory.exists():
+                    self.directory = directory
+                    break
+        else:
             log.warning('Histology folder for animal: {} not found. Skipping...'.format(self.water))
             return
 
@@ -414,86 +422,91 @@ class HistologyIngest(dj.Imported):
         for FIXME name (new) format.
         """
 
-        file_format_map = {'landmark_file': '_siteInfo.mat',
-                           'histology_file': '.csv'}
+        # Detecting format #2 (.json)
+        if self.rig == 'RRig-MTL':
+            filename_prefix = ''
+        else:
+            filename_prefix = '{}_{}_{}_'.format(
+                self.water, self.session_date_str, self.probe)
 
-        # ---- probefile - landmarks_{water_res_number}_{session_date}_{session_time}_{probe_no}_{shank_no}.csv
-        histology_files = [f for f in list(self.directory.glob('landmarks*')) if re.match(
-            'landmarks_{}_{}(_\d\d\d\d\d\d)?_{}(_\d)?{}'.format(self.water, self.session_date_str,
-                                                                self.probe, file_format_map[file_type]), f.name)]
+        format_number = 2 if (self.directory / '{}channel_locations.json'.format(filename_prefix)).exists() else 1
 
-        if len(histology_files) < 1:
-            raise FileNotFoundError('Probe {} histology file {} not found!'.format(self.probe,
-                                                                                   'landmarks_{}_{}*{}'.format(
-                                                                                       self.water,
-                                                                                       self.session_date_str,
-                                                                                       file_format_map[file_type])))
-        elif len(histology_files) == 1:
-            corresponding_shanks = [1]
-            if len(self.shanks) != 1:
-                raise HistologyFileError('Only 1 file found ({}) for a {}-shank probe'.format(histology_files[0].name, len(self.shanks)))
+        if format_number == 1:
+            file_format_map = {'landmark_file': '_siteInfo.mat',
+                               'histology_file': '.csv'}
 
-            match = re.search('landmarks_{}_{}_?(.*)_{}_?(.*){}'.format(
-                self.water, self.session_date_str, self.probe, file_format_map[file_type]), histology_files[0].name)
-            session_time_str, _ = match.groups()
-            if session_time_str == '':
-                same_day_sess_count = len(experiment.Session & {'subject_id': self.session['subject_id'], 'session_date': self.session['session_date']})
-                if same_day_sess_count != 1:
-                    raise HistologyFileError('{} same-day sessions found - but only 1 histology file found ({}) with no "session_time" specified'.format(
-                        same_day_sess_count, histology_files[0].name))
+            # ---- probefile - landmarks_{water_res_number}_{session_date}_{session_time}_{probe_no}_{shank_no}.csv
+            histology_files = [f for f in list(self.directory.glob('landmarks*')) if re.match(
+                'landmarks_{}_{}(_\d\d\d\d\d\d)?_{}(_\d)?{}'.format(self.water, self.session_date_str,
+                                                                    self.probe, file_format_map[file_type]), f.name)]
+
+            if len(histology_files) < 1:
+                raise FileNotFoundError('Probe {} histology file {} not found!'.format(self.probe,
+                                                                                       'landmarks_{}_{}*{}'.format(
+                                                                                           self.water,
+                                                                                           self.session_date_str,
+                                                                                           file_format_map[file_type])))
+            elif len(histology_files) == 1:
+                corresponding_shanks = [1]
+                if len(self.shanks) != 1:
+                    raise HistologyFileError('Only 1 file found ({}) for a {}-shank probe'.format(histology_files[0].name, len(self.shanks)))
+
+                match = re.search('landmarks_{}_{}_?(.*)_{}_?(.*){}'.format(
+                    self.water, self.session_date_str, self.probe, file_format_map[file_type]), histology_files[0].name)
+                session_time_str, _ = match.groups()
+                if session_time_str == '':
+                    same_day_sess_count = len(experiment.Session & {'subject_id': self.session['subject_id'], 'session_date': self.session['session_date']})
+                    if same_day_sess_count != 1:
+                        raise HistologyFileError('{} same-day sessions found - but only 1 histology file found ({}) with no "session_time" specified'.format(
+                            same_day_sess_count, histology_files[0].name))
+                else:
+                    behavior_time_str = re.search('_(\d{6}).mat', self.q_behavior_file.fetch1('behavior_file')).groups()[0]
+                    if session_time_str != behavior_time_str:
+                        raise HistologyFileError('Only 1 histology file found ({}) with "session_time" ({}) different from "behavior_time" ({})'.format(
+                            histology_files[0].name, session_time_str, behavior_time_str))
             else:
                 behavior_time_str = re.search('_(\d{6}).mat', self.q_behavior_file.fetch1('behavior_file')).groups()[0]
-                if session_time_str != behavior_time_str:
-                    raise HistologyFileError('Only 1 histology file found ({}) with "session_time" ({}) different from "behavior_time" ({})'.format(
-                        histology_files[0].name, session_time_str, behavior_time_str))
+                file_format = 'landmarks_{}_{}_{}_{}*{}'.format(self.water, self.session_date_str,
+                                                                behavior_time_str,
+                                                                self.probe, file_format_map[file_type])
+                histology_sesstime_files = [f for f in list(self.directory.glob('landmarks*')) if re.match(
+                    'landmarks_{}_{}_{}_{}(_\d)?{}'.format(self.water, self.session_date_str, behavior_time_str,
+                                                           self.probe, file_format_map[file_type]), f.name)]
 
-        else:
-            behavior_time_str = re.search('_(\d{6}).mat', self.q_behavior_file.fetch1('behavior_file')).groups()[0]
-            file_format = 'landmarks_{}_{}_{}_{}*{}'.format(self.water, self.session_date_str,
-                                                            behavior_time_str,
-                                                            self.probe, file_format_map[file_type])
-            histology_sesstime_files = [f for f in list(self.directory.glob('landmarks*')) if re.match(
-                'landmarks_{}_{}_{}_{}(_\d)?{}'.format(self.water, self.session_date_str, behavior_time_str,
-                                                       self.probe, file_format_map[file_type]), f.name)]
+                if len(histology_sesstime_files) < 1:  # case of no session-time in filename
+                    if len(histology_files) != len(self.shanks):  # ensure 1 file per shank
+                        raise FileNotFoundError('Probe {} histology file {} not found!'.format(self.probe, file_format))
+                    else:
+                        histology_sesstime_files = histology_files
+                elif len(histology_sesstime_files) != len(self.shanks):  # ensure 1 file per shank
+                    raise HistologyFileError('{} files found for a {}-shank probe'.format(len(histology_sesstime_files),
+                                                                                          len(self.shanks)))
 
-            if len(histology_sesstime_files) < 1:  # case of no session-time in filename
-                if len(histology_files) != len(self.shanks):  # ensure 1 file per shank
-                    raise FileNotFoundError('Probe {} histology file {} not found!'.format(self.probe, file_format))
-                else:
-                    histology_sesstime_files = histology_files
-            elif len(histology_sesstime_files) != len(self.shanks):  # ensure 1 file per shank
-                raise HistologyFileError('{} files found for a {}-shank probe'.format(len(histology_sesstime_files),
-                                                                                      len(self.shanks)))
+                corresponding_shanks = [int(re.search('landmarks_.*_(\d)_(\d){}'.format(file_format_map[file_type]),
+                                                      f.as_posix()).groups()[1]) for f in histology_sesstime_files]
 
-            corresponding_shanks = [int(re.search('landmarks_.*_(\d)_(\d){}'.format(file_format_map[file_type]),
-                                                  f.as_posix()).groups()[1]) for f in histology_sesstime_files]
+            res = {
+                'format': 1,
+                'histology_files': histology_files,
+                'corresponding_shanks': corresponding_shanks
+            }
 
-        res = {
-            'format': 1,
-            'histology_files': histology_files,
-            'corresponding_shanks': corresponding_shanks
-        }
-
-        chan_loc_file = '{}_{}_{}_channel_locations.json'.format(
-            self.water, self.session_date_str, self.probe)
-
-        if (self.directory / chan_loc_file).exists():
-
-            res['format'] = 2
-
+        if format_number == 2:
+            res = {'format': 2}
             log.debug('format 2 detected..')
 
             new_histology_files = {
-                'channel_locations': (self.directory / chan_loc_file),
+                'channel_locations': (self.directory / '{}channel_locations.json'.format(
+                    filename_prefix)),
                 'raw_ind': (self.directory / 'channels.rawInd.npy'),
                 'channel_local_coordinates': (
                     self.directory /
-                    '{}_{}_{}_channels.localCoordinates.npy'.format(
-                        self.water, self.session_date_str, self.probe))
+                    '{}channels.localCoordinates.npy'.format(
+                        filename_prefix))
             }
 
             new_histology_files_state = {i: new_histology_files[i].exists()
-                                         for i in histology_files}
+                                         for i in new_histology_files}
 
             if not all(new_histology_files_state.values()):
                 log.warning(
