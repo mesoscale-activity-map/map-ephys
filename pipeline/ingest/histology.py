@@ -214,15 +214,13 @@ class HistologyIngest(dj.Imported):
 
                 log.info('... ok.')
 
-            return True
-
         if found['format'] == 2:
             # load data,
-            for channel_location_file, shank_no in zip(found['channel_location_files'],
+            for channel_locations_file, shank_no in zip(found['channel_locations_files'],
                                                        found['corresponding_shanks']):
 
-                log.debug('loading format 2 channels from {}'.format(channel_location_file))
-                with open(channel_location_file, 'r') as fh:
+                log.debug('loading format 2 channels from {}'.format(channel_locations_file))
+                with open(channel_locations_file, 'r') as fh:
                     cloc_raw = json.loads(fh.read())
 
                 cloc_data = {'origin': cloc_raw['origin']}
@@ -310,7 +308,7 @@ class HistologyIngest(dj.Imported):
                             repr(e)))
                         histology.ElectrodeCCFPosition.ElectrodePositionError.insert1(rec)
 
-            return True
+        return True
 
     def _load_histology_track(self):
 
@@ -372,13 +370,13 @@ class HistologyIngest(dj.Imported):
                     ignore_extra_fields=True, allow_direct_insert=True)
 
         if found['format'] == 2:
-            for channel_location_file, xyz_picks_file, shank_no in zip(
-                    found['channel_location_files'],
+            for channel_locations_file, xyz_picks_file, shank_no in zip(
+                    found['channel_locations_files'],
                     found['xyz_picks_files'],
                     found['corresponding_shanks']):
 
-                log.debug('loading format 2 channels from {}'.format(channel_location_file))
-                with open(channel_location_file, 'r') as fh:
+                log.debug('loading format 2 channels from {}'.format(channel_locations_file))
+                with open(channel_locations_file, 'r') as fh:
                     channel_location = json.loads(fh.read())
                 with open(xyz_picks_file, 'r') as fh:
                     xyz_pick = json.loads(fh.read())
@@ -454,7 +452,7 @@ class HistologyIngest(dj.Imported):
             filename_prefix = '{}_{}_{}_'.format(
                 self.water, self.session_date_str, self.probe)
 
-        format_number = 2 if (self.directory / '{}channel_locations*.json'.format(filename_prefix)).exists() else 1
+        format_number = 2 if len(list(self.directory.glob('{}channel_locations*.json'.format(filename_prefix)))) else 1
 
         if format_number == 1:
             file_format_map = {'landmark_file': '_siteInfo.mat',
