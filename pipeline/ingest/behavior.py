@@ -890,6 +890,7 @@ class BehaviorBpodIngest(dj.Imported):
             # extracting trial data
             session_start_time = datetime.combine(sess_key['session_date'], sess_key['session_time'])
             trial_start_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'TRIAL') & (df_behavior_session['MSG'] == 'New trial')].index
+            trial_start_idxs -= 2 # To reflect the change that bitcode is moved before the "New trial" line
             trial_start_idxs = pd.Index([0]).append(trial_start_idxs[1:])  # so the random seed will be present
             trial_end_idxs = trial_start_idxs[1:].append(pd.Index([(max(df_behavior_session.index))]))
             # trial_end_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'END-TRIAL')].index

@@ -897,7 +897,7 @@ def _get_sess_dir(rigpath, h2o, sess_datetime):
     else:
         date_strings = [sess_datetime.date().strftime('%m%d%y'), sess_datetime.date().strftime('%Y%m%d')]
         for date_string in date_strings:
-            sess_dirs = list(pathlib.Path(rigpath, h2o).glob('*{}_{}_*'.format(h2o, date_string)))
+            sess_dirs = list(pathlib.Path(rigpath, h2o).glob('*{}*{}_*'.format(h2o, date_string)))
             for sess_dir in sess_dirs:
                 try:
                     npx_meta = NeuropixelsMeta(next(sess_dir.rglob('{}_*.ap.meta'.format(h2o))))
@@ -907,7 +907,7 @@ def _get_sess_dir(rigpath, h2o, sess_datetime):
                 start_time_difference = abs((npx_meta.recording_time - sess_datetime).total_seconds())
                 if start_time_difference <= 120:
                     dpath = sess_dir
-                    dglob = '{}_{}_*_imec[0-9]'.format(h2o, date_string) + '/{}'  # probe directory pattern
+                    dglob = '{}*{}_*_imec[0-9]'.format(h2o, date_string) + '/{}'  # probe directory pattern
                     break
                 else:
                     log.info('Found {} - difference in behavior and ephys start-time: {} seconds (more than 2 minutes). Skipping...'.format(sess_dir, start_time_difference))
