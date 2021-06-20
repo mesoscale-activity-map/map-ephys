@@ -7,7 +7,7 @@
 	"database.reconnect": false,
 	"loglevel": "INFO",
 	"safemode": true,
-	"display.limit": 15,
+	"display.limit": 30,
 	"display.width": 50,
 	"display.show_tuple_count": true,
 	"enable_python_native_blobs": true,
@@ -31,6 +31,8 @@
             "E:/Data_for_ingestion/Foraging_ephys",
             "F:/catGT"
         ],
+        "recording_notes_spreadsheet": "E:/Data_for_ingestion/Foraging_behavior/Metadata/Ephys.csv",
+        "recording_notes_sheet_name": "Ephys",
     	"logfile": "log.txt"
     },
 	"stores": {
