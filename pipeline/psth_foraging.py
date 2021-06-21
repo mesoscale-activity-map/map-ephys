@@ -14,7 +14,7 @@ from . import (lab, experiment, ephys)
 from . import get_schema_name, dict_to_hash
 from .util import _get_units_hemisphere
 
-schema = dj.schema(get_schema_name('psth'))
+schema = dj.schema(get_schema_name('psth_foraging'))
 log = logging.getLogger(__name__)
 
 # NOW:
@@ -42,122 +42,143 @@ class TrialCondition(dj.Lookup):
     @property
     def contents(self):
         contents_data = [
+                     
+            # ----- Foraging task -------
             {
-                'trial_condition_name': 'good_noearlylick_hit',
+                'trial_condition_name': 'foraging_L_reward_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
-                    'task': 'audio delay',
-                    'task_protocol': 1,
+                    'task': 'foraging',
+                    'task_protocol': 100,
+                    'water_port': 'left',
+                    'outcome': 'hit',
+                    'early_lick': 'no early',
+                    'auto_water': 0,
+                    'free_water': 0
+                    }
+            },
+            {
+                'trial_condition_name': 'foraging_L_noreward_noearlylick',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'foraging',
+                    'task_protocol': 100,
+                    'water_port': 'left',
+                    'outcome': 'miss',
+                    'early_lick': 'no early',
+                    'auto_water': 0,
+                    'free_water': 0
+                    }
+            },            
+            {
+                'trial_condition_name': 'foraging_R_reward_noearlylick',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'foraging',
+                    'task_protocol': 100,
+                    'water_port': 'right',
+                    'outcome': 'hit',
+                    'early_lick': 'no early',
+                    'auto_water': 0,
+                    'free_water': 0
+                    }
+            },
+            {
+                'trial_condition_name': 'foraging_R_noreward_noearlylick',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'foraging',
+                    'task_protocol': 100,
+                    'water_port': 'right',
+                    'outcome': 'miss',
+                    'early_lick': 'no early',
+                    'auto_water': 0,
+                    'free_water': 0
+                    }
+            },
+            {
+                'trial_condition_name': 'foraging_LR_reward_noearlylick',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'foraging',
+                    'task_protocol': 100,
                     'outcome': 'hit',
                     'early_lick': 'no early',
                     'auto_water': 0,
                     'free_water': 0}
             },
             {
-                'trial_condition_name': 'good_noearlylick_left_hit',
+                'trial_condition_name': 'foraging_LR_noreward_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
-                    'task': 'audio delay',
-                    'task_protocol': 1,
-                    'outcome': 'hit',
-                    'early_lick': 'no early',
-                    'auto_water': 0,
-                    'free_water': 0,
-                    'trial_instruction': 'left'}
-            },
-            {
-                'trial_condition_name': 'good_noearlylick_right_hit',
-                'trial_condition_func': '_get_trials_exclude_stim',
-                'trial_condition_arg': {
-                    'task': 'audio delay',
-                    'task_protocol': 1,
-                    'outcome': 'hit',
-                    'early_lick': 'no early',
-                    'auto_water': 0,
-                    'free_water': 0,
-                    'trial_instruction': 'right'}
-            },
-            {
-                'trial_condition_name': 'good_noearlylick_left_miss',
-                'trial_condition_func': '_get_trials_exclude_stim',
-                'trial_condition_arg': {
-                    'task': 'audio delay',
-                    'task_protocol': 1,
+                    'task': 'foraging',
+                    'task_protocol': 100,
                     'outcome': 'miss',
-                    'early_lick': 'no early',
-                    'auto_water': 0,
-                    'free_water': 0,
-                    'trial_instruction': 'left'}
-            },
-            {
-                'trial_condition_name': 'good_noearlylick_right_miss',
-                'trial_condition_func': '_get_trials_exclude_stim',
-                'trial_condition_arg': {
-                    'task': 'audio delay',
-                    'task_protocol': 1,
-                    'outcome': 'miss',
-                    'early_lick': 'no early',
-                    'auto_water': 0,
-                    'free_water': 0,
-                    'trial_instruction': 'right'}
-            },
-            {
-                'trial_condition_name': 'all_noearlylick_nostim',
-                'trial_condition_func': '_get_trials_exclude_stim',
-                'trial_condition_arg': {
-                    '_outcome': 'ignore',
-                    'task': 'audio delay',
-                    'task_protocol': 1,
                     'early_lick': 'no early',
                     'auto_water': 0,
                     'free_water': 0}
             },
             {
-                'trial_condition_name': 'all_noearlylick_nostim_left',
+                'trial_condition_name': 'foraging_all_noearlylick_nostim',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
-                    'task': 'audio delay',
-                    'task_protocol': 1,
+                    'task': 'foraging',
+                    'task_protocol': 100,
                     'early_lick': 'no early',
                     'auto_water': 0,
-                    'free_water': 0,
-                    'trial_instruction': 'left'}
+                    'free_water': 0}
             },
             {
-                'trial_condition_name': 'all_noearlylick_nostim_right',
+                'trial_condition_name': 'foraging_L_all_noearlylick_nostim',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
-                    'task': 'audio delay',
-                    'task_protocol': 1,
+                    'task': 'foraging',
+                    'task_protocol': 100,
+                    'water_port': 'left', 
                     'early_lick': 'no early',
                     'auto_water': 0,
-                    'free_water': 0,
-                    'trial_instruction': 'right'}
+                    'free_water': 0
+                    }
+            },
+            {
+                'trial_condition_name': 'foraging_R_all_noearlylick_nostim',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    '_outcome': 'ignore',
+                    'task': 'foraging',
+                    'task_protocol': 100,
+                    'water_port': 'right', 
+                    'early_lick': 'no early',
+                    'auto_water': 0,
+                    'free_water': 0
+                    }
             }
+            
         ]
 
-        # PHOTOSTIM conditions
-        stim_locs = [('left', 'alm'), ('right', 'alm'), ('both', 'alm')]
-        for hemi, brain_area in stim_locs:
-            for instruction in (None, 'left', 'right'):
-                condition = {'trial_condition_name': '_'.join(filter(None, ['all', 'noearlylick',
-                                                                            '_'.join([hemi, brain_area]), 'stim',
-                                                                            instruction])),
-                             'trial_condition_func': '_get_trials_include_stim',
-                             'trial_condition_arg': {
-                                 **{'_outcome': 'ignore',
-                                    'task': 'audio delay',
-                                    'task_protocol': 1,
-                                    'early_lick': 'no early',
-                                    'auto_water': 0,
-                                    'free_water': 0,
-                                    'stim_laterality': hemi,
-                                    'stim_brain_area': brain_area},
-                                 **({'trial_instruction': instruction} if instruction else {})}
-                             }
-                contents_data.append(condition)
+        # PHOTOSTIM conditions. Not implemented for now 
+        
+        # stim_locs = [('left', 'alm'), ('right', 'alm'), ('both', 'alm')]
+        # for hemi, brain_area in stim_locs:
+        #     for instruction in (None, 'left', 'right'):
+        #         condition = {'trial_condition_name': '_'.join(filter(None, ['all', 'noearlylick',
+        #                                                                     '_'.join([hemi, brain_area]), 'stim',
+        #                                                                     instruction])),
+        #                      'trial_condition_func': '_get_trials_include_stim',
+        #                      'trial_condition_arg': {
+        #                          **{'_outcome': 'ignore',
+        #                             'task': 'audio delay',
+        #                             'task_protocol': 1,
+        #                             'early_lick': 'no early',
+        #                             'auto_water': 0,
+        #                             'free_water': 0,
+        #                             'stim_laterality': hemi,
+        #                             'stim_brain_area': brain_area},
+        #                          **({'trial_instruction': instruction} if instruction else {})}
+        #                      }
+        #         contents_data.append(condition)
 
         return ({**d, 'trial_condition_hash':
             dict_to_hash({'trial_condition_func': d['trial_condition_func'],
@@ -207,7 +228,7 @@ class TrialCondition(dj.Lookup):
 
         stim_attrs = set((experiment.Photostim * experiment.PhotostimBrainRegion
                           * experiment.PhotostimEvent).heading.names) - set(experiment.Session.heading.names)
-        behav_attrs = set(experiment.BehaviorTrial.heading.names)
+        behav_attrs = set((experiment.BehaviorTrial * experiment.WaterPortChoice).heading.names)
 
         _stim_key = {k: v for k, v in _restr.items() if k in stim_attrs}
         _behav_key = {k: v for k, v in _restr.items() if k in behav_attrs}
@@ -215,7 +236,7 @@ class TrialCondition(dj.Lookup):
         stim_key = {k: v for k, v in restr.items() if k in stim_attrs}
         behav_key = {k: v for k, v in restr.items() if k in behav_attrs}
 
-        return (((experiment.BehaviorTrial & behav_key) - [{k: v} for k, v in _behav_key.items()]) -
+        return (((experiment.BehaviorTrial * experiment.WaterPortChoice & behav_key) - [{k: v} for k, v in _behav_key.items()]) -
                 ((experiment.PhotostimEvent * experiment.PhotostimBrainRegion * experiment.Photostim & stim_key)
                  - [{k: v} for k, v in _stim_key.items()]).proj())
 
@@ -233,7 +254,7 @@ class TrialCondition(dj.Lookup):
 
         stim_attrs = set((experiment.Photostim * experiment.PhotostimBrainRegion
                           * experiment.PhotostimEvent).heading.names) - set(experiment.Session.heading.names)
-        behav_attrs = set(experiment.BehaviorTrial.heading.names)
+        behav_attrs = set((experiment.BehaviorTrial * experiment.WaterPortChoice).heading.names)
 
         _stim_key = {k: v for k, v in _restr.items() if k in stim_attrs}
         _behav_key = {k: v for k, v in _restr.items() if k in behav_attrs}
@@ -241,7 +262,7 @@ class TrialCondition(dj.Lookup):
         stim_key = {k: v for k, v in restr.items() if k in stim_attrs}
         behav_key = {k: v for k, v in restr.items() if k in behav_attrs}
 
-        return (((experiment.BehaviorTrial & behav_key) - [{k: v} for k, v in _behav_key.items()]) &
+        return (((experiment.BehaviorTrial * experiment.WaterPortChoice & behav_key) - [{k: v} for k, v in _behav_key.items()]) &
                 ((experiment.PhotostimEvent * experiment.PhotostimBrainRegion * experiment.Photostim & stim_key)
                  - [{k: v} for k, v in _stim_key.items()]).proj())
 
