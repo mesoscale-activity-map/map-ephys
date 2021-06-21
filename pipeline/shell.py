@@ -14,7 +14,7 @@ import datajoint as dj
 from pymysql.err import OperationalError
 
 
-from pipeline import (lab, experiment, tracking, ephys, report, psth, ccf,
+from pipeline import (lab, experiment, tracking, ephys, report, psth, psth_foraging, ccf,
                       histology, export, publication, globus, foraging_analysis,
                       get_schema_name)
 
@@ -153,7 +153,14 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     from pipeline.ingest import behavior as behav_ingest
     log.info('loading probe insertions from spreadsheet {}'.format(excel_fp))
 
-    df = pd.read_excel(excel_fp, sheet_name)
+    try:
+        df = pd.read_excel(excel_fp, sheet_name)
+        from_excel = True
+    except:
+        df = pd.read_csv(excel_fp)
+        from_excel = False
+        
+            
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
 
     insertion_locations = []
@@ -165,24 +172,34 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
         except ValueError:
             log.debug('Invalid behaviour time: {} - try single-sess per day'.format(row.behaviour_time))
             valid_btime = False
+        
+        session_date = row.session_date.date() if from_excel else datetime.strptime(row.session_date,'%Y-%m-%d')
+        if 'foraging' in row.project:
+            behavior_ingest_table = behav_ingest.BehaviorBpodIngest
+            bf_reg_exp = '(\d{8}-\d{6})'
+            bf_datetime_format = '%Y%m%d-%H%M%S'
+        else:
+            behavior_ingest_table = behav_ingest.BehaviorIngest
+            bf_reg_exp = '(\d{8}_\d{6}).mat'
+            bf_datetime_format = '%Y%m%d_%H%M%S'
 
         if valid_btime:
             sess_key = experiment.Session & (
-                behav_ingest.BehaviorIngest.BehaviorFile
-                & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
+                behavior_ingest_table.BehaviorFile
+                & {'subject_id': row.subject_id, 'session_date': session_date}
                 & 'behavior_file LIKE "%{}%{}_{:06}%"'.format(
-                    row.water_restriction_number, row.session_date.date().strftime('%Y%m%d'), int(row.behaviour_time)))
+                    row.water_restriction_number, session_date.strftime('%Y%m%d'), int(row.behaviour_time)))
         else:
             sess_key = False
 
         if not sess_key:
-            sess_key = experiment.Session & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
+            sess_key = experiment.Session & {'subject_id': row.subject_id, 'session_date': session_date}
             if len(sess_key) == 1:
                 # case of single-session per day - ensuring session's datetime matches the filename
                 # session_datetime and datetime from filename should not be more than 3 hours apart
-                bf = (behav_ingest.BehaviorIngest.BehaviorFile & sess_key).fetch('behavior_file')[0]
-                bf_datetime = re.search('(\d{8}_\d{6}).mat', bf).groups()[0]
-                bf_datetime = datetime.strptime(bf_datetime, '%Y%m%d_%H%M%S')
+                bf = (behavior_ingest_table.BehaviorFile & sess_key).fetch('behavior_file')[0]
+                bf_datetime = re.search(bf_reg_exp, bf).groups()[0]
+                bf_datetime = datetime.strptime(bf_datetime, bf_datetime_format)
                 s_datetime = sess_key.proj(s_dt='cast(concat(session_date, " ", session_time) as datetime)').fetch1('s_dt')
                 if abs((s_datetime - bf_datetime).total_seconds()) > 10800:  # no more than 3 hours
                     log.debug('Unmatched sess_dt ({}) and behavior_dt ({}). Skipping...'.format(s_datetime, bf_datetime))
