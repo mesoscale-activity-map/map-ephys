@@ -2,7 +2,7 @@
 import numpy as np
 
 import matplotlib.pyplot as plt
-from pipeline import psth
+from pipeline import psth_foraging
 from pipeline.util import _get_trial_event_times, _get_units_hemisphere
 
 
@@ -65,16 +65,16 @@ def plot_unit_psth(unit_key, axs=None, title='', xlim=_plt_xlim):
 
     hemi = _get_units_hemisphere(unit_key)
 
-    ipsi_hit_unit_psth = psth.UnitPsth.get_plotting_data(
+    ipsi_hit_unit_psth = psth_foraging.UnitPsth.get_plotting_data(
         unit_key, {'trial_condition_name': f'good_noearlylick_{"left" if hemi == "left" else "right"}_hit'})
 
-    contra_hit_unit_psth = psth.UnitPsth.get_plotting_data(
+    contra_hit_unit_psth = psth_foraging.UnitPsth.get_plotting_data(
         unit_key, {'trial_condition_name':  f'good_noearlylick_{"right" if hemi == "left" else "left"}_hit'})
 
-    ipsi_miss_unit_psth = psth.UnitPsth.get_plotting_data(
+    ipsi_miss_unit_psth = psth_foraging.UnitPsth.get_plotting_data(
         unit_key, {'trial_condition_name': f'good_noearlylick_{"left" if hemi == "left" else "right"}_miss'})
 
-    contra_miss_unit_psth = psth.UnitPsth.get_plotting_data(
+    contra_miss_unit_psth = psth_foraging.UnitPsth.get_plotting_data(
         unit_key, {'trial_condition_name':  f'good_noearlylick_{"right" if hemi == "left" else "left"}_miss'})
 
     # get event start times: sample, delay, response
