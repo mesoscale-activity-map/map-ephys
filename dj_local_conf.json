@@ -16,37 +16,35 @@
 	"nuclear_option": true,
 	"custom": {
     	"behavior_bpod": {
-            "meta_dir": "E:/Data_for_ingestion/Foraging_behavior/Metadata",
-            "meta_lab_dir": "E:/Data_for_ingestion/Foraging_behavior/Metadata_lab",
+            "meta_dir": "F:/Data_for_ingestion/Foraging_behavior/Metadata",
+            "meta_lab_dir": "F:/Data_for_ingestion/Foraging_behavior/Metadata_lab",
             "project_paths": [
-                "E:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-1/Foraging",
-				"E:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-1/Foraging_homecage",
-                "E:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-2/Foraging",
-                "E:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-2/Foraging_again",
-                "E:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-2/Foraging_homecage",
-                "E:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-3/Foraging_homecage",
-				"E:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Ephys-Han/Foraging_ephys"]
+                "F:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-1/Foraging",
+				"F:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-1/Foraging_homecage",
+                "F:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-2/Foraging",
+                "F:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-2/Foraging_again",
+                "F:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-2/Foraging_homecage",
+                "F:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Tower-3/Foraging_homecage",
+				"F:/Data_for_ingestion/Foraging_behavior/Behavior_rigs/Ephys-Han/Foraging_ephys"]
                         },
         "ephys_data_paths": [
-            "E:/Data_for_ingestion/Foraging_ephys",
-            "F:/catGT"
+            "I:/catGT"
         ],
-        "recording_notes_spreadsheet": "E:/Data_for_ingestion/Foraging_behavior/Metadata/Ephys.csv",
-        "recording_notes_sheet_name": "Ephys",
+        "recording_notes_spreadsheet": "F:/Data_for_ingestion/Foraging_behavior/Metadata/Ephys.csv",
     	"logfile": "log.txt"
     },
 	"stores": {
         "report_store":
         {
             "protocol": "file",
-            "location": "E:/Pipeline_report",
-            "stage": "E:/Pipeline_report"
+            "location": "F:/Pipeline_report",
+            "stage": "F:/Pipeline_report"
         },
         "archive_store":
         {
             "protocol": "file",
-            "location": "E:/Pipeline_report",
-            "stage": "E:/Pipeline_report"
+            "location": "F:/Pipeline_report",
+            "stage": "F:/Pipeline_report"
         }    	
 	}
 }
