@@ -1,41 +1,5 @@
 import numpy as np
 
-from . import (experiment, psth, ephys)
-
-
-def _get_trial_event_times(events, units, trial_cond_name):
-    """
-    Get median event start times from all unit-trials from the specified "trial_cond_name" and "units" - aligned to GO CUE
-    For trials with multiple events of the same type, use the one occurred last
-    :param events: list of events
-    """
-    events = list(events) + ['go']
-
-    tr_OI = (psth.TrialCondition().get_trials(trial_cond_name) & units).proj()
-    tr_events = {}
-    for eve in events:
-        if eve not in tr_events:
-            tr_events[eve] = (tr_OI.aggr(
-                experiment.TrialEvent & {'trial_event_type': eve}, trial_event_id='max(trial_event_id)')
-                              * experiment.TrialEvent).fetch('trial_event_time', order_by='trial')
-
-    present_events, event_starts = [], []
-    for etype, etime in tr_events.items():
-        if etype in events[:-1]:
-            present_events.append(etype)
-            event_starts.append(np.nanmedian(etime.astype(float) - tr_events["go"].astype(float)))
-
-    return np.array(present_events), np.array(event_starts)
-
-
-def _get_stim_onset_time(units, trial_cond_name):
-    stim_onsets = (experiment.PhotostimEvent.proj('photostim_event_time')
-                   * (experiment.TrialEvent & 'trial_event_type="go"').proj(go_time='trial_event_time')
-                   & psth.TrialCondition().get_trials(trial_cond_name) & units).proj(
-        stim_onset_from_go='photostim_event_time - go_time').fetch('stim_onset_from_go')
-    return np.nanmean(stim_onsets.astype(float))
-
-
 def _get_units_hemisphere(units):
     """
     Return the hemisphere ("left" or "right") that the specified units belong to,
@@ -55,6 +19,44 @@ def _get_units_hemisphere(units):
     else:
         assert (ml_locations == 0).all()  # sanity check
         raise ValueError('Ambiguous hemisphere: ML locations are all 0...')
+        
+
+from . import (experiment, psth, ephys, psth_foraging)
+
+def _get_trial_event_times(events, units, trial_cond_name):
+    """
+    Get median event start times from all unit-trials from the specified "trial_cond_name" and "units" - aligned to GO CUE
+    For trials with multiple events of the same type, use the one occurred last
+    :param events: list of events
+    """
+    events = list(events) + ['go']
+    psth_schema = psth_foraging if 'foraging' in trial_cond_name else psth
+
+    tr_OI = (psth_schema.TrialCondition().get_trials(trial_cond_name) & units).proj()
+    tr_events = {}
+    for eve in events:
+        if eve not in tr_events:
+            tr_events[eve] = (tr_OI.aggr(
+                experiment.TrialEvent & {'trial_event_type': eve}, trial_event_id='max(trial_event_id)')
+                              * experiment.TrialEvent).fetch('trial_event_time', order_by='trial')
+
+    present_events, event_starts = [], []
+    for etype, etime in tr_events.items():
+        if etype in events[:-1]:
+            present_events.append(etype)
+            event_starts.append(np.nanmedian(etime.astype(float) - tr_events["go"].astype(float)))
+
+    return np.array(present_events), np.array(event_starts)
+
+
+def _get_stim_onset_time(units, trial_cond_name):
+    psth_schema = psth_foraging if 'foraging' in trial_cond_name else psth
+
+    stim_onsets = (experiment.PhotostimEvent.proj('photostim_event_time')
+                   * (experiment.TrialEvent & 'trial_event_type="go"').proj(go_time='trial_event_time')
+                   & psth_schema.TrialCondition().get_trials(trial_cond_name) & units).proj(
+        stim_onset_from_go='photostim_event_time - go_time').fetch('stim_onset_from_go')
+    return np.nanmean(stim_onsets.astype(float))
 
 
 def _get_clustering_method(probe_insertion):
