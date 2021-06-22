@@ -7,7 +7,7 @@
 	"database.reconnect": false,
 	"loglevel": "INFO",
 	"safemode": true,
-	"display.limit": 30,
+	"display.limit": 15,
 	"display.width": 50,
 	"display.show_tuple_count": true,
 	"enable_python_native_blobs": true,
