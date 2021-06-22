@@ -45,7 +45,7 @@ class TrialCondition(dj.Lookup):
                      
             # ----- Foraging task -------
             {
-                'trial_condition_name': 'foraging_L_reward_noearlylick',
+                'trial_condition_name': 'foraging_L_hit_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'foraging',
@@ -58,7 +58,7 @@ class TrialCondition(dj.Lookup):
                     }
             },
             {
-                'trial_condition_name': 'foraging_L_noreward_noearlylick',
+                'trial_condition_name': 'foraging_L_miss_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'foraging',
@@ -71,7 +71,7 @@ class TrialCondition(dj.Lookup):
                     }
             },            
             {
-                'trial_condition_name': 'foraging_R_reward_noearlylick',
+                'trial_condition_name': 'foraging_R_hit_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'foraging',
@@ -84,7 +84,7 @@ class TrialCondition(dj.Lookup):
                     }
             },
             {
-                'trial_condition_name': 'foraging_R_noreward_noearlylick',
+                'trial_condition_name': 'foraging_R_miss_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'foraging',
@@ -97,7 +97,7 @@ class TrialCondition(dj.Lookup):
                     }
             },
             {
-                'trial_condition_name': 'foraging_LR_reward_noearlylick',
+                'trial_condition_name': 'foraging_LR_hit_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'foraging',
@@ -108,7 +108,7 @@ class TrialCondition(dj.Lookup):
                     'free_water': 0}
             },
             {
-                'trial_condition_name': 'foraging_LR_noreward_noearlylick',
+                'trial_condition_name': 'foraging_LR_miss_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'foraging',
@@ -119,7 +119,7 @@ class TrialCondition(dj.Lookup):
                     'free_water': 0}
             },
             {
-                'trial_condition_name': 'foraging_all_noearlylick_nostim',
+                'trial_condition_name': 'foraging_LR_all_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -130,7 +130,7 @@ class TrialCondition(dj.Lookup):
                     'free_water': 0}
             },
             {
-                'trial_condition_name': 'foraging_L_all_noearlylick_nostim',
+                'trial_condition_name': 'foraging_L_all_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -143,7 +143,7 @@ class TrialCondition(dj.Lookup):
                     }
             },
             {
-                'trial_condition_name': 'foraging_R_all_noearlylick_nostim',
+                'trial_condition_name': 'foraging_R_all_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -338,7 +338,7 @@ class UnitPsth(dj.Computed):
         # interact('unitpsth make', local=dict(ChainMap(locals(), globals())))
 
         trials = TrialCondition.get_func(condition_key)()
-
+ 
         unit_psth = (UnitPsth & {**condition_key, **unit_key}).fetch1('unit_psth')
         if unit_psth is None:
             raise Exception('No spikes found for this unit and trial-condition')
