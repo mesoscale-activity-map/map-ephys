@@ -998,7 +998,7 @@ def read_bitcode(bitcode_dir, h2o, skey):
             next(bitcode_dir.parent.glob('*.XA_0_0.txt'))
             bf_path = next(bitcode_dir.parent.glob('*.XA_1_2.txt'))
             bitcode_format = 'nidq.XA.txt'
-    log.info('.... loading bitcode file: {}'.format(str(bf_path)))
+            log.info('.... loading bitcode file: {}'.format(str(bf_path)))
         except StopIteration:
             raise FileNotFoundError(
                 'Reading bitcode failed. Neither (*bitcode.mat) nor (nidq.XA*.txt)'
@@ -1009,25 +1009,25 @@ def read_bitcode(bitcode_dir, h2o, skey):
         'trial', 'trial_note', order_by='trial')
 
     if bitcode_format == 'bitcode.mat':
-    bf = spio.loadmat(str(bf_path))
+        bf = spio.loadmat(str(bf_path))
 
         ephys_trial_start_times = bf['sTrig'].flatten()  # trial start
         ephys_trial_ref_times = bf['goCue'].flatten()  # trial go cues
 
-    # check if there are `FreeWater` trials (i.e. no trial_go), if so, set those with trial_go value of NaN
+        # check if there are `FreeWater` trials (i.e. no trial_go), if so, set those with trial_go value of NaN
         if len(ephys_trial_ref_times) < len(ephys_trial_start_times):
 
             if len(experiment.BehaviorTrial & skey) != len(ephys_trial_start_times):
-            raise BitCodeError('Mismatch sTrig ({} elements) and total behavior trials ({} trials)'.format(
+                raise BitCodeError('Mismatch sTrig ({} elements) and total behavior trials ({} trials)'.format(
                     len(ephys_trial_start_times), len(experiment.BehaviorTrial & skey)))
 
             if len(experiment.BehaviorTrial & skey & 'free_water = 0') != len(ephys_trial_ref_times):
-            raise BitCodeError('Mismatch goCue ({} elements) and non-FreeWater trials ({} trials)'.format(
+                raise BitCodeError('Mismatch goCue ({} elements) and non-FreeWater trials ({} trials)'.format(
                     len(ephys_trial_ref_times), len(experiment.BehaviorTrial & skey & 'free_water = 0')))
 
-        all_tr = (experiment.BehaviorTrial & skey).fetch('trial', order_by='trial')
-        no_free_water_tr = (experiment.BehaviorTrial & skey & 'free_water = 0').fetch('trial', order_by='trial')
-        is_go_trial = np.in1d(all_tr, no_free_water_tr)
+            all_tr = (experiment.BehaviorTrial & skey).fetch('trial', order_by='trial')
+            no_free_water_tr = (experiment.BehaviorTrial & skey & 'free_water = 0').fetch('trial', order_by='trial')
+            is_go_trial = np.in1d(all_tr, no_free_water_tr)
 
             trial_go_full = np.full_like(ephys_trial_start_times, np.nan)
             trial_go_full[is_go_trial] = ephys_trial_ref_times
