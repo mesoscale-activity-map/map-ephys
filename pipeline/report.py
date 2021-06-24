@@ -583,7 +583,7 @@ class ProbeLevelDriftMap(dj.Computed):
     """
 
     # Only process ProbeInsertion with Histology and InsertionLocation known
-    key_source = (ephys.ProbeInsertion * ephys.ClusteringMethod & ephys.Unit.proj()) & ephys.ProbeInsertion.InsertionLocation & histology.ElectrodeCCFPosition
+    key_source = (ephys.ProbeInsertion * ephys.ClusteringMethod & ephys.Unit.proj()) & histology.InterpolatedShankTrack
 
     def make(self, key):
         water_res_num, sess_date = get_wr_sessdate(key)
@@ -850,7 +850,9 @@ def delete_outdated_project_plots(project_name='MAP'):
     latest_track_count = SessionLevelProbeTrack.fetch('probe_track_count').sum().astype(int)
 
     if plotted_track_count != latest_track_count:
-        uuid_byte = (ProjectLevelProbeTrack & {'project_name': project_name}).proj(ub='(tracks_plot)').fetch1('ub')
+        uuid_byte = (ProjectLevelProbeTrack & {'project_name': project_name}).proj(
+            ub='CONCAT(tracks_plot , "")').fetch1('ub')
+        print('project_name', project_name, 'uuid_byte:', str(uuid_byte))
         ext_key = {'hash': uuid.UUID(bytes=uuid_byte)}
 
         with dj.config(safemode=False):
