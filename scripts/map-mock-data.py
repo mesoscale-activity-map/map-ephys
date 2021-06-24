@@ -759,7 +759,7 @@ def mockdata():
         lab.Rig().insert1({
             'rig': 'RRig3',
             'room': '2w.334',
-            'rig_description': 'Recording rig3 for multi-target-licking'},
+            'rig_description': 'Recording rig3 for multi-target'},
             skip_duplicates=True
         )
         lab.Rig().insert1({

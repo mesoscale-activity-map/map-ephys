@@ -79,7 +79,7 @@ class TrackingIngest(dj.Imported):
 
         log.info('\tgot session: {} - {} trials - {}'.format(session, len(trials), session_rig))
 
-        # Camera 3, 4, 5 are for multi-target-licking task - with RRig-MTL
+        # Camera 3, 4, 5 are for multi-target task - with RRig-MTL
         camera_restriction = ('tracking_device in ("Camera 3", "Camera 4", "Camera 5")'
                               if session_rig == 'RRig-MTL'
                               else 'tracking_device in ("Camera 0", "Camera 1", "Camera 2")')
@@ -367,7 +367,7 @@ def _get_sess_tracking_dir(tracking_path, session):
 
 def _get_MTL_sess_tracking_dir(tracking_path, session, camera_position):
     """
-    Specialized directory searching method for "multi-target-licking" tracking data (recorded from RRig-MTL at Baylor)
+    Specialized directory searching method for "multi-target" tracking data (recorded from RRig-MTL at Baylor)
     Given the session information, a tracking root data directory, and the camera position
     search and return:
      i) the directory containing the session's tracking data
@@ -391,4 +391,4 @@ def _get_MTL_sess_tracking_dir(tracking_path, session, camera_position):
             return dir, sess_date.strftime('%Y_%m_%d') + session_nth_str
 
     raise FileNotFoundError(
-        'Multi-target-licking tracking data dir ({}) not found'.format(dir.relative_to(tracking_path)))
+        'multi-target tracking data dir ({}) not found'.format(dir.relative_to(tracking_path)))

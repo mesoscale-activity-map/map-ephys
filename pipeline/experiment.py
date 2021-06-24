@@ -39,7 +39,7 @@ class Task(dj.Lookup):
         ('s1 stim', 'S1 photostimulation task (2AFC)'),
         ('foraging', 'foraging task based on Bari-Cohen 2019'),
         ('foraging 3lp', 'foraging task based on Bari-Cohen 2019 with variable delay period'),
-        ('multi-target-licking', 'multi-target-licking task')
+        ('multi-target', 'multi-target task')
     ]
 
 
@@ -64,8 +64,8 @@ class TaskProtocol(dj.Lookup):
         ('s1 stim', 9, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample period'),
         ('foraging', 100, 'moving lickports, delay period, early lick punishment, sound GO cue then free choice'),
         ('foraging 3lp', 101, 'moving lickports, delay period, early lick punishment, sound GO cue then free choice from three lickports'),
-        ('multi-target-licking', 1, 'multi-target-licking task - 2D'),
-        ('multi-target-licking', 2, 'multi-target-licking task - Spontaneous')
+        ('multi-target', 1, 'multi-target task - 2D'),
+        ('multi-target', 2, 'multi-target task - Spontaneous')
     ]
 
 
@@ -76,7 +76,7 @@ class WaterPort(dj.Lookup):
     """
 
     contents = zip(['left', 'right', 'middle',
-                    'mtl-1', 'mtl-2', 'mtl-3',    # The "mtl-" refers to multi-target-licking
+                    'mtl-1', 'mtl-2', 'mtl-3',    # The "mtl-" refers to multi-target
                     'mtl-4', 'mtl-5', 'mtl-6',    # water ports, arranged in a 3x3 "number-pad"
                     'mtl-7', 'mtl-8', 'mtl-9'])   # fashion, with the numbering as shown here
 
@@ -377,13 +377,13 @@ class TrialAvailableReward(dj.Imported):
     reward_available: bool
     """
 
-# ---- Multi-target-licking paradigm specifics ----
+# ---- multi-target paradigm specifics ----
 
 
 @schema
 class MultiTargetLickingSessionBlock(dj.Imported):
     definition = """
-    # Session block for multi-target-licking experiments
+    # Session block for multi-target experiments
     -> Session
     block : smallint 		# block number
     ---
@@ -425,7 +425,7 @@ class Breathing(dj.Imported):
     breathing_timestamps: longblob  # (s) relative to the start of the trial
     """
 
-    key_source = Session & ephys.ProbeInsertion & (BehaviorTrial & 'task = "multi-target-licking"')
+    key_source = Session & ephys.ProbeInsertion & (BehaviorTrial & 'task = "multi-target"')
 
     def make(self, key):
         # channel 2 is for breathing data
@@ -447,7 +447,7 @@ class Piezoelectric(dj.Imported):
     """
 
     key_source = Session & ephys.ProbeInsertion & (
-                BehaviorTrial & 'task = "multi-target-licking"')
+                BehaviorTrial & 'task = "multi-target"')
 
     def make(self, key):
         # channel 3 is for piezoelectric data

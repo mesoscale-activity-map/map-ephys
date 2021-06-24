@@ -215,7 +215,7 @@ class BehaviorIngest(dj.Imported):
 
         path = pathlib.Path(key['rig_data_path'], key['subpath'])
 
-        # distinguishing "delay-response" task or "multi-target-licking" task
+        # distinguishing "delay-response" task or "multi-target" task
         task_type = detect_task_type(path)
 
         # skip too small behavior file (only for 'delay-response' task)
@@ -298,8 +298,8 @@ class BehaviorIngest(dj.Imported):
                                          ignore_extra_fields=True,
                                          allow_direct_insert=True)
 
-        if task_type == 'multi-target-licking':
-            # Multi-target-licking specifics
+        if task_type == 'multi-target':
+            # multi-target specifics
             log.info('BehaviorIngest.make(): ... experiment.MultiTargetLickingSessionBlock')
             experiment.MultiTargetLickingSessionBlock.insert(
                 rows['session_block'],
@@ -333,7 +333,7 @@ class BehaviorIngest(dj.Imported):
 
         :param key: session_key
         :param path: (str) filepath of the behavior file (.mat)
-        :param task_type: (str) "delay-response" or "multi-target-licking"
+        :param task_type: (str) "delay-response" or "multi-target"
         :return: skey, rows
             + skey: session_key
             + rows: a dictionary containing all per-trial information to be inserted
@@ -362,7 +362,7 @@ class BehaviorIngest(dj.Imported):
         log.info('generated session id: {session}'.format(session=session))
         skey['session'] = session
 
-        if task_type == 'multi-target-licking':
+        if task_type == 'multi-target':
             rows = load_multi_target_licking_matfile(skey, path)
         elif task_type == 'delay-response':
             rows = load_delay_response_matfile(skey, path)
@@ -881,17 +881,17 @@ class BehaviorBpodIngest(dj.Imported):
 
 def detect_task_type(path):
     """
-    Method to detect if a behavior matlab file is for "delay-response" or "multi-target-licking" task
+    Method to detect if a behavior matlab file is for "delay-response" or "multi-target" task
     :param path: (str) filepath of the behavior file (.mat)
-    :return task_type: (str) "delay-response" or "multi-target-licking"
+    :return task_type: (str) "delay-response" or "multi-target"
     """
-    # distinguishing "delay-response" task or "multi-target-licking" task
+    # distinguishing "delay-response" task or "multi-target" task
     mat = spio.loadmat(path.as_posix(), squeeze_me=True, struct_as_record=False)
     GUI_fields = set(mat['SessionData'].SettingsFile.GUI._fieldnames)
 
     if ({'X_center', 'Y_center', 'Z_center'}.issubset(GUI_fields)
             and not {'SamplePeriod', 'DelayPeriod'}.issubset(GUI_fields)):
-        task_type = 'multi-target-licking'
+        task_type = 'multi-target'
     else:
         task_type = 'delay-response'
 
@@ -1413,7 +1413,7 @@ def load_multi_target_licking_matfile(skey, matlab_filepath):
         rows['trial'].append(tkey)
 
         #
-        # Specific Multi-target-licking blocks information for this trial
+        # Specific multi-target blocks information for this trial
         #
         trial_block = t.trial_block
         block_key = {**skey, 'block': trial_block}
@@ -1460,7 +1460,7 @@ def load_multi_target_licking_matfile(skey, matlab_filepath):
         #
 
         bkey = dict(tkey)
-        bkey['task'] = 'multi-target-licking'  # hard-coded here
+        bkey['task'] = 'multi-target'  # hard-coded here
         bkey['task_protocol'] = int(protocol_type)
 
         # trial instruction - 'none' - no notion of "trial instruction" for this task
@@ -1515,7 +1515,7 @@ def load_multi_target_licking_matfile(skey, matlab_filepath):
                 rows['trial_event'].append(ekey)
 
         # ==== ActionEvents ====
-        # no action events for multi-target-licking task
+        # no action events for multi-target task
 
         # end of trial loop.
 

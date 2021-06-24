@@ -68,7 +68,7 @@ class EphysIngest(dj.Imported):
         """
 
     # key_source = experiment.Session - ephys.ProbeInsertion
-    key_source = experiment.Session & (experiment.TrialNote() & 'trial_note_type = "bitcode"')
+    key_source = experiment.Session & (experiment.TrialNote() & 'trial_note_type = "bitcode"') - ephys.ProbeInsertion
 
     def make(self, key):
         '''
@@ -82,7 +82,7 @@ class EphysIngest(dj.Imported):
 
         if (experiment.Session
                 & ephys.ProbeInsertion
-                & (experiment.BehaviorTrial & 'task = "multi-target-licking"')
+                & (experiment.BehaviorTrial & 'task = "multi-target"')
                 & key):
             experiment.Breathing().make(key)
             experiment.Piezoelectric().make(key)
@@ -1037,8 +1037,8 @@ def read_bitcode(bitcode_dir, h2o, skey):
         trial_numbers = bf['trialNum'].flatten() if 'trialNum' in bf else None
     elif bitcode_format == 'nidq.XA.txt':
         bitcodes, trial_start_times = build_bitcode(bitcode_dir.parent)
-        if (experiment.BehaviorTrial & 'task = "multi-target-licking"' & skey):
-            # multi-target-licking task: spiketimes w.r.t trial-start
+        if (experiment.BehaviorTrial & 'task = "multi-target"' & skey):
+            # multi-target task: spiketimes w.r.t trial-start
             go_times = np.zeros_like(behav_trials)
         else:
             # delay-response or foraging task: spiketimes w.r.t go-cue
