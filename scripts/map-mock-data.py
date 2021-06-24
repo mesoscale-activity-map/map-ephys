@@ -595,6 +595,42 @@ def mockdata():
             'wr_start_weight': 23.0},
             skip_duplicates=True
         )
+        # Subject 55004 / DL004
+        lab.Subject().insert1({
+            'subject_id': 550004,
+            'username': 'daveliu',
+            'cage_number': 163782,
+            'date_of_birth': '2018-09-24',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates=True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 550004,
+            'water_restriction_number': 'DL004',
+            'cage_number': 163782,
+            'wr_start_date': '2018-11-24',
+            'wr_start_weight': 23.0},
+            skip_duplicates=True
+        )
+        # Subject 550009 / DL009
+        lab.Subject().insert1({
+            'subject_id': 550009,
+            'username': 'daveliu',
+            'cage_number': 163782,
+            'date_of_birth': '2018-09-24',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates=True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 550009,
+            'water_restriction_number': 'DL009',
+            'cage_number': 163782,
+            'wr_start_date': '2018-11-24',
+            'wr_start_weight': 23.0},
+            skip_duplicates=True
+        )
         # Subject 440959 / SC011
         lab.Subject().insert1({
             'subject_id': 440959,
@@ -718,6 +754,12 @@ def mockdata():
             'rig': 'RRig2',
             'room': '2w.334',
             'rig_description': 'Recording rig2'},
+            skip_duplicates=True
+        )
+        lab.Rig().insert1({
+            'rig': 'RRig3',
+            'room': '2w.334',
+            'rig_description': 'Recording rig3 for multi-target-licking'},
             skip_duplicates=True
         )
         lab.Rig().insert1({

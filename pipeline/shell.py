@@ -37,9 +37,6 @@ def usage_exit():
             str().join("  - {}: {}\n".format(k, v[1])
                        for k, v in actions.items())))
 
-    # print("usage: {p} [{c}] <args>"
-    #       .format(p=os.path.basename(sys.argv[0]),
-    #               c='|'.join(list(actions.keys()))))
     sys.exit(0)
 
 
@@ -126,7 +123,7 @@ def ingest_all(*args):
 
 
 def load_animal(excel_fp, sheet_name='Sheet1'):
-    df = pd.read_excel(excel_fp, sheet_name)
+    df = pd.read_excel(excel_fp, sheet_name, engine='openpyxl')
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
 
     subjects, water_restrictions, subject_ids = [], [], []
@@ -154,7 +151,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     log.info('loading probe insertions from spreadsheet {}'.format(excel_fp))
 
     try:
-        df = pd.read_excel(excel_fp, sheet_name)
+        df = pd.read_excel(excel_fp, sheet_name, engine='openpyxl')
         from_excel = True
     except:
         df = pd.read_csv(excel_fp)
@@ -349,6 +346,12 @@ def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': 
 
     log.info('ephys.UnitCellType.populate()')
     ephys.UnitCellType.populate(**populate_settings)
+
+    log.info('ephys.MAPClusterMetric.populate()')
+    ephys.MAPClusterMetric.populate(**populate_settings)
+
+    log.info('ephys.MAPClusterMetric.populate()')
+    histology.InterpolatedShankTrack.populate(**populate_settings)
 
 
 def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': True}):
@@ -564,6 +567,32 @@ def sync_and_external_cleanup():
         print("allow_external_cleanup disabled, set dj.config['custom']['allow_external_cleanup'] = True to enable")
 
 
+def loop(*args):
+    ''' run subsequent 'cmd args ..'. command in a loop '''
+    cmd, *newargs = args
+
+    cmd_fn = actions[cmd][0]
+
+    log.info('running {} in a loop'.format(cmd))
+
+    nruns = nerrs = 0
+
+    while True:
+        log.info('{} loop round {} (nerrs: {})'.format(cmd, nruns, nerrs))
+        try:
+            cmd_fn(*args)
+        except Exception as e:
+            log.info('{} loop round {} recieved error: {}'.format(
+                cmd, nruns, repr(e)))
+            log.debug('exception:', exc_info=1)
+            nerrs += 1
+
+        nruns += 1
+
+        log.info('{} loop - waiting 5 seconds before next round'.format(cmd))
+        time.sleep(5)
+
+
 actions = {
     'ingest-behavior': (ingest_behavior, 'ingest behavior data'),
     'ingest-foraging': (ingest_behavior, 'ingest foraging behavior data'),
@@ -593,5 +622,6 @@ actions = {
     'load-insertion-location': (load_insertion_location,
                                 'load ProbeInsertions from .xlsx'),
     'load-animal': (load_animal, 'load subject data from .xlsx'),
-    'load-meta-foraging': (load_meta_foraging, 'load foraging meta information from .csv')
+    'load-meta-foraging': (load_meta_foraging, 'load foraging meta information from .csv'),
+    'loop': (loop, 'run subsequent command and args in a loop')
 }

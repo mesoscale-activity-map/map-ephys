@@ -1,11 +1,14 @@
 
 import datajoint as dj
 import numpy as np
+import pathlib
 
 from . import lab, ccf
 from . import get_schema_name
 
 schema = dj.schema(get_schema_name('experiment'))
+
+ephys = dj.create_virtual_module('ephys', get_schema_name('ephys'))  # avoid circular dependency
 
 
 @schema
@@ -26,7 +29,7 @@ class Session(dj.Manual):
 class Task(dj.Lookup):
     definition = """
     # Type of tasks
-    task            : varchar(12)                  # task type
+    task            : varchar(24)                  # task type
     ----
     task_description : varchar(4000)
     """
@@ -35,7 +38,8 @@ class Task(dj.Lookup):
         ('audio mem', 'auditory working memory task'),
         ('s1 stim', 'S1 photostimulation task (2AFC)'),
         ('foraging', 'foraging task based on Bari-Cohen 2019'),
-        ('foraging 3lp', 'foraging task based on Bari-Cohen 2019 with variable delay period')
+        ('foraging 3lp', 'foraging task based on Bari-Cohen 2019 with variable delay period'),
+        ('multi-target-licking', 'multi-target-licking task')
     ]
 
 
@@ -59,7 +63,9 @@ class TaskProtocol(dj.Lookup):
         ('s1 stim', 8, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample period'),
         ('s1 stim', 9, 'mini-distractors and full distractors (only at late delay), with different levels of the mini-stim and the full-stim during sample period'),
         ('foraging', 100, 'moving lickports, delay period, early lick punishment, sound GO cue then free choice'),
-        ('foraging 3lp', 101, 'moving lickports, delay period, early lick punishment, sound GO cue then free choice from three lickports')
+        ('foraging 3lp', 101, 'moving lickports, delay period, early lick punishment, sound GO cue then free choice from three lickports'),
+        ('multi-target-licking', 1, 'multi-target-licking task - 2D'),
+        ('multi-target-licking', 2, 'multi-target-licking task - Spontaneous')
     ]
 
 
@@ -69,7 +75,10 @@ class WaterPort(dj.Lookup):
     water_port: varchar(16)  # e.g. left, right, middle, top-left, purple
     """
 
-    contents = zip(['left', 'right', 'middle'])
+    contents = zip(['left', 'right', 'middle',
+                    'mtl-1', 'mtl-2', 'mtl-3',    # The "mtl-" refers to multi-target-licking
+                    'mtl-4', 'mtl-5', 'mtl-6',    # water ports, arranged in a 3x3 "number-pad"
+                    'mtl-7', 'mtl-8', 'mtl-9'])   # fashion, with the numbering as shown here
 
 
 @schema
@@ -150,7 +159,8 @@ class TrialNoteType(dj.Lookup):
     definition = """
     trial_note_type : varchar(24)
     """
-    contents = zip(('autolearn', 'protocol #', 'bad', 'bitcode', 'autowater', 'random_seed_start'))
+    contents = zip(('autolearn', 'protocol #', 'bad',
+                    'bitcode', 'autowater', 'random_seed_start'))
 
 
 @schema
@@ -229,7 +239,7 @@ class Outcome(dj.Lookup):
     definition = """
     outcome : varchar(32)
     """
-    contents = zip(('hit', 'miss', 'ignore'))
+    contents = zip(('hit', 'miss', 'ignore', 'N/A'))
 
 
 @schema
@@ -317,6 +327,7 @@ class ActionEvent(dj.Imported):
 @schema
 class SessionBlock(dj.Imported):
     definition = """
+    # Session block for Foraging experiment
     -> Session
     block : smallint 		# block number
     ---
@@ -343,7 +354,7 @@ class WaterPortSetting(dj.Imported):
     definition = """  
     -> BehaviorTrial
     ----
-    water_port_lateral_pos=null: int # position value of the motor
+    water_port_lateral_pos=null: int # position value of the motor 
     water_port_rostrocaudal_pos=null: int # position value of the motor
     water_port_dorsoventral_pos=null: int # position value of the motor
     """
@@ -365,6 +376,87 @@ class TrialAvailableReward(dj.Imported):
     ---
     reward_available: bool
     """
+
+# ---- Multi-target-licking paradigm specifics ----
+
+
+@schema
+class MultiTargetLickingSessionBlock(dj.Imported):
+    definition = """
+    # Session block for multi-target-licking experiments
+    -> Session
+    block : smallint 		# block number
+    ---
+    block_start_time : decimal(10, 4)  # (s) relative to session beginning
+    trial_count: int                   # total number of trials in this block
+    num_licks_for_reward: smallint     # how many licks are needed to trigger a water release. The mouse can collect the water drop on num_licks_for_reward +1 lick
+    roll_deg: double                   # roll angle of the lickport positions in deg. Positve roll means the mouse is turning its head towards its right shoulder
+    position_x_bins=3: int             # number of water port possible positions in X
+    position_y_bins=1: int             # number of water port possible positions in Y
+    position_z_bins=3: int             # number of water port possible positions in Z
+    """
+
+    class WaterPort(dj.Part):
+        definition = """
+        # the water port used for all trials in a given block
+        -> master
+        ---
+        -> WaterPort
+        position_x: float  # X position of this water port (in motor unit) - lateral
+        position_y: float  # Y position of this water port (in motor unit) - rostrocaudal
+        position_z: float  # Z position of this water port (in motor unit) - dorsoventral
+        """
+
+    class BlockTrial(dj.Part):
+        definition = """
+        -> master
+        -> BehaviorTrial
+        ---
+        block_trial_number: int  # the ordering of this trial in this block
+        """
+
+
+@schema
+class Breathing(dj.Imported):
+    definition = """
+    -> SessionTrial
+    ---
+    breathing: longblob
+    breathing_timestamps: longblob  # (s) relative to the start of the trial
+    """
+
+    key_source = Session & ephys.ProbeInsertion & (BehaviorTrial & 'task = "multi-target-licking"')
+
+    def make(self, key):
+        # channel 2 is for breathing data
+        breathing_trials_data = extract_nidq_trial_data(key, channel=2)
+        for d in breathing_trials_data:
+            d['breathing'] = d.pop('data')
+            d['breathing_timestamps'] = d.pop('timestamps')
+
+        self.insert(breathing_trials_data, allow_direct_insert=True)
+
+
+@schema
+class Piezoelectric(dj.Imported):
+    definition = """
+    -> SessionTrial
+    ---
+    piezoelectric: longblob
+    piezoelectric_timestamps: longblob  # (s) relative to the start of the trial
+    """
+
+    key_source = Session & ephys.ProbeInsertion & (
+                BehaviorTrial & 'task = "multi-target-licking"')
+
+    def make(self, key):
+        # channel 3 is for piezoelectric data
+        piezoelectric_trials_data = extract_nidq_trial_data(key, channel=3)
+        for d in piezoelectric_trials_data:
+            d['piezoelectric'] = d.pop('data')
+            d['piezoelectric_timestamps'] = d.pop('timestamps')
+
+        self.insert(piezoelectric_trials_data, allow_direct_insert=True)
 
 
 # ---- Photostim trials ----
@@ -429,3 +521,53 @@ class Project(dj.Lookup):
     """
 
     contents = [('MAP', 'The Mesoscale Activity Map project', '')]
+
+
+# ============================= HELPER METHODS ==========================
+
+def extract_nidq_trial_data(session_key, channel):
+    from pipeline.ingest import ephys as ephys_ingest
+
+    h2o = (lab.WaterRestriction & session_key).fetch1('water_restriction_number')
+    sess_datetime = (Session & session_key).proj(
+        sess_datetime="cast(concat(session_date, ' ', session_time) as datetime)").fetch1(
+        'sess_datetime')
+
+    rigpaths = ephys_ingest.get_ephys_paths()
+    for rigpath in rigpaths:
+        session_ephys_dir, dglob = ephys_ingest._get_sess_dir(rigpath, h2o, sess_datetime)
+        if session_ephys_dir is not None:
+            break
+    else:
+        raise FileNotFoundError(
+            'Error - No session folder found for {}/{}'.format(h2o, sess_datetime))
+
+    try:
+        nidq_bin_fp = next(session_ephys_dir.glob('*.nidq.bin'))
+    except StopIteration:
+        raise FileNotFoundError('*.nidq.bin file not found in {}'.format(session_ephys_dir))
+
+    ephys_bitcodes, trial_start_times = ephys_ingest.build_bitcode(session_ephys_dir)
+    behav_trials, behavior_bitcodes = (TrialNote
+                                       & {**session_key, 'trial_note_type': 'bitcode'}).fetch(
+        'trial', 'trial_note', order_by='trial')
+
+    chan_list = [channel]
+    breathing_data, sampling_rate = ephys_ingest.read_SGLX_bin(nidq_bin_fp, chan_list)
+
+    trial_starts_indices = (trial_start_times * sampling_rate).astype(int)
+    # segment to per-trial
+    all_trials_data = []
+    for idx in range(len(trial_starts_indices)):
+        start_idx = trial_starts_indices[idx]
+        end_idx = trial_starts_indices[idx + 1] if start_idx < trial_starts_indices[-1] else -1
+        trial_data = breathing_data[:, start_idx:end_idx].flatten()
+
+        ephys_bitcode = ephys_bitcodes[idx]
+        matched_trial_idx = np.where(behavior_bitcodes == ephys_bitcode)[0][0]
+
+        all_trials_data.append({
+            **session_key, 'trial': behav_trials[matched_trial_idx],
+            'data': trial_data,
+            'timestamps': np.arange(len(trial_data)) / sampling_rate})
+    return all_trials_data
