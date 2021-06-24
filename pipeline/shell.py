@@ -14,7 +14,7 @@ import datajoint as dj
 from pymysql.err import OperationalError
 
 
-from pipeline import (lab, experiment, tracking, ephys, report, psth, ccf,
+from pipeline import (lab, experiment, tracking, ephys, report, psth, psth_foraging, ccf,
                       histology, export, publication, globus, foraging_analysis,
                       get_schema_name)
 
@@ -150,7 +150,13 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     from pipeline.ingest import behavior as behav_ingest
     log.info('loading probe insertions from spreadsheet {}'.format(excel_fp))
 
-    df = pd.read_excel(excel_fp, sheet_name, engine='openpyxl')
+    try:
+        df = pd.read_excel(excel_fp, sheet_name)
+        from_excel = True
+    except:
+        df = pd.read_csv(excel_fp)
+        from_excel = False
+
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
 
     insertion_locations = []
@@ -162,24 +168,34 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
         except ValueError:
             log.debug('Invalid behaviour time: {} - try single-sess per day'.format(row.behaviour_time))
             valid_btime = False
+        
+        session_date = row.session_date.date() if from_excel else datetime.strptime(row.session_date,'%Y-%m-%d')
+        if 'foraging' in row.project:
+            behavior_ingest_table = behav_ingest.BehaviorBpodIngest
+            bf_reg_exp = '(\d{8}-\d{6})'
+            bf_datetime_format = '%Y%m%d-%H%M%S'
+        else:
+            behavior_ingest_table = behav_ingest.BehaviorIngest
+            bf_reg_exp = '(\d{8}_\d{6}).mat'
+            bf_datetime_format = '%Y%m%d_%H%M%S'
 
         if valid_btime:
             sess_key = experiment.Session & (
-                behav_ingest.BehaviorIngest.BehaviorFile
-                & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
+                behavior_ingest_table.BehaviorFile
+                & {'subject_id': row.subject_id, 'session_date': session_date}
                 & 'behavior_file LIKE "%{}%{}_{:06}%"'.format(
-                    row.water_restriction_number, row.session_date.date().strftime('%Y%m%d'), int(row.behaviour_time)))
+                    row.water_restriction_number, session_date.strftime('%Y%m%d'), int(row.behaviour_time)))
         else:
             sess_key = False
 
         if not sess_key:
-            sess_key = experiment.Session & {'subject_id': row.subject_id, 'session_date': row.session_date.date()}
+            sess_key = experiment.Session & {'subject_id': row.subject_id, 'session_date': session_date}
             if len(sess_key) == 1:
                 # case of single-session per day - ensuring session's datetime matches the filename
                 # session_datetime and datetime from filename should not be more than 3 hours apart
-                bf = (behav_ingest.BehaviorIngest.BehaviorFile & sess_key).fetch('behavior_file')[0]
-                bf_datetime = re.search('(\d{8}_\d{6}).mat', bf).groups()[0]
-                bf_datetime = datetime.strptime(bf_datetime, '%Y%m%d_%H%M%S')
+                bf = (behavior_ingest_table.BehaviorFile & sess_key).fetch('behavior_file')[0]
+                bf_datetime = re.search(bf_reg_exp, bf).groups()[0]
+                bf_datetime = datetime.strptime(bf_datetime, bf_datetime_format)
                 s_datetime = sess_key.proj(s_dt='cast(concat(session_date, " ", session_time) as datetime)').fetch1('s_dt')
                 if abs((s_datetime - bf_datetime).total_seconds()) > 10800:  # no more than 3 hours
                     log.debug('Unmatched sess_dt ({}) and behavior_dt ({}). Skipping...'.format(s_datetime, bf_datetime))
@@ -224,25 +240,33 @@ def load_meta_foraging():
     print('Adding experimenters...')
     df_experimenters = pd.read_csv(pathlib.Path(meta_lab_dir) / 'Experimenter.csv')
     
+    duplicate_num = 0
     for experimenter in df_experimenters.iterrows():
         experimenter = experimenter[1]
         experimenternow = {'username':experimenter['username'],'fullname':experimenter['fullname']}
         try:
             lab.Person().insert1(experimenternow)
+            print('  added experimenter: ',experimenternow['username'])
         except dj.errors.DuplicateError:
-            print('  duplicate. experimenter: ',experimenternow['username'], ' already exists')
+            duplicate_num += 1
+            #  print('  duplicate. experimenter: ',experimenternow['username'], ' already exists')
+    print(f'  {duplicate_num} experimenters already exist')
     
     # --- Add rigs ---
     print('Adding rigs... ')
     df_rigs = pd.read_csv(pathlib.Path(meta_lab_dir) / 'Rig.csv')
     
+    duplicate_num = 0
     for rig in df_rigs.iterrows():
         rig = rig[1]
         rignow = {'rig':rig['rig'],'room':rig['room'],'rig_description':rig['rig_description']}
         try:
             lab.Rig().insert1(rignow)
+            print('  added rig: ', rignow['rig'])
         except dj.errors.DuplicateError:
-            print('  duplicate. rig: ',rignow['rig'], ' already exists')
+            duplicate_num += 1
+            # print('  duplicate. rig: ',rignow['rig'], ' already exists')
+    print(f'  {duplicate_num} rigs already exist')
             
     # --- Add viruses ---
     # Not implemented for now.  Han
@@ -252,6 +276,9 @@ def load_meta_foraging():
     df_surgery = pd.read_csv(pathlib.Path(meta_dir) / 'Surgery.csv')
     
     # For each entry
+    duplicate_subject_num = 0
+    duplicate_WR_num = 0
+
     for item in df_surgery.iterrows():
         item = item[1]
         
@@ -267,9 +294,10 @@ def load_meta_foraging():
                     }
             try:
                 lab.Subject().insert1(subjectdata)
-                
+                print('  added subject: ', item['animal#'])
             except dj.errors.DuplicateError:
-                print('  duplicate. animal :',item['animal#'], ' already exists')
+                duplicate_subject_num += 1
+                # print('  duplicate. animal :',item['animal#'], ' already exists')
                 
             # -- Add lab.Surgery() --
             # Not implemented. Han
@@ -296,9 +324,13 @@ def load_meta_foraging():
                         }
                 try:
                     lab.WaterRestriction().insert1(wrdata)
+                    print('  added WR: ', item['ID'])
                 except dj.errors.DuplicateError:
-                    print('  duplicate. water restriction:', item['ID'], ' already exists')
-
+                    duplicate_WR_num += 1
+                    # print('  duplicate. water restriction:', item['ID'], ' already exists')
+                    
+    print(f'  {duplicate_subject_num} subjects and {duplicate_WR_num} WRs already exist')
+    
 
 def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': True}):
 
@@ -331,6 +363,18 @@ def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': T
 
     log.info('psth.UnitSelectivity.populate()')
     psth.UnitSelectivity.populate(**populate_settings)
+
+
+def populate_foraging_psth(populate_settings={'reserve_jobs': True, 'display_progress': True}):
+
+    log.info('psth.UnitPsth.populate()')
+    psth_foraging.UnitPsth.populate(**populate_settings)
+
+    log.info('psth.PeriodSelectivity.populate()')
+    psth_foraging.PeriodSelectivity.populate(**populate_settings)
+
+    log.info('psth.UnitSelectivity.populate()')
+    psth_foraging.UnitSelectivity.populate(**populate_settings)
 
 
 def populate_foraging_analysis(populate_settings={'reserve_jobs': True, 'display_progress': True}):
