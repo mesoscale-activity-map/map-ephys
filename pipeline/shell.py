@@ -15,7 +15,7 @@ from pymysql.err import OperationalError
 
 
 from pipeline import (lab, experiment, tracking, ephys, report, psth, psth_foraging, ccf,
-                      histology, export, publication, globus, foraging_analysis,
+                      histology, export, publication, globus, foraging_analysis, foraging_model,
                       get_schema_name)
 
 pipeline_modules = [lab, ccf, experiment, ephys, publication, report,
