@@ -78,9 +78,19 @@ class ProbeInsertionQuality(dj.Manual):
     definition = """  # Indication of insertion quality (good/bad) - for various reasons: lack of unit, poor behavior, poor histology
     -> ProbeInsertion
     ---
-    insertion_quality: enum('good', 'bad')
-    comment: varchar(1000)  # comment/reason for the 'good'/'bad' label
+    insertion_quality='good': enum('good', 'bad')
+    drift_presence=0: bool
+    number_of_landmarks: int
+    comment='': varchar(1000)  # comment/reason for the 'good'/'bad' label
     """
+
+    class GoodPeriod(dj.Part):
+        definition = """
+        -> master
+        good_period_start: float  # seconds with respect to the start of the session
+        ---
+        good_period_end: float  # seconds with respect to the end of the session
+        """
 
 
 @schema
