@@ -281,7 +281,7 @@ def get_session_history(session_key={'subject_id': 447921, 'session': 3}):
     q_p_reward = experiment.SessionBlock.WaterPortRewardProbability()
 
     for lickport in ['left', 'right']:
-        
+        pass
 
 
 
