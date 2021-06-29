@@ -8,7 +8,7 @@ import scipy.optimize as optimize
 import multiprocessing as mp
 # from tqdm import tqdm  # For progress bar. HH
 
-from models.bandit_model import BanditModel
+from .bandit_model import BanditModel
 global fit_history
 
 def negLL_func(fit_value, *argss):
@@ -178,7 +178,7 @@ def fit_bandit(forager, fit_names, fit_bounds, choice_history, reward_history, s
     fitting_result.LPT_AIC = np.exp(- fitting_result.AIC / 2 / fitting_result.n_trials)
     fitting_result.LPT_BIC = np.exp(- fitting_result.BIC / 2 / fitting_result.n_trials)
     
-    # === Rerun predictive choice sequence ===
+    # === Rerun predictive choice sequence (latent decision value; not latent value per se, but can be used to estimate Q etc.) ===
     if if_predictive:
         
         kwargs_all = {}
@@ -200,12 +200,14 @@ def fit_bandit(forager, fit_names, fit_bounds, choice_history, reward_history, s
             reward_this = reward_history[:, session_num == ss]
             fitting_result.trial_numbers.append(np.sum(session_num == ss))
             
-            # Run **PREDICTIVE** simulation    
+            # Run **PREDICTIVE** simulation using the fitted data
             bandit = BanditModel(forager = forager, **kwargs_all, fit_choice_history = choice_this, fit_reward_history = reward_this)  # Into the fitting mode
             bandit.simulate()
             predictive_choice_prob.append(bandit.predictive_choice_prob)
         
         fitting_result.predictive_choice_prob = np.hstack(predictive_choice_prob)
+        this_predictive_choice = np.argmax(fitting_result.predictive_choice_prob, axis = 0)
+        fitting_result.prediction_accuracy = np.sum(this_predictive_choice == choice_this) / fitting_result.n_trials
         
     # === Run generative choice sequence ==  #!!!
         
@@ -280,11 +282,11 @@ def cross_validate_bandit(forager, fit_names, fit_bounds, choice_history, reward
         if 'biasL' in kwargs_all:
             bias_this = kwargs_all['biasL']
             prediction_correct_bias_only = int(bias_this <= 0) == choice_history[0] # If bias_this < 0, bias predicts all rightward choices
-        
+            prediction_accuracy_test_bias_only.append(sum(prediction_correct_bias_only[test_set_this]) / len(test_set_this))
+
         prediction_accuracy_test.append(sum(prediction_correct[test_set_this]) / len(test_set_this))
         prediction_accuracy_fit.append(sum(prediction_correct[fit_set_this]) / len(fit_set_this))
         
-        prediction_accuracy_test_bias_only.append(sum(prediction_correct_bias_only[test_set_this]) / len(test_set_this))
 
     return prediction_accuracy_test, prediction_accuracy_fit, prediction_accuracy_test_bias_only
             
