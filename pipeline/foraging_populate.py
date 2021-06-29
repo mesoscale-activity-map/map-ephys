@@ -1,5 +1,5 @@
 import datajoint as dj
-from pipeline import lab, get_schema_name, foraging_analysis, report, psth_foraging
+from pipeline import lab, get_schema_name, foraging_analysis, report, psth_foraging, foraging_model
 import multiprocessing as mp
 
 # Ray does not support Windows, use multiprocessing instead
@@ -7,18 +7,20 @@ use_ray = False
 
 def populatemytables_core(arguments,runround):
     if runround == 1:
-        foraging_analysis.TrialStats().populate(**arguments)
-        foraging_analysis.BlockStats().populate(**arguments)
-        foraging_analysis.SessionTaskProtocol().populate(**arguments)
-        foraging_analysis.SessionStats().populate(**arguments)
-        foraging_analysis.BlockFraction().populate(**arguments)
-        foraging_analysis.SessionMatching().populate(**arguments)
-        foraging_analysis.BlockEfficiency().populate(**arguments)           
+        # foraging_analysis.TrialStats().populate(**arguments)
+        # foraging_analysis.BlockStats().populate(**arguments)
+        # foraging_analysis.SessionTaskProtocol().populate(**arguments)
+        # foraging_analysis.SessionStats().populate(**arguments)
+        # foraging_analysis.BlockFraction().populate(**arguments)
+        # foraging_analysis.SessionMatching().populate(**arguments)
+        # foraging_analysis.BlockEfficiency().populate(**arguments)           
 
-        report.SessionLevelForagingSummary.populate(**arguments)   
-        report.SessionLevelForagingLickingPSTH.populate(**arguments)   
+        # report.SessionLevelForagingSummary.populate(**arguments)   
+        # report.SessionLevelForagingLickingPSTH.populate(**arguments)   
 
-        psth_foraging.UnitPsth.populate(**arguments)
+        # psth_foraging.UnitPsth.populate(**arguments)
+        
+        foraging_model.FittedSessionModel.populate(**arguments)
         
 def populatemytables(paralel = True, cores = 9):
     IDs = {k: v for k, v in zip(*lab.WaterRestriction().fetch('water_restriction_number', 'subject_id'))}              
