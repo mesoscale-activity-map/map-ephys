@@ -8,9 +8,9 @@ import numpy as np
 import pandas as pd
 import time
 
-from models.fitting_functions import fit_bandit, cross_validate_bandit
-from utils.plot_fitting import plot_model_comparison_predictive_choice_prob, plot_model_comparison_result
-from IPython.display import display
+from .fitting_functions import fit_bandit, cross_validate_bandit
+# from utils.plot_fitting import plot_model_comparison_predictive_choice_prob, plot_model_comparison_result
+# from IPython.display import display
 
 
 class BanditModelComparison:
@@ -21,35 +21,28 @@ class BanditModelComparison:
     
     '''
     
-    def __init__(self, choice_history, reward_history, p_reward = None, session_num = None, models = None):
+    def __init__(self, choice_history, reward_history, model, p_reward = None, session_num = None):
         """
 
         Parameters
         ----------
         choice_history, reward_history, (p_reward), (session_num)
             DESCRIPTION. p_reward is only for plotting or generative validation; session_num is for pooling across sessions
-        models : list of integers or models, optional
-            DESCRIPTION. If it's a list of integers, the models will be selected from the pre-defined models.
-            If it's a list of models, then it will be used directly. Use the format: [forager, [para_names], [lower bounds], [higher bounds]]
-            The default is None (using all pre-defined models).
+        model: only accepts one model, selected from foraging_model.Model table
+            # models : list of integers or models, optional
+            #     DESCRIPTION. If it's a list of integers, the models will be selected from the pre-defined models.
+            #     If it's a list of models, then it will be used directly. Use the format: [forager, [para_names], [lower bounds], [higher bounds]]
+            #     The default is None (using all pre-defined models).
         Returns
         -------
         None.
 
         """
-        
-        if models is None:  
-            self.models = MODELS
-        elif type(models[0]) is int:
-            self.models = [MODELS[i-1] for i in models]
-        else:
-            self.models = models
-            
+
+        self.models = model
         self.fit_choice_history, self.fit_reward_history, self.p_reward, self.session_num = choice_history, reward_history, p_reward, session_num
         self.K, self.n_trials = np.shape(self.fit_reward_history)
         assert np.shape(self.fit_choice_history)[1] == self.n_trials, 'Choice length should be equal to reward length!'
-        
-        return
         
     def fit(self, fit_method = 'DE', fit_settings = {'DE_pop_size': 16}, pool = '',
                   if_verbose = True, 
@@ -65,17 +58,9 @@ class BanditModelComparison:
             forager, fit_names, fit_lb, fit_ub = model
             fit_bounds = [fit_lb, fit_ub]
             
-            para_notation = ''
-            Km = 0
-            
-            for name, lb, ub in zip(fit_names, fit_lb, fit_ub):
-                # == Generate notation ==
-                if lb < ub:
-                    para_notation += PARA_NOTATIONS[name] + ', '
-                    Km += 1
-            
-            para_notation = para_notation[:-2]
-            
+            para_notation = None
+            Km = None
+                        
             # == Do fitting here ==
             #  Km = np.sum(np.diff(np.array(fit_bounds),axis=0)>0)
             
@@ -89,10 +74,12 @@ class BanditModelComparison:
             if if_verbose: print(' AIC = %g, BIC = %g (done in %.3g secs)' % (result_this.AIC, result_this.BIC, time.time()-start) )
             self.results_raw.append(result_this)
             self.results = self.results.append(pd.DataFrame({'model': [forager], 'Km': Km, 'AIC': result_this.AIC, 'BIC': result_this.BIC, 
-                                    'LPT_AIC': result_this.LPT_AIC, 'LPT_BIC': result_this.LPT_BIC, 'LPT': result_this.LPT,
+                                    'LPT_AIC': result_this.LPT_AIC, 'LPT_BIC': result_this.LPT_BIC, 'LPT': result_this.LPT, 'prediction_accuracy': result_this.prediction_accuracy,
                                     'para_names': [fit_names], 'para_bounds': [fit_bounds], 
                                     'para_notation': [para_notation], 'para_fitted': [np.round(result_this.x,3)]}, index = [mm+1]))
         
+        '''
+        #!!! To move
         # == Reorganize data ==
         delta_AIC = self.results.AIC - np.min(self.results.AIC) 
         delta_BIC = self.results.BIC - np.min(self.results.BIC)
@@ -114,6 +101,7 @@ class BanditModelComparison:
         
         self.results_sort = self.results.sort_values(by='AIC')
         
+        '''
         self.trial_numbers = result_this.trial_numbers 
         
         # == Plotting == 
@@ -133,16 +121,8 @@ class BanditModelComparison:
             forager, fit_names, fit_lb, fit_ub = model
             fit_bounds = [fit_lb, fit_ub]
             
-            para_notation = ''
-            Km = 0
-            
-            for name, lb, ub in zip(fit_names, fit_lb, fit_ub):
-                # == Generate notation ==
-                if lb < ub:
-                    para_notation += PARA_NOTATIONS[name] + ', '
-                    Km += 1
-            
-            para_notation = para_notation[:-2]
+            para_notation = None
+            Km = None
             
             # == Do fitting here ==
             #  Km = np.sum(np.diff(np.array(fit_bounds),axis=0)>0)
@@ -150,9 +130,10 @@ class BanditModelComparison:
             if if_verbose: print('Model %g/%g: %15s, Km = %g ...'%(mm+1, len(self.models), forager, Km), end = '')
             start = time.time()
                 
-            prediction_accuracy_test, prediction_accuracy_fit, prediction_accuracy_test_bias_only= cross_validate_bandit(forager, fit_names, fit_bounds, 
-                                                                                      self.fit_choice_history, self.fit_reward_history, self.session_num, 
-                                                                                      k_fold = k_fold, **fit_settings, pool = pool, if_verbose = if_verbose) #plot_predictive is not None)
+            prediction_accuracy_test, prediction_accuracy_fit, prediction_accuracy_test_bias_only \
+            = cross_validate_bandit(forager, fit_names, fit_bounds, 
+                                    self.fit_choice_history, self.fit_reward_history, self.session_num, 
+                                    k_fold = k_fold, **fit_settings, pool = pool, if_verbose = if_verbose) #plot_predictive is not None)
             
             if if_verbose: print('  \n%g-fold CV: Test acc.= %s, Fit acc. = %s (done in %.3g secs)' % (k_fold, prediction_accuracy_test, prediction_accuracy_fit, time.time()-start) )
             
@@ -161,19 +142,19 @@ class BanditModelComparison:
                                                                    'forager': forager,
                                                                    'Km': Km,
                                                                    'para_notation': para_notation,
-                                                                   'prediction_accuracy_test': prediction_accuracy_test, 
-                                                                   'prediction_accuracy_fit': prediction_accuracy_fit,
-                                                                   'prediction_accuracy_test_bias_only': prediction_accuracy_test_bias_only})])
+                                                                   'prediction_accuracy_test': [prediction_accuracy_test], 
+                                                                   'prediction_accuracy_fit': [prediction_accuracy_fit],
+                                                                   'prediction_accuracy_test_bias_only': [prediction_accuracy_test_bias_only]})])
             
         return
 
-    def plot_predictive_choice(self):
-        plot_model_comparison_predictive_choice_prob(self)
+    # def plot_predictive_choice(self):
+    #     plot_model_comparison_predictive_choice_prob(self)
 
-    def show(self):
-        pd.options.display.max_colwidth = 100
-        display(self.results_sort[['model','Km', 'AIC','log10_BF_AIC', 'model_weight_AIC', 'BIC','log10_BF_BIC', 'model_weight_BIC', 'para_notation','para_fitted']].round(2))
+    # def show(self):
+        # pd.options.display.max_colwidth = 100
+        # display(self.results_sort[['model','Km', 'AIC','log10_BF_AIC', 'model_weight_AIC', 'BIC','log10_BF_BIC', 'model_weight_BIC', 'para_notation','para_fitted']].round(2))
         
-    def plot(self):
-        plot_model_comparison_result(self)
+    # def plot(self):
+    #     plot_model_comparison_result(self)
 

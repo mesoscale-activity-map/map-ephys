@@ -35,7 +35,7 @@
 
 import numpy as np
 from scipy.stats import norm
-from utils.helper_func import softmax, choose_ps
+from .helper_func import softmax, choose_ps
 
 LEFT = 0
 RIGHT = 1
