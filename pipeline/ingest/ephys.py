@@ -1041,7 +1041,7 @@ def read_bitcode(bitcode_dir, h2o, skey):
             assert len(go_times) == len(behav_trials)
 
         if bitcodes is None:
-            # no bitcodes (the nidq.XA.txt file for bitcode not available)
+            # no bitcodes (the nidq.XA.txt file for bitcode is not available)
             if skey['rig'] == 'RRig-MTL' and len(trial_start_times) == len(behav_trials):
                 # for MTL rig, this is glitch in the recording system
                 # if the number of trial matches with behavior, then this is a 1-to-1 mapping
@@ -1091,11 +1091,13 @@ def build_bitcode(bitcode_dir):
                                 ' for found in {}'.format(bitcode_dir))
 
     try:
-        with open(next(bitcode_dir.glob('*.XA_1_2.txt')), 'r') as f:
+        bitcode_file = next(bitcode_dir.glob('*.XA_1_2.txt'))
+        assert bitcode_file.stat().st_size / 1024 > 0
+        with open(bitcode_file, 'r') as f:
             bitcode_times = f.read()
             bitcode_times = bitcode_times.strip().split('\n')
             bitcode_times = np.array(bitcode_times).astype(float)
-    except StopIteration:
+    except (StopIteration, AssertionError):
         log.info('Generate bitcode failed. No bitcode file "*.XA_1_2.txt"'
                  ' for found in {}'.format(bitcode_dir))
         bitcodes = None
