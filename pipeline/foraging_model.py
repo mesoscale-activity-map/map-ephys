@@ -210,7 +210,7 @@ class FittedSessionModel(dj.Computed):
     """
 
     key_source = (foraging_analysis.SessionTaskProtocol() & 'session_task_protocol = 100' & 'session_real_foraging'
-                  ) * Model() & (experiment.Session & 'session_date > "2021-01-01"')
+                  ) * Model() #& (experiment.Session & 'session_date > "2021-01-01"')
 
     class FittedParam(dj.Part):
         definition = """
@@ -246,7 +246,7 @@ class FittedSessionModel(dj.Computed):
                           prediction_accuracy=fit_result.prediction_accuracy,
                           cross_valid_accuracy_fit=np.mean(cross_valid_result.prediction_accuracy_fit),
                           cross_valid_accuracy_test=np.mean(cross_valid_result.prediction_accuracy_test),
-                          cross_valid_accuracy_test_bias_only=np.mean(cross_valid_result.prediction_accuracy_test),
+                          cross_valid_accuracy_test_bias_only=np.mean(cross_valid_result.prediction_accuracy_test_bias_only),
                           predictive_choice_prob=fit_result.predictive_choice_prob,
                           ),
                      skip_duplicates=True, allow_direct_insert=True)
