@@ -163,7 +163,13 @@ class BrainArea(dj.Lookup):
     contents = [('ALM', 'anterior lateral motor cortex'),
                 ('vS1', 'vibrissal primary somatosensory cortex ("barrel cortex")'),
                 ('Thalamus', 'Thalamus'), ('Medulla', 'Medulla'),
-                ('Striatum', 'Striatum'), ('Midbrain', 'Midbrain')]
+                ('Striatum', 'Striatum'), ('Midbrain', 'Midbrain'),
+                ('vM1', 'vibrissal primary motor cortex'), 
+                ('PL', 'prelimbic area'),
+                ('IL', 'infralimbic area'),
+                ('ACA', 'anterior cingulate area'),
+                ('MOB', 'main olfactory bulb'),
+                ('RSP', 'retrosplenial area')]
     
     
 @schema
