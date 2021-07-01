@@ -20,6 +20,9 @@ log = logging.getLogger(__name__)
 # NOW:
 # - rework Condition to TrialCondition funtion+arguments based schema
 
+# The new psth_foraging schema is only for foraging sessions. 
+foraging_sessions = experiment.Session & (experiment.BehaviorTrial & 'task LIKE "foraging%"')
+
 
 @schema
 class TrialCondition(dj.Lookup):
@@ -287,7 +290,7 @@ class UnitPsth(dj.Computed):
                   & 'unit_quality != "all"')
         stim = ((ephys.Unit & (experiment.Session & experiment.PhotostimBrainRegion))
                 * (TrialCondition & 'trial_condition_func = "_get_trials_include_stim"') & 'unit_quality != "all"')
-        return nostim.proj() + stim.proj()
+        return nostim.proj() + stim.proj() & foraging_sessions
 
     def make(self, key):
         log.debug('UnitPsth.make(): key: {}'.format(key))
@@ -351,151 +354,6 @@ class UnitPsth(dj.Computed):
                                   for s, t in zip(spikes, trials)])]
 
         return dict(trials=trials, spikes=spikes, psth=unit_psth, raster=raster)
-
-
-@schema
-class Selectivity(dj.Lookup):
-    """
-    Selectivity lookup values
-    """
-
-    definition = """
-    selectivity: varchar(24)
-    """
-
-    contents = zip(['contra-selective', 'ipsi-selective', 'non-selective'])
-
-
-@schema
-class PeriodSelectivity(dj.Computed):
-    """
-    Multi-trial selectivity for a specific trial subperiod
-    """
-
-    definition = """
-    -> ephys.Unit
-    -> experiment.Period
-    ---
-    -> Selectivity.proj(period_selectivity='selectivity')
-    ipsi_firing_rate=0:           float  # mean firing rate of all ipsi-trials
-    contra_firing_rate=0:         float  # mean firing rate of all contra-trials
-    p_value=1:                    float  # all trial spike rate t-test p-value
-    """
-
-    alpha = 0.05  # default alpha value
-
-    key_source = experiment.Period * (ephys.Unit & ephys.ProbeInsertion.InsertionLocation & 'unit_quality != "all"')
-
-    def make(self, key):
-        '''
-        Compute Period Selectivity for a given unit.
-        '''
-        log.debug('PeriodSelectivity.make(): key: {}'.format(key))
-
-        hemi = _get_units_hemisphere(key)
-
-        # retrieving the spikes of interest,
-        spikes_q = ((ephys.Unit.TrialSpikes & key)
-                    * (experiment.BehaviorTrial
-                       & {'task': 'audio delay',
-                          'early_lick': 'no early',
-                          'outcome': 'hit',
-                          'free_water': 0,
-                          'auto_water': 0})
-                    & (experiment.TrialEvent & 'trial_event_type = "delay"' & 'duration = 1.2')
-                    - experiment.PhotostimEvent)
-
-        if not spikes_q:  # no spikes found
-            self.insert1({**key, 'period_selectivity': 'non-selective'})
-            return
-
-        # retrieving event times
-        start_event, start_tshift, end_event, end_tshift = (experiment.Period & key).fetch1(
-            'start_event_type', 'start_time_shift', 'end_event_type', 'end_time_shift')
-        start_event_q = {k['trial']: float(k['start_event_time'])
-                         for k in (experiment.TrialEvent & key & {'trial_event_type': start_event}).proj(
-            start_event_time=f'trial_event_time + {start_tshift}').fetch(as_dict=True)}
-        end_event_q = {k['trial']: float(k['end_event_time'])
-                       for k in (experiment.TrialEvent & key & {'trial_event_type': end_event}).proj(
-            end_event_time=f'trial_event_time + {end_tshift}').fetch(as_dict=True)}
-        cue_event_q = {k['trial']: float(k['trial_event_time'])
-                       for k in (experiment.TrialEvent & key & {'trial_event_type': 'go'}).fetch(as_dict=True)}
-
-        # compute spike rate during the period-of-interest for each trial
-        freq_i, freq_c = [], []
-        for trial, trial_instruct, spike_times in zip(*spikes_q.fetch('trial', 'trial_instruction', 'spike_times')):
-            start_time = start_event_q[trial] - cue_event_q[trial]
-            stop_time = end_event_q[trial] - cue_event_q[trial]
-            spk_rate = np.logical_and(spike_times >= start_time, spike_times < stop_time).sum() / (stop_time - start_time)
-            if hemi == trial_instruct:
-                freq_i.append(spk_rate)
-            else:
-                freq_c.append(spk_rate)
-
-        # and testing for selectivity.
-        t_stat, pval = sc_stats.ttest_ind(freq_i, freq_c, equal_var=True)
-        # try:
-        #     _stat, pval = sc_stats.mannwhitneyu(freq_i, freq_c)
-        # except ValueError:
-        #     pval = np.nan
-
-        freq_i_m = np.average(freq_i)
-        freq_c_m = np.average(freq_c)
-
-        pval = 1 if np.isnan(pval) else pval
-        if pval > self.alpha:
-            pref = 'non-selective'
-        else:
-            pref = ('ipsi-selective' if freq_i_m > freq_c_m
-                    else 'contra-selective')
-
-        self.insert1({**key, 'p_value': pval,
-                      'period_selectivity': pref,
-                      'ipsi_firing_rate': freq_i_m,
-                      'contra_firing_rate': freq_c_m})
-
-
-@schema
-class UnitSelectivity(dj.Computed):
-    """
-    Multi-trial selectivity at unit level
-    """
-
-    definition = """
-    -> ephys.Unit
-    ---
-    -> Selectivity.proj(unit_selectivity='selectivity')
-    """
-
-    # Unit Selectivity is computed only for units
-    # that has PeriodSelectivity computed for "sample" and "delay" and "response"
-    key_source = (ephys.Unit
-                  & (PeriodSelectivity & 'period = "sample"')
-                  & (PeriodSelectivity & 'period = "delay"')
-                  & (PeriodSelectivity & 'period = "response"'))
-
-    def make(self, key):
-        '''
-        calculate 'global' selectivity for a unit -
-        '''
-        log.debug('UnitSelectivity.make(): key: {}'.format(key))
-
-        # fetch region selectivity,
-        sels = (PeriodSelectivity & key).fetch('period_selectivity')
-
-        if (sels == 'non-selective').all():
-            log.debug('... no UnitSelectivity for unit')
-            self.insert1({**key, 'unit_selectivity': 'non-selective'})
-            return
-
-        contra_frate, ipsi_frate = (PeriodSelectivity & key & 'period in ("sample", "delay", "response")').fetch(
-            'contra_firing_rate', 'ipsi_firing_rate')
-
-        pref = ('ipsi-selective' if ipsi_frate.mean() > contra_frate.mean() else 'contra-selective')
-
-        log.debug('... prefers: {}'.format(pref))
-
-        self.insert1({**key, 'unit_selectivity': pref})
 
 
 def compute_unit_psth(unit_key, trial_keys, per_trial=False):

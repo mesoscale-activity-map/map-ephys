@@ -365,17 +365,9 @@ def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': T
     log.info('psth.UnitSelectivity.populate()')
     psth.UnitSelectivity.populate(**populate_settings)
 
-
-def populate_foraging_psth(populate_settings={'reserve_jobs': True, 'display_progress': True}):
-
-    log.info('psth.UnitPsth.populate()')
+    # Foraging task
+    log.info('psth_foraging.UnitPsth.populate()')
     psth_foraging.UnitPsth.populate(**populate_settings)
-
-    log.info('psth.PeriodSelectivity.populate()')
-    psth_foraging.PeriodSelectivity.populate(**populate_settings)
-
-    log.info('psth.UnitSelectivity.populate()')
-    psth_foraging.UnitSelectivity.populate(**populate_settings)
 
 
 def populate_foraging_analysis(populate_settings={'reserve_jobs': True, 'display_progress': True}):
