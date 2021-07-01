@@ -483,6 +483,7 @@ class BehaviorBpodIngest(dj.Imported):
                             sessions_now.append(session)
                             session_start_times_now.append(session.started)
                             experimentnames_now.append(exp.name)
+                            
         bpodsess_order = np.argsort(session_start_times_now)
 
         # --- Handle missing BPod session ---
@@ -557,6 +558,8 @@ class BehaviorBpodIngest(dj.Imported):
                     setupname = 'Training-Tower-3'
                 elif session.setup_name.lower() in ['tower-1']:
                     setupname = 'Training-Tower-1'
+                elif session.setup_name.lower() in ['ephys_han']:
+                    setupname = 'Ephys-Han'
                 else:
                     log.info('ERROR: unhandled setup name {} (from {}). Skipping...'.format(
                         session.setup_name, session.path))
@@ -586,14 +589,12 @@ class BehaviorBpodIngest(dj.Imported):
             # ---- Ingestion of trials ----
 
             # extracting trial data
-            session_start_time = datetime.combine(sess_key['session_date'],
-                                                  sess_key['session_time'])
-            trial_start_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'TRIAL') & (
-                        df_behavior_session['MSG'] == 'New trial')].index
-            trial_start_idxs = pd.Index([0]).append(
-                trial_start_idxs[1:])  # so the random seed will be present
-            trial_end_idxs = trial_start_idxs[1:].append(
-                pd.Index([(max(df_behavior_session.index))]))
+            session_start_time = datetime.combine(sess_key['session_date'], sess_key['session_time'])
+            trial_start_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'TRIAL') & (df_behavior_session['MSG'] == 'New trial')].index
+            trial_start_idxs -= 2 # To reflect the change that bitcode is moved before the "New trial" line
+            trial_start_idxs = pd.Index([0]).append(trial_start_idxs[1:])  # so the random seed will be present
+            trial_end_idxs = trial_start_idxs[1:].append(pd.Index([(max(df_behavior_session.index))]))
+
             # trial_end_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'END-TRIAL')].index
             prevtrialstarttime = np.nan
             blocknum_local_prev = np.nan
@@ -741,8 +742,15 @@ class BehaviorBpodIngest(dj.Imported):
                     seedidx = (df_behavior_trial['MSG'] == 'Random seed:').idxmax() + 1
                     rows['trial_note'].append({**sess_trial_key,
                                                'trial_note_type': 'random_seed_start',
-                                               'trial_note': str(
-                                                   df_behavior_trial['MSG'][seedidx])})
+                                               'trial_note': str(df_behavior_trial['MSG'][seedidx])})
+                    
+                # add randomID (TrialBitCode)
+                if any(df_behavior_trial['MSG'] == 'TrialBitCode: '):
+                    bitcode_ind = (df_behavior_trial['MSG'] == 'TrialBitCode: ').idxmax() + 1
+                    rows['trial_note'].append({**sess_trial_key,
+                                               'trial_note_type': 'bitcode',
+                                               'trial_note': str(df_behavior_trial['MSG'][bitcode_ind])})
+
 
                 # ---- Behavior Trial ----
                 rows['behavior_trial'].append({**sess_trial_key,
