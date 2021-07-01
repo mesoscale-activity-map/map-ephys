@@ -37,9 +37,6 @@ def usage_exit():
             str().join("  - {}: {}\n".format(k, v[1])
                        for k, v in actions.items())))
 
-    # print("usage: {p} [{c}] <args>"
-    #       .format(p=os.path.basename(sys.argv[0]),
-    #               c='|'.join(list(actions.keys()))))
     sys.exit(0)
 
 
@@ -602,6 +599,7 @@ def loop(*args):
         except Exception as e:
             log.info('{} loop round {} recieved error: {}'.format(
                 cmd, nruns, repr(e)))
+            log.debug('exception:', exc_info=1)
             nerrs += 1
 
         nruns += 1
