@@ -476,7 +476,7 @@ def export_recording(*args):
     export.export_recording(ik, fn)
 
 
-def print_worker_status():
+def print_jobs_summary():
     """
     Return a pandas.DataFrame on the status of each table currently being processed
 
@@ -494,35 +494,27 @@ def print_worker_status():
      but this won't reflect idling workers because there's no "key_source" to work on for some
      particular tables
     """
-    job_status = {}
+    job_status = []
     for pipeline_module in (experiment, tracking, ephys, histology,
                             psth, foraging_analysis, report):
-        reserved_df = (pipeline_module.schema.jobs
-                       & 'status = "reserved"').proj('status', 'timestamp').fetch(
-            format='frame').reset_index()
-        reserve_count = reserved_df.groupby('table_name').count()
-        reserve_oldest = reserved_df.groupby('table_name').min()
-        reserve_newest = reserved_df.groupby('table_name').max()
+        reserved = dj.U('table_name').aggr(pipeline_module.schema.jobs & 'status = "reserved"',
+                                           reserve_count='count(table_name)',
+                                           oldest_job='MIN(timestamp)',
+                                           newest_job='MAX(timestamp)')
+        errored = dj.U('table_name').aggr(pipeline_module.schema.jobs & 'status = "error"',
+                                          error_count='count(table_name)')
+        jobs_summary = reserved * errored
 
-        error_df = (pipeline_module.schema.jobs
-                    & 'status = "error"').proj('status', 'timestamp').fetch(
-            format='frame').reset_index()
-        error_count = error_df.groupby('table_name').count()
-
-        for r_index, r in reserve_count.iterrows():
-            if r_index not in job_status:
-                job_status[r_index] = {
-                    'table': f'{pipeline_module.__name__.split(".")[-1]}.{dj.utils.to_camel_case(r_index)}',
-                    'reserve_count': r.status}
-            job_status[r_index]['error_count'] = error_count.loc[r_index].status if r_index in error_count.index else 0
-            job_status[r_index]['oldest_job'] = reserve_oldest.loc[r_index].timestamp
-            job_status[r_index]['newest_job'] = reserve_newest.loc[r_index].timestamp
+        for job in jobs_summary.fetch(as_dict=True):
+            job_status.append({
+                'table': f'{pipeline_module.__name__.split(".")[-1]}.{dj.utils.to_camel_case(job.pop("table_name"))}',
+                **job})
 
     if not job_status:
         print('No jobs under process (0 reserved jobs)')
         return
 
-    job_status_df = pd.DataFrame(job_status.values()).set_index('table')
+    job_status_df = pd.DataFrame(job_status).set_index('table')
     with pd.option_context('display.max_rows', None,
                            'display.max_columns', None,
                            'display.width', None,
