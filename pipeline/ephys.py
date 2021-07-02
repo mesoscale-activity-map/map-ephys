@@ -88,9 +88,9 @@ class ProbeInsertionQuality(dj.Manual):
     class GoodPeriod(dj.Part):
         definition = """
         -> master
-        good_period_start: float  # seconds with respect to the start of the session
+        good_period_start: decimal(9, 4)  #  (s) relative to session beginning 
         ---
-        good_period_end: float  # seconds with respect to the end of the session
+        good_period_end: decimal(9, 4)  # (s) relative to session beginning 
         """
 
 
