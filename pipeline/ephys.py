@@ -81,6 +81,7 @@ class ProbeInsertionQuality(dj.Manual):
     insertion_quality='good': enum('good', 'bad')
     drift_presence=0: bool
     number_of_landmarks: int
+    alignment_confidence=1: bool
     comment='': varchar(1000)  # comment/reason for the 'good'/'bad' label
     """
 
