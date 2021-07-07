@@ -206,7 +206,6 @@ class FittedSessionModel(dj.Computed):
     cross_valid_accuracy_fit: float     # cross-validated accuracy (fitting set)
     cross_valid_accuracy_test: float    # cross-validated accuracy (testing set)
     cross_valid_accuracy_test_bias_only = NULL: float    # accuracy predicted only by bias (testing set)
-    predictive_choice_prob: longblob  # could be used to compute latent value Q (for models that have Q)
     """
 
     key_source = (foraging_analysis.SessionTaskProtocol() & 'session_task_protocol = 100' & 'session_real_foraging'
@@ -219,9 +218,19 @@ class FittedSessionModel(dj.Computed):
         ---
         fitted_value: float
         """
+    
+    class PredictiveChoiceProb(dj.Part):
+        definition = """
+        # Could be used to compute latent value Q (for models that have Q). Ignored trial skipped.
+        -> master
+        -> experiment.SessionTrial
+        -> experiment.WaterPort
+        ---
+        choice_prob: float        
+        """
 
     def make(self, key):
-        choice_history, reward_history, p_reward = get_session_history(key)
+        choice_history, reward_history, p_reward, q_choice_outcome = get_session_history(key)
         model_str = (Model & key).fetch('fit_cmd')
 
         # --- Actual fitting ---
@@ -247,14 +256,22 @@ class FittedSessionModel(dj.Computed):
                           cross_valid_accuracy_fit=np.mean(cross_valid_result.prediction_accuracy_fit),
                           cross_valid_accuracy_test=np.mean(cross_valid_result.prediction_accuracy_test),
                           cross_valid_accuracy_test_bias_only=np.mean(cross_valid_result.prediction_accuracy_test_bias_only),
-                          predictive_choice_prob=fit_result.predictive_choice_prob,
                           ),
                      skip_duplicates=True, allow_direct_insert=True)
 
         # Insert fitted params
         for param, x in zip((Model.Param & key).fetch('model_param'), fit_result.x):
             self.FittedParam.insert1(dict(**key, model_param=param, fitted_value=x))
-
+        
+        # Insert predictive choice probability
+        for water_port_idx, water_port in enumerate(['left', 'right']):
+            key['water_port'] = water_port
+            self.PredictiveChoiceProb.insert(
+                [{**key, 'trial': trial_idx, 'choice_prob': this_prob} 
+                 for trial_idx, this_prob in zip(q_choice_outcome.fetch('trial'), fit_result.predictive_choice_prob[water_port_idx])],
+                skip_duplicates=True
+                )
+        
 
 # ============= Helpers =============
 
@@ -281,4 +298,4 @@ def get_session_history(session_key, remove_ignored=True):
     p_reward = np.vstack([(q_p_reward & 'water_port="left"').fetch('reward_probability').astype(float),
                           (q_p_reward & 'water_port="right"').fetch('reward_probability').astype(float)])
 
-    return choice_history, reward_history, p_reward
+    return choice_history, reward_history, p_reward, q_choice_outcome
