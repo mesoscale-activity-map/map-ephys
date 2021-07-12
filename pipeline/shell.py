@@ -354,6 +354,9 @@ def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': 
     log.info('ephys.MAPClusterMetric.populate()')
     histology.InterpolatedShankTrack.populate(**populate_settings)
 
+    log.info('tracking.TrackingQC.populate()')
+    tracking.TrackingQC.populate(**populate_settings)
+
 
 def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': True}):
 
@@ -471,6 +474,61 @@ def export_recording(*args):
     ik = eval(args[0])  # "{k: v}" -> {k: v}
     fn = args[1] if len(args) > 1 else None
     export.export_recording(ik, fn)
+
+
+def print_worker_status():
+    """
+    Return a pandas.DataFrame on the status of each table currently being processed
+
+        table | reserve_count | error_count | oldest_job | newest_job
+            - table: {schema}.{table} name
+            - reserve_count: number of workers currently working on this table
+            - error_count: number of jobs errors for this table
+            - oldest_job: timestamp of the oldest job currently being worked on
+            - newest_job: timestamp of the most recent job currently being worked on
+
+    Provide insights into the current status of the workers
+
+    One caveat in this function is that we don't know how many workers are being deployed,
+     and how they're orchestrated. We can infer by taking the sum of the reserved jobs,
+     but this won't reflect idling workers because there's no "key_source" to work on for some
+     particular tables
+    """
+    job_status = {}
+    for pipeline_module in (experiment, tracking, ephys, histology,
+                            psth, foraging_analysis, report):
+        reserved_df = (pipeline_module.schema.jobs
+                       & 'status = "reserved"').proj('status', 'timestamp').fetch(
+            format='frame').reset_index()
+        reserve_count = reserved_df.groupby('table_name').count()
+        reserve_oldest = reserved_df.groupby('table_name').min()
+        reserve_newest = reserved_df.groupby('table_name').max()
+
+        error_df = (pipeline_module.schema.jobs
+                    & 'status = "error"').proj('status', 'timestamp').fetch(
+            format='frame').reset_index()
+        error_count = error_df.groupby('table_name').count()
+
+        for r_index, r in reserve_count.iterrows():
+            if r_index not in job_status:
+                job_status[r_index] = {
+                    'table': f'{pipeline_module.__name__.split(".")[-1]}.{dj.utils.to_camel_case(r_index)}',
+                    'reserve_count': r.status}
+            job_status[r_index]['error_count'] = error_count.loc[r_index].status if r_index in error_count.index else 0
+            job_status[r_index]['oldest_job'] = reserve_oldest.loc[r_index].timestamp
+            job_status[r_index]['newest_job'] = reserve_newest.loc[r_index].timestamp
+
+    if not job_status:
+        print('No jobs under process (0 reserved jobs)')
+        return
+
+    job_status_df = pd.DataFrame(job_status.values()).set_index('table')
+    with pd.option_context('display.max_rows', None,
+                           'display.max_columns', None,
+                           'display.width', None,
+                           'display.max_colwidth', -1):
+        print(job_status_df)
+    return job_status_df
 
 
 def shell(*args):
