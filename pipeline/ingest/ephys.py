@@ -976,11 +976,16 @@ def _match_probe_to_ephys(h2o, dpath, dglob):
     return clustered_probes
 
 
+# ======== Helpers for bitcodes loading/generation ========
+bitcode_rig_mapper = {'RRig-MTL': {'trial_start': '*.XA_0_0.txt', 'bitcode': '*.XA_1_2.txt'}}
+
+
 def read_bitcode(bitcode_dir, h2o, skey):
     """
     Load bitcode file from specified dir - example bitcode format: e.g. 'SC022_030319_Imec3_bitcode.mat'
     :return: sync_behav, sync_ephys, trial_fix, trial_go, trial_start
     """
+    rig = (experiment.Session & skey).fetch1('rig')
     bitcode_dir = pathlib.Path(bitcode_dir)
     try:
         bf_path = next(bitcode_dir.glob('{}_*bitcode.mat'.format(h2o)))
@@ -988,10 +993,9 @@ def read_bitcode(bitcode_dir, h2o, skey):
         log.info('.... loading bitcode file: {}'.format(str(bf_path)))
     except StopIteration:
         try:
-            next(bitcode_dir.parent.glob('*.XA_0_0.txt'))
-            bf_path = next(bitcode_dir.parent.glob('*.XA_1_2.txt'))
+            next(bitcode_dir.parent.glob('*.XA_0_0*.txt'))
             bitcode_format = 'nidq.XA.txt'
-            log.info('.... loading bitcode file: {}'.format(str(bf_path)))
+            log.info('.... loading bitcodes from "nidq.XA.txt" files')
         except StopIteration:
             raise FileNotFoundError(
                 'Reading bitcode failed. Neither (*bitcode.mat) nor (nidq.XA*.txt)'
@@ -1039,19 +1043,33 @@ def read_bitcode(bitcode_dir, h2o, skey):
                 'trial_event_time', order_by='trial').astype(float)
             assert len(go_times) == len(behav_trials)
 
-        ephys_bitcodes, trial_numbers, ephys_trial_start_times, ephys_trial_ref_times = [], [], [], []
-        for bitcode, start_time in zip(bitcodes, trial_start_times):
-            matched_trial_idx = np.where(behavior_bitcodes == bitcode)[0]
-            if len(matched_trial_idx):
-                matched_trial_idx = matched_trial_idx[0]
-                ephys_trial_start_times.append(start_time)
-                ephys_bitcodes.append(bitcode)
-                trial_numbers.append(behav_trials[matched_trial_idx])
-                ephys_trial_ref_times.append(start_time + go_times[matched_trial_idx])
+        if bitcodes is None:
+            # no bitcodes (the nidq.XA.txt file for bitcode is not available)
+            if rig == 'RRig-MTL' and len(trial_start_times) == len(behav_trials):
+                # for MTL rig, this is glitch in the recording system
+                # if the number of trial matches with behavior, then this is a 1-to-1 mapping
+                ephys_bitcodes = behavior_bitcodes
+                trial_numbers = behav_trials
+                ephys_trial_ref_times = trial_start_times + go_times
+                ephys_trial_start_times = trial_start_times
+            else:
+                raise FileNotFoundError('Generate bitcode failed. No bitcode file'
+                                        ' "*.XA_0_0.txt"'
+                                        ' for found in {}'.format(bitcode_dir))
+        else:
+            ephys_bitcodes, trial_numbers, ephys_trial_start_times, ephys_trial_ref_times = [], [], [], []
+            for bitcode, start_time in zip(bitcodes, trial_start_times):
+                matched_trial_idx = np.where(behavior_bitcodes == bitcode)[0]
+                if len(matched_trial_idx):
+                    matched_trial_idx = matched_trial_idx[0]
+                    ephys_trial_start_times.append(start_time)
+                    ephys_bitcodes.append(bitcode)
+                    trial_numbers.append(behav_trials[matched_trial_idx])
+                    ephys_trial_ref_times.append(start_time + go_times[matched_trial_idx])
 
-        ephys_trial_ref_times = np.array(ephys_trial_ref_times)
-        trial_numbers = np.array(trial_numbers)
-        ephys_trial_start_times = np.array(ephys_trial_start_times)
+            ephys_trial_ref_times = np.array(ephys_trial_ref_times)
+            trial_numbers = np.array(trial_numbers)
+            ephys_trial_start_times = np.array(ephys_trial_start_times)
 
     else:
         raise ValueError('Unknown bitcode format: {}'.format(bitcode_format))
@@ -1065,33 +1083,54 @@ def build_bitcode(bitcode_dir):
 
     bitcode_dir = pathlib.Path(bitcode_dir)
 
+    # trial-start file
     try:
-        with open(next(bitcode_dir.glob('*.XA_0_0.txt')), 'r') as f:
-            trial_starts = f.read()
-            trial_starts = trial_starts.strip().split('\n')
-            trial_starts = np.array(trial_starts).astype(float)
-        with open(next(bitcode_dir.glob('*.XA_1_2.txt')), 'r') as f:
+        trial_start_filepath = next(bitcode_dir.glob('*.XA_0_0.adj.txt'))
+    except StopIteration:
+        try:
+            trial_start_filepath = next(bitcode_dir.glob('*.XA_0_0.txt'))
+        except StopIteration:
+            raise FileNotFoundError('Generate bitcode failed. No trial-start file'
+                                    ' "*.XA_1_2.txt"'
+                                    ' found in {}'.format(bitcode_dir))
+    with open(trial_start_filepath, 'r') as f:
+        trial_starts = f.read()
+        trial_starts = trial_starts.strip().split('\n')
+        trial_starts = np.array(trial_starts).astype(float)
+
+    # bitcode file
+    try:
+        bitcode_filepath = next(bitcode_dir.glob('*.XA_1_2.adj.txt'))
+    except StopIteration:
+        try:
+            bitcode_filepath = next(bitcode_dir.glob('*.XA_1_2.txt'))
+        except StopIteration:
+            log.info('Generate bitcode failed. No bitcode file "*.XA_1_2.txt"'
+                     ' found in {}'.format(bitcode_dir))
+            bitcode_filepath = None
+
+    if bitcode_filepath is None or bitcode_filepath.stat().st_size == 0:
+        log.info('Generate bitcode failed. 0kb bitcode file "*.XA_1_2.txt"'
+                 ' found in {}'.format(bitcode_dir))
+        bitcodes = None
+    else:
+        with open(bitcode_filepath, 'r') as f:
             bitcode_times = f.read()
             bitcode_times = bitcode_times.strip().split('\n')
             bitcode_times = np.array(bitcode_times).astype(float)
-    except StopIteration:
-        raise FileNotFoundError('Generate bitcode failed. No bitcode file'
-                                ' "*.XA_0_0.txt" or "*.XA_1_2.txt"'
-                                ' for found in {}'.format(bitcode_dir))
 
-    trial_ends = np.concatenate([trial_starts[1:], [trial_starts[-1] + 99]])  # the last trial to be arbitrarily long
-
-    bitcodes = []
-    for trial_start, trial_end in zip(trial_starts, trial_ends):
-        trial_bitcode_times = bitcode_times[np.logical_and(bitcode_times >= trial_start,
-                                                           bitcode_times < trial_end)]
-        trial_bitcode_times = np.concatenate(
-            [[trial_start + time_to_first_high_bit - inter_bit_interval], trial_bitcode_times])
-        high_bit_ind = np.cumsum(np.round(np.diff(trial_bitcode_times) / inter_bit_interval)).astype(int) - 1
-        bitcode = np.zeros(10).astype(int)
-        bitcode[high_bit_ind] = 1
-        bitcode = ''.join(bitcode.astype(str))
-        bitcodes.append(bitcode)
+        trial_ends = np.concatenate([trial_starts[1:], [trial_starts[-1] + 99]])  # the last trial to be arbitrarily long
+        bitcodes = []
+        for trial_start, trial_end in zip(trial_starts, trial_ends):
+            trial_bitcode_times = bitcode_times[np.logical_and(bitcode_times >= trial_start,
+                                                               bitcode_times < trial_end)]
+            trial_bitcode_times = np.concatenate(
+                [[trial_start + time_to_first_high_bit - inter_bit_interval], trial_bitcode_times])
+            high_bit_ind = np.cumsum(np.round(np.diff(trial_bitcode_times) / inter_bit_interval)).astype(int) - 1
+            bitcode = np.zeros(10).astype(int)
+            bitcode[high_bit_ind] = 1
+            bitcode = ''.join(bitcode.astype(str))
+            bitcodes.append(bitcode)
 
     return bitcodes, trial_starts
 
