@@ -128,6 +128,7 @@ def ingest_all(*args):
 def load_animal(excel_fp, sheet_name='Sheet1'):
     df = pd.read_excel(excel_fp, sheet_name, engine='openpyxl')
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
+    df.dropna(subset=['water_restriction_number'], inplace=True)
 
     subjects, water_restrictions, subject_ids = [], [], []
     for i, row in df.iterrows():
@@ -179,7 +180,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
         + good_period: string, in the following example format: 0-200;230-290;400-end
     """
 
-    from pipeline.ingest import behavior as behav_ingest
+    from pipeline.ingest import behavior as behavior_ingest
     log.info('loading probe insertions from spreadsheet {}'.format(excel_fp))
 
     yes_no_mapper = {'yes': 1, 'no': 0}
@@ -192,26 +193,30 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
         from_excel = False
 
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
+    df.dropna(subset=['water_restriction_number'], inplace=True)
 
-    insertion_locations = []
-    recordable_brain_regions = []
-    insertions_quality = []
-    insertions_good_periods = []
+    if 'behaviour_time' not in df.columns:
+        df['behaviour_time'] = np.full(len(df), None)
+
+    load_insertion_quality = 'insertion_quality' in df.columns
+
+    insertion_locations, recordable_brain_regions = [], []
+    insertions_quality, insertions_good_periods = [], []
     for i, row in df.iterrows():
         try:
             int(row.behaviour_time)
             valid_btime = True
-        except ValueError:
+        except (ValueError, TypeError):
             log.debug('Invalid behaviour time: {} - try single-sess per day'.format(row.behaviour_time))
             valid_btime = False
         
         session_date = row.session_date.date() if from_excel else datetime.strptime(row.session_date,'%Y-%m-%d')
-        if 'foraging' in row.project:
-            behavior_ingest_table = behav_ingest.BehaviorBpodIngest
+        if hasattr(row, 'project') and 'foraging' in row.project:
+            behavior_ingest_table = behavior_ingest.BehaviorBpodIngest
             bf_reg_exp = '(\d{8}-\d{6})'
             bf_datetime_format = '%Y%m%d-%H%M%S'
         else:
-            behavior_ingest_table = behav_ingest.BehaviorIngest
+            behavior_ingest_table = behavior_ingest.BehaviorIngest
             bf_reg_exp = '(\d{8}_\d{6}).mat'
             bf_datetime_format = '%Y%m%d_%H%M%S'
 
@@ -249,7 +254,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
             if not (ephys.ProbeInsertion.RecordableBrainRegion & pinsert_key):
                 recordable_brain_regions.append(dict(pinsert_key, brain_area=row.brain_area,
                                                      hemisphere=row.hemisphere))
-            if not (ephys.ProbeInsertionQuality & pinsert_key):
+            if load_insertion_quality and not (ephys.ProbeInsertionQuality & pinsert_key):
                 if (row.insertion_quality and row.drift_presence and row.number_of_landmarks
                         and row.alignment_confidence and row.good_period):
                     # insertion_quality
@@ -259,7 +264,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
                              drift_presence=yes_no_mapper[row.drift_presence.lower()],
                              number_of_landmarks=row.number_of_landmarks,
                              alignment_confidence=yes_no_mapper[row.alignment_confidence.lower()],
-                             insertion_comment=row.insertion_comment or ''))
+                             insertion_comment=row.insertion_comment if isinstance(row.insertion_comment, str) else ''))
                     # insertion good periods
                     session_end = (experiment.SessionTrial & sess_key).fetch(
                         'stop_time', order_by='stop_time DESC', limit=1)[0]
