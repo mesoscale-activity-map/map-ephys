@@ -284,7 +284,9 @@ class TrialEventType(dj.Lookup):
     trial_event_type  : varchar(12)  
     """
     contents = zip(('delay', 'go', 'sample', 'presample', 'trialend',
-                    'videostart', 'videoend', 'bitcodestart', 'choice', 'reward', 'doubledip'))   # Added for foraging
+                    'videostart', 'videoend', 'bitcodestart', 'choice', 'reward', 'doubledip',   # Added for foraging
+                    'bpodstart', 'zaberstep', 'zaberready'    # Events only available from NIDQ channels
+                    ))
 
 
 @schema
