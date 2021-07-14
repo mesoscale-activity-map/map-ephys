@@ -179,7 +179,6 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
         + insertion_comment: free text
         + good_period: string, in the following example format: 0-200;230-290;400-end
     """
-
     from pipeline.ingest import behavior as behavior_ingest
     log.info('loading probe insertions from spreadsheet {}'.format(excel_fp))
 
@@ -194,7 +193,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
 
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
     df.dropna(subset=['water_restriction_number'], inplace=True)
-
+    df.fillna(value=False, inplace=True)
     if 'behaviour_time' not in df.columns:
         df['behaviour_time'] = np.full(len(df), None)
 
@@ -264,7 +263,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
                              drift_presence=yes_no_mapper[row.drift_presence.lower()],
                              number_of_landmarks=row.number_of_landmarks,
                              alignment_confidence=yes_no_mapper[row.alignment_confidence.lower()],
-                             insertion_comment=row.insertion_comment if isinstance(row.insertion_comment, str) else ''))
+                             insertion_comment=row.insertion_comment or ''))
                     # insertion good periods
                     session_end = (experiment.SessionTrial & sess_key).fetch(
                         'stop_time', order_by='stop_time DESC', limit=1)[0]
