@@ -200,6 +200,30 @@ class Unit(dj.Imported):
 
 
 @schema
+class TrialEventType(dj.Lookup):
+    definition = """
+    trial_event_type  : varchar(20)  
+    """
+    contents = zip(('bitcodestart', 'go', 'choice', 'reward', 'trialend',   # Same as experiment.TrialEvent; could be used for cross-validation
+                    'bpodstart', 'zaberstep', 'zaberinposition'    # Events that are only available from NIDQ channels (camera pulses into the tracking schema)
+                    ))   
+
+
+@schema
+class TrialEvent(dj.Imported):
+    """
+    Trialized events extracted from NIDQ channels with (global) session-based times
+    """
+    definition = """
+    -> experiment.BehaviorTrial
+    trial_event_id: smallint
+    ---
+    -> TrialEventType
+    trial_event_time : float  # (s) from session start (global time)
+    """    
+
+
+@schema
 class UnitNote(dj.Imported):
     definition = """
     -> Unit

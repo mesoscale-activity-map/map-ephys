@@ -46,6 +46,13 @@ class Tracking(dj.Imported):
     ---
     tracking_samples: int             # number of events (possibly frame number, relative to the start of the trial)
     """
+    
+    class Frame(dj.Part):
+        definition = """
+        -> Tracking
+        ---
+        frame_time: longblob   # Global session-wise time (in sec)
+        """
 
     class NoseTracking(dj.Part):
         definition = """
