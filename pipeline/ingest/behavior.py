@@ -692,7 +692,7 @@ class BehaviorBpodIngest(dj.Imported):
                 #    They are far from each other because I start the bpod trial at the middle of ITI (Foraging_bpod: e9a8ffd6) to cover video recording during ITI.
                 # 3. In theory, *bitcodestart* = *delay* (since there's no sample period),
                 #    but in practice, the bitcode (21*20=420 ms) and lickport movement (~100 ms) also take some time.
-                #    Note that bpod doesn't know the exact time when lickports are in place, so we can get *delay* only from NIDQ zaber channel.
+                #    Note that bpod doesn't know the exact time when lickports are in place, so we can get *delay* only from NIDQ zaber channel (ephys.TrialEvent.'zaberinposition').
                 # 4. In early lick trials, effective delay start should be the last 'DelayStart' (?)
                 # 5. Finally, to perform session-wise alignment between behavior and ephys, there are two ways, which could be cross-checked with each other:
                 #       (1) (most straightforward) use all event markers directly from NIDQ bitcode.mat,
@@ -718,6 +718,7 @@ class BehaviorBpodIngest(dj.Imported):
                                            'reward': [f'Reward_{lickport}' for lickport in self.water_port_name_mapper.values()],
                                            'doubledip': ['Double_dipped'],   # Only for non-double-dipped trials, ITI = last lick + 1 sec (maybe I should not use double dipping punishment for ehpys?)
                                            'trialend': ['ITI'],
+                                           'videoend': ['ITIAfterVideoOff'],
                                            }
 
                 for trial_event_type, bpod_state in bpod_states_of_interest.items():
