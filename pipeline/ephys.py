@@ -205,7 +205,7 @@ class UnitNote(dj.Imported):
     -> Unit
     note_source: varchar(36)  # e.g. "sort", "Davesort", "Han-sort"
     ---
-    note_value: varchar(128)
+    -> UnitQualityType
     """
 
     key_source = ProbeInsertion & Unit.proj()
