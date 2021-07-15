@@ -19,7 +19,7 @@ import numpy as np
 import datajoint as dj
 #import pdb
 
-from pipeline import lab, experiment, ephys, report
+from pipeline import lab, experiment, ephys, report, tracking
 from pipeline import InsertBuffer, dict_value_to_hash
 
 from .. import get_schema_name
@@ -105,6 +105,7 @@ class EphysIngest(dj.Imported):
         metrics = data['metrics']  # either None or a pd.DataFrame loaded from 'metrics.csv'
         creation_time = data['creation_time']
         clustering_label = data['clustering_label']
+        bitcode_raw = data['bitcode_raw']
 
         log.info('-- Start insertions for probe: {} - Clustering method: {} - Label: {}'.format(probe, method, clustering_label))
 
@@ -169,6 +170,13 @@ class EphysIngest(dj.Imported):
             trials = behav_trials[trial_indices]
 
         assert len(trial_start) == len(trials), 'Unequal number of bitcode "trial_start" ({}) and ingested behavior trials ({})'.format(len(trial_start), len(trials))
+
+        # -- Ingest time markers from NIDQ channels --
+        # This is redudant for delay response task because aligning spikes to the go-cue is enough (trial_spikes below)
+        # But this is critical for the foraging task, because we need global session-wise times to plot flexibly-aligned PSTHs (in particular, spikes during ITI).
+        # However, we CANNOT get this from behavior pybpod .csv files (PC-TIME is inaccurate, whereas BPOD-TIME is trial-based)
+        if probe == 1 and 'digMarkerPerTrial' in bitcode_raw:   # Only import once for one session
+            insert_ephys_events(skey, bitcode_raw)
 
         # trialize the spikes & subtract go cue
         t, trial_spikes, trial_units = 0, [], []
@@ -608,7 +616,7 @@ def _load_jrclust_v3(sinfo, fpath):
 
     # -- trial-info from bitcode --
     try:
-        sync_behav, sync_ephys, trial_fix, trial_go, trial_start = read_bitcode(fpath.parent, h2o, skey)
+        sync_behav, sync_ephys, trial_fix, trial_go, trial_start, _ = read_bitcode(fpath.parent, h2o, skey)
     except FileNotFoundError as e:
         raise e
 
@@ -694,7 +702,7 @@ def _load_jrclust_v4(sinfo, fpath):
 
     # -- trial-info from bitcode --
     try:
-        sync_behav, sync_ephys, trial_fix, trial_go, trial_start = read_bitcode(fpath.parent, h2o, skey)
+        sync_behav, sync_ephys, trial_fix, trial_go, trial_start, _ = read_bitcode(fpath.parent, h2o, skey)
     except FileNotFoundError as e:
         raise e
 
@@ -765,7 +773,7 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
 
     # -- trial-info from bitcode --
     try:
-        sync_behav, sync_ephys, trial_fix, trial_go, trial_start = read_bitcode(npx_dir, h2o, skey)
+        sync_behav, sync_ephys, trial_fix, trial_go, trial_start, bitcode_raw = read_bitcode(npx_dir, h2o, skey)
     except FileNotFoundError as e:
         raise e
 
@@ -881,6 +889,7 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
         'creation_time': creation_time,
         'clustering_label': clustering_label,
         'ks_channel_map': ks.data['channel_map'] + 1,  # channel numbering in this pipeline is 1-based indexed
+        'bitcode_raw': bitcode_raw,
     }
 
     return data
@@ -1074,7 +1083,67 @@ def read_bitcode(bitcode_dir, h2o, skey):
     else:
         raise ValueError('Unknown bitcode format: {}'.format(bitcode_format))
 
-    return behavior_bitcodes, ephys_bitcodes, trial_numbers, ephys_trial_ref_times, ephys_trial_start_times
+    return behavior_bitcodes, ephys_bitcodes, trial_numbers, ephys_trial_ref_times, ephys_trial_start_times, bf
+
+
+def insert_ephys_events(skey, bf):
+    '''
+    all times are session-based
+    '''
+    
+    # --- Events available both from behavior .csv file (trial time) and ephys NIDQ (session time) ---
+    # digMarkerPerTrial from bitcode.mat: [STRIG_, GOCUE_, CHOICEL_, CHOICER_, REWARD_, ITI_, BPOD_START_, ZABER_IN_POS_]
+    # <--> ephys.TrialEventType: 'bitcodestart', 'go', 'choice', 'choice', 'reward', 'trialend', 'bpodstart', 'zaberinposition'
+    log.info('.... insert_ephys_events() ...')
+    log.info('       loading ephys events from NIDQ ...')
+    df = pd.DataFrame()
+    headings = bf['headings'][0]
+    digMarkerPerTrial = bf['digMarkerPerTrial']
+    
+    for col, event_type in enumerate(headings):
+        times = digMarkerPerTrial[:, col]
+        not_nan = np.where(~np.isnan(times))[0]
+        trials = not_nan + 1   # Trial all starts from 1
+        df = df.append(pd.DataFrame({**skey,
+                           'trial': trials,
+                           'trial_event_id': col,
+                           'trial_event_type': event_type[0],
+                           'trial_event_time': times[not_nan]}
+                                    )
+                       )
+
+    # --- Zaber pulses (only available from ephys NIDQ) ---
+    if 'zaberPerTrial' in bf:
+        for trial, pulses in enumerate(bf['zaberPerTrial'][0]):
+            df = df.append(pd.DataFrame({**skey,
+                               'trial': trial + 1,   # Trial all starts from 1
+                               'trial_event_id': np.arange(len(pulses)) + len(headings),
+                               'trial_event_type': 'zaberstep',
+                               'trial_event_time': pulses.flatten()}
+                                        )
+                           )
+
+    # --- Do batch insertion --
+    ephys.TrialEvent.insert(df, allow_direct_insert=True)
+
+    # --- Camera frames (only available from ephys NIDQ) ---
+    if 'cameraPerTrial' in bf:
+        log.info('       loading camera frames from NIDQ ...')
+
+        _idx = [_idx for _idx, field in enumerate(bf['chan'].dtype.descr) if 'cameraNameInDJ' in field][0]
+        cameras = bf['chan'][0,0][_idx][0,:]
+        for camera, all_frames in zip(cameras, bf['cameraPerTrial'][0]):
+            for trial, frames in enumerate(all_frames[0]):
+                key = {**skey,
+                       'trial': trial + 1,  # Trial all starts from 1
+                       'tracking_device': camera[0]}
+                tracking.Tracking.insert1({**key,
+                                           'tracking_samples': len(frames)},
+                                          allow_direct_insert=True)
+                tracking.Tracking.Frame.insert1({**key,
+                                                  'frame_time': frames.flatten()},
+                                                 allow_direct_insert=True)
+    log.info('.... insert_ephys_events() Done! ...')
 
 
 def build_bitcode(bitcode_dir):
