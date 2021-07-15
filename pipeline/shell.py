@@ -258,7 +258,6 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
                     # insertion_quality
                     insertions_quality.append(
                         dict(pinsert_key,
-                             insertion_quality=row.insertion_quality,
                              drift_presence=yes_no_mapper[row.drift_presence.lower()],
                              number_of_landmarks=row.number_of_landmarks,
                              alignment_confidence=yes_no_mapper[row.alignment_confidence.lower()],
