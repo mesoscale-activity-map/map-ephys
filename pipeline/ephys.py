@@ -78,7 +78,6 @@ class ProbeInsertionQuality(dj.Manual):
     definition = """  # Indication of insertion quality (good/bad) - for various reasons: lack of unit, poor behavior, poor histology
     -> ProbeInsertion
     ---
-    insertion_quality='good': enum('good', 'bad')
     drift_presence=0: bool
     number_of_landmarks: int
     alignment_confidence=1: bool

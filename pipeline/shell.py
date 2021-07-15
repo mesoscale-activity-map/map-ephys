@@ -172,7 +172,6 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
         + brain_area
         + hemisphere
         -- insertion quality --
-        + insertion_quality: good/bad
         + drift_presence: yes/no
         + alignment_confidence: yes/no
         + number_of_landmarks: int
@@ -255,7 +254,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
                                                      hemisphere=row.hemisphere))
             if load_insertion_quality and not (ephys.ProbeInsertionQuality & pinsert_key):
                 if (row.insertion_quality and row.drift_presence and row.number_of_landmarks
-                        and row.alignment_confidence and row.good_period):
+                        and row.alignment_confidence):
                     # insertion_quality
                     insertions_quality.append(
                         dict(pinsert_key,
@@ -265,14 +264,16 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
                              alignment_confidence=yes_no_mapper[row.alignment_confidence.lower()],
                              insertion_comment=row.insertion_comment or ''))
                     # insertion good periods
-                    session_end = (experiment.SessionTrial & sess_key).fetch(
-                        'stop_time', order_by='stop_time DESC', limit=1)[0]
-                    for period in row.good_period.replace(' ', '').split(','):
-                        period_start, period_end = period.lower().split('-')
-                        insertions_good_periods.append(
-                            dict(pinsert_key,
-                                 good_period_start=Decimal(period_start),
-                                 good_period_end=Decimal(period_end) if period_end != 'end' else session_end))
+                    if row.good_period:
+                        session_end = (experiment.SessionTrial & sess_key).fetch(
+                            'stop_time', order_by='stop_time DESC', limit=1)[0]
+                        for period in row.good_period.replace(' ', '').split(','):
+                            period_start, period_end = period.lower().split('-')
+                            insertions_good_periods.append(
+                                dict(pinsert_key,
+                                     good_period_start=Decimal(period_start),
+                                     good_period_end=Decimal(period_end) if period_end != 'end'
+                                     else session_end))
 
     log.debug('InsertionLocation: {}'.format(insertion_locations))
     log.debug('RecordableBrainRegion: {}'.format(recordable_brain_regions))
