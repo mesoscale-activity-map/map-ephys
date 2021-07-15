@@ -253,7 +253,8 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
                 recordable_brain_regions.append(dict(pinsert_key, brain_area=row.brain_area,
                                                      hemisphere=row.hemisphere))
             if load_insertion_quality and not (ephys.ProbeInsertionQuality & pinsert_key):
-                if (row.insertion_quality and row.drift_presence and row.number_of_landmarks
+                if (row.drift_presence
+                        and row.number_of_landmarks 
                         and row.alignment_confidence):
                     # insertion_quality
                     insertions_quality.append(
