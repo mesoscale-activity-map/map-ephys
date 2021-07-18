@@ -1,18 +1,13 @@
 import logging
-import hashlib
-
 from functools import partial
 from inspect import getmembers
-from itertools import repeat
 import numpy as np
 import datajoint as dj
-import scipy.stats as sc_stats
 
 from . import (lab, experiment, ephys)
 [lab, experiment, ephys]  # NOQA
 
 from . import get_schema_name, dict_to_hash
-from .util import _get_units_hemisphere
 
 schema = dj.schema(get_schema_name('psth_foraging'))
 log = logging.getLogger(__name__)
@@ -354,107 +349,3 @@ class UnitPsth(dj.Computed):
                                   for s, t in zip(spikes, trials)])]
 
         return dict(trials=trials, spikes=spikes, psth=unit_psth, raster=raster)
-
-
-def compute_unit_psth(unit_key, trial_keys, per_trial=False):
-    """
-    Compute unit-level psth for the specified unit and trial-set - return (time,)
-    If per_trial == True, compute trial-level psth - return ((trial x time), time_vec)
-    :param unit_key: key of a single unit to compute the PSTH for
-    :param trial_keys: list of all the trial keys to compute the PSTH over
-    """
-    q = (ephys.Unit.TrialSpikes & unit_key & trial_keys)
-    if not q:
-        return None
-
-    xmin, xmax, bin_size = UnitPsth.psth_params.values()
-    binning = np.arange(xmin, xmax, bin_size)
-
-    spikes = q.fetch('spike_times')
-
-    if per_trial:
-        trial_psth = np.vstack(np.histogram(spike, bins=binning)[0] / bin_size for spike in spikes)
-        return trial_psth, binning[1:]
-    else:
-        spikes = np.concatenate(spikes)
-        psth, edges = np.histogram(spikes, bins=binning)
-        psth = psth / len(q) / bin_size
-        return psth, edges[1:]
-
-
-def compute_coding_direction(contra_psths, ipsi_psths, time_period=None):
-    """
-    Coding direction here is a vector of length: len(unit_keys)
-    This coding direction vector (vcd) is the normalized difference between contra-trials firing rate
-    and ipsi-trials firing rate per unit, within the specified time period
-    :param contra_psths: unit# x (trial-ave psth, psth_edge)
-    :param ipsi_psths: unit# x (trial-ave psth, psth_edge)
-    :param time_period: (time_from, time_to) in seconds, relative to go-cue
-    """
-    if not time_period:
-        contra_tmin, contra_tmax = zip(*((k[1].min(), k[1].max()) for k in contra_psths))
-        ipsi_tmin, ipsi_tmax = zip(*((k[1].min(), k[1].max()) for k in ipsi_psths))
-        time_period = max(min(contra_tmin), min(ipsi_tmin)), min(max(contra_tmax), max(ipsi_tmax))
-
-    p_start, p_end = time_period
-
-    contra_ave_spk_rate = np.array([spk_rate[np.logical_and(spk_edge >= p_start, spk_edge < p_end)].mean()
-                                    for spk_rate, spk_edge in contra_psths])
-    ipsi_ave_spk_rate = np.array([spk_rate[np.logical_and(spk_edge >= p_start, spk_edge < p_end)].mean()
-                                  for spk_rate, spk_edge in ipsi_psths])
-
-    cd_vec = contra_ave_spk_rate - ipsi_ave_spk_rate
-    return cd_vec / np.linalg.norm(cd_vec)
-
-
-def compute_CD_projected_psth(units, time_period=None):
-    """
-    Routine for Coding Direction computation on all the units in the specified unit_keys
-    Coding Direction is calculated in the specified time_period
-    Unit PSTH are computed over no early-lick, correct-response trials
-    :param: unit_keys - list of unit_keys
-    :param time_period: (time_from, time_to) in seconds, relative to go-cue
-    :return: coding direction unit-vector,
-             contra-trials CD projected trial-psth,
-             ipsi-trials CD projected trial-psth
-             psth time-stamps
-    """
-    unit_hemi = _get_units_hemisphere(units)
-    session_key = experiment.Session & units
-    if len(session_key) != 1:
-        raise Exception('Units from multiple sessions found')
-
-    # -- the computation part
-    # get units and trials - ensuring they have trial-spikes
-    contra_trials = (TrialCondition().get_trials(
-        'good_noearlylick_right_hit' if unit_hemi == 'left' else 'good_noearlylick_left_hit')
-                     & session_key & ephys.Unit.TrialSpikes).fetch('KEY')
-    ipsi_trials = (TrialCondition().get_trials(
-        'good_noearlylick_left_hit' if unit_hemi == 'left' else 'good_noearlylick_right_hit')
-                     & session_key & ephys.Unit.TrialSpikes).fetch('KEY')
-
-    # get per-trial unit psth for all units - unit# x (trial# x time)
-    contra_trial_psths, contra_edges = zip(*(compute_unit_psth(unit, contra_trials, per_trial=True)
-                                             for unit in units))
-    ipsi_trial_psths, ipsi_edges = zip(*(compute_unit_psth(unit, ipsi_trials, per_trial=True)
-                                         for unit in units))
-
-    # compute trial-ave unit psth
-    contra_psths = zip((p.mean(axis=0) for p in contra_trial_psths), contra_edges)
-    ipsi_psths = zip((p.mean(axis=0) for p in ipsi_trial_psths), ipsi_edges)
-
-    # compute coding direction
-    cd_vec = compute_coding_direction(contra_psths, ipsi_psths, time_period=time_period)
-
-    # get time vector, relying on all units PSTH shares the same time vector
-    time_stamps = contra_edges[0]
-
-    # get coding projection per trial - trial# x unit# x time
-    contra_psth_per_trial = np.dstack(contra_trial_psths)
-    ipsi_psth_per_trial = np.dstack(ipsi_trial_psths)
-
-    proj_contra_trial = np.vstack(np.dot(tr_u, cd_vec) for tr_u in contra_psth_per_trial)  # trial# x time
-    proj_ipsi_trial = np.vstack(np.dot(tr_u, cd_vec) for tr_u in ipsi_psth_per_trial)    # trial# x time
-
-    return cd_vec, proj_contra_trial, proj_ipsi_trial, time_stamps, unit_hemi
-

@@ -33,21 +33,21 @@ photostim_duration = 0.5  # (s)
 skull_ref = 'Bregma'
 photostims = {
     4: {'photo_stim': 4, 'photostim_device': 'OBIS470', 'duration': photostim_duration,
-                  'locations': [{'skull_reference': skull_ref, 'brain_area': 'ALM',
-                                 'ap_location': 2500, 'ml_location': -1500, 'depth': 0,
-                                 'theta': 15, 'phi': 15}]},
-              5: {'photo_stim': 5, 'photostim_device': 'OBIS470', 'duration': photostim_duration,
-                  'locations': [{'skull_reference': skull_ref, 'brain_area': 'ALM',
-                                 'ap_location': 2500, 'ml_location': 1500, 'depth': 0,
-                                 'theta': 15, 'phi': 15}]},
-              6: {'photo_stim': 6, 'photostim_device': 'OBIS470', 'duration': photostim_duration,
-                  'locations': [{'skull_reference': skull_ref, 'brain_area': 'ALM',
-                                 'ap_location': 2500, 'ml_location': -1500, 'depth': 0,
-                                 'theta': 15, 'phi': 15},
-                                {'skull_reference': skull_ref, 'brain_area': 'ALM',
-                                 'ap_location': 2500, 'ml_location': 1500, 'depth': 0,
-                                 'theta': 15, 'phi': 15}
-                                ]}}
+        'locations': [{'skull_reference': skull_ref, 'brain_area': 'ALM',
+                       'ap_location': 2500, 'ml_location': -1500, 'depth': 0,
+                       'theta': 15, 'phi': 15}]},
+    5: {'photo_stim': 5, 'photostim_device': 'OBIS470', 'duration': photostim_duration,
+        'locations': [{'skull_reference': skull_ref, 'brain_area': 'ALM',
+                       'ap_location': 2500, 'ml_location': 1500, 'depth': 0,
+                       'theta': 15, 'phi': 15}]},
+    6: {'photo_stim': 6, 'photostim_device': 'OBIS470', 'duration': photostim_duration,
+        'locations': [{'skull_reference': skull_ref, 'brain_area': 'ALM',
+                       'ap_location': 2500, 'ml_location': -1500, 'depth': 0,
+                       'theta': 15, 'phi': 15},
+                      {'skull_reference': skull_ref, 'brain_area': 'ALM',
+                       'ap_location': 2500, 'ml_location': 1500, 'depth': 0,
+                       'theta': 15, 'phi': 15}
+                      ]}}
 
 
 def get_behavior_paths():
@@ -215,7 +215,7 @@ class BehaviorIngest(dj.Imported):
 
         path = pathlib.Path(key['rig_data_path'], key['subpath'])
 
-        # distinguishing "delay-response" task or "multi-target" task
+        # distinguishing "delay-response" task or "multi-target-licking" task
         task_type = detect_task_type(path)
 
         # skip too small behavior file (only for 'delay-response' task)
@@ -384,9 +384,9 @@ class BehaviorBpodIngest(dj.Imported):
         -> master
         behavior_file:              varchar(255)          # behavior file name
         """
-    
+
     water_port_name_mapper = {'left': 'L', 'right': 'R', 'middle': 'M'}
-    
+
     @staticmethod
     def get_bpod_projects():
         projectdirs = dj.config.get('custom', {}).get('behavior_bpod', []).get('project_paths')
@@ -396,7 +396,7 @@ class BehaviorBpodIngest(dj.Imported):
             projects.append(BPodProject())
             projects[-1].load(projectdir)
         return projects
-    
+
     @property
     def key_source(self):
         key_source = []
@@ -487,7 +487,7 @@ class BehaviorBpodIngest(dj.Imported):
                             experimentnames_now.append(exp.name)
                             
         bpodsess_order = np.argsort(session_start_times_now)
-        
+
         # --- Handle missing BPod session ---
         if len(bpodsess_order) == 0:
             log.error('BPod session not found!')
@@ -511,27 +511,27 @@ class BehaviorBpodIngest(dj.Imported):
             experiment_name = experimentnames_now[session_idx]
             csvfilename = (pathlib.Path(session.path) / (
                         pathlib.Path(session.path).name + '.csv'))
-            
+
             # ---- Special parsing for csv file ----
             log.info('Load session file(s) ({}/{}): {}'.format(s_idx + 1, len(bpodsess_order),
                                                                csvfilename))
             df_behavior_session = util.load_and_parse_a_csv_file(csvfilename)
-            
+
             # ---- Integrity check of the current bpodsess file ---
             # It must have at least one 'trial start' and 'trial end'
             trial_start_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'TRIAL') & (
                         df_behavior_session['MSG'] == 'New trial')].index
             if not len(trial_start_idxs):
                 log.info('No "trial start" for {}. Skipping...'.format(csvfilename))
-                continue   # Make sure 'start' exists, otherwise move on to try the next bpodsess file if exists     
-                   
+                continue  # Make sure 'start' exists, otherwise move on to try the next bpodsess file if exists
+
             trial_end_idxs = df_behavior_session[
                 (df_behavior_session['TYPE'] == 'TRANSITION') & (
                             df_behavior_session['MSG'] == 'End')].index
             if not len(trial_end_idxs):
                 log.info('No "trial end" for {}. Skipping...'.format(csvfilename))
-                continue   # Make sure 'end' exists, otherwise move on to try the next bpodsess file if exists     
-            
+                continue  # Make sure 'end' exists, otherwise move on to try the next bpodsess file if exists
+
             # It must be a foraging session
             # extracting task protocol - hard-code implementation
             if 'foraging' in experiment_name.lower() or (
@@ -547,8 +547,8 @@ class BehaviorBpodIngest(dj.Imported):
                     lick_ports = ['left', 'right']
             else:
                 log.info('ERROR: unhandled task name {}. Skipping...'.format(experiment_name))
-                continue   # Make sure this is a foraging bpodsess, otherwise move on to try the next bpodsess file if exists 
-                
+                continue  # Make sure this is a foraging bpodsess, otherwise move on to try the next bpodsess file if exists
+
             # ---- New session - construct a session key (from the first bpodsess that passes the integrity check) ----
             if sess_key is None:
                 session_time = df_behavior_session['PC-TIME'][trial_start_idxs[0]]
@@ -565,7 +565,7 @@ class BehaviorBpodIngest(dj.Imported):
                 else:
                     log.info('ERROR: unhandled setup name {} (from {}). Skipping...'.format(
                         session.setup_name, session.path))
-                    continue   # Another integrity check here
+                    continue  # Another integrity check here
 
                 log.debug('synthesizing session ID')
                 key['session'] = (dj.U().aggr(experiment.Session()
@@ -596,6 +596,7 @@ class BehaviorBpodIngest(dj.Imported):
             trial_start_idxs -= 2 # To reflect the change that bitcode is moved before the "New trial" line
             trial_start_idxs = pd.Index([0]).append(trial_start_idxs[1:])  # so the random seed will be present
             trial_end_idxs = trial_start_idxs[1:].append(pd.Index([(max(df_behavior_session.index))]))
+
             # trial_end_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'END-TRIAL')].index
             prevtrialstarttime = np.nan
             blocknum_local_prev = np.nan
@@ -612,7 +613,7 @@ class BehaviorBpodIngest(dj.Imported):
                         df_behavior_trial[(df_behavior_trial['MSG'] == 'GoCue') & (
                         df_behavior_trial['TYPE'] == 'STATE')]):
                     continue
-                
+
                 # ---- session trial ----
                 trial_num += 1  # increment trial number
                 trial_uid = len(experiment.SessionTrial & {'subject_id': subject_id_now}) + trial_num  # Fix trial_uid here
@@ -831,8 +832,7 @@ class BehaviorBpodIngest(dj.Imported):
                     seedidx = (df_behavior_trial['MSG'] == 'Random seed:').idxmax() + 1
                     rows['trial_note'].append({**sess_trial_key,
                                                'trial_note_type': 'random_seed_start',
-                                               'trial_note': str(
-                                                   df_behavior_trial['MSG'][seedidx])})
+                                               'trial_note': str(df_behavior_trial['MSG'][seedidx])})
                     
                 # add randomID (TrialBitCode)
                 if any(df_behavior_trial['MSG'] == 'TrialBitCode: '):
@@ -840,6 +840,7 @@ class BehaviorBpodIngest(dj.Imported):
                     rows['trial_note'].append({**sess_trial_key,
                                                'trial_note_type': 'bitcode',
                                                'trial_note': str(df_behavior_trial['MSG'][bitcode_ind])})
+
 
                 # ---- Behavior Trial ----
                 rows['behavior_trial'].append({**sess_trial_key,
@@ -856,13 +857,13 @@ class BehaviorBpodIngest(dj.Imported):
 
                 if 'var_motor:LickPort_Lateral_pos' in df_behavior_trial.keys():
                     valve_setting['water_port_lateral_pos'] = \
-                    df_behavior_trial['var_motor:LickPort_Lateral_pos'].values[0]
+                        df_behavior_trial['var_motor:LickPort_Lateral_pos'].values[0]
                 if 'var_motor:LickPort_RostroCaudal_pos' in df_behavior_trial.keys():
                     valve_setting['water_port_rostrocaudal_pos'] = \
-                    df_behavior_trial['var_motor:LickPort_RostroCaudal_pos'].values[0]
+                        df_behavior_trial['var_motor:LickPort_RostroCaudal_pos'].values[0]
                 if 'var_motor:LickPort_DorsoVentral_pos' in df_behavior_trial.keys():
                     valve_setting['water_port_dorsoventral_pos'] = \
-                    df_behavior_trial['var_motor:LickPort_DorsoVentral_pos'].values[0]
+                        df_behavior_trial['var_motor:LickPort_DorsoVentral_pos'].values[0]
 
                 rows['valve_setting'].append(valve_setting)
 
@@ -916,7 +917,7 @@ class BehaviorBpodIngest(dj.Imported):
         for block in concat_rows['sess_block']:
             block_reward_prob.extend(
                 [{**block, 'water_port': water_port, 'reward_probability': reward_p}
-                                      for water_port, reward_p in block.pop('reward_probability').items()])
+                 for water_port, reward_p in block.pop('reward_probability').items()])
         experiment.SessionBlock.WaterPortRewardProbability.insert(block_reward_prob,
                                                                   **insert_settings)
 
@@ -934,7 +935,7 @@ class BehaviorBpodIngest(dj.Imported):
         self.insert1(sess_key, **insert_settings)
         self.BehaviorFile.insert(
             [{**sess_key, 'behavior_file': pathlib.Path(s.path).as_posix()}
-                                  for s in sessions_now], **insert_settings)
+             for s in sessions_now], **insert_settings)
 
 
 # --------------------- HELPER LOADER FUNCTIONS -----------------

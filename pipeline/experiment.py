@@ -567,10 +567,11 @@ def extract_nidq_trial_data(session_key, channel):
         trial_data = breathing_data[:, start_idx:end_idx].flatten()
 
         ephys_bitcode = ephys_bitcodes[idx]
-        matched_trial_idx = np.where(behavior_bitcodes == ephys_bitcode)[0][0]
+        matched_trial_idx = np.where(behavior_bitcodes == ephys_bitcode)[0]
 
-        all_trials_data.append({
-            **session_key, 'trial': behav_trials[matched_trial_idx],
-            'data': trial_data,
-            'timestamps': np.arange(len(trial_data)) / sampling_rate})
+        if len(matched_trial_idx):
+            all_trials_data.append({
+                **session_key, 'trial': behav_trials[matched_trial_idx[0]],
+                'data': trial_data,
+                'timestamps': np.arange(len(trial_data)) / sampling_rate})
     return all_trials_data

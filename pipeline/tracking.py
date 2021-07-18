@@ -4,6 +4,7 @@ MAP Motion Tracking Schema
 '''
 
 import datajoint as dj
+import numpy as np
 
 from . import experiment, lab
 from . import get_schema_name
@@ -138,4 +139,49 @@ class TrackedWhisker(dj.Manual):
         -> master
         -> lab.Whisker
         """
+
+
+# ------------------------ Quality Control Metrics -----------------------
+
+
+@schema
+class TrackingQC(dj.Computed):
+    definition = """
+    -> Tracking
+    tracked_feature: varchar(32)  # e.g. RightPaw, LickPort
+    ---
+    bad_percentage: float  # percentage of bad frames out of all frames 
+    bad_frames: longblob  # array of frame indices that are "bad"
+    """
+
+    threshold_mapper = {('RRig2', 'side', 'NoseTracking'): 20,
+                        ('RRig2', 'side', 'JawTracking'): 20,
+                        ('RRig-MTL', 'side', 'JawTracking'): 20,
+                        ('RRig-MTL', 'bottom', 'JawTracking'): 20}
+
+    def make(self, key):
+        rig = (experiment.Session & key).fetch1('rig')
+        device, device_position = (TrackingDevice & key).fetch1('tracking_device', 'tracking_position')
+
+        tracking_qc_list = []
+        for feature_name, feature_table in Tracking().tracking_features.items():
+            if feature_name in ('JawTracking', 'NoseTracking'):
+                if not feature_table & key:
+                    continue
+
+                bad_threshold = self.threshold_mapper[(rig, device_position, feature_name)]
+                tracking_data = (Tracking * feature_table & key).fetch1()
+
+                attribute_prefix = feature_name.replace('Tracking', '').lower()
+
+                x_diff = np.diff(tracking_data[attribute_prefix + '_x'])
+                y_diff = np.diff(tracking_data[attribute_prefix + '_y'])
+                bad_frames = np.where(np.logical_or(x_diff > bad_threshold, y_diff > bad_threshold))[0]
+                bad_percentage = len(bad_frames) / tracking_data['tracking_samples'] * 100
+
+                tracking_qc_list.append({**key, 'tracked_feature': feature_name,
+                                         'bad_percentage': bad_percentage,
+                                         'bad_frames': bad_frames})
+
+        self.insert(tracking_qc_list)
 

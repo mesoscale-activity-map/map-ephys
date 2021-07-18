@@ -631,6 +631,42 @@ def mockdata():
             'wr_start_weight': 23.0},
             skip_duplicates=True
         )
+        # Subject 550010 / DL010
+        lab.Subject().insert1({
+            'subject_id': 550010,
+            'username': 'daveliu',
+            'cage_number': 163782,
+            'date_of_birth': '2018-09-24',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates=True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 550010,
+            'water_restriction_number': 'DL010',
+            'cage_number': 163782,
+            'wr_start_date': '2018-11-24',
+            'wr_start_weight': 23.0},
+            skip_duplicates=True
+        )
+        # Subject 550022 / DL022
+        lab.Subject().insert1({
+            'subject_id': 550022,
+            'username': 'daveliu',
+            'cage_number': 163782,
+            'date_of_birth': '2018-09-24',
+            'sex': 'M',
+            'animal_source': 'Jackson labs'},
+            skip_duplicates=True
+        )
+        lab.WaterRestriction().insert1({
+            'subject_id': 550022,
+            'water_restriction_number': 'DL022',
+            'cage_number': 163782,
+            'wr_start_date': '2018-11-24',
+            'wr_start_weight': 23.0},
+            skip_duplicates=True
+        )
         # Subject 440959 / SC011
         lab.Subject().insert1({
             'subject_id': 440959,
