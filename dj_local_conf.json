@@ -31,6 +31,15 @@
             "I:/catGT",
             "v:/HH"
         ],
+        "histology_data_paths": [
+            "F:/Data_for_ingestion/MAP/"
+        ],
+        "ccf_data_paths":{
+            "version_name": "CCF_2017",
+            "region_csv": "mousebrainontology_2.csv",
+            "hexcode_csv": "hexcode.csv",
+            "annotation_nrrd": "annotation_10.nrrd"
+        },
         "recording_notes_spreadsheet": "F:/Data_for_ingestion/Foraging_behavior/Metadata/Ephys.csv",
     	"logfile": "log.txt"
     },
