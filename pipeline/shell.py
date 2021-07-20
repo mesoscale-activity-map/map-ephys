@@ -280,7 +280,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
                             insertions_good_trials.extend([
                                 {**pinsert_key, **trial_key}
                                 for trial_key in (
-                                        experiment.SessionTrial
+                                        experiment.SessionTrial & pinsert_key
                                         & f'start_time >= {period_start} '
                                           f'AND stop_time <= {period_end}').fetch('KEY')])
 
@@ -296,9 +296,9 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
 
     ephys.ProbeInsertionQuality.insert(insertions_quality)
     ephys.ProbeInsertionQuality.GoodPeriod.insert(insertions_good_periods)
+    ephys.ProbeInsertionQuality.GoodTrial.insert(insertions_good_trials)
 
-    log.info(
-        'load_insertion_location - Number of insertions quality: {}'.format(len(insertions_quality)))
+    log.info('load_insertion_location - Number of insertions quality: {}'.format(len(insertions_quality)))
 
 
 def load_ccf(*args):
