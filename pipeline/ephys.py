@@ -93,6 +93,12 @@ class ProbeInsertionQuality(dj.Manual):
         good_period_end: decimal(9, 4)  # (s) relative to session beginning 
         """
 
+    class GoodTrial(dj.Part):
+        definition = """
+        -> master
+        -> experiment.SessionTrial
+        """
+
 
 @schema
 class LFP(dj.Imported):

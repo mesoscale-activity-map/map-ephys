@@ -199,7 +199,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     load_insertion_quality = 'insertion_quality' in df.columns
 
     insertion_locations, recordable_brain_regions = [], []
-    insertions_quality, insertions_good_periods = [], []
+    insertions_quality, insertions_good_periods, insertions_good_trials = [], [], []
     for i, row in df.iterrows():
         try:
             int(row.behaviour_time)
@@ -269,11 +269,20 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
                             'stop_time', order_by='stop_time DESC', limit=1)[0]
                         for period in row.good_period.replace(' ', '').split(','):
                             period_start, period_end = period.lower().split('-')
+                            period_start = Decimal(period_start)
+                            period_end = Decimal(period_end) if period_end != 'end' else session_end
+                            # good periods
                             insertions_good_periods.append(
                                 dict(pinsert_key,
-                                     good_period_start=Decimal(period_start),
-                                     good_period_end=Decimal(period_end) if period_end != 'end'
-                                     else session_end))
+                                     good_period_start=period_start,
+                                     good_period_end=period_end))
+                            # good trials
+                            insertions_good_trials.extend([
+                                {**pinsert_key, **trial_key}
+                                for trial_key in (
+                                        experiment.SessionTrial
+                                        & f'start_time >= {period_start} '
+                                          f'AND stop_time <= {period_end}').fetch('KEY')])
 
     log.debug('InsertionLocation: {}'.format(insertion_locations))
     log.debug('RecordableBrainRegion: {}'.format(recordable_brain_regions))
