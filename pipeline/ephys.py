@@ -214,6 +214,19 @@ class TrialEvent(dj.Imported):
 
 
 @schema
+class ActionEvent(dj.Imported):
+    """
+    Trialized events extracted from NIDQ channels with (global) session-based times
+    """
+    definition = """
+    -> experiment.BehaviorTrial
+    action_event_id: smallint
+    ---
+    -> experiment.ActionEventType
+    action_event_time : float  # (s) from session start (global time)
+    """
+
+@schema
 class UnitNote(dj.Imported):
     definition = """
     -> Unit
