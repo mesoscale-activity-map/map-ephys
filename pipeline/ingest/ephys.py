@@ -1126,6 +1126,33 @@ def insert_ephys_events(skey, bf):
     # --- Do batch insertion --
     ephys.TrialEvent.insert(df, allow_direct_insert=True)
 
+    # --- Licks from NI --
+    df_action = pd.DataFrame()
+    lick_wrapper = {'left lick': 'lickLPerTrial', 'right lick': 'lickRPerTrial', 'middle lick': 'lickMPerTrial'}
+    exist_lick = [ltype for ltype in lick_wrapper.keys() if lick_wrapper[ltype] in bf]
+
+    if len(exist_lick):
+        log.info(f'       loading licks from NIDQ ...')
+        
+        for trial, *licks in enumerate(zip(*(bf[lick_wrapper[ltype]][0] for ltype in exist_lick))):
+            lick_times = {ltype: ltime for ltype, ltime in zip(exist_lick, *licks)}
+            all_lick_types = np.concatenate(
+                [[ltype] * len(ltimes) for ltype, ltimes in lick_times.items()])
+            all_lick_times = np.concatenate(
+                [ltimes for ltimes in lick_times.values()]).flatten()
+            sorted_licks = sorted(zip(all_lick_types, all_lick_times), key=lambda x: x[-1])  # sort by lick times
+            df_action = df_action.append(pd.DataFrame([{ **skey,
+                                                         'trial': trial + 1,  # Trial all starts from 1
+                                                         'action_event_id': idx,  # Event_id starts from 0
+                                                         'action_event_type': ltype,
+                                                         'action_event_time': ltime
+                                                         } for idx, (ltype, ltime)
+                                                       in enumerate(sorted_licks)
+                                                       ]))
+
+        # --- Do batch insertion --
+        ephys.ActionEvent.insert(df_action, allow_direct_insert=True)
+
     # --- Camera frames (only available from ephys NIDQ) ---
     if 'cameraPerTrial' in bf:
         log.info('       loading camera frames from NIDQ ...')
