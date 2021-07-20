@@ -10,6 +10,7 @@ from . import get_schema_name
 schema = dj.schema(get_schema_name('ephys'))
 [lab, experiment, ccf]  # NOQA flake8
 
+
 DEFAULT_ARCHIVE_STORE = {
     "protocol": "s3",
     "endpoint": "s3.amazonaws.com",
@@ -210,13 +211,37 @@ class UnitNote(dj.Imported):
     key_source = ProbeInsertion & Unit.proj()
 
     def make(self, key):
-        pass
+        from pipeline.ingest import ephys as ephys_ingest  # import here to avoid circular imports
+
+        ephys_file = (ephys_ingest.EphysIngest.EphysFile.proj(
+            insertion_number='probe_insertion_number') & key).fetch1('ephys_file')
+        rigpaths = ephys_ingest.get_ephys_paths()
+        for rigpath in rigpaths:
+            if (rigpath / ephys_file).exists():
+                session_ephys_dir = rigpath / ephys_file
+                break
+        else:
+            raise FileNotFoundError(
+                'Error - No ephys data directory found for {}'.format(ephys_file))
+
+        ks = ephys_ingest.Kilosort(session_ephys_dir)
+        curated_cluster_notes = ks.extract_curated_cluster_notes()
+
+        cluster_notes = []
+        for curation_source, cluster_note in curated_cluster_notes.items():
+            if curation_source == 'group':
+                continue
+            cluster_notes.extend([{**key, 'note_source': curation_source,
+                                   'unit': unit, 'unit_quality': note}
+                                  for unit, note in zip(cluster_note['cluster_ids'],
+                                                        cluster_note['cluster_notes'])])
+        self.insert(cluster_notes)
 
 
 @schema
 class UnitNoiseLabel(dj.Imported):
     definition = """
-    # labeling based on the noiseTemplate module
+    # labeling based on the noiseTemplate module - output to "cluster_group.tsv" file
     # (https://github.com/jenniferColonell/ecephys_spike_sorting/tree/master/ecephys_spike_sorting/modules/noise_templates)
     -> Unit
     ---

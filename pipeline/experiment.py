@@ -526,7 +526,7 @@ class Project(dj.Lookup):
 
 # ============================= HELPER METHODS ==========================
 
-def extract_nidq_trial_data(session_key, channel):
+def get_session_ephys_data_directory(session_key):
     from pipeline.ingest import ephys as ephys_ingest
 
     h2o = (lab.WaterRestriction & session_key).fetch1('water_restriction_number')
@@ -542,6 +542,13 @@ def extract_nidq_trial_data(session_key, channel):
     else:
         raise FileNotFoundError(
             'Error - No session folder found for {}/{}'.format(h2o, sess_datetime))
+
+    return session_ephys_dir
+
+
+def extract_nidq_trial_data(session_key, channel):
+    from pipeline.ingest import ephys as ephys_ingest
+    session_ephys_dir = get_session_ephys_data_directory(session_key)
 
     try:
         nidq_bin_fp = next(session_ephys_dir.glob('*.nidq.bin'))
