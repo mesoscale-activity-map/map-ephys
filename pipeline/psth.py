@@ -20,6 +20,9 @@ log = logging.getLogger(__name__)
 # NOW:
 # - rework Condition to TrialCondition funtion+arguments based schema
 
+# The original psth schema is only for delay-response sessions.
+delay_response_sessions = experiment.Session & (experiment.BehaviorTrial & 'task = "audio delay"')
+
 
 @schema
 class TrialCondition(dj.Lookup):
@@ -266,7 +269,7 @@ class UnitPsth(dj.Computed):
                   & 'unit_quality != "all"')
         stim = ((ephys.Unit & (experiment.Session & experiment.PhotostimBrainRegion))
                 * (TrialCondition & 'trial_condition_func = "_get_trials_include_stim"') & 'unit_quality != "all"')
-        return nostim.proj() + stim.proj()
+        return nostim.proj() + stim.proj() & delay_response_sessions
 
     def make(self, key):
         log.debug('UnitPsth.make(): key: {}'.format(key))
@@ -363,7 +366,9 @@ class PeriodSelectivity(dj.Computed):
 
     alpha = 0.05  # default alpha value
 
-    key_source = experiment.Period * (ephys.Unit & ephys.ProbeInsertion.InsertionLocation & 'unit_quality != "all"')
+    key_source = (experiment.Period
+                  * (ephys.Unit & ephys.ProbeInsertion.InsertionLocation & 'unit_quality != "all"')
+                  & delay_response_sessions)
 
     def make(self, key):
         '''

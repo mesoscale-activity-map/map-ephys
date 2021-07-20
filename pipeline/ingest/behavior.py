@@ -483,6 +483,7 @@ class BehaviorBpodIngest(dj.Imported):
                             sessions_now.append(session)
                             session_start_times_now.append(session.started)
                             experimentnames_now.append(exp.name)
+                            
         bpodsess_order = np.argsort(session_start_times_now)
 
         # --- Handle missing BPod session ---
@@ -557,6 +558,8 @@ class BehaviorBpodIngest(dj.Imported):
                     setupname = 'Training-Tower-3'
                 elif session.setup_name.lower() in ['tower-1']:
                     setupname = 'Training-Tower-1'
+                elif session.setup_name.lower() in ['ephys_han']:
+                    setupname = 'Ephys-Han'
                 else:
                     log.info('ERROR: unhandled setup name {} (from {}). Skipping...'.format(
                         session.setup_name, session.path))
@@ -586,14 +589,12 @@ class BehaviorBpodIngest(dj.Imported):
             # ---- Ingestion of trials ----
 
             # extracting trial data
-            session_start_time = datetime.combine(sess_key['session_date'],
-                                                  sess_key['session_time'])
-            trial_start_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'TRIAL') & (
-                        df_behavior_session['MSG'] == 'New trial')].index
-            trial_start_idxs = pd.Index([0]).append(
-                trial_start_idxs[1:])  # so the random seed will be present
-            trial_end_idxs = trial_start_idxs[1:].append(
-                pd.Index([(max(df_behavior_session.index))]))
+            session_start_time = datetime.combine(sess_key['session_date'], sess_key['session_time'])
+            trial_start_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'TRIAL') & (df_behavior_session['MSG'] == 'New trial')].index
+            trial_start_idxs -= 2 # To reflect the change that bitcode is moved before the "New trial" line
+            trial_start_idxs = pd.Index([0]).append(trial_start_idxs[1:])  # so the random seed will be present
+            trial_end_idxs = trial_start_idxs[1:].append(pd.Index([(max(df_behavior_session.index))]))
+
             # trial_end_idxs = df_behavior_session[(df_behavior_session['TYPE'] == 'END-TRIAL')].index
             prevtrialstarttime = np.nan
             blocknum_local_prev = np.nan
@@ -607,13 +608,18 @@ class BehaviorBpodIngest(dj.Imported):
 
                 # Trials without GoCue are skipped
                 if not len(
-                        df_behavior_trial['PC-TIME'][(df_behavior_trial['MSG'] == 'GoCue') & (
-                                df_behavior_trial['TYPE'] == 'TRANSITION')]):
+                        df_behavior_trial[(df_behavior_trial['MSG'] == 'GoCue') & (
+                        df_behavior_trial['TYPE'] == 'STATE')]):
                     continue
 
                 # ---- session trial ----
                 trial_num += 1  # increment trial number
-                trial_uid = len(experiment.SessionTrial & {'subject_id': subject_id_now}) + 1
+                trial_uid = len(experiment.SessionTrial & {'subject_id': subject_id_now}) + trial_num  # Fix trial_uid here
+                
+                # Note that the following trial_start/stop_time SHOULD NEVER BE USED in ephys related analysis 
+                # because they are PC-TIME, which is not accurate (4 ms average delay, sometimes up to several seconds!)!
+                # In fact, from bpod.csv, we can only accurately retrieve (local) trial-wise, but not (global) session-wise, times
+                # See comments below.
                 trial_start_time = df_behavior_session['PC-TIME'][
                                        trial_start_idx].to_pydatetime() - session_start_time
                 trial_stop_time = df_behavior_session['PC-TIME'][
@@ -665,7 +671,103 @@ class BehaviorBpodIngest(dj.Imported):
 
                     rows['sess_block_trial'].append({**sess_trial_key, 'block': block_num})
 
-                # ---- WaterPort Choice ----
+
+                # ====== Event times ======
+                # Foraging trial structure: (*...*: events of interest in experiment.EventType; [...]: optional)
+                # -> (ITI) -> *bitcodestart* -> bitcode -> lickport movement -> *delay* (lickport in position) 
+                #          -> [effective delay period] -> *go* -> [*choice*] -> [*reward*] -> *trialend* -> (ITI) ->
+                # Notes:
+                # 1. Differs from the delay-task:
+                #       (1) no sample and presample epoch
+                #       (2) effective delay period could be zero (ITI as an inherent delay). 
+                #           Also note that if the delay_period in bpod protocol < lickport movement time (~100 ms), the effective delay period is also zero, 
+                #           where the go-cue sound actually appears BEFORE the lickport stops moving.
+                #       (3) we are interested in not only go-cue aligned PSTH (ephys.Unit.TrialSpikes), but need more flexible event alignments, especially ITI firings.
+                #           So we should use the session-wise untrialized spike times stored in ephys.Unit['spike_times']. See below.
+                # 2. Two "trial start"s:
+                #       (1) *bitcodestart* = onset of the first bitcode = *sTrig* in NIDQ bitcode.mat
+                #       (2) `trial_start_idx` in this for loop = the start of bpod-trial ('New Trial' in bpod csv file)
+                #            = the reference point of BPOD-TIME  = NIDQ bpod-trial channel
+                #    They are far from each other because I start the bpod trial at the middle of ITI (Foraging_bpod: e9a8ffd6) to cover video recording during ITI.
+                # 3. In theory, *bitcodestart* = *delay* (since there's no sample period),
+                #    but in practice, the bitcode (21*20=420 ms) and lickport movement (~100 ms) also take some time.
+                #    Note that bpod doesn't know the exact time when lickports are in place, so we can get *delay* only from NIDQ zaber channel (ephys.TrialEvent.'zaberinposition').
+                # 4. In early lick trials, effective delay start should be the last 'DelayStart' (?)
+                # 5. Finally, to perform session-wise alignment between behavior and ephys, there are two ways, which could be cross-checked with each other:
+                #       (1) (most straightforward) use all event markers directly from NIDQ bitcode.mat,
+                #           then align them to ephys.Unit['spike_times'] by looking at the *sTrig* of the first trial of a session
+                #       (2) (can be used as a sanity check) extract trial-wise BPOD-TIME from pybpod.csv,
+                #           and then convert the local trial-wise times to global session-wise times by aligning
+                #           the same events from pybpod.csv and bitcode.mat across all trials, e.g., *bitcodestart* <--> *sTrig*, or 0 <--> NIDQ bpod-"trial trigger" channel
+                #    Note that one should NEVER use PC-TIME from the bpod csv files (at least for ephys-related alignment)!!!
+                
+                # ----- BPOD STATES (all events except licks) -----
+                bpod_states_this_trial = df_behavior_trial[(df_behavior_trial['TYPE'] == 'STATE') & (df_behavior_trial['BPOD-INITIAL-TIME'] > 0)]   # All states of this trial
+                trial_event_count = 0
+
+                # Use BPOD-INITIAL-TIME and BPOD-FINAL-TIME (all relative to bpod-trialstart)
+                bpod_states_of_interest = { # experiment.TrialEventType: Bpod state name
+                                           'videostart': ['ITIBeforeVideoOn'],
+                                           'bitcodestart': ['Start'],
+                                           'delay': ['DelayStart'],     # (1) in a non early lick trial, effective delay start = max(DelayStart, LickportInPosition).
+                                                                        #       where LickportIntInPosition is only available from NIDQ
+                                                                        # (2) in an early lick trial, there are multiple DelayStarts, the last of which is the effective delay start
+                                           'go': ['GoCue'],
+                                           'choice': [f'Choice_{lickport}' for lickport in self.water_port_name_mapper.values()],
+                                           'reward': [f'Reward_{lickport}' for lickport in self.water_port_name_mapper.values()],
+                                           'doubledip': ['Double_dipped'],   # Only for non-double-dipped trials, ITI = last lick + 1 sec (maybe I should not use double dipping punishment for ehpys?)
+                                           'trialend': ['ITI'],
+                                           'videoend': ['ITIAfterVideoOff'],
+                                           }
+
+                for trial_event_type, bpod_state in bpod_states_of_interest.items():
+                    _idx = bpod_states_this_trial.index[bpod_states_this_trial['MSG'].isin(bpod_state)]   # One state could have multiple appearances, such as DelayStart in early-lick trials
+                    if not len(_idx):
+                        continue
+
+                    initials, finals = bpod_states_this_trial.loc[_idx][['BPOD-INITIAL-TIME', 'BPOD-FINAL-TIME']].values.T.astype(float)
+                    initials[initials > 9999] = 9999   # Wordaround for bug #9: BPod protocol was paused and then resumed after an impossible long period of time (> decimal(8, 4)).
+                    finals[finals > 9999] = 9999
+
+                    # cache event times
+                    for idx, (initial, final) in enumerate(zip(initials, finals)):
+                        rows['trial_event'].extend(
+                            [{**sess_trial_key,
+                              'trial_event_id': trial_event_count + idx,
+                              'trial_event_type': trial_event_type,
+                              'trial_event_time': initial,
+                              'duration': final - initial}])   # list comprehension doesn't work here
+
+                    trial_event_count += len(initials)
+                    
+                    # save gocue time for early-lick below
+                    if trial_event_type == 'go':
+                        gocue_time = initials[0]
+
+                # ------ Licks (use EVENT instead of STATE because not all licks triggered a state change) -------
+                lick_times = {}
+                for lick_port in lick_ports:
+                    lick_times[lick_port] = df_behavior_trial['BPOD-INITIAL-TIME'][(
+                                df_behavior_trial['+INFO'] == water_port_channels[lick_port])].to_numpy()
+                    
+                # cache licks
+                all_lick_types = np.concatenate(
+                    [[ltype] * len(ltimes) for ltype, ltimes in lick_times.items()])
+
+                all_lick_times = np.concatenate(
+                    [ltimes for ltimes in lick_times.values()])
+
+                # sort by lick times
+                sorted_licks = sorted(zip(all_lick_types, all_lick_times), key=lambda x: x[-1])
+
+                rows['action_event'].extend([{**sess_trial_key, 'action_event_id': idx,
+                                              'action_event_type': '{} lick'.format(ltype),
+                                              'action_event_time': ltime} for
+                                             idx, (ltype, ltime)
+                                            in enumerate(sorted_licks)])
+
+                # ====== Trial facts (nontemporal) ======
+                # WaterPort Choice 
                 trial_choice = {'water_port': None}
                 for lick_port in lick_ports:
                     if any((df_behavior_trial['MSG'] == 'Choice_{}'.format(
@@ -676,24 +778,11 @@ class BehaviorBpodIngest(dj.Imported):
 
                 rows['trial_choice'].append({**sess_trial_key, **trial_choice})
 
-                # ---- Trial events ----
-                time_TrialStart = df_behavior_session['PC-TIME'][trial_start_idx].to_numpy()
-                time_GoCue = df_behavior_trial['PC-TIME'][
-                    (df_behavior_trial['MSG'] == 'GoCue') & (
-                                df_behavior_trial['TYPE'] == 'TRANSITION')].to_numpy()
-
-                lick_times = {}
-                for lick_port in lick_ports:
-                    lick_times[lick_port] = df_behavior_trial['PC-TIME'][(
-                                df_behavior_trial['+INFO'] == water_port_channels[
-                            lick_port])].to_numpy()
-
                 # early lick
                 early_lick = 'no early'
-                for lick_port in lick_ports:
-                    if any(lick_times[lick_port] - time_GoCue < np.timedelta64(0)):
-                        early_lick = 'early'
-                        break
+                if any(all_lick_times < gocue_time):
+                    early_lick = 'early'
+
                 # outcome
                 outcome = 'miss' if trial_choice['water_port'] else 'ignore'
                 for lick_port in lick_ports:
@@ -741,8 +830,15 @@ class BehaviorBpodIngest(dj.Imported):
                     seedidx = (df_behavior_trial['MSG'] == 'Random seed:').idxmax() + 1
                     rows['trial_note'].append({**sess_trial_key,
                                                'trial_note_type': 'random_seed_start',
-                                               'trial_note': str(
-                                                   df_behavior_trial['MSG'][seedidx])})
+                                               'trial_note': str(df_behavior_trial['MSG'][seedidx])})
+                    
+                # add randomID (TrialBitCode)
+                if any(df_behavior_trial['MSG'] == 'TrialBitCode: '):
+                    bitcode_ind = (df_behavior_trial['MSG'] == 'TrialBitCode: ').idxmax() + 1
+                    rows['trial_note'].append({**sess_trial_key,
+                                               'trial_note_type': 'bitcode',
+                                               'trial_note': str(df_behavior_trial['MSG'][bitcode_ind])})
+
 
                 # ---- Behavior Trial ----
                 rows['behavior_trial'].append({**sess_trial_key,
@@ -755,7 +851,7 @@ class BehaviorBpodIngest(dj.Imported):
                                                'free_water': False})  # TODO: verify this
 
                 # ---- Water Valve Setting ----
-                valve_setting = {**sess_trial_key}
+                valve_setting = {**sess_trial_key}  
 
                 if 'var_motor:LickPort_Lateral_pos' in df_behavior_trial.keys():
                     valve_setting['water_port_lateral_pos'] = \
@@ -777,38 +873,10 @@ class BehaviorBpodIngest(dj.Imported):
                             **sess_trial_key, 'water_port': lick_port,
                             'open_duration': df_behavior_trial[valve_open_varname].values[0]})
 
-                # ---- Trial Event and Action Event ----
-
-                # -- add Go Cue
-                GoCueTimes = (time_GoCue - time_TrialStart) / np.timedelta64(1, 's')
-                GoCueTimes[
-                    GoCueTimes > 9999] = 9999  # Wordaround for bug #9: BPod protocol was paused and then
-                # resumed after an impossible long period of time (> decimal(8, 4)).
-
-                rows['trial_event'].extend(
-                    [{**sess_trial_key, 'trial_event_id': idx, 'trial_event_type': 'go',
-                      'trial_event_time': t, 'duration': 0} for idx, t in
-                     enumerate(GoCueTimes)])
-
-                # -- add licks
-                all_lick_types = np.concatenate(
-                    [[ltype] * len(ltimes) for ltype, ltimes in lick_times.items()])
-                all_lick_times = np.concatenate(
-                    [(ltimes - time_TrialStart) / np.timedelta64(1, 's') for ltimes in
-                     lick_times.values()])
-
-                # sort by lick times
-                sorted_licks = sorted(zip(all_lick_types, all_lick_times), key=lambda x: x[-1])
-
-                rows['action_event'].extend([{**sess_trial_key, 'action_event_id': idx,
-                                              'action_event_type': '{} lick'.format(ltype),
-                                              'action_event_time': ltime} for
-                                             idx, (ltype, ltime)
-                                             in enumerate(sorted_licks)])
-
             # add to the session-concat
             for tbl in tbls_2_insert:
                 concat_rows[tbl].extend(rows[tbl])
+                
         # ---- The insertions to relevant tables ----
         # Session, SessionComment, SessionDetails insert
         log.info('BehaviorIngest.make(): adding session record')

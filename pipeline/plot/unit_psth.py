@@ -2,7 +2,7 @@
 import numpy as np
 
 import matplotlib.pyplot as plt
-from pipeline import psth
+from pipeline import psth, psth_foraging
 from pipeline.util import _get_trial_event_times, _get_units_hemisphere
 
 
@@ -79,6 +79,50 @@ def plot_unit_psth(unit_key, axs=None, title='', xlim=_plt_xlim):
 
     # get event start times: sample, delay, response
     periods, period_starts = _get_trial_event_times(['sample', 'delay', 'go'], unit_key, 'good_noearlylick_hit')
+
+    fig = None
+    if axs is None:
+        fig, axs = plt.subplots(2, 2)
+
+    # correct response
+    _plot_spike_raster(ipsi_hit_unit_psth, contra_hit_unit_psth, ax=axs[0, 0],
+                       vlines=period_starts,
+                       title=title if title else f'Unit #: {unit_key["unit"]}\nCorrect Response', xlim=xlim)
+    _plot_psth(ipsi_hit_unit_psth, contra_hit_unit_psth,
+               vlines=period_starts, ax=axs[1, 0], xlim=xlim)
+
+    # incorrect response
+    _plot_spike_raster(ipsi_miss_unit_psth, contra_miss_unit_psth, ax=axs[0, 1],
+                       vlines=period_starts,
+                       title=title if title else f'Unit #: {unit_key["unit"]}\nIncorrect Response', xlim=xlim)
+    _plot_psth(ipsi_miss_unit_psth, contra_miss_unit_psth,
+               vlines=period_starts, ax=axs[1, 1], xlim=xlim)
+
+    return fig
+
+
+def plot_unit_psth_foraging(unit_key, axs=None, title='', xlim=_plt_xlim):
+    """
+    Default raster and PSTH plot for a specified unit - only {good, no early lick, correct trials} selected
+    condition_name_kw: list of keywords to match for the TrialCondition name
+    """
+
+    hemi = _get_units_hemisphere(unit_key)
+
+    ipsi_hit_unit_psth = psth_foraging.UnitPsth.get_plotting_data(
+        unit_key, {'trial_condition_name': f'foraging_{"L" if hemi == "left" else "R"}_hit_noearlylick'})
+
+    contra_hit_unit_psth = psth_foraging.UnitPsth.get_plotting_data(
+        unit_key, {'trial_condition_name':  f'foraging_{"R" if hemi == "left" else "L"}_hit_noearlylick'})
+
+    ipsi_miss_unit_psth = psth_foraging.UnitPsth.get_plotting_data(
+        unit_key, {'trial_condition_name': f'foraging_{"L" if hemi == "left" else "R"}_miss_noearlylick'})
+
+    contra_miss_unit_psth = psth_foraging.UnitPsth.get_plotting_data(
+        unit_key, {'trial_condition_name':  f'foraging_{"R" if hemi == "left" else "L"}_miss_noearlylick'})
+
+    # get event start times: sample, delay, response
+    periods, period_starts = _get_trial_event_times(['go'], unit_key, 'foraging_LR_hit_noearlylick')
 
     fig = None
     if axs is None:

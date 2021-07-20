@@ -78,9 +78,20 @@ class ProbeInsertionQuality(dj.Manual):
     definition = """  # Indication of insertion quality (good/bad) - for various reasons: lack of unit, poor behavior, poor histology
     -> ProbeInsertion
     ---
-    insertion_quality: enum('good', 'bad')
-    comment: varchar(1000)  # comment/reason for the 'good'/'bad' label
+    insertion_quality='good': enum('good', 'bad')
+    drift_presence=0: bool
+    number_of_landmarks: int
+    alignment_confidence=1: bool
+    comment='': varchar(1000)  # comment/reason for the 'good'/'bad' label
     """
+
+    class GoodPeriod(dj.Part):
+        definition = """
+        -> master
+        good_period_start: decimal(9, 4)  #  (s) relative to session beginning 
+        ---
+        good_period_end: decimal(9, 4)  # (s) relative to session beginning 
+        """
 
 
 @schema
@@ -186,6 +197,20 @@ class Unit(dj.Imported):
         ---
         spike_times : longblob # (s) per-trial spike times relative to go-cue
         """
+
+
+@schema
+class TrialEvent(dj.Imported):
+    """
+    Trialized events extracted from NIDQ channels with (global) session-based times
+    """
+    definition = """
+    -> experiment.BehaviorTrial
+    trial_event_id: smallint
+    ---
+    -> experiment.TrialEventType
+    trial_event_time : float  # (s) from session start (global time)
+    """    
 
 
 @schema
