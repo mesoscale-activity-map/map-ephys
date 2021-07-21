@@ -318,17 +318,10 @@ def compare_ni_and_bpod_times(q_sess=dj.AndList(['subject_id = "473361"', 'sessi
     This is a critical validation for ephys timing alignment
     
     [Conclusions]:
-    1. No bias between NI time and bpod time, but there's jitter up to 10 ms!
-    2. We should trust NI time (?)
-
-    Parameters
-    ----------
-    q_sess : TYPE, optional
-        DESCRIPTION. Query of session. The default is dj.AndList(['water_restriction_number = "HH09"', 'session >= 50']).
-
-    Returns
-    -------
-    None.
+    1. Even Bpod-time is not accurate... (occationally up to 3ms jitter)
+    2. At least for choice, NIXD is very close to groundtruth NIXA (< 0.5 ms)
+    3. We should always trust NI device and feed everything to it!
+    4. NOTE the float number precision problem: should use double or at least Decimal(8,4) for times! 
 
     '''
     
@@ -338,41 +331,41 @@ def compare_ni_and_bpod_times(q_sess=dj.AndList(['subject_id = "473361"', 'sessi
     # 1. -- all events, Bpod vs NIXD --
     # Ephys time
     ephys_times = (ephys.TrialEvent & q_sess & f'trial_event_type IN {tuple(event_all)}').fetch(format='frame')
-    ephys_times = ephys_times.reset_index().pivot(index = ['subject_id', 'session', 'trial'], columns='trial_event_type').trial_event_time
+    ephys_times = ephys_times.reset_index().pivot(index = ['subject_id', 'session', 'trial'], columns='trial_event_type').trial_event_time.astype(float)
     session_times = ephys_times.bitcodestart
     ephys_times = ephys_times.sub(ephys_times[event_to_align], axis=0).drop(columns=event_to_align)  # To each bitcode start (bpodstart is sometimes problematic if a new bpod session is started)
-    
+
     # Bpod time
     bpod_times = (experiment.TrialEvent & q_sess & f'trial_event_type IN {tuple(event_all)}' ).fetch(format='frame')
     bpod_times = bpod_times.reset_index().pivot(index = ['subject_id', 'session', 'trial'], columns='trial_event_type').trial_event_time.astype(float)  # Already related to bpod start
     bpod_times = bpod_times.sub(bpod_times[event_to_align], axis=0).drop(columns=event_to_align)  # To each trial's bpod start
-    
+
     # Plot: Bpod vs NIXD, distribution of differences
     fig = plt.figure(figsize=(8,13))
     ax = fig.subplots(len(event_to_compare), 2)
     max_error = 0
     for n, event in enumerate(event_to_compare):
         ax[n, 0].plot(ephys_times[event], bpod_times[event], '*', label=event)
-        ax[n, 1].hist((np.array(bpod_times[event].astype(float)) - np.array(ephys_times[event])) * 1000, bins=100, label=event)
+        ax[n, 1].hist((np.array(bpod_times[event]) - np.array(ephys_times[event])) * 1000, bins=100, label=event)
         ax_max = max(max(ax[n, 0].get_xlim()), max(ax[n, 0].get_ylim()))
         ax_min = min(min(ax[n, 0].get_xlim()), min(ax[n, 0].get_ylim()))
         ax[n, 0].plot([ax_min, ax_max], [ax_min, ax_max], 'k:')
         ax[n, 0].legend()
-        max_error = max(max_error, max(ax[n, 1].get_xlim()))
+        max_error = max(max_error, max(np.abs(ax[n, 1].get_xlim())))
 
     for _a in ax[:, 1]:
         _a.set_xlim(-max_error, max_error)
-        
+
     ax[-1, 0].set_xlabel(f'NI time to {event_to_align} (s)')
     ax[-1, 0].set_ylabel('Bpod time (s)')
     ax[-1, 1].set_xlabel('Bpod time - NI time (ms)')
     ax[0, 1].set_title(f'{q_sess}\ntotal {len(bpod_times)} trials', fontsize=8)
-    
-    
+
+
     # 2. -- first lick: NIXA (raw lickboard, close to ground truth?), NIXD (bpod digital to NI), and Bpod (bpod csv file) --
     ephys_go_cue = (ephys.TrialEvent & 'trial_event_type = "go"' & q_sess).proj(ephys_go='trial_event_time')
     nixa_first_lick = ephys_go_cue.proj().aggr(
-        (ephys.ActionEvent * ephys_go_cue) & 'action_event_time >= ephys_go', 
+        (ephys.ActionEvent * ephys_go_cue) & 'action_event_time >= ephys_go',
         nixa='min(action_event_time)')    # Session-time of first lick of each trial
 
     q_all = (nixa_first_lick.proj(..., tmp='trial_event_id')   # NIXA
@@ -386,11 +379,11 @@ def compare_ni_and_bpod_times(q_sess=dj.AndList(['subject_id = "473361"', 'sessi
                            bpod_aligned='bpod - bpod_align')
 
     diff_cut_off = 30   # (ms) Cutoff where discrepancy is due to lick faster than 10 ms go cue bitcode (has been decrease to 1ms)
-    nixa, nixd, bpod = (q_all & f'abs(nixa_aligned - nixd_aligned) < {diff_cut_off/1000}').fetch('nixa_aligned', 'nixd_aligned', 'bpod_aligned')
+    nixa, nixd, bpod, ni_align = (q_all & f'abs(nixa_aligned - nixd_aligned) < {diff_cut_off/1000}').fetch('nixa_aligned', 'nixd_aligned', 'bpod_aligned', 'ni_align')
     n_cut_off = len(q_all) - len(nixa)
 
-    nixa *= 1000
-    nixd *= 1000
+    nixa = nixa.astype(float) * 1000
+    nixd = nixd.astype(float) * 1000
     bpod = bpod.astype(float) * 1000
 
     # (Bpod - NIXA) vs (NIXD - NIXA)
@@ -404,21 +397,31 @@ def compare_ni_and_bpod_times(q_sess=dj.AndList(['subject_id = "473361"', 'sessi
     ax[1,0].set(xlabel='nixd - nixa (ms)')
     ax[1,1].hist(bpod - nixd, bins = 100)
     ax[1,1].set(xlabel='bpod - nixd (ms)')
-    
+
     # 3. -- Error as a function of session time --
     # For the up-to-10-ms unacceptable jitter between times,
     # I have narrowed it down to the precision of computing float numbers!
-    # Here I just compare choice times from ephys_times and q_all, which are 
+    # Here I just compare choice times from ephys_times and q_all, which are
     # using exactly the same data (ephys.TrialEvent), but by different approaches:
-    #    ephys_times: fetch and substract
-    #    q_all: substract and fetch
+    #    ephys_times: fetch and subtract
+    #    q_all: subtract and fetch
+    non_nan = ~np.isnan(ephys_times.choice.astype(float))
+    session_times = session_times[non_nan]
+    fetch_and_subtract = ephys_times.choice[non_nan]
+    subtract_and_fetch = q_all.fetch('nixd_aligned').astype(float)
+    ax = plt.figure(figsize=(10,10)).subplots(3,1)
+    ax[0].plot(session_times, (fetch_and_subtract - subtract_and_fetch) * 1000, '.')
+    ax[0].set(title='NIXD choice, fetch first - subtract first')
     
-    session_times = session_times[~np.isnan(ephys_times.choice)]
-    fetch_and_substract = ephys_times.choice[~np.isnan(ephys_times.choice)]
-    substract_and_fetch = q_all.fetch('nixd_aligned')
-    plt.figure()
-    plt.plot(session_times, fetch_and_substract - substract_and_fetch, '.')
+    # Choice time, Bpod vs NIXA
+    ax[1].plot(ni_align, bpod - nixa, '.')
+    ax[1].set(title='choice (Bpod - NIXA)', ylabel='time error (ms)')
     
+    # Choice time, NIXD vs NIXA
+    ax[2].plot(ni_align, nixd - nixa, '.')
+    ax[2].set(title='choice (NIXD - NIXA)', xlabel='time in session (s)')
+    
+    for _a in ax.flat:
+        _a.label_outer()
 
     
-    import pdb; pdb.set_trace()
