@@ -339,6 +339,7 @@ def compare_ni_and_bpod_times(q_sess=dj.AndList(['subject_id = "473361"', 'sessi
     # Ephys time
     ephys_times = (ephys.TrialEvent & q_sess & f'trial_event_type IN {tuple(event_all)}').fetch(format='frame')
     ephys_times = ephys_times.reset_index().pivot(index = ['subject_id', 'session', 'trial'], columns='trial_event_type').trial_event_time
+    session_times = ephys_times.bitcodestart
     ephys_times = ephys_times.sub(ephys_times[event_to_align], axis=0).drop(columns=event_to_align)  # To each bitcode start (bpodstart is sometimes problematic if a new bpod session is started)
     
     # Bpod time
@@ -367,11 +368,8 @@ def compare_ni_and_bpod_times(q_sess=dj.AndList(['subject_id = "473361"', 'sessi
     ax[-1, 1].set_xlabel('Bpod time - NI time (ms)')
     ax[0, 1].set_title(f'{q_sess}\ntotal {len(bpod_times)} trials', fontsize=8)
     
-    # 2. -- Error as a function of session time --
     
-    
-    
-    # 3. -- first lick: NIXA (raw lickboard, close to ground truth?), NIXD (bpod digital to NI), and Bpod (bpod csv file) --
+    # 2. -- first lick: NIXA (raw lickboard, close to ground truth?), NIXD (bpod digital to NI), and Bpod (bpod csv file) --
     ephys_go_cue = (ephys.TrialEvent & 'trial_event_type = "go"' & q_sess).proj(ephys_go='trial_event_time')
     nixa_first_lick = ephys_go_cue.proj().aggr(
         (ephys.ActionEvent * ephys_go_cue) & 'action_event_time >= ephys_go', 
@@ -406,3 +404,21 @@ def compare_ni_and_bpod_times(q_sess=dj.AndList(['subject_id = "473361"', 'sessi
     ax[1,0].set(xlabel='nixd - nixa (ms)')
     ax[1,1].hist(bpod - nixd, bins = 100)
     ax[1,1].set(xlabel='bpod - nixd (ms)')
+    
+    # 3. -- Error as a function of session time --
+    # For the up-to-10-ms unacceptable jitter between times,
+    # I have narrowed it down to the precision of computing float numbers!
+    # Here I just compare choice times from ephys_times and q_all, which are 
+    # using exactly the same data (ephys.TrialEvent), but by different approaches:
+    #    ephys_times: fetch and substract
+    #    q_all: substract and fetch
+    
+    session_times = session_times[~np.isnan(ephys_times.choice)]
+    fetch_and_substract = ephys_times.choice[~np.isnan(ephys_times.choice)]
+    substract_and_fetch = q_all.fetch('nixd_aligned')
+    plt.figure()
+    plt.plot(session_times, fetch_and_substract - substract_and_fetch, '.')
+    
+
+    
+    import pdb; pdb.set_trace()
