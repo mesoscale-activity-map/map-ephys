@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 import datajoint as dj
 plt.style.use('seaborn-talk')
-from pipeline import lab
+from pipeline import lab, experiment, ephys
 from pipeline.ingest import behavior as behavior_ingest
 
 
@@ -312,3 +312,97 @@ def compare_pc_and_bpod_times(q_sess=dj.AndList(['water_restriction_number = "HH
     ax[0].legend()
     
 
+def compare_ni_and_bpod_times(q_sess=dj.AndList(['subject_id = "473361"', 'session >= 57']), event_to_align='bitcodestart'):
+    '''
+    Compare NI-TIME and BPOD-TIME
+    This is a critical validation for ephys timing alignment
+    
+    [Conclusions]:
+    1. No bias between NI time and bpod time, but there's jitter up to 10 ms!
+    2. We should trust NI time (?)
+
+    Parameters
+    ----------
+    q_sess : TYPE, optional
+        DESCRIPTION. Query of session. The default is dj.AndList(['water_restriction_number = "HH09"', 'session >= 50']).
+
+    Returns
+    -------
+    None.
+
+    '''
+    
+    event_all = ['bitcodestart', 'go', 'choice', 'trialend']
+    event_to_compare = [e for e in event_all if e != event_to_align]
+    
+    # 1. -- all events, Bpod vs NIXD --
+    # Ephys time
+    ephys_times = (ephys.TrialEvent & q_sess & f'trial_event_type IN {tuple(event_all)}').fetch(format='frame')
+    ephys_times = ephys_times.reset_index().pivot(index = ['subject_id', 'session', 'trial'], columns='trial_event_type').trial_event_time
+    ephys_times = ephys_times.sub(ephys_times[event_to_align], axis=0).drop(columns=event_to_align)  # To each bitcode start (bpodstart is sometimes problematic if a new bpod session is started)
+    
+    # Bpod time
+    bpod_times = (experiment.TrialEvent & q_sess & f'trial_event_type IN {tuple(event_all)}' ).fetch(format='frame')
+    bpod_times = bpod_times.reset_index().pivot(index = ['subject_id', 'session', 'trial'], columns='trial_event_type').trial_event_time.astype(float)  # Already related to bpod start
+    bpod_times = bpod_times.sub(bpod_times[event_to_align], axis=0).drop(columns=event_to_align)  # To each trial's bpod start
+    
+    # Plot: Bpod vs NIXD, distribution of differences
+    fig = plt.figure(figsize=(8,13))
+    ax = fig.subplots(len(event_to_compare), 2)
+    max_error = 0
+    for n, event in enumerate(event_to_compare):
+        ax[n, 0].plot(ephys_times[event], bpod_times[event], '*', label=event)
+        ax[n, 1].hist((np.array(bpod_times[event].astype(float)) - np.array(ephys_times[event])) * 1000, bins=100, label=event)
+        ax_max = max(max(ax[n, 0].get_xlim()), max(ax[n, 0].get_ylim()))
+        ax_min = min(min(ax[n, 0].get_xlim()), min(ax[n, 0].get_ylim()))
+        ax[n, 0].plot([ax_min, ax_max], [ax_min, ax_max], 'k:')
+        ax[n, 0].legend()
+        max_error = max(max_error, max(ax[n, 1].get_xlim()))
+
+    for _a in ax[:, 1]:
+        _a.set_xlim(-max_error, max_error)
+        
+    ax[-1, 0].set_xlabel(f'NI time to {event_to_align} (s)')
+    ax[-1, 0].set_ylabel('Bpod time (s)')
+    ax[-1, 1].set_xlabel('Bpod time - NI time (ms)')
+    ax[0, 1].set_title(f'{q_sess}\ntotal {len(bpod_times)} trials', fontsize=8)
+    
+    # 2. -- Error as a function of session time --
+    
+    
+    
+    # 3. -- first lick: NIXA (raw lickboard, close to ground truth?), NIXD (bpod digital to NI), and Bpod (bpod csv file) --
+    ephys_go_cue = (ephys.TrialEvent & 'trial_event_type = "go"' & q_sess).proj(ephys_go='trial_event_time')
+    nixa_first_lick = ephys_go_cue.proj().aggr(
+        (ephys.ActionEvent * ephys_go_cue) & 'action_event_time >= ephys_go', 
+        nixa='min(action_event_time)')    # Session-time of first lick of each trial
+
+    q_all = (nixa_first_lick.proj(..., tmp='trial_event_id')   # NIXA
+            * (ephys.TrialEvent & 'trial_event_type = "choice"').proj(nixd='trial_event_time', tmp1='trial_event_id')   # NIXD
+            * (ephys.TrialEvent & f'trial_event_type = "{event_to_align}"').proj(ni_align='trial_event_time')
+            * (experiment.TrialEvent & 'trial_event_type = "choice"').proj(bpod='trial_event_time', tmp2='trial_event_id')  # Bpod csv
+            * (experiment.TrialEvent & f'trial_event_type = "{event_to_align}"').proj(bpod_align='trial_event_time', tmp3='trial_event_id')
+            & q_sess).proj(...,
+                           nixa_aligned='nixa - ni_align',
+                           nixd_aligned='nixd - ni_align',
+                           bpod_aligned='bpod - bpod_align')
+
+    diff_cut_off = 30   # (ms) Cutoff where discrepancy is due to lick faster than 10 ms go cue bitcode (has been decrease to 1ms)
+    nixa, nixd, bpod = (q_all & f'abs(nixa_aligned - nixd_aligned) < {diff_cut_off/1000}').fetch('nixa_aligned', 'nixd_aligned', 'bpod_aligned')
+    n_cut_off = len(q_all) - len(nixa)
+
+    nixa *= 1000
+    nixd *= 1000
+    bpod = bpod.astype(float) * 1000
+
+    # (Bpod - NIXA) vs (NIXD - NIXA)
+    fig = plt.figure(figsize=(8,8))
+    ax = fig.subplots(2, 2)
+    ax[0,0].plot(bpod - nixa, nixd - nixa, '.')
+    ax[0,0].set(xlabel='bpod - nixa (ms)', ylabel='nixd - nixa')
+    ax[0,1].hist(bpod - nixa, bins = 100)
+    ax[0,1].set(xlabel='bpod - nixa (ms)', title=f'first lick after go, total_trial = {len(bpod)}, cut_off = {n_cut_off}')
+    ax[1,0].hist(nixd - nixa, bins = 100)
+    ax[1,0].set(xlabel='nixd - nixa (ms)')
+    ax[1,1].hist(bpod - nixd, bins = 100)
+    ax[1,1].set(xlabel='bpod - nixd (ms)')
