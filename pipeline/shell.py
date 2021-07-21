@@ -196,7 +196,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     if 'behaviour_time' not in df.columns:
         df['behaviour_time'] = np.full(len(df), None)
 
-    load_insertion_quality = 'insertion_quality' in df.columns
+    load_insertion_quality = 'drift_presence' in df.columns
 
     insertion_locations, recordable_brain_regions = [], []
     insertions_quality, insertions_good_periods, insertions_good_trials = [], [], []
@@ -237,9 +237,11 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
                 bf_datetime = datetime.strptime(bf_datetime, bf_datetime_format)
                 s_datetime = sess_key.proj(s_dt='cast(concat(session_date, " ", session_time) as datetime)').fetch1('s_dt')
                 if abs((s_datetime - bf_datetime).total_seconds()) > 10800:  # no more than 3 hours
-                    log.debug('Unmatched sess_dt ({}) and behavior_dt ({}). Skipping...'.format(s_datetime, bf_datetime))
+                    log.debug('\tUnmatched sess_dt ({}) and behavior_dt ({}). Skipping...'.format(s_datetime, bf_datetime))
                     continue
             else:
+                log.debug('\tNot a single-sess per day case ({} sessions found). Skipping...'.format(
+                    len(sess_key)))
                 continue
 
         pinsert_key = dict(sess_key.fetch1('KEY'), insertion_number=row.insertion_number)
@@ -267,7 +269,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
                     if row.good_period:
                         session_end = (experiment.SessionTrial & sess_key).fetch(
                             'stop_time', order_by='stop_time DESC', limit=1)[0]
-                        for period in row.good_period.replace(' ', '').split(','):
+                        for period in re.split(',|;', row.good_period.replace(' ', '')):
                             period_start, period_end = period.lower().split('-')
                             period_start = Decimal(period_start)
                             period_end = Decimal(period_end) if period_end != 'end' else session_end
