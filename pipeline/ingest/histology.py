@@ -485,7 +485,7 @@ class HistologyIngest(dj.Imported):
                             same_day_sess_count, histology_files[0].name))
                 else:
                     if self.is_foraging:
-                        behavior_time_str = re.search('-(\d{6})', self.q_behavior_file.fetch('behavior_file')[0]).groups()[0]
+                        behavior_time_str = re.search('-(\d{6})', self.q_behavior_file.fetch('behavior_file', limit=1)[0]).groups()[0]
                     else:
                         behavior_time_str = re.search('_(\d{6}).mat', self.q_behavior_file.fetch1('behavior_file')).groups()[0]
                     if session_time_str != behavior_time_str:
@@ -493,7 +493,7 @@ class HistologyIngest(dj.Imported):
                             histology_files[0].name, session_time_str, behavior_time_str))
             else:
                 if self.is_foraging:
-                    behavior_time_str = re.search('-(\d{6})', self.q_behavior_file.fetch('behavior_file')[0]).groups()[0]
+                    behavior_time_str = re.search('-(\d{6})', self.q_behavior_file.fetch('behavior_file', limit=1)[0]).groups()[0]
                 else:
                     behavior_time_str = re.search('_(\d{6}).mat', self.q_behavior_file.fetch1('behavior_file')).groups()[0]
                 file_format = 'landmarks_{}_{}_{}_{}*{}'.format(self.water, self.session_date_str,
