@@ -104,21 +104,23 @@ def _plot_spike_raster_foraging(ipsi, contra, offset=0, vlines=[], shade_bar=Non
     if not ax:
         fig, ax = plt.subplots(1, 1)
         
-    ipsi_tr = ipsi['raster'][1]
-    for i, tr in enumerate(ipsi['trials']):
-        ipsi_tr = np.where(ipsi['raster'][1] == tr, i, ipsi_tr)
-    
     contra_tr = contra['raster'][1]
     for i, tr in enumerate(contra['trials']):
         contra_tr = np.where(contra['raster'][1] == tr, i, contra_tr)
 
-    ipsi_tr_max = ipsi_tr.max() if ipsi_tr.size > 0 else 0
-
-    ax.plot(ipsi['raster'][0], ipsi_tr + offset, 'r.', markersize=1)
-    ax.axhline(y=ipsi_tr_max + offset + 0.5, linestyle='-', color='k')
+    ipsi_tr = ipsi['raster'][1]
+    for i, tr in enumerate(ipsi['trials']):
+        ipsi_tr = np.where(ipsi['raster'][1] == tr, i, ipsi_tr)
     
-    ax.plot(contra['raster'][0], contra_tr + ipsi_tr_max + 1 + offset, 'b.', markersize=1)
-    ax.axhline(y=contra_tr.max() + ipsi_tr_max + offset + 0.5, linestyle='-', color='k')
+    contra_tr_max = contra_tr.max() if contra_tr.size > 0 else 0
+
+    start_at = offset
+    ax.plot(contra['raster'][0], contra_tr + start_at + 1, 'b.', markersize=1)
+    ax.axhline(y=start_at, linestyle='-', color='k')
+    start_at += contra_tr_max
+
+    ax.plot(ipsi['raster'][0], ipsi_tr + start_at, 'r.', markersize=1)
+    ax.axhline(y=start_at, linestyle='-', color='k')
 
     for x in vlines:
         ax.axvline(x=x, linestyle='--', color='k')
@@ -169,16 +171,16 @@ def _set_same_horizonal_aspect_ratio(axs, xlims, gap=0.02):
         ax.set_position([l, b, w, h])
 
 
-def plot_unit_psth_foraging(unit_key, if_raster=True, axs=None, title='', if_exclude_early_lick=False):
+def plot_unit_psth_choice_outcome(unit_key,
+                                  align_types=['trial_start', 'go_cue', 'first_lick_after_go_cue', 'iti_start', 'next_trial_start'],
+                                  if_raster=True, axs=None, title='', if_exclude_early_lick=False):
     """
-    Default raster and PSTH plot for foraging task
+    (for foraging task) Plot psth grouped by (choice x outcome)
     """
     
     # for (the very few) sessions without zaber feedback signal, use 'bitcodestart' with manual correction (see compute_unit_psth_and_raster)
-    trialstart = 'trial_start' if (ephys.TrialEvent & unit_key & 'trial_event_type = "zaberready"') else 'trial_start_bitcode'
-
-    # Select align types from psth_foraging.AlignType
-    align_types_to_plot = [trialstart, 'go_cue', 'first_lick_after_go_cue', 'iti_start', 'next_' + trialstart]
+    if not ephys.TrialEvent & unit_key & 'trial_event_type = "zaberready"':
+        align_types = [a + '_bitcode' if 'trial_start' in a else a for a in align_types]
 
     hemi = _get_units_hemisphere(unit_key)
     ipsi = "L" if hemi == "left" else "R"
@@ -194,12 +196,12 @@ def plot_unit_psth_foraging(unit_key, if_raster=True, axs=None, title='', if_exc
 
     fig = None
     if axs is None:
-        fig = plt.figure(figsize=(16, 9))
-        axs = fig.subplots(1 + if_raster, len(align_types_to_plot), sharey='row', sharex='col')
-        axs = np.atleast_2d(axs)
+        fig = plt.figure(figsize=(len(align_types)/5*16, (1+if_raster)/2 * 9))
+        axs = fig.subplots(1 + if_raster, len(align_types), sharey='row', sharex='col')
+        axs = np.atleast_2d(axs).reshape((1+if_raster, -1))
     xlims = []
 
-    for ax_i, align_type in enumerate(align_types_to_plot):
+    for ax_i, align_type in enumerate(align_types):
         
         offset, xlim = (psth_foraging.AlignType & {'align_type_name': align_type}).fetch1('trial_offset', 'xlim')
         xlims.append(xlim)
@@ -220,11 +222,11 @@ def plot_unit_psth_foraging(unit_key, if_raster=True, axs=None, title='', if_exc
 
         # --- plot psths (all 4 in one plot) ---
         ax_psth = axs[1 if if_raster else 0, ax_i]
-        period_starts_hit = _get_ephys_trial_event_times(align_types_to_plot,
+        period_starts_hit = _get_ephys_trial_event_times(align_types,
                                                          align_to=align_type,
-                                                         trial_keys=psth_foraging.TrialCondition.get_trials(f'LR_hit{no_early_lick}') & unit_key, 
+                                                         trial_keys=psth_foraging.TrialCondition.get_trials(f'LR_hit{no_early_lick}') & unit_key,
                                                          # cannot use *_hit_trials because it could have been offset
-                                                        )
+                                                         )
         # _, period_starts_miss = _get_ephys_trial_event_times([trialstart, 'go', 'choice', 'trialend'], 
         #                                                   ipsi_miss_trials.proj() + contra_miss_trials.proj(), align_event=align_event_type)
         
@@ -247,17 +249,16 @@ def plot_unit_psth_foraging(unit_key, if_raster=True, axs=None, title='', if_exc
                                            vlines=period_starts_hit,
                                            title='', xlim=xlim)
             _plot_spike_raster_foraging(ipsi_miss_unit_psth, contra_miss_unit_psth, ax=ax_raster,
-                                           offset=len(ipsi_hit_unit_psth['trials']) + len(contra_hit_unit_psth['trials']), 
+                                           offset=len(ipsi_hit_unit_psth['trials']) + len(contra_hit_unit_psth['trials']),
                                            vlines=[],
                                            title='' if ax_i > 0 else unit_info, xlim=xlim)
+            ax_raster.invert_yaxis()
             
     # Scale axis widths to keep the same horizontal aspect ratio (time) across axs
     _set_same_horizonal_aspect_ratio(axs[1 if if_raster else 0, :], xlims)
     if if_raster:
         _set_same_horizonal_aspect_ratio(axs[0, :], xlims)
-        
-                
     ax_psth.legend(fontsize=8)
-    
 
     return fig
+
