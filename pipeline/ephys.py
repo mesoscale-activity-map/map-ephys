@@ -246,9 +246,12 @@ class UnitNote(dj.Imported):
 
 @schema
 class UnitNoiseLabel(dj.Imported):
-    definition = """
+    """
+    labeling based on the noiseTemplate module - output to "cluster_group.tsv" file
+    (https://github.com/jenniferColonell/ecephys_spike_sorting/tree/master/ecephys_spike_sorting/modules/noise_templates)
+    """
+    definition = """ 
     # labeling based on the noiseTemplate module - output to "cluster_group.tsv" file
-    # (https://github.com/jenniferColonell/ecephys_spike_sorting/tree/master/ecephys_spike_sorting/modules/noise_templates)
     -> Unit
     ---
     noise: enum('good', 'noise')
