@@ -105,6 +105,7 @@ class EphysIngest(dj.Imported):
         metrics = data['metrics']  # either None or a pd.DataFrame loaded from 'metrics.csv'
         creation_time = data['creation_time']
         clustering_label = data['clustering_label']
+        cluster_noise_label = data.get('cluster_noise_label')
 
         log.info('-- Start insertions for probe: {} - Clustering method: {} - Label: {}'.format(probe, method, clustering_label))
 
@@ -284,7 +285,6 @@ class EphysIngest(dj.Imported):
                     [{**archive_key, 'unit': u, 'unit_amp': unit_amp[i], 'unit_snr': unit_snr[i],
                       'isi_violation': metrics[u]['isi_viol'], 'avg_firing_rate': metrics[u]['firing_rate']}
                      for i, u in enumerate(set(units))], allow_direct_insert=True)
-
         else:
             # insert Unit
             log.info('.. ephys.Unit')
@@ -376,6 +376,15 @@ class EphysIngest(dj.Imported):
                                         'isi_violation': metrics[u]['isi_viol'],
                                         'avg_firing_rate': metrics[u]['firing_rate']} for u in set(units)],
                                       allow_direct_insert=True)
+
+            if cluster_noise_label is not None:
+                dj.conn().ping()
+                log.info('.. inserting unit noise label')
+                ephys.UnitNoiseLabel.insert([
+                    {**skey, 'insertion_number': probe, 'clustering_method': method,
+                     'unit': unit, 'unit_quality': note}
+                    for unit, note in zip(cluster_noise_label['cluster_ids'],
+                                          cluster_noise_label['cluster_notes'])])
 
             dj.conn().ping()
             log.info('.. inserting clustering timestamp and label')
@@ -855,6 +864,8 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
 
     creation_time, clustering_label = extract_clustering_info(ks_dir, 'kilosort2')
 
+    cluster_noise_label = ks.extract_cluster_noise_label()
+
     data = {
         'sinfo': sinfo,
         'ef_path': ks_dir,
@@ -881,6 +892,7 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
         'creation_time': creation_time,
         'clustering_label': clustering_label,
         'ks_channel_map': ks.data['channel_map'] + 1,  # channel numbering in this pipeline is 1-based indexed
+        'cluster_noise_label': cluster_noise_label
     }
 
     return data
@@ -921,7 +933,6 @@ def _get_sess_dir(rigpath, h2o, sess_datetime):
                     break
                 else:
                     log.info('Found {} - difference in behavior and ephys start-time: {} seconds (more than 2 minutes). Skipping...'.format(sess_dir, start_time_difference))
-
 
     return dpath, dglob
 
@@ -1320,14 +1331,14 @@ class Kilosort:
     # keys to self.files, .data are file name e.g. self.data['params'], etc.
     ks_keys = [path.splitext(i)[0] for i in ks_files]
 
-    def __init__(self, dname):
-        self._dname = dname
+    def __init__(self, kilosort_dir):
+        self._kilosort_dir = kilosort_dir
         self._files = {}
         self._data = None
         self._clusters = None
 
-        self._info = {'time_created': datetime.fromtimestamp((dname / 'params.py').stat().st_ctime),
-                      'time_modified': datetime.fromtimestamp((dname / 'params.py').stat().st_mtime)}
+        self._info = {'time_created': datetime.fromtimestamp((kilosort_dir / 'params.py').stat().st_ctime),
+                      'time_modified': datetime.fromtimestamp((kilosort_dir / 'params.py').stat().st_mtime)}
 
     @property
     def data(self):
@@ -1342,7 +1353,7 @@ class Kilosort:
     def _stat(self):
         self._data = {}
         for i in Kilosort.ks_files:
-            f = self._dname / i
+            f = self._kilosort_dir / i
 
             if not f.exists():
                 log.debug('skipping {} - doesnt exist'.format(f))
@@ -1367,12 +1378,12 @@ class Kilosort:
                 self._data[base] = d.squeeze()
 
         # Read the Cluster Groups
-        if (self._dname / 'cluster_groups.csv').exists():
-            df = pd.read_csv(self._dname / 'cluster_groups.csv', delimiter='\t')
+        if (self._kilosort_dir / 'cluster_groups.csv').exists():
+            df = pd.read_csv(self._kilosort_dir / 'cluster_groups.csv', delimiter='\t')
             self._data['cluster_groups'] = np.array(df['group'].values)
             self._data['cluster_ids'] = np.array(df['cluster_id'].values)
-        elif (self._dname / 'cluster_KSLabel.tsv').exists():
-            df = pd.read_csv(self._dname / 'cluster_KSLabel.tsv', sep="\t", header=0)
+        elif (self._kilosort_dir / 'cluster_KSLabel.tsv').exists():
+            df = pd.read_csv(self._kilosort_dir / 'cluster_KSLabel.tsv', sep="\t", header=0)
             self._data['cluster_groups'] = np.array(df['KSLabel'].values)
             self._data['cluster_ids'] = np.array(df['cluster_id'].values)
         else:
@@ -1380,7 +1391,7 @@ class Kilosort:
 
     def extract_curated_cluster_notes(self):
         curated_cluster_notes = {}
-        for cluster_file in pathlib.Path(self._dname).glob('cluster_*.tsv'):
+        for cluster_file in pathlib.Path(self._kilosort_dir).glob('cluster_*.tsv'):
             if cluster_file.name not in self.ks_cluster_files:
                 curation_source = ''.join(cluster_file.stem.split('_')[1:])
                 df = pd.read_csv(cluster_file, sep="\t", header=0)
@@ -1388,6 +1399,19 @@ class Kilosort:
                     cluster_ids=np.array(df['cluster_id'].values),
                     cluster_notes=np.array(df[curation_source].values))
         return curated_cluster_notes
+
+    def extract_cluster_noise_label(self):
+        """
+        # labeling based on the noiseTemplate module - output to "cluster_group.tsv" file
+        # (https://github.com/jenniferColonell/ecephys_spike_sorting/tree/master/ecephys_spike_sorting/modules/noise_templates)
+        """
+        cluster_group_tsv = pathlib.Path(self._kilosort_dir) / 'cluster_group.tsv'
+        if cluster_group_tsv.exists():
+            df = pd.read_csv(cluster_group_tsv, sep="\t", header=0)
+            return dict(cluster_ids=np.array(df['cluster_id'].values),
+                        cluster_notes=np.array(df['group'].values))
+        else:
+            return {}
 
     def extract_spike_depths(self):
         """ Reimplemented from https://github.com/cortex-lab/spikes/blob/master/analysis/ksDriftmap.m """
