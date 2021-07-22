@@ -438,14 +438,16 @@ class AlignType(dj.Lookup):
         [1, 'go', 'go_cue', 0, 0, [-2, 5], [-1, 3]],
         [2, 'choice', 'first_lick_after_go_cue', 0, 0, [-2, 5], [-1, 3]],
         [3, 'trialend', 'iti_start', 0, 0, [-3, 10], [-2, 5]],
-        [4, 'zaberready', 'next_trial_start', 1, 0, [-10, 3], [-8, 1]],
+        [4, 'zaberready', 'next_trial_start', 1, 0, [-10, 5], [-8, 3]],
+        [5, 'zaberready', 'next_two_trial_start', 2, 0, [-10, 5], [-8, 3]],
 
         # In the first few sessions, zaber moter feedback is not recorded,
         # so we don't know the exact time of trial start ('zaberready').
         # We have to estimate actual trial start by
         #   bitcodestart + bitcode width (42 ms for first few sessions) + zaber movement duration (~ 104 ms, very repeatable)
-        [5, 'bitcodestart', 'trial_start_bitcode', 0, 0.146, [-3, 2], [-2, 1]],
-        [6, 'bitcodestart', 'next_trial_start_bitcode', 1, 0.146, [-10, 3], [-8, 1]]
+        [6, 'bitcodestart', 'trial_start_bitcode', 0, 0.146, [-3, 2], [-2, 1]],
+        [7, 'bitcodestart', 'next_trial_start_bitcode', 1, 0.146, [-10, 5], [-8, 3]],
+        [8, 'bitcodestart', 'next_two_trial_start_bitcode', 2, 0.146, [-10, 5], [-8, 3]],
     ]
 
 

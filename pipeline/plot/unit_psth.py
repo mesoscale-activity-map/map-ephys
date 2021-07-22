@@ -2,7 +2,8 @@
 import numpy as np
 
 import matplotlib.pyplot as plt
-from pipeline import psth, psth_foraging, ephys, lab, ccf, histology, experiment
+import pandas as pd
+from pipeline import psth, psth_foraging, ephys, lab, ccf, histology, experiment, foraging_model
 from pipeline.util import _get_trial_event_times, _get_ephys_trial_event_times, _get_units_hemisphere
 
 
@@ -124,6 +125,8 @@ def _plot_spike_raster_foraging(ipsi, contra, offset=0, vlines=[], shade_bar=Non
 
     for x in vlines:
         ax.axvline(x=x, linestyle='--', color='k')
+    ax.axvline(x=0, linestyle='-', color='k', lw=1.5)
+
     if shade_bar is not None:
         ax.axvspan(shade_bar[0], shade_bar[0] + shade_bar[1], alpha=0.3, color='royalblue')
 
@@ -155,6 +158,35 @@ def _plot_psth_foraging(ipsi, contra, vlines=[], shade_bar=None, ax=None, title=
     ax.set_title(title)
 
 
+def _plot_psths(psths, kargs=[], vlines=[], shade_bar=None, ax=None, title='', label='', xlim=_plt_xlim):
+    """
+    Plot arbitrary number of psths
+    """
+    if not ax:
+        fig, ax = plt.subplots(1, 1)
+
+    if not kargs:
+        kargs = [{'color': 'b'}] * len(psths)
+
+    for psth, karg in zip(psths, kargs):
+        ax.plot(psth['bins'], psth['psth'], **karg)
+
+    for x in vlines:
+        ax.axvline(x=x, linestyle='--', color='k')
+    ax.axvline(x=0, linestyle='-', color='k', lw=1.5)
+
+    if shade_bar is not None:
+        ax.axvspan(shade_bar[0], shade_bar[0] + shade_bar[1], alpha=0.3, color='royalblue')
+
+    ax.set_ylabel('spikes/s')
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    ax.set_xlim(xlim)
+    ax.set_xlabel('Time (s)')
+    ax.set_title(title)
+
+
 def _set_same_horizonal_aspect_ratio(axs, xlims, gap=0.02):
     """
     Scale axis widths to keep the same horizonal aspect ratio across axs
@@ -173,7 +205,8 @@ def _set_same_horizonal_aspect_ratio(axs, xlims, gap=0.02):
 
 def plot_unit_psth_choice_outcome(unit_key,
                                   align_types=['trial_start', 'go_cue', 'first_lick_after_go_cue', 'iti_start', 'next_trial_start'],
-                                  if_raster=True, axs=None, title='', if_exclude_early_lick=False):
+                                  if_raster=True, if_exclude_early_lick=False,
+                                  axs=None, title=''):
     """
     (for foraging task) Plot psth grouped by (choice x outcome)
     """
@@ -187,18 +220,13 @@ def plot_unit_psth_choice_outcome(unit_key,
     contra = "R" if hemi == "left" else "L"
     no_early_lick = '_noearlylick' if if_exclude_early_lick else ''
 
-    unit_info = (f'{(lab.WaterRestriction & unit_key).fetch1("water_restriction_number")}, '
-                 f'{(experiment.Session & unit_key).fetch1("session_date")}, '
-                 f'imec {unit_key["insertion_number"]-1}\n'
-                 f'Unit #: {unit_key["unit"]}, '
-                 f'{(((ephys.Unit & unit_key) * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation).fetch1("annotation")}'
-                 )
-
     fig = None
     if axs is None:
-        fig = plt.figure(figsize=(len(align_types)/5*16, (1+if_raster)/2 * 9))
+        fig = plt.figure(figsize=(len(align_types)/5 * 25, (1+if_raster)/2 * 9))
         axs = fig.subplots(1 + if_raster, len(align_types), sharey='row', sharex='col')
         axs = np.atleast_2d(axs).reshape((1+if_raster, -1))
+        plt.subplots_adjust(top=0.8)
+
     xlims = []
 
     for ax_i, align_type in enumerate(align_types):
@@ -251,9 +279,18 @@ def plot_unit_psth_choice_outcome(unit_key,
             _plot_spike_raster_foraging(ipsi_miss_unit_psth, contra_miss_unit_psth, ax=ax_raster,
                                            offset=len(ipsi_hit_unit_psth['trials']) + len(contra_hit_unit_psth['trials']),
                                            vlines=[],
-                                           title='' if ax_i > 0 else unit_info, xlim=xlim)
+                                           title='', xlim=xlim)
             ax_raster.invert_yaxis()
-            
+
+    # Add unit info
+    unit_info = (f'{(lab.WaterRestriction & unit_key).fetch1("water_restriction_number")}, '
+                 f'{(experiment.Session & unit_key).fetch1("session_date")}, '
+                 f'imec {unit_key["insertion_number"]-1}\n'
+                 f'Unit #: {unit_key["unit"]}, '
+                 f'{(((ephys.Unit & unit_key) * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation).fetch1("annotation")}'
+                 )
+    fig.text(0.1, 0.9, unit_info)
+
     # Scale axis widths to keep the same horizontal aspect ratio (time) across axs
     _set_same_horizonal_aspect_ratio(axs[1 if if_raster else 0, :], xlims)
     if if_raster:
@@ -262,3 +299,83 @@ def plot_unit_psth_choice_outcome(unit_key,
 
     return fig
 
+
+def plot_unit_psth_value_quantile(unit_key, model_id=11, n_quantile=5,
+                                  align_types=['trial_start', 'go_cue', 'first_lick_after_go_cue', 'iti_start', 'next_trial_start'],
+                                  axs=None, title=''
+                                  ):
+    """
+    (for foraging task) Plot psth grouped by quantiles of action value from behavioral model fitting
+    """
+    # for (the very few) sessions without zaber feedback signal, use 'bitcodestart' with manual correction (see compute_unit_psth_and_raster)
+    if not ephys.TrialEvent & unit_key & 'trial_event_type = "zaberready"':
+        align_types = [a + '_bitcode' if 'trial_start' in a else a for a in align_types]
+
+    hemi = _get_units_hemisphere(unit_key)
+    contra = "right" if hemi == "left" else "left"
+
+    # Fetch predictive contra choice probabilities
+    df = (foraging_model.FittedSessionModel.PredictiveChoiceProb
+          & unit_key
+          & {'model_id': model_id}
+          & {'water_port': contra}
+          ).fetch(format='frame').reset_index()[['trial', 'choice_prob']]
+
+    # TODO: turn choice_prob back to real action value
+
+    # Cut choice probabilities into quantiles
+    df['quantile_rank'] = pd.qcut(df.choice_prob, n_quantile, labels=False)
+
+    fig = None
+    if axs is None:
+        fig = plt.figure(figsize=(len(align_types)/5 * 25, 5))
+        axs = fig.subplots(1, len(align_types), sharey='row', sharex='col')
+        axs = np.atleast_2d(axs).reshape((1, -1))
+        plt.subplots_adjust(top=0.8)
+    kargs = [{'color': 'b',
+              'alpha': np.linspace(0.2, 1, n_quantile)[rank],
+              'label': f'contra value quantile {rank + 1}'} for rank in range(n_quantile)]
+    xlims = []
+
+    # -- For each align type --
+    for ax_i, align_type in enumerate(align_types):
+        offset, xlim = (psth_foraging.AlignType & {'align_type_name': align_type}).fetch1('trial_offset', 'xlim')
+        xlims.append(xlim)
+
+        # -- For each quantile group --
+        psths = []
+        for rank in range(n_quantile):
+            # Group trials
+            trial_num = df[df.quantile_rank == rank]
+            trial_num.trial += offset    # TODO: check whether predictive_choice_prob is *before or after* this trial
+
+            # Get psths
+            this_trials = (experiment.BehaviorTrial & unit_key & trial_num).proj()
+            psths.append(psth_foraging.compute_unit_psth_and_raster(unit_key, this_trials, align_type))
+
+        # -- Plot psths for this align type --
+        ax_psth = axs[0, ax_i]
+        period_starts_all = _get_ephys_trial_event_times(align_types,
+                                                         align_to=align_type,
+                                                         trial_keys=experiment.BehaviorTrial & unit_key & df,  # From all trials
+                                                         )
+
+        _plot_psths(psths, kargs, ax=ax_psth, xlim=xlim, vlines=period_starts_all)
+        ax_psth.set(title=f'{align_type}')
+
+    _set_same_horizonal_aspect_ratio(axs[0, :], xlims)
+    ax_psth.legend(fontsize=8)
+
+    # Add unit and model info
+    unit_info = (f'{(lab.WaterRestriction & unit_key).fetch1("water_restriction_number")}, '
+                 f'{(experiment.Session & unit_key).fetch1("session_date")}, '
+                 f'imec {unit_key["insertion_number"]-1}\n'
+                 f'Unit #: {unit_key["unit"]}, '
+                 f'{(((ephys.Unit & unit_key) * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation).fetch1("annotation")}'
+                 )
+    id, model_notation, desc, accuracy, n = (foraging_model.FittedSessionModel * foraging_model.Model & unit_key & {'model_id': model_id}).fetch1(
+        'model_id', 'model_notation', 'desc', 'cross_valid_accuracy_test', 'n_trials')
+    fig.text(0.1, 0.9, unit_info)
+    fig.text(0.4, 0.9, f'model #{id} {model_notation}\n{desc}\n{n} trials, prediction accuracy (cross-valid) = {accuracy}')
+
+    return fig

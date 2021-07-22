@@ -64,6 +64,7 @@ def _get_ephys_trial_event_times(all_align_types, align_to, trial_keys):
     
     
     tr_events = {}
+    min_len = np.inf
     for eve in all_align_types:
         q_align = psth_foraging.AlignType & {'align_type_name': eve}
         trial_offset, time_offset = q_align.fetch1('trial_offset', 'time_offset')
@@ -75,10 +76,11 @@ def _get_ephys_trial_event_times(all_align_types, align_to, trial_keys):
                  * ephys.TrialEvent).fetch('trial_event_time', order_by='trial').astype(float)
         
         tr_events[eve] = times + float(time_offset)
+        min_len = min(min_len, len(times))  # To account for possible different lengths due to trial_offset ~= 0
   
     event_starts = []
     for etime in tr_events.values():
-        event_starts.append(np.nanmedian(etime - tr_events[align_to]))
+        event_starts.append(np.nanmedian(etime[:min_len] - tr_events[align_to][:min_len]))
             
     return np.array(event_starts)
 
