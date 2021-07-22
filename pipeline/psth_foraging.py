@@ -153,6 +153,16 @@ class TrialCondition(dj.Lookup):
                     'free_water': 0}
             },
             {
+                'trial_condition_name': 'LR_hit',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'foraging',
+                    'task_protocol': 100,
+                    'outcome': 'hit',
+                    'auto_water': 0,
+                    'free_water': 0}
+            },
+            {
                 'trial_condition_name': 'LR_miss_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
@@ -231,8 +241,8 @@ class TrialCondition(dj.Lookup):
                 for d in contents_data)
 
     @classmethod
-    def get_trials(cls, trial_condition_name):
-        return cls.get_func({'trial_condition_name': trial_condition_name})()
+    def get_trials(cls, trial_condition_name, trial_offset=0):
+        return cls.get_func({'trial_condition_name': trial_condition_name}, trial_offset)()
 
     @classmethod
     def get_cond_name_from_keywords(cls, keywords):
@@ -251,16 +261,16 @@ class TrialCondition(dj.Lookup):
         return sorted(matched_cond_names)
 
     @classmethod
-    def get_func(cls, key):
+    def get_func(cls, key, trial_offset=0):
         self = cls()
 
         func, args = (self & key).fetch1(
             'trial_condition_func', 'trial_condition_arg')
 
-        return partial(dict(getmembers(cls))[func], **args)
+        return partial(dict(getmembers(cls))[func], trial_offset, **args)
 
     @classmethod
-    def _get_trials_exclude_stim(cls, **kwargs):
+    def _get_trials_exclude_stim(cls, trial_offset, **kwargs):
         # Note: inclusion (attr) is AND - exclusion (_attr) is OR
         log.debug('_get_trials_exclude_stim: {}'.format(kwargs))
 
@@ -280,13 +290,18 @@ class TrialCondition(dj.Lookup):
 
         stim_key = {k: v for k, v in restr.items() if k in stim_attrs}
         behav_key = {k: v for k, v in restr.items() if k in behav_attrs}
-
-        return (((experiment.BehaviorTrial * experiment.WaterPortChoice & behav_key) - [{k: v} for k, v in _behav_key.items()]) -
+        
+        q = (((experiment.BehaviorTrial * experiment.WaterPortChoice & behav_key) - [{k: v} for k, v in _behav_key.items()]) -
                 ((experiment.PhotostimEvent * experiment.PhotostimBrainRegion * experiment.Photostim & stim_key)
                  - [{k: v} for k, v in _stim_key.items()]).proj())
+        
+        if trial_offset:
+            return experiment.BehaviorTrial & q.proj(_='trial', trial=f'trial + {trial_offset}')
+        else:
+            return q
 
     @classmethod
-    def _get_trials_include_stim(cls, **kwargs):
+    def _get_trials_include_stim(cls, trial_offset, **kwargs):
         # Note: inclusion (attr) is AND - exclusion (_attr) is OR
         log.debug('_get_trials_include_stim: {}'.format(kwargs))
 
@@ -307,9 +322,14 @@ class TrialCondition(dj.Lookup):
         stim_key = {k: v for k, v in restr.items() if k in stim_attrs}
         behav_key = {k: v for k, v in restr.items() if k in behav_attrs}
 
-        return (((experiment.BehaviorTrial * experiment.WaterPortChoice & behav_key) - [{k: v} for k, v in _behav_key.items()]) &
+        q = (((experiment.BehaviorTrial * experiment.WaterPortChoice & behav_key) - [{k: v} for k, v in _behav_key.items()]) &
                 ((experiment.PhotostimEvent * experiment.PhotostimBrainRegion * experiment.Photostim & stim_key)
                  - [{k: v} for k, v in _stim_key.items()]).proj())
+    
+        if trial_offset:
+            return experiment.BehaviorTrial & q.proj(_='trial', trial=f'trial + {trial_offset}')
+        else:
+            return q
 
 
 @schema
@@ -396,9 +416,40 @@ class UnitPsth(dj.Computed):
                                   for s, t in zip(spikes, trials)])]
 
         return dict(trials=trials, spikes=spikes, psth=unit_psth, raster=raster)
+    
+    
+@schema 
+class AlignType(dj.Lookup):
+    '''
+    Define flexible psth alignment types
+    '''
+    definition = """
+    idx:                 smallint
+    -> experiment.TrialEventType
+    ---
+    align_type_name:     varchar(128)     # user-friendly name of alignment type
+    trial_offset=0:      smallint         # e.g., offset = 1 means the psth will be aligned to the event of the *next* trial
+    time_offset=0:       Decimal(10, 5)   # will be added to the event time for manual correction (e.g., bitcodestart to actual zaberready)  
+    psth_win:            tinyblob   
+    xlim:                tinyblob
+    """
+    contents = [
+        [0, 'zaberready', 'trial_start', 0, 0, [-3, 2], [-2, 1]],
+        [1, 'go', 'go_cue', 0, 0, [-2, 5], [-1, 3]],
+        [2, 'choice', 'first_lick_after_go_cue', 0, 0, [-2, 5], [-1, 3]],
+        [3, 'trialend', 'iti_start', 0, 0, [-3, 10], [-2, 5]],
+        [4, 'zaberready', 'next_trial_start', 1, 0, [-10, 3], [-8, 1]],
+
+        # In the first few sessions, zaber moter feedback is not recorded,
+        # so we don't know the exact time of trial start ('zaberready').
+        # We have to estimate actual trial start by
+        #   bitcodestart + bitcode width (42 ms for first few sessions) + zaber movement duration (~ 104 ms, very repeatable)
+        [5, 'bitcodestart', 'trial_start_bitcode', 0, 0.146, [-3, 2], [-2, 1]],
+        [6, 'bitcodestart', 'next_trial_start_bitcode', 1, 0.146, [-10, 3], [-8, 1]]
+    ]
 
 
-def compute_unit_psth_and_raster(unit_key, trial_keys, align_event_type='go', win=[-3, 3], bin_size=0.04):
+def compute_unit_psth_and_raster(unit_key, trial_keys, align_type='go_cue', bin_size=0.04):
     """
     Align spikes of specified unit and trial-set to specified align_event_type,
     compute psth with specified window and binsize, and generate data for raster plot.
@@ -406,8 +457,7 @@ def compute_unit_psth_and_raster(unit_key, trial_keys, align_event_type='go', wi
 
     @param unit_key: key of a single unit to compute the PSTH for
     @param trial_keys: list of all the trial keys to compute the PSTH over
-    @param align_event_type: NI event to align (not bpod event!!). Any one in ephys.TrialEvent
-    @param win: (in sec) window before and after the aligning event
+    @param align_type: psth_foraging.AlignType
     @param bin_size: (in sec)
     
     Returns a dictionary of the form:
@@ -421,9 +471,11 @@ def compute_unit_psth_and_raster(unit_key, trial_keys, align_event_type='go', wi
       }
     """
     
+    q_align_type = AlignType & {'align_type_name': align_type}
+    
     # -- Get global times for spike and event --
-    q_spike = (ephys.Unit & unit_key)  # Using ephys.Unit, not ephys.Unit.TrialSpikes
-    q_event = (ephys.TrialEvent & trial_keys & {'trial_event_type': align_event_type})   # Using ephys.TrialEvent, not experiment.TrialEvent
+    q_spike = ephys.Unit & unit_key  # Using ephys.Unit, not ephys.Unit.TrialSpikes
+    q_event = ephys.TrialEvent & trial_keys & q_align_type   # Using ephys.TrialEvent, not experiment.TrialEvent
     if not q_spike or not q_event:
         return None
 
@@ -436,7 +488,11 @@ def compute_unit_psth_and_raster(unit_key, trial_keys, align_event_type='go', wi
     events -= (ephys.TrialEvent & trial_keys.proj(_='trial') & {'trial_event_type': 'bitcodestart', 'trial': 1}).fetch1('trial_event_time')
     events = events.astype(float)
     
+    # Manual correction of trialstart, if necessary
+    events += q_align_type.fetch('time_offset').astype(float)
+    
     # -- Align spike times to each event --
+    win = q_align_type.fetch1('psth_win')
     spikes_aligned = []
     for e_t in events:
         s_t = spikes[(e_t + win[0] <= spikes) & (spikes < e_t + win[1])]
