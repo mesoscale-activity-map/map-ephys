@@ -95,7 +95,8 @@ def extract_trials(plottype = '2lickport',
                                                                              
     # Handle p_{waterport}_reward
     for water_port in experiment.WaterPort.fetch('water_port'):
-        p_reward_this = (q_session_block_trial * experiment.SessionBlock.WaterPortRewardProbability 
+        p_reward_this = (q_session_block_trial * experiment.SessionBlock.WaterPortRewardProbability
+                         & (experiment.TrialEvent & 'trial_event_type = "go"')
                                                       & 'water_port = "{}"'.format(water_port)).fetch(
                                                           'reward_probability', order_by=('session','trial')).astype(float)
         if len(p_reward_this) == len(df_behaviortrial):
