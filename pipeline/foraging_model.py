@@ -187,7 +187,41 @@ class Model(dj.Manual):
 
         return
 
+            
+@schema
+class ModelComparison(dj.Lookup):
+    # Define model comparison groups
+    definition = """
+    model_comparison_idx:        smallint
+    ---
+    desc='':     varchar(200)
+    """
 
+    class Competitor(dj.Part):
+        definition = """
+        -> master
+        competitor_idx:          int
+        ---
+        -> Model
+        """
+
+    @classmethod
+    def load(cls):
+        model_comparisons = [
+            ['all_models', Model],
+            ['models_with_bias', Model & 'is_bias = 1'],
+            ['models_with_bias_and_choice_kernel', Model & 'is_bias = 1' & 'is_choice_kernel']
+             ]
+        
+        # Parse and insert ModelComparisonGroup
+        for mc_idx, (desc, models) in enumerate(model_comparisons):
+            cls.insert1(dict(model_comparison_idx=mc_idx, desc=desc), skip_duplicates=True)
+            cls.Competitor.insert([
+                dict(model_comparison_idx=mc_idx, competitor_idx=idx, model_id=model_id) 
+                for idx, model_id in enumerate(models.fetch('model_id', order_by='model_id'))
+                ], skip_duplicates=True)
+            
+            
 @schema
 class FittedSessionModel(dj.Computed):
     definition = """
@@ -271,6 +305,70 @@ class FittedSessionModel(dj.Computed):
                  for trial_idx, this_prob in zip(q_choice_outcome.fetch('trial'), fit_result.predictive_choice_prob[water_port_idx])],
                 skip_duplicates=True
                 )
+            
+            
+@schema
+class FittedSessionModelComparison(dj.Computed):
+    definition = """
+    -> experiment.Session
+    -> ModelComparison
+    """
+    
+    key_source = (experiment.Session & FittedSessionModel) * ModelComparison  # Only include already-fitted sessions
+
+    class RelativeStat(dj.Part):
+        definition = """
+        -> master
+        -> Model
+        ---
+        relative_likelihood_aic:    float
+        relative_likelihood_bic:    float
+        model_weight_aic:           float
+        model_weight_bic:           float
+        log10_bf_aic:               float   # log_10 (Bayes factor)
+        log10_bf_bic:               float   # log_10 (Bayes factor)
+        """
+    
+    class BestModel(dj.Part):
+        definition = """
+        -> master
+        ---
+        best_aic:      int   # model_id of the model with the smallest aic
+        best_bic:      int    # model_id of the model with the smallest bic
+        best_cross_validation_test:      int   # model_id of the model with the highest cross validation test accuracy
+        """
+    
+    def make(self, key):
+        competing_models = ModelComparison.Competitor & key
+        results = (FittedSessionModel & key & competing_models).fetch(format='frame').reset_index()
+
+        delta_aic = results.aic - np.min(results.aic)
+        delta_bic = results.bic - np.min(results.bic)
+
+        # Relative likelihood = Bayes factor = p_model/p_best = exp( - delta_aic / 2)
+        results['relative_likelihood_aic'] = np.exp( - delta_aic / 2)
+        results['relative_likelihood_bic'] = np.exp( - delta_bic / 2)
+
+        # Model weight = Relative likelihood / sum(Relative likelihood)
+        results['model_weight_aic'] = results['relative_likelihood_aic'] / np.sum(results['relative_likelihood_aic'])
+        results['model_weight_bic'] = results['relative_likelihood_bic'] / np.sum(results['relative_likelihood_bic'])
+        
+        # log_10 (Bayes factor) = log_10 (exp( - delta_aic / 2)) = (-delta_aic / 2) / log(10)
+        results['log10_bf_aic'] = - delta_aic/2 / np.log(10) # Calculate log10(Bayes factor) (relative likelihood)
+        results['log10_bf_bic'] = - delta_bic/2 / np.log(10) # Calculate log10(Bayes factor) (relative likelihood)
+        
+        best_aic = results.model_id[np.argmin(results.aic)]
+        best_bic = results.model_id[np.argmin(results.bic)]
+        best_cross_validation_test = results.model_id[np.argmax(results.cross_valid_accuracy_test)]
+        
+        results['model_comparison_idx'] = key['model_comparison_idx']
+        self.insert1(key)
+        self.RelativeStat.insert(results, ignore_extra_fields=True, skip_duplicates=True)
+        self.BestModel.insert1({**key, 
+                                'best_aic': best_aic, 
+                                'best_bic': best_bic, 
+                                'best_cross_validation_test': best_cross_validation_test})
+        
         
 
 # ============= Helpers =============

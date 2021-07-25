@@ -7,9 +7,15 @@ Created on Sat Mar 21 13:47:05 2020
 
 import numpy as np
 import matplotlib.pyplot as plt
-import statsmodels.api as sm
 import seaborn as sns
 import pandas as pd
+from scipy import stats
+
+from statannot import add_stat_annotation
+from matplotlib.gridspec import GridSpec
+from matplotlib.patches import Rectangle
+
+from utils.plot_fitting import set_label
 
 from matplotlib.gridspec import GridSpec
 from matplotlib.pyplot import cm
@@ -30,7 +36,7 @@ plt.rcParams.update({'figure.max_open_warning': 0})
 sns.set(context='talk')
 
 def corrfunc(x, y, **kws):
-    (r, p) = pearsonr(x, y)
+    (r, p) = stats.pearsonr(x, y)
     ax = plt.gca()
     title_obj = ax.set_title("r = %.3f, p = %.4f " % (r, p), fontsize=8)
     if p < 0.05:
@@ -38,6 +44,7 @@ def corrfunc(x, y, **kws):
 
 
 def plot_each_mice(group_result, if_hattori_Fig1I):
+    
     # Unpack data
     file = group_result['file']
     data = group_result['raw_data']
@@ -59,7 +66,6 @@ def plot_each_mice(group_result, if_hattori_Fig1I):
 
     fitted_para_names = np.array(grand_result['para_notation'].iloc[overall_best - 1].split(','))
 
-    # %%
     # plt.close('all')
     sns.set(context='talk')
 
@@ -250,7 +256,6 @@ def plot_each_mice(group_result, if_hattori_Fig1I):
 def plot_group_results(result_path="..\\results\\model_comparison\\w_bias_8\\",
                        group_results_name='group_results_all_with_bias.npz',
                        average_session_number_range=None):
-    # %%
     sns.set()
 
     # results_all_mice = pd.read_pickle(result_path + group_results_name)
@@ -488,7 +493,7 @@ def plot_group_results(result_path="..\\results\\model_comparison\\w_bias_8\\",
                         test='Wilcoxon', loc='inside', verbose=0, line_offset_to_box=0.2, line_offset=0.03,
                         line_height=0.01, text_offset=0.2)
 
-    # %% -- 5. All mice statistics --
+    # % -- 5. All mice statistics --
     fig = plt.figure(figsize=(10, 5), dpi=150)
     gs = GridSpec(1, 6, wspace=1, bottom=0.15, top=0.85, left=0.1, right=0.95)
 
@@ -552,7 +557,7 @@ def plot_group_results(result_path="..\\results\\model_comparison\\w_bias_8\\",
     ax.set_ylabel('')
     ax.set_ylim([-2, 2])
 
-    # %% 5> Correlations
+    # % 5> Correlations
     # - 1. All paras, session filtered -
     data = results_all_mice_session_filtered[
         ['session_number', hattori_col_name, 'prediction_accuracy_Sugrue_NONCV', 'foraging_efficiency',
@@ -588,7 +593,7 @@ def plot_group_results(result_path="..\\results\\model_comparison\\w_bias_8\\",
         hh.map_lower(plot_diag)
         plt.tight_layout()
 
-    # %% - Foraging Efficiency VS Prediction Accuracy (all sessions included) -
+    # % - Foraging Efficiency VS Prediction Accuracy (all sessions included) -
     # > All mice
     data = results_all_mice[['session_number', 'mice',
                              hattori_col_name, 'prediction_accuracy_Sugrue_NONCV', 'foraging_efficiency',
@@ -609,7 +614,7 @@ def plot_group_results(result_path="..\\results\\model_comparison\\w_bias_8\\",
     plt.axhline(100, c='k', ls='--', lw=1)
     plt.axvline(50, c='k', ls='--', lw=1)
 
-    (r, p) = pearsonr(data[x], data[y])
+    (r, p) = stats.pearsonr(data[x], data[y])
 
     ## OLS
     sns.regplot(x=x, y=y, ax=hh.ax, data=data,
@@ -630,7 +635,7 @@ def plot_group_results(result_path="..\\results\\model_comparison\\w_bias_8\\",
     plt.axhline(100, c='k', ls='--', lw=1)
     plt.axvline(50, c='k', ls='--', lw=1)
 
-    (r, p) = pearsonr(data[x], data[y])
+    (r, p) = stats.pearsonr(data[x], data[y])
 
     ## OLS
     sns.regplot(x=x, y=y, ax=hh.ax, data=data,
@@ -643,7 +648,7 @@ def plot_group_results(result_path="..\\results\\model_comparison\\w_bias_8\\",
     plt.title('All sessions')
     plt.tight_layout()
 
-    # %% > Each mice
+    # % > Each mice
     fig = plt.figure(figsize=(9, 8), dpi=150)
     n_mice = len(data.mice.unique())
     gs = GridSpec(int(np.ceil(n_mice / 4)), 4, hspace=.6, wspace=0.5,
@@ -654,7 +659,7 @@ def plot_group_results(result_path="..\\results\\model_comparison\\w_bias_8\\",
 
         x = data[data.mice == mouse][hattori_col_name]
         y = data[data.mice == mouse].foraging_efficiency
-        (r, p) = pearsonr(x, y)
+        (r, p) = stats.pearsonr(x, y)
 
         # palette = sns.color_palette("coolwarm", sum(data.mice == mouse))  # Relative colormap
         # Use absolute colormap instead
@@ -696,9 +701,8 @@ def plot_group_results(result_path="..\\results\\model_comparison\\w_bias_8\\",
     # plt.tight_layout()
     plt.show()
 
-    # %%
+    # %
     # plt.pause(10)
-    # %%
     return
 
 
@@ -706,7 +710,7 @@ def plot_example_sessions(result_path="..\\results\\model_comparison\\w_wo_bias_
                           combine_prefix='model_comparison_15_CV_patched_',
                           group_results_name='group_results_15_CV.npz', session_of_interest=[['FOR05', 33]],
                           block_partitions=[70, 70], smooth_factor=1):
-    # %%
+
     from utils.plot_fitting import plot_model_comparison_predictive_choice_prob
 
     sns.set()
@@ -777,7 +781,7 @@ def analyze_runlength_Lau2005(choice_history, p_reward, min_trial=50, block_part
     '''
     Runlength analysis in Fig.5, Lau2005
     '''
-    # %%
+    # %
     df_run_length_Lau = [pd.DataFrame(), pd.DataFrame()]  # First half, Second half
 
     p_reward_ratio = p_reward[1] / p_reward[0]  # R/L
@@ -860,7 +864,7 @@ def analyze_runlength_Lau2005(choice_history, p_reward, min_trial=50, block_part
     return df_run_length_Lau
 
 
-# %% Compute mean_runlength_Bernoulli
+#  Compute mean_runlength_Bernoulli
 X = np.linspace(1, 16, 50)
 mean_runlength_Bernoulli = np.zeros([3, len(X)])
 n = np.r_[1:100]
@@ -874,7 +878,6 @@ for i, x in enumerate(X):
 
 
 def plot_runlength_Lau2005(df_run_length_Lau, block_partitions=['unknown', 'unknown']):
-    # %%
 
     # --- Plotting ---
     fig = plt.figure(figsize=(10, 8), dpi=150)
@@ -928,7 +931,7 @@ def plot_runlength_Lau2005(df_run_length_Lau, block_partitions=['unknown', 'unkn
         sns.regplot(x=x, y=y, ax=ax)
 
         try:
-            (r, p) = pearsonr(x, y)
+            (r, p) = stats.pearsonr(x, y)
             plt.annotate('r = %.3g\np = %.3g' % (r, p), xy=(0, 0.8), xycoords=ax.transAxes, fontsize=9)
         except:
             pass
@@ -945,7 +948,7 @@ def plot_runlength_Lau2005(df_run_length_Lau, block_partitions=['unknown', 'unkn
         y = df_this_half.choice_ratio
 
         try:
-            (r, p) = pearsonr(x, y)
+            (r, p) = stats.pearsonr(x, y)
             plt.annotate('r = %.3g\np = %.3g' % (r, p), xy=(0, 0.8), xycoords=ax.transAxes, fontsize=9)
         except:
             pass
@@ -965,7 +968,6 @@ def plot_block_switch(result_path="..\\results\\model_comparison\\w_bias_8\\",
                       group_results_name='group_results_all_with_bias.npz',
                       min_p_change=0, session_partitions=[1 / 3, 1 / 3, 1 / 3],
                       efficiency_partitions=[1 / 3, 1 / 3, 1 / 3]):
-    # %%
     sns.set(context='notebook')
 
     # == Load dataframe ==
@@ -1048,7 +1050,7 @@ def plot_block_switch(result_path="..\\results\\model_comparison\\w_bias_8\\",
     #     plt.title(mouse)
     #     ax.set_ylim([-0.5, 1.5])
 
-    # %% 3. Each mice, training progress
+    #  3. Each mice, training progress
     fig = plt.figure(figsize=(9, 8), dpi=200)
     fig.suptitle(
         'Each mouse, training sessions %s, min_p_change = %g' % (np.round(session_partitions, 3), min_p_change),
@@ -1077,7 +1079,7 @@ def plot_block_switch(result_path="..\\results\\model_comparison\\w_bias_8\\",
 
     plt.show()
 
-    # %% 4. Each mice, foraging efficiency
+    # 4. Each mice, foraging efficiency
     fig = plt.figure(figsize=(9, 8), dpi=200)
     fig.suptitle(
         'Each mouse, foraging efficiency %s, min_p_change = %g' % (np.round(efficiency_partitions, 3), min_p_change),
@@ -1113,7 +1115,6 @@ def plot_block_switch(result_path="..\\results\\model_comparison\\w_bias_8\\",
         plt.title(mouse)
     plt.show()
 
-    # %%
     return
 
 
@@ -1160,110 +1161,6 @@ def plot_choice_matrix(choice_matrix_list, prev_align, ax=None, color_list=['b']
     ax.axhline(1, c='k', ls='--', lw=1)
 
     return
-
-
-def plot_para_recovery(forager, true_paras, fitted_paras, para_names, para_bounds, para_scales, para_color_code, para_2ds, n_trials, fit_method):
-    # sns.reset_orig()
-    n_paras, n_models = np.shape(fitted_paras)
-    n_para_2ds = len(para_2ds)
-    if para_scales is None: 
-        para_scales = ['linear'] * n_paras
-        
-    # Color coded: 1 or the noise level (epsilon or softmax_temperature) 
-    if para_color_code is None:
-        if 'epsilon' in para_names:
-            para_color_code = para_names.index('epsilon')
-        elif 'softmax_temperature' in para_names:
-            para_color_code = para_names.index('softmax_temperature')
-        else:
-            para_color_code = 1
-            
-    nn = min(4, n_paras + n_para_2ds)  # Column number
-    mm = np.ceil((n_paras + n_para_2ds)/nn).astype(int)
-    fig = plt.figure(figsize=(nn*4, mm*5), dpi = 100)
-    
-    fig.text(0.05,0.90,'Parameter Recovery: %s, Method: %s, N_trials = %g, N_runs = %g\nColor code: %s' % (forager, fit_method, n_trials, n_models, para_names[para_color_code]), fontsize = 15)
-
-    gs = GridSpec(mm, nn, wspace=0.4, hspace=0.3, bottom=0.15, top=0.80, left=0.07, right=0.97) 
-    
-    xmin = np.min(true_paras[para_color_code,:])
-    xmax = np.max(true_paras[para_color_code,:])
-    if para_scales[para_color_code] == 'log':
-        xmin = np.min(true_paras[para_color_code,:])
-        xmax = np.max(true_paras[para_color_code,:])
-        colors = cm.copper((np.log(true_paras[para_color_code,:])-np.log(xmin))/(np.log(xmax)-np.log(xmin)+1e-6)) # Use second as color (backward compatibility)
-    else:
-        colors = cm.copper((true_paras[para_color_code,:]-xmin)/(xmax-xmin+1e-6)) # Use second as color (backward compatibility)
-      
-    
-    # 1. 1-D plot
-    for pp in range(n_paras):
-        ax = fig.add_subplot(gs[np.floor(pp/nn).astype(int), np.mod(pp,nn).astype(int)])
-        plt.plot([para_bounds[0][pp], para_bounds[1][pp]], [para_bounds[0][pp], para_bounds[1][pp]],'k--',linewidth=1)
-        
-        # Raw data
-        plt.scatter(true_paras[pp,:], fitted_paras[pp,:], marker = 'o', facecolors='none', s = 100, c = colors, alpha=0.7)
-        
-        if n_models > 1:   # Linear regression
-            if para_scales[pp] == 'linear':
-                x = true_paras[pp,:]
-                y = fitted_paras[pp,:]
-            else:  #  Use log10 if needed
-                x = np.log10(true_paras[pp,:])
-                y = np.log10(fitted_paras[pp,:])
-                
-            model = sm.OLS(y, sm.add_constant(x)).fit()
-            b, k = model.params  
-            r_square, p = (model.rsquared, model.pvalues)
-            
-            if para_scales[pp] == 'linear':
-                plt.plot([min(x),max(x)], [k*min(x)+b, k*max(x)+b,], '-k', label = 'r^2 = %.2g\np = %.2g'%(r_square, p[1]))
-            else:  #  Use log10 if needed
-                plt.plot([10**min(x), 10**max(x)], [10**(k*min(x)+b), 10**(k*max(x)+b),], '-k', label = 'r^2 = %.2g\np = %.2g'%(r_square, p[1]))
-        
-        ax.set_xscale(para_scales[pp])
-        ax.set_yscale(para_scales[pp])
-        ax.legend()
-        
-        plt.title(para_names[pp])
-        plt.xlabel('True')
-        plt.ylabel('Fitted')
-        plt.axis('square')
-        
-    # 2. 2-D plot
-    
-    for pp, para_2d in enumerate(para_2ds):
-        
-        ax = fig.add_subplot(gs[np.floor((pp+n_paras)/nn).astype(int), np.mod(pp+n_paras,nn).astype(int)])    
-        legend_plotted = False
-        
-        # Connected true and fitted data
-        for n in range(n_models):
-            plt.plot(true_paras[para_2d[0],n], true_paras[para_2d[1],n],'ok', markersize=11, fillstyle='none', c = colors[n], label = 'True' if not legend_plotted else '',alpha=.7)
-            plt.plot(fitted_paras[para_2d[0],n], fitted_paras[para_2d[1],n],'ok', markersize=7, c = colors[n], label = 'Fitted' if not legend_plotted else '',alpha=.7)
-            legend_plotted = True
-            
-            plt.plot([true_paras[para_2d[0],n], fitted_paras[para_2d[0],n]], [true_paras[para_2d[1],n], fitted_paras[para_2d[1],n]],'-', linewidth=1, c = colors[n])
-            
-        # Draw the fitting bounds
-        x1 = para_bounds[0][para_2d[0]]
-        y1 = para_bounds[0][para_2d[1]]
-        x2 = para_bounds[1][para_2d[0]]
-        y2 = para_bounds[1][para_2d[1]]
-        
-        plt.plot([x1,x2,x2,x1,x1],[y1,y1,y2,y2,y1],'k--',linewidth=1)
-        
-        plt.xlabel(para_names[para_2d[0]])
-        plt.ylabel(para_names[para_2d[1]])
-        
-        if para_scales[para_2d[0]] == 'linear' and para_scales[para_2d[1]] == 'linear':
-            ax.set_aspect(1.0/ax.get_data_ratio())  # This is the correct way of setting square display
-        
-        ax.set_xscale(para_scales[para_2d[0]])
-        ax.set_yscale(para_scales[para_2d[1]])
-
-    plt.legend(bbox_to_anchor=(1.1, 1.05))
-    plt.show()
 
 
 def plot_LL_surface(forager, LLsurfaces, CI_cutoff_LPTs, para_names, para_2ds, para_grids, para_scales, true_para, fitted_para, fit_history, fit_method, n_trials):
@@ -1393,12 +1290,15 @@ def plot_session_lightweight(fake_data, fitted_data = None, smooth_factor = 5, b
 
     return ax
     
+
 def plot_model_comparison_predictive_choice_prob(model_comparison, smooth_factor = 5):
     # sns.reset_orig()
     
     choice_history, reward_history, p_reward, trial_numbers = model_comparison.fit_choice_history, model_comparison.fit_reward_history, model_comparison.p_reward, model_comparison.trial_numbers
     if not hasattr(model_comparison,'plot_predictive'):
         model_comparison.plot_predictive = [1,2,3]
+        
+    
         
     n_trials = np.shape(choice_history)[1]
 
@@ -1431,6 +1331,7 @@ def plot_model_comparison_predictive_choice_prob(model_comparison, smooth_factor
     # fig.tight_layout() 
     sns.set()
     return
+
 
 def plot_model_comparison_result(model_comparison):
     sns.set()
