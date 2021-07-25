@@ -86,17 +86,18 @@ class HistologyIngest(dj.Imported):
         self.probe = key['insertion_number']
         self.rig = self.session['rig']
         self.session_date_str = self.session['session_date'].strftime('%Y%m%d')
+        self.is_foraging = len((experiment.BehaviorTrial & self.session) & 'task LIKE "foraging%"') > 0
 
         # electrode configuration
         self.egroup = (ephys.ProbeInsertion * lab.ElectrodeConfig.ElectrodeGroup & key).fetch1('KEY')
         self.shanks = np.unique((lab.ElectrodeConfig.Electrode * lab.ProbeType.Electrode & self.egroup).fetch('shank'))
 
         # behavior_file
-        if not (behavior_ingest.BehaviorIngest.BehaviorFile & key):
+        if not ((behavior_ingest.BehaviorIngest.BehaviorFile + behavior_ingest.BehaviorBpodIngest.BehaviorFile) & key):
             log.warning('Missing BehaviorFile for session: {}. Skipping...'.format(self.session))
             return
 
-        self.q_behavior_file = (behavior_ingest.BehaviorIngest.BehaviorFile & key)
+        self.q_behavior_file = ((behavior_ingest.BehaviorIngest.BehaviorFile + behavior_ingest.BehaviorBpodIngest.BehaviorFile) & key)
 
         for rigpath in rigpaths:
             if self.rig == 'RRig-MTL':
@@ -483,12 +484,18 @@ class HistologyIngest(dj.Imported):
                         raise HistologyFileError('{} same-day sessions found - but only 1 histology file found ({}) with no "session_time" specified'.format(
                             same_day_sess_count, histology_files[0].name))
                 else:
-                    behavior_time_str = re.search('_(\d{6}).mat', self.q_behavior_file.fetch1('behavior_file')).groups()[0]
+                    if self.is_foraging:
+                        behavior_time_str = re.search('-(\d{6})', self.q_behavior_file.fetch('behavior_file', limit=1)[0]).groups()[0]
+                    else:
+                        behavior_time_str = re.search('_(\d{6}).mat', self.q_behavior_file.fetch1('behavior_file')).groups()[0]
                     if session_time_str != behavior_time_str:
                         raise HistologyFileError('Only 1 histology file found ({}) with "session_time" ({}) different from "behavior_time" ({})'.format(
                             histology_files[0].name, session_time_str, behavior_time_str))
             else:
-                behavior_time_str = re.search('_(\d{6}).mat', self.q_behavior_file.fetch1('behavior_file')).groups()[0]
+                if self.is_foraging:
+                    behavior_time_str = re.search('-(\d{6})', self.q_behavior_file.fetch('behavior_file', limit=1)[0]).groups()[0]
+                else:
+                    behavior_time_str = re.search('_(\d{6}).mat', self.q_behavior_file.fetch1('behavior_file')).groups()[0]
                 file_format = 'landmarks_{}_{}_{}_{}*{}'.format(self.water, self.session_date_str,
                                                                 behavior_time_str,
                                                                 self.probe, file_format_map[file_type])

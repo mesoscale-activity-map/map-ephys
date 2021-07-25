@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import re
 import datajoint as dj
+from decimal import Decimal
 from pymysql.err import OperationalError
 
 
@@ -127,6 +128,7 @@ def ingest_all(*args):
 def load_animal(excel_fp, sheet_name='Sheet1'):
     df = pd.read_excel(excel_fp, sheet_name, engine='openpyxl')
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
+    df.dropna(subset=['water_restriction_number'], inplace=True)
 
     subjects, water_restrictions, subject_ids = [], [], []
     for i, row in df.iterrows():
@@ -149,35 +151,70 @@ def load_animal(excel_fp, sheet_name='Sheet1'):
 
 
 def load_insertion_location(excel_fp, sheet_name='Sheet1'):
-    from pipeline.ingest import behavior as behav_ingest
+    """
+    Function to load from file ProbeInsertion related information:
+        + InsertionLocation
+        + InsertionQuality
+    Expecting the file to have the following columns:
+        -- general --
+        + subject_id
+        + water_restriction_number
+        + session_date
+        + insertion_number
+        -- insertion location --
+        + skull_reference
+        + ap_location
+        + ml_location
+        + depth
+        + theta
+        + phi
+        + beta
+        + brain_area
+        + hemisphere
+        -- insertion quality --
+        + drift_presence: yes/no
+        + alignment_confidence: yes/no
+        + number_of_landmarks: int
+        + insertion_comment: free text
+        + good_period: string, in the following example format: 0-200;230-290;400-end
+    """
+    from pipeline.ingest import behavior as behavior_ingest
     log.info('loading probe insertions from spreadsheet {}'.format(excel_fp))
 
+    yes_no_mapper = {'yes': 1, 'no': 0}
+
     try:
-        df = pd.read_excel(excel_fp, sheet_name)
+        df = pd.read_excel(excel_fp, sheet_name, engine='openpyxl')
         from_excel = True
     except:
         df = pd.read_csv(excel_fp)
         from_excel = False
 
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
+    df.dropna(subset=['water_restriction_number'], inplace=True)
+    df.fillna(value=False, inplace=True)
+    if 'behaviour_time' not in df.columns:
+        df['behaviour_time'] = np.full(len(df), None)
 
-    insertion_locations = []
-    recordable_brain_regions = []
+    load_insertion_quality = 'drift_presence' in df.columns
+
+    insertion_locations, recordable_brain_regions = [], []
+    insertions_quality, insertions_good_periods, insertions_good_trials = [], [], []
     for i, row in df.iterrows():
         try:
             int(row.behaviour_time)
             valid_btime = True
-        except ValueError:
+        except (ValueError, TypeError):
             log.debug('Invalid behaviour time: {} - try single-sess per day'.format(row.behaviour_time))
             valid_btime = False
         
         session_date = row.session_date.date() if from_excel else datetime.strptime(row.session_date,'%Y-%m-%d')
-        if 'foraging' in row.project:
-            behavior_ingest_table = behav_ingest.BehaviorBpodIngest
+        if hasattr(row, 'project') and 'foraging' in row.project:
+            behavior_ingest_table = behavior_ingest.BehaviorBpodIngest
             bf_reg_exp = '(\d{8}-\d{6})'
             bf_datetime_format = '%Y%m%d-%H%M%S'
         else:
-            behavior_ingest_table = behav_ingest.BehaviorIngest
+            behavior_ingest_table = behavior_ingest.BehaviorIngest
             bf_reg_exp = '(\d{8}_\d{6}).mat'
             bf_datetime_format = '%Y%m%d_%H%M%S'
 
@@ -200,20 +237,54 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
                 bf_datetime = datetime.strptime(bf_datetime, bf_datetime_format)
                 s_datetime = sess_key.proj(s_dt='cast(concat(session_date, " ", session_time) as datetime)').fetch1('s_dt')
                 if abs((s_datetime - bf_datetime).total_seconds()) > 10800:  # no more than 3 hours
-                    log.debug('Unmatched sess_dt ({}) and behavior_dt ({}). Skipping...'.format(s_datetime, bf_datetime))
+                    log.debug('\tUnmatched sess_dt ({}) and behavior_dt ({}). Skipping...'.format(s_datetime, bf_datetime))
                     continue
             else:
+                log.debug('\tNot a single-sess per day case ({} sessions found). Skipping...'.format(
+                    len(sess_key)))
                 continue
 
         pinsert_key = dict(sess_key.fetch1('KEY'), insertion_number=row.insertion_number)
         if pinsert_key in ephys.ProbeInsertion.proj():
             if not (ephys.ProbeInsertion.InsertionLocation & pinsert_key):
-                insertion_locations.append(dict(pinsert_key, skull_reference=row.skull_reference,
-                                                ap_location=row.ap_location, ml_location=row.ml_location,
-                                                depth=row.depth, theta=row.theta, phi=row.phi, beta=row.beta))
+                insertion_locations.append(
+                    dict(pinsert_key, skull_reference=row.skull_reference,
+                         ap_location=row.ap_location, ml_location=row.ml_location,
+                         depth=row.depth, theta=row.theta, phi=row.phi, beta=row.beta))
             if not (ephys.ProbeInsertion.RecordableBrainRegion & pinsert_key):
                 recordable_brain_regions.append(dict(pinsert_key, brain_area=row.brain_area,
                                                      hemisphere=row.hemisphere))
+            if load_insertion_quality and not (ephys.ProbeInsertionQuality & pinsert_key):
+                if (row.drift_presence
+                        and row.number_of_landmarks 
+                        and row.alignment_confidence):
+                    # insertion_quality
+                    insertions_quality.append(
+                        dict(pinsert_key,
+                             drift_presence=yes_no_mapper[row.drift_presence.lower()],
+                             number_of_landmarks=row.number_of_landmarks,
+                             alignment_confidence=yes_no_mapper[row.alignment_confidence.lower()],
+                             insertion_comment=row.insertion_comment or ''))
+                    # insertion good periods
+                    if row.good_period:
+                        session_end = (experiment.SessionTrial & sess_key).fetch(
+                            'stop_time', order_by='stop_time DESC', limit=1)[0]
+                        for period in re.split(',|;', row.good_period.replace(' ', '')):
+                            period_start, period_end = period.lower().split('-')
+                            period_start = Decimal(period_start)
+                            period_end = Decimal(period_end) if period_end != 'end' else session_end
+                            # good periods
+                            insertions_good_periods.append(
+                                dict(pinsert_key,
+                                     good_period_start=period_start,
+                                     good_period_end=period_end))
+                            # good trials
+                            insertions_good_trials.extend([
+                                {**pinsert_key, **trial_key}
+                                for trial_key in (
+                                        experiment.SessionTrial & pinsert_key
+                                        & f'start_time >= {period_start} '
+                                          f'AND stop_time <= {period_end}').fetch('KEY')])
 
     log.debug('InsertionLocation: {}'.format(insertion_locations))
     log.debug('RecordableBrainRegion: {}'.format(recordable_brain_regions))
@@ -222,6 +293,14 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     ephys.ProbeInsertion.RecordableBrainRegion.insert(recordable_brain_regions)
 
     log.info('load_insertion_location - Number of insertions: {}'.format(len(insertion_locations)))
+
+    log.debug('ProbeInsertionQuality: {}'.format(insertions_quality))
+
+    ephys.ProbeInsertionQuality.insert(insertions_quality)
+    ephys.ProbeInsertionQuality.GoodPeriod.insert(insertions_good_periods)
+    ephys.ProbeInsertionQuality.GoodTrial.insert(insertions_good_trials)
+
+    log.info('load_insertion_location - Number of insertions quality: {}'.format(len(insertions_quality)))
 
 
 def load_ccf(*args):
@@ -476,7 +555,7 @@ def export_recording(*args):
     export.export_recording(ik, fn)
 
 
-def print_worker_status():
+def print_jobs_summary():
     """
     Return a pandas.DataFrame on the status of each table currently being processed
 
@@ -494,40 +573,36 @@ def print_worker_status():
      but this won't reflect idling workers because there's no "key_source" to work on for some
      particular tables
     """
-    job_status = {}
+    job_status = []
     for pipeline_module in (experiment, tracking, ephys, histology,
                             psth, foraging_analysis, report):
-        reserved_df = (pipeline_module.schema.jobs
-                       & 'status = "reserved"').proj('status', 'timestamp').fetch(
-            format='frame').reset_index()
-        reserve_count = reserved_df.groupby('table_name').count()
-        reserve_oldest = reserved_df.groupby('table_name').min()
-        reserve_newest = reserved_df.groupby('table_name').max()
+        reserved = dj.U('table_name').aggr(pipeline_module.schema.jobs & 'status = "reserved"',
+                                           reserve_count='count(table_name)',
+                                           oldest_job='MIN(timestamp)',
+                                           newest_job='MAX(timestamp)')
+        errored = dj.U('table_name').aggr(pipeline_module.schema.jobs & 'status = "error"',
+                                          error_count='count(table_name)')
+        jobs_summary = reserved.join(errored, left=True)
 
-        error_df = (pipeline_module.schema.jobs
-                    & 'status = "error"').proj('status', 'timestamp').fetch(
-            format='frame').reset_index()
-        error_count = error_df.groupby('table_name').count()
-
-        for r_index, r in reserve_count.iterrows():
-            if r_index not in job_status:
-                job_status[r_index] = {
-                    'table': f'{pipeline_module.__name__.split(".")[-1]}.{dj.utils.to_camel_case(r_index)}',
-                    'reserve_count': r.status}
-            job_status[r_index]['error_count'] = error_count.loc[r_index].status if r_index in error_count.index else 0
-            job_status[r_index]['oldest_job'] = reserve_oldest.loc[r_index].timestamp
-            job_status[r_index]['newest_job'] = reserve_newest.loc[r_index].timestamp
+        for job in jobs_summary.fetch(as_dict=True):
+            job_status.append({
+                'table': f'{pipeline_module.__name__.split(".")[-1]}.{dj.utils.to_camel_case(job.pop("table_name"))}',
+                **job})
 
     if not job_status:
         print('No jobs under process (0 reserved jobs)')
         return
 
-    job_status_df = pd.DataFrame(job_status.values()).set_index('table')
+    job_status_df = pd.DataFrame(job_status).set_index('table')
+    job_status_df.fillna(0, inplace=True)
+    job_status_df = job_status_df.astype({"reserve_count": int, "error_count": int})
+
     with pd.option_context('display.max_rows', None,
                            'display.max_columns', None,
                            'display.width', None,
                            'display.max_colwidth', -1):
         print(job_status_df)
+
     return job_status_df
 
 
