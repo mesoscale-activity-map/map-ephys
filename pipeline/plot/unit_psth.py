@@ -335,7 +335,11 @@ def plot_unit_psth_latent_variable_quantile(unit_key, model_id=11, n_quantile=5,
           ).fetch(format='frame').reset_index()[['trial', latent_variable]]
 
     # Cut choice probabilities into quantiles
-    df['quantile_rank'] = pd.qcut(df[latent_variable], n_quantile, labels=False)
+    if any(np.isnan(df[latent_variable])):
+        print('No latent variable data or too few unique values')
+        return
+    df['quantile_rank'] = pd.qcut(df[latent_variable], n_quantile, labels=False, duplicates='drop')
+    n_quantile = len(df['quantile_rank'].unique())    # Just in case qcut has 'dropped'
 
     fig = None
     if axs is None:
@@ -381,9 +385,9 @@ def plot_unit_psth_latent_variable_quantile(unit_key, model_id=11, n_quantile=5,
 
     # Add unit and model info
     unit_info = (f'{(lab.WaterRestriction & unit_key).fetch1("water_restriction_number")}, '
-                 f'{(experiment.Session & unit_key).fetch1("session", "session_date")}, '
+                 f'Session {(experiment.Session & unit_key).fetch1("session")}, {(experiment.Session & unit_key).fetch1("session_date")}, '
                  f'imec {unit_key["insertion_number"]-1}\n'
-                 f'Unit #: {unit_key["unit"]}, '
+                 f'Unit #{unit_key["unit"]}, '
                  f'{(((ephys.Unit & unit_key) * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation).fetch1("annotation")}\n'
                  f'PSTH grouped by -- {latent_variable} ({side}) --'
                  )
