@@ -242,10 +242,8 @@ class FittedSessionModel(dj.Computed):
     cross_valid_accuracy_test_bias_only = NULL: float    # accuracy predicted only by bias (testing set)
     """
 
-    # key_source = (foraging_analysis.SessionTaskProtocol() & 'session_task_protocol = 100' & 'session_real_foraging'
-    #               ) * Model()
-
-    key_source = (experiment.Session & {'session_date': "2021-04-18", 'subject_id': 473361}) * Model()
+    key_source = (foraging_analysis.SessionTaskProtocol() & 'session_task_protocol = 100' & 'session_real_foraging'
+                  ) * Model()
 
     class Param(dj.Part):
         definition = """

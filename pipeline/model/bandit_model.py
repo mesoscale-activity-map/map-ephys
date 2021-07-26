@@ -357,7 +357,7 @@ class BanditModel:
             self.predictive_choice_prob[last_choice, self.time] = 1 - prob_switch
             
             # Using fit_choice to mark an actual switch
-            if last_choice != self.fit_choice_history[0, self.time]:
+            if self.time < self.n_trials and last_choice != self.fit_choice_history[0, self.time]:
                 self.loss_count[0, self.time] = - self.loss_count[0, self.time] # A flag of "switch happens here"
                 
             choice = None                
@@ -556,9 +556,6 @@ class BanditModel:
         
         if '_CK' in self.forager:  # Could be independent of other foragers, so use "if" rather than "elif"
             self.step_choice_kernel(choice)
-
-        if self.time == self.n_trials + 1:
-            return   # Session terminates
 
     def simulate(self):
         
