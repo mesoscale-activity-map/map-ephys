@@ -45,7 +45,7 @@ def negLL_func(fit_value, *argss):
         bandit.simulate()
         
         # Compute negative likelihood
-        predictive_choice_prob = bandit.predictive_choice_prob  # Get all predictive choice probability [K, num_trials]
+        predictive_choice_prob = bandit.predictive_choice_prob[:, :-1]  # Get all predictive choice probability [K, num_trials], exclude the final update after the last trial
         likelihood_each_trial = predictive_choice_prob [choice_this[0,:], range(len(choice_this[0]))]  # Get the actual likelihood for each trial
         
         # Deal with numerical precision
@@ -191,6 +191,8 @@ def fit_bandit(forager, fit_names, fit_bounds, choice_history, reward_history, s
         
         unique_session = np.unique(session_num)
         predictive_choice_prob = []
+        action_value = []
+        choice_kernel = []
         fitting_result.trial_numbers = []
         
         # -- For each session --
@@ -203,13 +205,22 @@ def fit_bandit(forager, fit_names, fit_bounds, choice_history, reward_history, s
             # Run **PREDICTIVE** simulation using the fitted data
             bandit = BanditModel(forager = forager, **kwargs_all, fit_choice_history = choice_this, fit_reward_history = reward_this)  # Into the fitting mode
             bandit.simulate()
-            predictive_choice_prob.append(bandit.predictive_choice_prob)
+            
+            # Save latent variables
+            predictive_choice_prob.append(bandit.predictive_choice_prob)  # Length = n_trial + 1, with the final update after the last trial
+            if hasattr(bandit, 'q_estimation'):
+                action_value.append(bandit.q_estimation)  # Length = n_trial + 1, with the final update after the last trial
+            if hasattr(bandit, 'choice_kernel'):
+                choice_kernel.append(bandit.choice_kernel)  # Length = n_trial + 1, with the final update after the last trial
         
         fitting_result.predictive_choice_prob = np.hstack(predictive_choice_prob)
-        this_predictive_choice = np.argmax(fitting_result.predictive_choice_prob, axis = 0)
+        if action_value: fitting_result.action_value = np.hstack(action_value)
+        if choice_kernel: fitting_result.choice_kernel = np.hstack(choice_kernel)
+        
+        this_predictive_choice = np.argmax(fitting_result.predictive_choice_prob[:, :-1], axis = 0)   # Exclude the last update
         fitting_result.prediction_accuracy = np.sum(this_predictive_choice == choice_this) / fitting_result.n_trials
         
-    # === Run generative choice sequence ==  #!!!
+    # === Run generative choice sequence ==  #TODO
         
 
     return fitting_result
@@ -271,7 +282,7 @@ def cross_validate_bandit(forager, fit_names, fit_bounds, choice_history, reward
             # Run PREDICTIVE simulation    
             bandit = BanditModel(forager = forager, **kwargs_all, fit_choice_history = choice_this, fit_reward_history = reward_this)  # Into the fitting mode
             bandit.simulate()
-            predictive_choice_prob.extend(bandit.predictive_choice_prob)
+            predictive_choice_prob.extend(bandit.predictive_choice_prob[:, :-1])   # Exclude the final update after the last trial
             
         # Get prediction accuracy of the test_set and fitting_set
         predictive_choice_prob = np.array(predictive_choice_prob)

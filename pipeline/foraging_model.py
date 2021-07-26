@@ -242,26 +242,45 @@ class FittedSessionModel(dj.Computed):
     cross_valid_accuracy_test_bias_only = NULL: float    # accuracy predicted only by bias (testing set)
     """
 
-    key_source = (foraging_analysis.SessionTaskProtocol() & 'session_task_protocol = 100' & 'session_real_foraging'
-                  ) * Model() #& (experiment.Session & 'session_date > "2021-01-01"')
+    # key_source = (foraging_analysis.SessionTaskProtocol() & 'session_task_protocol = 100' & 'session_real_foraging'
+    #               ) * Model()
 
-    class FittedParam(dj.Part):
+    key_source = (experiment.Session & {'session_date': "2021-04-18", 'subject_id': 473361}) * Model()
+
+    class Param(dj.Part):
         definition = """
         -> master
         -> Model.Param
         ---
         fitted_value: float
         """
-    
-    class PredictiveChoiceProb(dj.Part):
+
+    class TrialLatentVariable(dj.Part):
+        """
+        To save all fitted latent variables that will be correlated to ephys
+        Notes:
+        1. In the original definition (Sutton&Barto book), the updated value after choice of trial t is Q(t+1), not Q(t)!
+                behavior & ephys:   -->  ITI(t-1) --> |  --> choice (t), reward(t)         --> ITI (t) -->            |
+                model:           Q(t) --> choice prob(t) --> choice (t), reward(t)  | --> Q(t+1) --> choice prob (t+1)
+           Therefore: the ITI of trial t -> t+1 corresponds to Q(t+1)
+        2. To make it more intuitive, when they are inserted here, Q is offset by -1,
+           such that ephys and model are aligned:
+                behavior & ephys:   -->  ITI(t-1) --> |  --> choice (t), reward(t)         --> ITI (t) -->       |
+                model:    Q(t-1) --> choice prob(t-1) | --> choice (t), reward(t)  --> Q(t) --> choice prob (t)  |
+           This will eliminate the need of adding an offset=-1 whenever ephys and behavioral model are compared.
+        3. By doing this, I also save the update after the last trial (useless for fitting; useful for ephys) ,
+           whereas the first trial is discarded, which was randomly initialized anyway
+        """
         definition = """
-        # Could be used to compute latent value Q (for models that have Q). Ignored trial skipped.
         -> master
         -> experiment.SessionTrial
-        -> experiment.WaterPort
+        -> experiment.WaterPort 
         ---
-        choice_prob: float        
+        action_value=null:   float
+        choice_prob=null:    float    
+        choice_kernel=null:  float
         """
+
 
     def make(self, key):
         choice_history, reward_history, p_reward, q_choice_outcome = get_session_history(key)
@@ -295,14 +314,22 @@ class FittedSessionModel(dj.Computed):
 
         # Insert fitted params
         for param, x in zip((Model.Param & key).fetch('model_param'), fit_result.x):
-            self.FittedParam.insert1(dict(**key, model_param=param, fitted_value=x))
+            self.Param.insert1(dict(**key, model_param=param, fitted_value=x))
         
-        # Insert predictive choice probability
+        # Insert latent variables (trial number offset -1 here!!)
+        choice_prob = fit_result.predictive_choice_prob[:, 1:]    # Model must have this
+        action_value = fit_result.action_value[:, 1:] if hasattr(fit_result, 'action_value') else np.full_like(choice_prob, np.nan)
+        choice_kernel = fit_result.choice_kernel[:, 1:] if hasattr(fit_result, 'choice_kernel') else np.full_like(choice_prob, np.nan)
+
         for water_port_idx, water_port in enumerate(['left', 'right']):
             key['water_port'] = water_port
-            self.PredictiveChoiceProb.insert(
-                [{**key, 'trial': trial_idx, 'choice_prob': this_prob} 
-                 for trial_idx, this_prob in zip(q_choice_outcome.fetch('trial'), fit_result.predictive_choice_prob[water_port_idx])],
+            
+            self.TrialLatentVariable.insert(
+                [{**key, 'trial': i, 'choice_prob': prob, 'action_value': value, 'choice_kernel': ck}
+                 for i, prob, value, ck in zip(q_choice_outcome.fetch('trial'),
+                                                 choice_prob[water_port_idx, :], 
+                                                 action_value[water_port_idx, :], 
+                                                 choice_kernel[water_port_idx, :])],
                 skip_duplicates=True
                 )
             

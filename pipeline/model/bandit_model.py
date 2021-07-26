@@ -35,7 +35,7 @@
 
 import numpy as np
 from scipy.stats import norm
-from .helper_func import softmax, choose_ps
+from .util import softmax, choose_ps
 
 LEFT = 0
 RIGHT = 1
@@ -180,13 +180,17 @@ class BanditModel:
         
         # Initialization
         self.time = 0
-        self.q_estimation = np.zeros([self.K, self.n_trials]) 
-        self.choice_prob = np.zeros([self.K, self.n_trials]) 
-        self.choice_prob[:] = 1/self.K   # To be strict (actually no use)
+        
+        # All latent variables have n_trials + 1 length to capture the update after the last trial (HH20210726)
+        self.q_estimation = np.full([self.K, self.n_trials + 1], np.nan)
+        self.q_estimation[:, 0] = 0
+        
+        self.choice_prob = np.full([self.K, self.n_trials + 1], np.nan)
+        self.choice_prob[:, 0] = 1/self.K   # To be strict (actually no use)
          
         if self.if_fit_mode:  # Predictive mode
-            self.predictive_choice_prob = np.zeros([self.K, self.n_trials])
-            self.predictive_choice_prob[:] = 1/self.K   # To be strict (actually no use)
+            self.predictive_choice_prob = np.full([self.K, self.n_trials + 1], np.nan)
+            self.predictive_choice_prob[:, 0] = 1/self.K   # To be strict (actually no use)
             
         else:   # Generative mode
             self.choice_history = np.zeros([1,self.n_trials], dtype = int)  # Choice history
@@ -207,7 +211,7 @@ class BanditModel:
         
         elif self.forager in ['LNP_softmax', 'LNP_softmax_CK']:
             # Compute the history filter. Compatible with any number of taus.
-            reversed_t = np.flipud(np.arange(self.n_trials))  # Use the full length of the session just in case of an extremely large tau.
+            reversed_t = np.flipud(np.arange(self.n_trials + 1))  # Use the full length of the session just in case of an extremely large tau.
             self.history_filter = np.zeros_like(reversed_t).astype('float64')
             
             for tau, w_tau in zip(self.taus, self.w_taus):
@@ -215,13 +219,13 @@ class BanditModel:
             
         elif self.forager in ['LossCounting']:
             # Initialize
-            self.loss_count = np.zeros([1, self.n_trials]) 
+            self.loss_count = np.zeros([1, self.n_trials + 1])
             if not self.if_fit_mode:
                 self.loss_threshold_this = np.random.normal(self.loss_count_threshold_mean, self.loss_count_threshold_std)
                 
         # Choice kernel can be added to any forager
         if '_CK' in self.forager:
-            self.choice_kernel = np.zeros([self.K, self.n_trials])
+            self.choice_kernel = np.zeros([self.K, self.n_trials + 1])
                 
 
     def generate_p_reward(self, block_size_base = global_block_size_mean, 
@@ -234,7 +238,7 @@ class BanditModel:
         if self.p_reward_seed_override != '':
             np.random.seed(self.p_reward_seed_override)
             
-        if self.p_reward_pairs == None:            
+        if self.p_reward_pairs == None:
             p_reward_pairs = np.array(p_reward_pairs) / 0.45 * self.p_reward_sum
         else:  # Full override of p_reward
             p_reward_pairs = self.p_reward_pairs
@@ -524,8 +528,9 @@ class BanditModel:
             
         # =================================================
         self.time += 1   # Time ticks here !!!
-        if self.time == self.n_trials: 
-            return   # Session terminates
+        # Doesn't terminate here to finish the final update after the last trial
+        # if self.time == self.n_trials:
+        #     return   # Session terminates
         # =================================================
         
         if not self.if_fit_mode:  # Prepare reward for the next trial (if sesson did not end)
@@ -552,6 +557,9 @@ class BanditModel:
         if '_CK' in self.forager:  # Could be independent of other foragers, so use "if" rather than "elif"
             self.step_choice_kernel(choice)
 
+        if self.time == self.n_trials + 1:
+            return   # Session terminates
+
     def simulate(self):
         
         # =============================================================================
@@ -563,4 +571,6 @@ class BanditModel:
             action = self.act()
             self.step(action)
 
+        if self.if_fit_mode:
+            action = self.act()   # Allow the final update of action prob after the last trial (for comparing with ephys)
 
