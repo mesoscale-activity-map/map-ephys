@@ -384,7 +384,7 @@ def get_session_history(session_key, remove_ignored=True):
     # TODO: session QC (warm-up and decreased motivation etc.)
 
     # Formatting
-    _choice = (q_choice_outcome.fetch('choice') == 'left').astype(int)
+    _choice = (q_choice_outcome.fetch('choice') == 'right').astype(int)    # 0: left, 1: right
     _reward = q_choice_outcome.fetch('outcome') == 'hit'
     reward_history = np.zeros([2, len(_reward)])  # .shape = (2, N trials)
     for c in (0, 1):
