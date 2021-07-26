@@ -428,7 +428,7 @@ class AlignType(dj.Lookup):
     -> experiment.TrialEventType
     ---
     align_type_name:     varchar(128)     # user-friendly name of alignment type
-    trial_offset=0:      smallint         # e.g., offset = 1 means the psth will be aligned to the event of the *next* trial
+    trial_offset=0:      smallint         # e.g., offset = 1 means the psth will be aligned to the event of the *next* trial (offset *align* relative to *condition*)
     time_offset=0:       Decimal(10, 5)   # will be added to the event time for manual correction (e.g., bitcodestart to actual zaberready)  
     psth_win:            tinyblob   
     xlim:                tinyblob

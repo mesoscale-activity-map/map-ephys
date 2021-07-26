@@ -347,7 +347,12 @@ def plot_unit_psth_value_quantile(unit_key, model_id=11, n_quantile=5,
         for rank in range(n_quantile):
             # Group trials
             trial_num = df[df.quantile_rank == rank]
-            trial_num.trial += offset    # TODO: check whether predictive_choice_prob is *before or after* this trial
+            trial_num.trial += -1 + offset    # Important note: by definition, the updated value after choice of trial t is Q(t+1), not Q(t)!
+                                              #    behavior & ephys: -->  ITI(t - 1) --> | --> choice(t), reward(t) --> ITI(t) --> |
+                                              #    model:          Q(t) --> choice prob(t) --> choice (t), reward(t)  | --> Q(t+1) --> choice prob (t+1)
+                                              # Therefore, to *align* PSTH to ITI(t) *conditioned* on Q(t), we should:
+                                              #    offset *align* relative to *condition* by -1 trial
+                                              # That's why an additional -1 is here. (see also psth_foraging.AlignType)
 
             # Get psths
             this_trials = (experiment.BehaviorTrial & unit_key & trial_num).proj()
