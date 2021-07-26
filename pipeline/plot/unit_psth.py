@@ -100,11 +100,11 @@ def plot_unit_psth(unit_key, axs=None, title='', xlim=_plt_xlim):
 
     return fig
 
-    
+
 def _plot_spike_raster_foraging(ipsi, contra, offset=0, vlines=[], shade_bar=None, ax=None, title='', xlim=_plt_xlim):
     if not ax:
         fig, ax = plt.subplots(1, 1)
-        
+
     contra_tr = contra['raster'][1]
     for i, tr in enumerate(contra['trials']):
         contra_tr = np.where(contra['raster'][1] == tr, i, contra_tr)
@@ -112,7 +112,7 @@ def _plot_spike_raster_foraging(ipsi, contra, offset=0, vlines=[], shade_bar=Non
     ipsi_tr = ipsi['raster'][1]
     for i, tr in enumerate(ipsi['trials']):
         ipsi_tr = np.where(ipsi['raster'][1] == tr, i, ipsi_tr)
-    
+
     contra_tr_max = contra_tr.max() if contra_tr.size > 0 else 0
 
     start_at = offset
@@ -145,7 +145,7 @@ def _plot_psth_foraging(ipsi, contra, vlines=[], shade_bar=None, ax=None, title=
     for x in vlines:
         ax.axvline(x=x, linestyle='--', color='k')
     ax.axvline(x=0, linestyle='-', color='k', lw=1.5)
-        
+
     if shade_bar is not None:
         ax.axvspan(shade_bar[0], shade_bar[0] + shade_bar[1], alpha=0.3, color='royalblue')
 
@@ -210,7 +210,7 @@ def plot_unit_psth_choice_outcome(unit_key,
     """
     (for foraging task) Plot psth grouped by (choice x outcome)
     """
-    
+
     # for (the very few) sessions without zaber feedback signal, use 'bitcodestart' with manual correction (see compute_unit_psth_and_raster)
     if not ephys.TrialEvent & unit_key & 'trial_event_type = "zaberready"':
         align_types = [a + '_bitcode' if 'trial_start' in a else a for a in align_types]
@@ -230,11 +230,11 @@ def plot_unit_psth_choice_outcome(unit_key,
     xlims = []
 
     for ax_i, align_type in enumerate(align_types):
-        
+
         offset, xlim = (psth_foraging.AlignType & {'align_type_name': align_type}).fetch1('trial_offset', 'xlim')
         xlims.append(xlim)
-        
-        # align_trial_offset is added on the get_trials, which effectively 
+
+        # align_trial_offset is added on the get_trials, which effectively
         # makes the psth conditioned on the previous {align_trial_offset} trials
         ipsi_hit_trials = psth_foraging.TrialCondition.get_trials(f'{ipsi}_hit{no_early_lick}', offset) & unit_key
         ipsi_hit_unit_psth = psth_foraging.compute_unit_psth_and_raster(unit_key, ipsi_hit_trials, align_type)
@@ -255,12 +255,12 @@ def plot_unit_psth_choice_outcome(unit_key,
                                                          trial_keys=psth_foraging.TrialCondition.get_trials(f'LR_hit{no_early_lick}') & unit_key,
                                                          # cannot use *_hit_trials because it could have been offset
                                                          )
-        # _, period_starts_miss = _get_ephys_trial_event_times([trialstart, 'go', 'choice', 'trialend'], 
+        # _, period_starts_miss = _get_ephys_trial_event_times([trialstart, 'go', 'choice', 'trialend'],
         #                                                   ipsi_miss_trials.proj() + contra_miss_trials.proj(), align_event=align_event_type)
-        
+
         _plot_psth_foraging(ipsi_hit_unit_psth, contra_hit_unit_psth,
                    vlines=period_starts_hit, ax=ax_psth, xlim=xlim, label='rew', linestyle='-')
-        
+
         _plot_psth_foraging(ipsi_miss_unit_psth, contra_miss_unit_psth,
                    vlines=[], ax=ax_psth, xlim=xlim, label='norew', linestyle = '--')
 
@@ -300,31 +300,42 @@ def plot_unit_psth_choice_outcome(unit_key,
     return fig
 
 
-def plot_unit_psth_value_quantile(unit_key, model_id=11, n_quantile=5,
-                                  align_types=['trial_start', 'go_cue', 'first_lick_after_go_cue', 'iti_start', 'next_trial_start'],
-                                  axs=None, title=''
-                                  ):
+def plot_unit_psth_latent_variable_quantile(unit_key, model_id=11, n_quantile=5,
+                                            align_types=['trial_start', 'go_cue', 'first_lick_after_go_cue', 'iti_start', 'next_trial_start'],
+                                            latent_variable='action_value',
+                                            side='contra',
+                                            axs=None, title=''
+                                            ):
     """
-    (for foraging task) Plot psth grouped by quantiles of action value from behavioral model fitting
+    (for foraging task) Plot psth grouped by quantiles of latent variable from behavioral model fitting
+
+    :param unit_key:
+    :param model_id:
+    :param n_quantile: numer of quantiles to split
+    :param align_types: psth_foraging.AlignType
+    :param latent_variable: one of 'action_value' (default), 'choice_prob', 'choice_kernel', etc.
+    :param side: 'contra' (default) or 'ipsi'. For choice_prob, they are perfectly anticorrelated
+    :param axs:
+    :param title:
+    :return:
     """
+
     # for (the very few) sessions without zaber feedback signal, use 'bitcodestart' with manual correction (see compute_unit_psth_and_raster)
     if not ephys.TrialEvent & unit_key & 'trial_event_type = "zaberready"':
         align_types = [a + '_bitcode' if 'trial_start' in a else a for a in align_types]
 
     hemi = _get_units_hemisphere(unit_key)
-    contra = "right" if hemi == "left" else "left"
+    lickport = hemi if side == 'ipsi' else list({'left', 'right'} - {hemi})[0]
 
     # Fetch predictive contra choice probabilities
     df = (foraging_model.FittedSessionModel.TrialLatentVariable
           & unit_key
           & {'model_id': model_id}
-          & {'water_port': contra}
-          ).fetch(format='frame').reset_index()[['trial', 'choice_prob']]
-
-    # TODO: turn choice_prob back to real action value
+          & {'water_port': lickport}
+          ).fetch(format='frame').reset_index()[['trial', latent_variable]]
 
     # Cut choice probabilities into quantiles
-    df['quantile_rank'] = pd.qcut(df.choice_prob, n_quantile, labels=False)
+    df['quantile_rank'] = pd.qcut(df[latent_variable], n_quantile, labels=False)
 
     fig = None
     if axs is None:
@@ -332,9 +343,9 @@ def plot_unit_psth_value_quantile(unit_key, model_id=11, n_quantile=5,
         axs = fig.subplots(1, len(align_types), sharey='row', sharex='col')
         axs = np.atleast_2d(axs).reshape((1, -1))
         plt.subplots_adjust(top=0.8)
-    kargs = [{'color': 'b',
+    kargs = [{'color': 'b' if side=='contra' else 'r',
               'alpha': np.linspace(0.2, 1, n_quantile)[rank],
-              'label': f'contra value quantile {rank + 1}'} for rank in range(n_quantile)]
+              'label': f'quantile {rank + 1}'} for rank in range(n_quantile)]
     xlims = []
 
     # -- For each align type --
@@ -366,18 +377,19 @@ def plot_unit_psth_value_quantile(unit_key, model_id=11, n_quantile=5,
         ax_psth.set(title=f'{align_type}')
 
     _set_same_horizonal_aspect_ratio(axs[0, :], xlims)
-    ax_psth.legend(fontsize=8)
+    ax_psth.legend(fontsize=10, ncol=2)
 
     # Add unit and model info
     unit_info = (f'{(lab.WaterRestriction & unit_key).fetch1("water_restriction_number")}, '
-                 f'{(experiment.Session & unit_key).fetch1("session_date")}, '
+                 f'{(experiment.Session & unit_key).fetch1("session", "session_date")}, '
                  f'imec {unit_key["insertion_number"]-1}\n'
                  f'Unit #: {unit_key["unit"]}, '
-                 f'{(((ephys.Unit & unit_key) * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation).fetch1("annotation")}'
+                 f'{(((ephys.Unit & unit_key) * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation).fetch1("annotation")}\n'
+                 f'PSTH grouped by -- {latent_variable} ({side}) --'
                  )
     id, model_notation, desc, accuracy, n = (foraging_model.FittedSessionModel * foraging_model.Model & unit_key & {'model_id': model_id}).fetch1(
         'model_id', 'model_notation', 'desc', 'cross_valid_accuracy_test', 'n_trials')
     fig.text(0.1, 0.9, unit_info)
-    fig.text(0.4, 0.9, f'model #{id} {model_notation}\n{desc}\n{n} trials, prediction accuracy (cross-valid) = {accuracy}')
+    fig.text(0.4, 0.9, f'model <{id}> {model_notation}\n{desc}\n{n} trials, prediction accuracy (cross-valid) = {accuracy}')
 
     return fig
