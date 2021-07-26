@@ -17,8 +17,10 @@ from matplotlib.gridspec import GridSpec
 from pipeline import lab, foraging_model
 from ..model.util import moving_average
 
+
 # plt.rcParams.update({'font.size': 14, 'figure.dpi': 150})
 # sns.set(context='talk')
+
 
 def plot_session_model_comparison(sess_key={'subject_id': 473361, 'session': 47}, model_comparison_idx=0, sort=None):
     """
@@ -52,8 +54,8 @@ def plot_session_model_comparison(sess_key={'subject_id': 473361, 'session': 47}
 
     # -- Plotting --
     with sns.plotting_context("notebook", font_scale=1), sns.axes_style("darkgrid"):
-        fig = plt.figure(figsize=(15, 8 + len(results)/7), dpi = 150)
-        gs = GridSpec(1, 5, wspace = 0.1, bottom = 0.11, top = 0.85, left = 0.33, right = 0.98)
+        fig = plt.figure(figsize=(15, 8 + len(results) / 7), dpi=150)
+        gs = GridSpec(1, 5, wspace=0.1, bottom=0.11, top=0.85, left=0.33, right=0.98)
         fig.text(0.05, 0.9, f'{(lab.WaterRestriction & sess_key).fetch1("water_restriction_number")}, '
                             f'session {sess_key["session"]}, {results.n_trials[0]} trials\n'
                             f'Model comparison: {(foraging_model.ModelComparison & q_model_comparison).fetch1("desc")}'
@@ -61,8 +63,8 @@ def plot_session_model_comparison(sess_key={'subject_id': 473361, 'session': 47}
 
         # -- 1. LPT --
         ax = fig.add_subplot(gs[0, 0])
-        s = sns.barplot(x = 'lpt', y = 'para_notation_with_best_fit', data = results, color = 'grey')
-        s.set_xlim(min(0.5,np.min(np.min(results[['lpt_aic', 'lpt_bic']]))) - 0.005)
+        s = sns.barplot(x='lpt', y='para_notation_with_best_fit', data=results, color='grey')
+        s.set_xlim(min(0.5, np.min(np.min(results[['lpt_aic', 'lpt_bic']]))) - 0.005)
         plt.axvline(0.5, color='k', linestyle='--')
         s.set_ylabel('')
         s.set_xlabel('Likelihood per trial')
@@ -70,27 +72,27 @@ def plot_session_model_comparison(sess_key={'subject_id': 473361, 'session': 47}
         # -- 2. aic, bic raw --
         ax = fig.add_subplot(gs[0, 1])
         df = pd.melt(results[['para_notation_with_best_fit', 'aic', 'bic']],
-                     id_vars = 'para_notation_with_best_fit', var_name = '', value_name= 'ic')
-        s = sns.barplot(x = 'ic', y = 'para_notation_with_best_fit', hue = '', data = df)
+                     id_vars='para_notation_with_best_fit', var_name='', value_name='ic')
+        s = sns.barplot(x='ic', y='para_notation_with_best_fit', hue='', data=df)
 
         # annotation
         x_max = max(plt.xlim())
         ylim = plt.ylim()
-        plt.plot(x_max, results.index[results.model_id == best_aic_id] - 0.2, '*', markersize = 15)
-        plt.plot(x_max, results.index[results.model_id == best_bic_id] + 0.2, '*', markersize = 15)
+        plt.plot(x_max, results.index[results.model_id == best_aic_id] - 0.2, '*', markersize=15)
+        plt.plot(x_max, results.index[results.model_id == best_bic_id] + 0.2, '*', markersize=15)
         plt.ylim(ylim)
         s.set_yticklabels('')
-        s.legend(bbox_to_anchor=(0,1.02,1,0.2), loc='lower left', ncol = 1)
+        s.legend(bbox_to_anchor=(0, 1.02, 1, 0.2), loc='lower left', ncol=1)
         s.set_ylabel('')
         s.set_xlabel('AIC or BIC')
 
         # -- 3. log10_bayesfactor --
         ax = fig.add_subplot(gs[0, 2])
-        df = pd.melt(results[['para_notation_with_best_fit','log10_bf_aic','log10_bf_bic']],
-                     id_vars = 'para_notation_with_best_fit', var_name = '', value_name= 'log10 (bayes factor)')
-        s = sns.barplot(x = 'log10 (bayes factor)', y = 'para_notation_with_best_fit', hue = '', data = df)
-        h_d = plt.axvline(-2, color='r', linestyle='--', label = 'decisive')
-        s.legend(handles = [h_d,], bbox_to_anchor=(0,1.02,1,0.2), loc='lower left')
+        df = pd.melt(results[['para_notation_with_best_fit', 'log10_bf_aic', 'log10_bf_bic']],
+                     id_vars='para_notation_with_best_fit', var_name='', value_name='log10 (bayes factor)')
+        s = sns.barplot(x='log10 (bayes factor)', y='para_notation_with_best_fit', hue='', data=df)
+        h_d = plt.axvline(-2, color='r', linestyle='--', label='decisive')
+        s.legend(handles=[h_d, ], bbox_to_anchor=(0, 1.02, 1, 0.2), loc='lower left')
         plt.ylim(ylim)
         # s.invert_xaxis()
         s.set_xlabel(r'log$_{10}\frac{p(model)}{p(best\,model)}$')
@@ -99,9 +101,9 @@ def plot_session_model_comparison(sess_key={'subject_id': 473361, 'session': 47}
 
         # -- 4. model weight --
         ax = fig.add_subplot(gs[0, 3])
-        df = pd.melt(results[['para_notation_with_best_fit','model_weight_aic','model_weight_bic']],
-                     id_vars = 'para_notation_with_best_fit', var_name = '', value_name= 'model weight')
-        s = sns.barplot(x = 'model weight', y = 'para_notation_with_best_fit', hue = '', data = df)
+        df = pd.melt(results[['para_notation_with_best_fit', 'model_weight_aic', 'model_weight_bic']],
+                     id_vars='para_notation_with_best_fit', var_name='', value_name='model weight')
+        s = sns.barplot(x='model weight', y='para_notation_with_best_fit', hue='', data=df)
         ax.legend_.remove()
         plt.xlim([-0.05, 1.05])
         plt.axvline(1, color='k', linestyle='--')
@@ -112,10 +114,10 @@ def plot_session_model_comparison(sess_key={'subject_id': 473361, 'session': 47}
         # -- 5. Prediction accuracy --
         results.cross_valid_accuracy_test *= 100
         ax = fig.add_subplot(gs[0, 4])
-        s = sns.barplot(x = 'cross_valid_accuracy_test', y = 'para_notation_with_best_fit', data = results, color = 'grey')
+        s = sns.barplot(x='cross_valid_accuracy_test', y='para_notation_with_best_fit', data=results, color='grey')
         plt.axvline(50, color='k', linestyle='--')
         x_max = max(plt.xlim())
-        plt.plot(x_max, results.index[results.model_id == best_cross_valid], '*', markersize = 15, color = 'grey')
+        plt.plot(x_max, results.index[results.model_id == best_cross_valid], '*', markersize=15, color='grey')
         ax.set_xlim(min(50, np.min(results.cross_valid_accuracy_test)) - 5)
         plt.ylim(ylim)
         ax.set_ylabel('')
@@ -125,14 +127,14 @@ def plot_session_model_comparison(sess_key={'subject_id': 473361, 'session': 47}
     return
 
 
-def plot_actual_and_fitted_choice(sess_key,
-                                  model_comparison_idx=0, model_comparison_metric='aic',
-                                  first_n=1, last_n=0, smooth_factor=5):
+def plot_session_fitted_choice(sess_key,
+                               model_comparison_idx=0, sort='aic',
+                               first_n=1, last_n=0, smooth_factor=5):
     """
     Plot actual and fitted choice trace of a specified session
     :param sess_key: could across several sessions
     :param model_comparison_idx: model comparison group
-    :param model_comparison_metric: {'aic', 'bic', 'cross_validation_test'}
+    :param sort: {'aic', 'bic', 'cross_validation_test'}
     :param first_n: top best n competitors to plot
     :param last_n: last n competitors to plot
     :param smooth_factor: for actual data
@@ -140,7 +142,18 @@ def plot_actual_and_fitted_choice(sess_key,
     """
 
     import pdb; pdb.set_trace()
+
+    # Fetch actual data
     choice_history, reward_history, p_reward, _ = foraging_model.get_session_history(sess_key)
+
+    # Fetch fitted data
+    q_model_comparison = (foraging_model.FittedSessionModelComparison.RelativeStat
+                          & sess_key & {'model_comparison_idx': model_comparison_idx})
+    q_fitted = (q_model_comparison
+                * foraging_model.Model
+                * foraging_model.FittedSessionModel)
+
+    # model_comparison = foraging_model.FittedSessionModelComparison.
 
     if not hasattr(model_comparison, 'plot_predictive'):
         model_comparison.plot_predictive = [1, 2, 3]
@@ -153,7 +166,7 @@ def plot_actual_and_fitted_choice(sess_key,
     for bb in model_comparison.plot_predictive:
         bb = bb - 1
         if bb < len(model_comparison.results):
-            this_id = model_comparison.results_sort.index[bb] - 1
+            this_id = model_comparison.results_sor3rt.index[bb] - 1
             this_choice_prob = model_comparison.results_raw[this_id].predictive_choice_prob
             this_result = model_comparison.results_sort.iloc[bb]
 
@@ -230,14 +243,3 @@ def plot_session_lightweight(fake_data, fitted_data=None, smooth_factor=5, base_
     sns.despine(trim=True)
 
     return ax
-
-
-
-
-
-
-
-
-
-
-
