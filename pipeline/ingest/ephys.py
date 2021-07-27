@@ -390,9 +390,10 @@ class EphysIngest(dj.Imported):
                 log.info('.. inserting unit noise label')
                 ephys.UnitNoiseLabel.insert([
                     {**skey, 'insertion_number': probe, 'clustering_method': method,
-                     'unit': unit, 'unit_quality': note}
-                    for unit, note in zip(cluster_noise_label['cluster_ids'],
-                                          cluster_noise_label['cluster_notes'])])
+                     'unit': u, 'noise': note}
+                    for u, note in zip(cluster_noise_label['cluster_ids'],
+                                       cluster_noise_label['cluster_notes']) if u in set(units)],
+                    allow_direct_insert=True)
 
             dj.conn().ping()
             log.info('.. inserting clustering timestamp and label')
@@ -1102,7 +1103,7 @@ def insert_ephys_events(skey, bf):
     '''
     all times are session-based
     '''
-    
+
     # --- Events available both from behavior .csv file (trial time) and ephys NIDQ (session time) ---
     # digMarkerPerTrial from bitcode.mat: [STRIG_, GOCUE_, CHOICEL_, CHOICER_, REWARD_, ITI_, BPOD_START_, ZABER_IN_POS_]
     # <--> ephys.TrialEventType: 'bitcodestart', 'go', 'choice', 'choice', 'reward', 'trialend', 'bpodstart', 'zaberinposition'
@@ -1111,7 +1112,7 @@ def insert_ephys_events(skey, bf):
     df = pd.DataFrame()
     headings = bf['headings'][0]
     digMarkerPerTrial = bf['digMarkerPerTrial']
-    
+
     for col, event_type in enumerate(headings):
         times = digMarkerPerTrial[:, col]
         not_nan = np.where(~np.isnan(times))[0]
@@ -1145,7 +1146,7 @@ def insert_ephys_events(skey, bf):
 
     if len(exist_lick):
         log.info(f'       loading licks from NIDQ ...')
-        
+
         for trial, *licks in enumerate(zip(*(bf[lick_wrapper[ltype]][0] for ltype in exist_lick))):
             lick_times = {ltype: ltime for ltype, ltime in zip(exist_lick, *licks)}
             all_lick_types = np.concatenate(
