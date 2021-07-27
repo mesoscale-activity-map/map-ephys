@@ -1,6 +1,6 @@
 
 import numpy as np
-
+import datajoint as dj
 import matplotlib.pyplot as plt
 import pandas as pd
 from pipeline import psth, psth_foraging, ephys, lab, ccf, histology, experiment, foraging_model
@@ -203,7 +203,7 @@ def _set_same_horizonal_aspect_ratio(axs, xlims, gap=0.02):
         ax.set_position([l, b, w, h])
 
 
-def plot_unit_psth_choice_outcome(unit_key,
+def plot_unit_psth_choice_outcome(unit_key={'subject_id': 473361, 'session': 47, 'insertion_number': 1, 'clustering_method': 'kilosort2', 'unit': 541},
                                   align_types=['trial_start', 'go_cue', 'first_lick_after_go_cue', 'iti_start', 'next_trial_start'],
                                   if_raster=True, if_exclude_early_lick=False,
                                   axs=None, title=''):
@@ -300,10 +300,10 @@ def plot_unit_psth_choice_outcome(unit_key,
     return fig
 
 
-def plot_unit_psth_latent_variable_quantile(unit_key, model_id=11, n_quantile=5,
+def plot_unit_psth_latent_variable_quantile(unit_key={'subject_id': 473361, 'session': 47, 'insertion_number': 1, 'clustering_method': 'kilosort2', 'unit': 541},
+                                            model_id=11, n_quantile=5,
                                             align_types=['trial_start', 'go_cue', 'first_lick_after_go_cue', 'iti_start', 'next_trial_start'],
-                                            latent_variable='action_value',
-                                            side='contra',
+                                            latent_variable='contra_action_value',
                                             axs=None, title=''
                                             ):
     """
@@ -313,8 +313,7 @@ def plot_unit_psth_latent_variable_quantile(unit_key, model_id=11, n_quantile=5,
     :param model_id:
     :param n_quantile: numer of quantiles to split
     :param align_types: psth_foraging.AlignType
-    :param latent_variable: one of 'action_value' (default), 'choice_prob', 'relative_action_value', 'total_action_value', 'choice_kernel', etc.
-    :param side: 'contra' (default) or 'ipsi'. For choice_prob, they are perfectly anticorrelated
+    :param latent_variable: 'contra_action_value' (default), 'ipsi_choice_prob', 'relative_action_value (contra - ipsi)', 'total_action_value', 'contra_choice_kernel', etc.
     :param axs:
     :param title:
     :return:
@@ -325,27 +324,28 @@ def plot_unit_psth_latent_variable_quantile(unit_key, model_id=11, n_quantile=5,
         align_types = [a + '_bitcode' if 'trial_start' in a else a for a in align_types]
 
     hemi = _get_units_hemisphere(unit_key)
-    lickport = hemi if side == 'ipsi' else list({'left', 'right'} - {hemi})[0]
+    contra_ipsi = ['right', 'left'] if hemi == 'left' else ['left', 'right']
 
     # Fetch predictive contra choice probabilities
     q_lv = (foraging_model.FittedSessionModel.TrialLatentVariable
             & unit_key
             & {'model_id': model_id})
 
-    import pdb; pdb.set_trace()
+    # Flatten latent variables to generate columns like 'left_action_value', 'right_choice_prob'
     q_latent_variable_all = dj.U('trial') & q_lv
     for lv in ['action_value', 'choice_prob', 'choice_kernel']:
-        for lickport in ['left', 'right']:
-            q_latent_variable_all = q_latent_variable_all.aggr(q_lv & {'water_port': lickport},
-                                                               f'{lickport}_{lv}'=lv)
+        for ci, lp in zip(['contra', 'ipsi'], contra_ipsi):
+            # Better way here?
+            q_latent_variable_all *= eval(f"(q_lv & {{'water_port': '{lp}'}}).proj({ci}_{lv}='{lv}', {lp}='water_port')")
 
+    # Add more combinations
+    q_latent_variable_all = q_latent_variable_all.proj(...,
+                                                       relative_action_value='contra_action_value - ipsi_action_value',
+                                                       total_action_value='contra_action_value + ipsi_action_value')
 
-    df = (foraging_model.FittedSessionModel.TrialLatentVariable
-          & unit_key
-          & {'model_id': model_id}
-          & {'water_port': lickport}
-          ).proj(..., relative_action_value=).fetch(
-          format='frame').reset_index()[['trial', latent_variable]]
+    # Fetch trial number and desired latent variable
+    df = q_latent_variable_all.fetch(
+        format='frame').astype(float).reset_index()[['trial', latent_variable]]
 
     # Cut choice probabilities into quantiles
     if any(np.isnan(df[latent_variable])):
@@ -360,7 +360,7 @@ def plot_unit_psth_latent_variable_quantile(unit_key, model_id=11, n_quantile=5,
         axs = fig.subplots(1, len(align_types), sharey='row', sharex='col')
         axs = np.atleast_2d(axs).reshape((1, -1))
         plt.subplots_adjust(top=0.8)
-    kargs = [{'color': 'b' if side=='contra' else 'r',
+    kargs = [{'color': 'b' if 'contra' in latent_variable else 'r' if 'ipsi' in latent_variable else 'k',
               'alpha': np.linspace(0.2, 1, n_quantile)[rank],
               'label': f'quantile {rank + 1}'} for rank in range(n_quantile)]
     xlims = []
@@ -402,7 +402,7 @@ def plot_unit_psth_latent_variable_quantile(unit_key, model_id=11, n_quantile=5,
                  f'imec {unit_key["insertion_number"]-1}\n'
                  f'Unit #{unit_key["unit"]}, '
                  f'{(((ephys.Unit & unit_key) * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation).fetch1("annotation")}\n'
-                 f'PSTH grouped by -- {latent_variable} ({side}) --'
+                 f'PSTH grouped by === {latent_variable} ==='
                  )
     id, model_notation, desc, accuracy, n = (foraging_model.FittedSessionModel * foraging_model.Model & unit_key & {'model_id': model_id}).fetch1(
         'model_id', 'model_notation', 'desc', 'cross_valid_accuracy_test', 'n_trials')
