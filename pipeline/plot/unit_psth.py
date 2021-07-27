@@ -313,7 +313,7 @@ def plot_unit_psth_latent_variable_quantile(unit_key, model_id=11, n_quantile=5,
     :param model_id:
     :param n_quantile: numer of quantiles to split
     :param align_types: psth_foraging.AlignType
-    :param latent_variable: one of 'action_value' (default), 'choice_prob', 'choice_kernel', etc.
+    :param latent_variable: one of 'action_value' (default), 'choice_prob', 'relative_action_value', 'total_action_value', 'choice_kernel', etc.
     :param side: 'contra' (default) or 'ipsi'. For choice_prob, they are perfectly anticorrelated
     :param axs:
     :param title:
@@ -328,11 +328,24 @@ def plot_unit_psth_latent_variable_quantile(unit_key, model_id=11, n_quantile=5,
     lickport = hemi if side == 'ipsi' else list({'left', 'right'} - {hemi})[0]
 
     # Fetch predictive contra choice probabilities
+    q_lv = (foraging_model.FittedSessionModel.TrialLatentVariable
+            & unit_key
+            & {'model_id': model_id})
+
+    import pdb; pdb.set_trace()
+    q_latent_variable_all = dj.U('trial') & q_lv
+    for lv in ['action_value', 'choice_prob', 'choice_kernel']:
+        for lickport in ['left', 'right']:
+            q_latent_variable_all = q_latent_variable_all.aggr(q_lv & {'water_port': lickport},
+                                                               f'{lickport}_{lv}'=lv)
+
+
     df = (foraging_model.FittedSessionModel.TrialLatentVariable
           & unit_key
           & {'model_id': model_id}
           & {'water_port': lickport}
-          ).fetch(format='frame').reset_index()[['trial', latent_variable]]
+          ).proj(..., relative_action_value=).fetch(
+          format='frame').reset_index()[['trial', latent_variable]]
 
     # Cut choice probabilities into quantiles
     if any(np.isnan(df[latent_variable])):

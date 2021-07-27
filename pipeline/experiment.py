@@ -511,6 +511,30 @@ class Period(dj.Lookup):
                 ('delay', 'delay', 0, 'go', 0),
                 ('response', 'go', 0, 'go', 1.2)]
 
+
+@schema
+class PeriodForaging(dj.Lookup):
+    # Totally different from delay-response task, so create a new table
+    definition = """  # time period between any two TrialEvent (eg the delay period is between delay and go)
+    period: varchar(30)
+    ---
+    -> TrialEventType.proj(start_event_type='trial_event_type')
+    start_trial_offset=0: smallint  # see psth_foraging.AlignType.trial_offset 
+    start_time_shift: float  # (s) any time-shift amount with respect to the start_event_type
+    -> TrialEventType.proj(end_event_type='trial_event_type')
+    end_trial_offset=0: smallint   # see psth_foraging.AlignType.trial_offset 
+    end_time_shift: float    # (s) any time-shift amount with respect to the end_event_type
+    """
+
+    contents = [('iti', 'trialend', 0, 0, 'bitcodestart', 1, 0),  # To be precise, should use 'zaberstart'??
+                ('delay', 'zaberready', 0, 0, 'go', 0, 0),
+                ('delay_bitcode', 'bitcodestart', 0, 0.146, 'go', 0, 0),
+                #TODO ('delay_effective')   # If early lick, from the last lick before go cue to go cue
+                ('post_choice', 'choice', 0, 0, 'trialend', 0, 0),   # Potential problem of double-dipping retraction?
+                ('response', 'go', 0, 0, 'go', 0, 1.2),    # Is ths reasonable?
+                ]
+
+
 # ============================= PROJECTS ==================================================
 
 

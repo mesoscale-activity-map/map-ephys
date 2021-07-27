@@ -131,42 +131,42 @@ def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
     n_trials = np.shape(choice_history)[1]
 
     # Fetch fitted data
-    results, q_model_comparison = _get_model_comparison_results(sess_key, model_comparison_idx, sort)
+    results, _ = _get_model_comparison_results(sess_key, model_comparison_idx, sort)
 
     # -- Plot actual choice and reward history --
-    with sns.plotting_context("notebook", font_scale=1, rc={'style': 'ticks'}):
+    ax = plot_session_lightweight([choice_history, reward_history, p_reward], smooth_factor=smooth_factor)
 
-        ax = plot_session_lightweight([choice_history, reward_history, p_reward], smooth_factor=smooth_factor)
-        plt.gcf().text(0.05, 0.95, f'{(lab.WaterRestriction & sess_key).fetch1("water_restriction_number")}, '
-                            f'session {sess_key["session"]}, {results.n_trials[0]} trials\n'
-                            f'Model comparison: {(foraging_model.ModelComparison & q_model_comparison).fetch1("desc")}'
-                            f' (n = {len(results)})')
+    # -- Plot fitted choice probability etc. --
+    for idx, result in pd.concat([results.iloc[:first_n], results.iloc[-last_n:]]).iterrows():
+        right_choice_prob = (foraging_model.FittedSessionModel.TrialLatentVariable
+                            & dict(result) & 'water_port="right"').fetch('choice_prob')
+        ax.plot(np.arange(0, n_trials), right_choice_prob, linewidth=max(1.5 - 0.3 * idx, 0.2),
+                label=f'{idx + 1}: <{result.model_id}>'
+                      f'{result.model_notation}\n'
+                      f'({result.fitted_param})')
 
-        # -- Plot fitted choice probability etc. --
-        for idx, result in pd.concat([results.iloc[:first_n], results.iloc[-last_n:]]).iterrows():
-            right_choice_prob = (foraging_model.FittedSessionModel.TrialLatentVariable
-                                & dict(result) & 'water_port="right"').fetch('choice_prob')
-            ax.plot(np.arange(0, n_trials), right_choice_prob, linewidth=max(1.5 - 0.3 * idx, 0.5),
-                    label=f'{idx + 1}: <{result.model_id}> '
-                          f'{result.model_notation}\n'
-                          f'({result.fitted_param})')
+    #TODO Plot session starts
+    # if len(trial_numbers) > 1:  # More than one sessions
+    #     for session_start in np.cumsum([0, *trial_numbers[:-1]]):
+    #         plt.axvline(session_start, color='b', linestyle='--', linewidth=2)
+    #         try:
+    #             plt.text(session_start + 1, 1, '%g' % model_comparison.session_num[session_start], fontsize=10,
+    #                      color='b')
+    #         except:
+    #             pass
 
-        #TODO Plot session starts
-        # if len(trial_numbers) > 1:  # More than one sessions
-        #     for session_start in np.cumsum([0, *trial_numbers[:-1]]):
-        #         plt.axvline(session_start, color='b', linestyle='--', linewidth=2)
-        #         try:
-        #             plt.text(session_start + 1, 1, '%g' % model_comparison.session_num[session_start], fontsize=10,
-        #                      color='b')
-        #         except:
-        #             pass
+    ax.legend(fontsize=8, loc=1, bbox_to_anchor=(0.985, 0.89), bbox_transform=plt.gcf().transFigure)
 
-        ax.legend(fontsize=7, loc=1, bbox_to_anchor=(0.985, 0.89), bbox_transform=plt.gcf().transFigure)
+    # ax.set_xlim(0,300)
 
+    # fig.tight_layout()
+    # sns.set()
     return
 
 
 def plot_session_lightweight(fake_data, fitted_data=None, smooth_factor=5, base_color='y'):
+    # sns.reset_orig()
+    sns.set(style="ticks", context="paper", font_scale=1.4)
 
     choice_history, reward_history, p_reward = fake_data
 
@@ -179,7 +179,7 @@ def plot_session_lightweight(fake_data, fitted_data=None, smooth_factor=5, base_
     unrewarded_trials = np.logical_not(rewarded_trials)
 
     # == Choice trace ==
-    fig = plt.figure(figsize=(11, 4), dpi=150)
+    fig = plt.figure(figsize=(9, 4), dpi=150)
 
     ax = fig.add_subplot(111)
     fig.subplots_adjust(left=0.1, right=0.8)
@@ -208,8 +208,9 @@ def plot_session_lightweight(fake_data, fitted_data=None, smooth_factor=5, base_
 
     ax.set_yticks([0, 1])
     ax.set_yticklabels(['Left', 'Right'])
-    ax.set_xlabel('Trial')
+    # ax.set_xlim(0,300)
 
+    # fig.tight_layout()
     sns.despine(trim=True)
 
     return ax
@@ -234,7 +235,7 @@ def _get_model_comparison_results(sess_key, model_comparison_idx=0, sort=None):
 
     # Add fitted params
     q_result *= q_result.aggr(foraging_model.FittedSessionModel.Param * foraging_model.ModelParam,
-                              fitted_param='GROUP_CONCAT(ROUND(fitted_value,2) SEPARATOR ", ")')
+                              fitted_param='GROUP_CONCAT(ROUND(fitted_value,2))')
     results = pd.DataFrame(q_result.fetch())
     results['para_notation_with_best_fit'] = [f'<{id}> {name}\n({value})' for id, name, value in
                                               results[['model_id', 'model_notation', 'fitted_param']].values]

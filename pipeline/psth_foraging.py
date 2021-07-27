@@ -331,92 +331,6 @@ class TrialCondition(dj.Lookup):
         else:
             return q
 
-
-@schema
-class UnitPsth(dj.Computed):
-    definition = """
-    -> TrialCondition
-    -> ephys.Unit
-    ---
-    unit_psth=NULL: longblob
-    """
-    psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
-
-    @property
-    def key_source(self):
-        """
-        For those conditions that include stim, process those with PhotostimBrainRegion already computed only
-        Only units not of type "all"
-        """
-        nostim = (ephys.Unit * (TrialCondition & 'trial_condition_func = "_get_trials_exclude_stim"')
-                  & 'unit_quality != "all"')
-        stim = ((ephys.Unit & (experiment.Session & experiment.PhotostimBrainRegion))
-                * (TrialCondition & 'trial_condition_func = "_get_trials_include_stim"') & 'unit_quality != "all"')
-        return nostim.proj() + stim.proj() & foraging_sessions
-
-    def make(self, key):
-        log.debug('UnitPsth.make(): key: {}'.format(key))
-
-        # expand TrialCondition to trials,
-        trials = TrialCondition.get_trials(key['trial_condition_name'])
-
-        # fetch related spike times
-        q = (ephys.Unit.TrialSpikes & key & trials.proj())
-        spikes = q.fetch('spike_times')
-
-        if len(spikes) == 0:
-            log.warning('no spikes found for key {} - null psth'.format(key))
-            self.insert1(key)
-            return
-
-        # compute psth & store
-        unit_psth = self.compute_psth(spikes)
-
-        self.insert1({**key, 'unit_psth': unit_psth})
-
-    @staticmethod
-    def compute_psth(session_unit_spikes):
-        spikes = np.concatenate(session_unit_spikes)
-
-        xmin, xmax, bins = UnitPsth.psth_params.values()
-        psth, edges = np.histogram(spikes, bins=np.arange(xmin, xmax, bins))
-        psth = psth / len(session_unit_spikes) / bins
-
-        return np.array([psth, edges[1:]])
-
-    @classmethod
-    def get_plotting_data(cls, unit_key, condition_key):
-        """
-        Retrieve / build data needed for a Unit PSTH Plot based on the given
-        unit condition and included / excluded condition (sub-)variables.
-        Returns a dictionary of the form:
-          {
-             'trials': ephys.Unit.TrialSpikes.trials,
-             'spikes': ephys.Unit.TrialSpikes.spikes,
-             'psth': UnitPsth.unit_psth,
-             'raster': Spike * Trial raster [np.array, np.array]
-          }
-        """
-        # from sys import exit as sys_exit  # NOQA
-        # from code import interact
-        # from collections import ChainMap
-        # interact('unitpsth make', local=dict(ChainMap(locals(), globals())))
-
-        trials = TrialCondition.get_func(condition_key)()
- 
-        unit_psth = (UnitPsth & {**condition_key, **unit_key}).fetch1('unit_psth')
-        if unit_psth is None:
-            raise Exception('No spikes found for this unit and trial-condition')
-
-        spikes, trials = (ephys.Unit.TrialSpikes & trials & unit_key).fetch(
-            'spike_times', 'trial', order_by='trial asc')
-
-        raster = [np.concatenate(spikes),
-                  np.concatenate([[t] * len(s)
-                                  for s, t in zip(spikes, trials)])]
-
-        return dict(trials=trials, spikes=spikes, psth=unit_psth, raster=raster)
-    
     
 @schema 
 class AlignType(dj.Lookup):
@@ -449,6 +363,130 @@ class AlignType(dj.Lookup):
         [7, 'bitcodestart', 'next_trial_start_bitcode', 1, 0.146, [-10, 5], [-8, 3]],
         [8, 'bitcodestart', 'next_two_trial_start_bitcode', 2, 0.146, [-10, 5], [-8, 3]],
     ]
+
+
+@schema
+class UnitPeriodTrialFiring(dj.Computed):
+    definition = """
+    -> ephys.Unit
+    -> experiment.PeriodForaging
+    -> experiment.SessionTrial
+    ---
+    spike_count:  int
+    mean_firing_rate:  float    
+    """
+
+
+@schema
+class IndependentVariable(dj.Lookup):
+    definition = """
+    var_name:  varchar(50)
+    ---
+    desc:   varchar(200)
+    """
+    contents = [
+        ['choice_prob', 'fitted choice probability'],
+        ['action_value', 'fitted action value'],
+        ['relative_action_value', 'relative action value (Q_r - Q_l)'],
+        ['total_action_value', 'total action value (Q_r + Q_l)'],
+        ['choice', 'left or right'],
+        ['reward', 'reward or no reward']
+    ]
+
+    @classmethod
+    def get_trial_independent_variable(q_trial, ind_var):
+
+        pass
+
+
+# @schema
+# class UnitPeriodSelectivity(dj.Computed):
+#     """
+#     Selectivity computed from psth_foraging.UnitPeriodTrialSpikeCount and TrialIndependentVariable
+#     """
+#     definition = """
+#     -> ephys.Unit
+#     -> experiment.PeriodForaging
+#     ---
+#     -> Selectivity.proj(period_selectivity='selectivity')
+#     ipsi_firing_rate=0:           float  # mean firing rate of all ipsi-trials
+#     contra_firing_rate=0:         float  # mean firing rate of all contra-trials
+#     p_value=1:                    float  # all trial spike rate t-test p-value
+#     """
+#
+#     alpha = 0.05  # default alpha value
+#
+#     key_source = (experiment.Period
+#                   * (ephys.Unit & ephys.ProbeInsertion.InsertionLocation & 'unit_quality != "all"')
+#                   & foraging_sessions)
+#
+#     def make(self, key):
+#         '''
+#         Compute Period Selectivity for a given unit.
+#         '''
+#         log.debug('PeriodSelectivity.make(): key: {}'.format(key))
+#
+#         hemi = _get_units_hemisphere(key)
+#
+#         # retrieving the spikes of interest,
+#         spikes_q = ((ephys.Unit.TrialSpikes & key)
+#                     * (experiment.BehaviorTrial
+#                        & {'task': 'audio delay',
+#                           'early_lick': 'no early',
+#                           'outcome': 'hit',
+#                           'free_water': 0,
+#                           'auto_water': 0})
+#                     & (experiment.TrialEvent & 'trial_event_type = "delay"' & 'duration = 1.2')
+#                     - experiment.PhotostimEvent)
+#
+#         if not spikes_q:  # no spikes found
+#             self.insert1({**key, 'period_selectivity': 'non-selective'})
+#             return
+#
+#         # retrieving event times
+#         start_event, start_tshift, end_event, end_tshift = (experiment.Period & key).fetch1(
+#             'start_event_type', 'start_time_shift', 'end_event_type', 'end_time_shift')
+#         start_event_q = {k['trial']: float(k['start_event_time'])
+#                          for k in (experiment.TrialEvent & key & {'trial_event_type': start_event}).proj(
+#             start_event_time=f'trial_event_time + {start_tshift}').fetch(as_dict=True)}
+#         end_event_q = {k['trial']: float(k['end_event_time'])
+#                        for k in (experiment.TrialEvent & key & {'trial_event_type': end_event}).proj(
+#             end_event_time=f'trial_event_time + {end_tshift}').fetch(as_dict=True)}
+#         cue_event_q = {k['trial']: float(k['trial_event_time'])
+#                        for k in (experiment.TrialEvent & key & {'trial_event_type': 'go'}).fetch(as_dict=True)}
+#
+#         # compute spike rate during the period-of-interest for each trial
+#         freq_i, freq_c = [], []
+#         for trial, trial_instruct, spike_times in zip(*spikes_q.fetch('trial', 'trial_instruction', 'spike_times')):
+#             start_time = start_event_q[trial] - cue_event_q[trial]
+#             stop_time = end_event_q[trial] - cue_event_q[trial]
+#             spk_rate = np.logical_and(spike_times >= start_time, spike_times < stop_time).sum() / (stop_time - start_time)
+#             if hemi == trial_instruct:
+#                 freq_i.append(spk_rate)
+#             else:
+#                 freq_c.append(spk_rate)
+#
+#         # and testing for selectivity.
+#         t_stat, pval = sc_stats.ttest_ind(freq_i, freq_c, equal_var=True)
+#         # try:
+#         #     _stat, pval = sc_stats.mannwhitneyu(freq_i, freq_c)
+#         # except ValueError:
+#         #     pval = np.nan
+#
+#         freq_i_m = np.average(freq_i)
+#         freq_c_m = np.average(freq_c)
+#
+#         pval = 1 if np.isnan(pval) else pval
+#         if pval > self.alpha:
+#             pref = 'non-selective'
+#         else:
+#             pref = ('ipsi-selective' if freq_i_m > freq_c_m
+#                     else 'contra-selective')
+#
+#         self.insert1({**key, 'p_value': pval,
+#                       'period_selectivity': pref,
+#                       'ipsi_firing_rate': freq_i_m,
+#                       'contra_firing_rate': freq_c_m})
 
 
 def compute_unit_psth_and_raster(unit_key, trial_keys, align_type='go_cue', bin_size=0.04):
