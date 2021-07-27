@@ -256,7 +256,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
                                                      hemisphere=row.hemisphere))
             if load_insertion_quality and not (ephys.ProbeInsertionQuality & pinsert_key):
                 if (row.drift_presence
-                        and row.number_of_landmarks 
+                        and isinstance(row.number_of_landmarks, (int, float))
                         and row.alignment_confidence):
                     # insertion_quality
                     insertions_quality.append(

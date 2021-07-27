@@ -900,7 +900,7 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
         'creation_time': creation_time,
         'clustering_label': clustering_label,
         'ks_channel_map': ks.data['channel_map'] + 1,  # channel numbering in this pipeline is 1-based indexed
-        'cluster_noise_label': cluster_noise_label
+        'cluster_noise_label': cluster_noise_label,
         'bitcode_raw': bitcode_raw,
     }
 
@@ -1053,6 +1053,7 @@ def read_bitcode(bitcode_dir, h2o, skey):
         ephys_bitcodes = bf['bitCodeS']  # ephys sync codes
         trial_numbers = bf['trialNum'].flatten() if 'trialNum' in bf else None
     elif bitcode_format == 'nidq.XA.txt':
+        bf = {}
         bitcodes, trial_start_times = build_bitcode(bitcode_dir.parent)
         if (experiment.BehaviorTrial & 'task = "multi-target-licking"' & skey):
             # multi-target-licking task: spiketimes w.r.t trial-start
