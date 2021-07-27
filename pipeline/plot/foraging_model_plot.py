@@ -4,6 +4,7 @@ Created on Sat Mar 21 13:47:05 2020
 
 @author: Han
 """
+import pdb
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -32,25 +33,9 @@ def plot_session_model_comparison(sess_key={'subject_id': 473361, 'session': 47}
     """
 
     # -- Fetch data --
-    # Get all relevant models
-    q_model_comparison = (foraging_model.FittedSessionModelComparison.RelativeStat
-                          & sess_key & {'model_comparison_idx': model_comparison_idx})
-    q_result = (q_model_comparison
-                * foraging_model.Model
-                * foraging_model.FittedSessionModel)
-    best_aic_id, best_bic_id, best_cross_valid = (foraging_model.FittedSessionModelComparison.BestModel & q_model_comparison).fetch1(
+    results, q_model_comparison = _get_model_comparison_results(sess_key, model_comparison_idx, sort)
+    best_aic_id, best_bic_id, best_cross_valid_id = (foraging_model.FittedSessionModelComparison.BestModel & q_model_comparison).fetch1(
         'best_aic', 'best_bic', 'best_cross_validation_test')
-
-    # Add fitted params
-    q_result *= q_result.aggr(foraging_model.FittedSessionModel.Param * foraging_model.ModelParam,
-                              fitted_param='GROUP_CONCAT(ROUND(fitted_value,2))')
-    results = pd.DataFrame(q_result.fetch())
-    results['para_notation_with_best_fit'] = [f'<{id}> {name}\n({value})' for id, name, value in
-                                              results[['model_id', 'model_notation', 'fitted_param']].values]
-
-    # Sort if necessary
-    if sort:
-        results.sort_values(by=[sort], ascending=sort != 'cross_valid_accuracy_test', ignore_index=True, inplace=True)
 
     # -- Plotting --
     with sns.plotting_context("notebook", font_scale=1), sns.axes_style("darkgrid"):
@@ -117,7 +102,7 @@ def plot_session_model_comparison(sess_key={'subject_id': 473361, 'session': 47}
         s = sns.barplot(x='cross_valid_accuracy_test', y='para_notation_with_best_fit', data=results, color='grey')
         plt.axvline(50, color='k', linestyle='--')
         x_max = max(plt.xlim())
-        plt.plot(x_max, results.index[results.model_id == best_cross_valid], '*', markersize=15, color='grey')
+        plt.plot(x_max, results.index[results.model_id == best_cross_valid_id], '*', markersize=15, color='grey')
         ax.set_xlim(min(50, np.min(results.cross_valid_accuracy_test)) - 5)
         plt.ylim(ylim)
         ax.set_ylabel('')
@@ -127,7 +112,7 @@ def plot_session_model_comparison(sess_key={'subject_id': 473361, 'session': 47}
     return
 
 
-def plot_session_fitted_choice(sess_key,
+def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
                                model_comparison_idx=0, sort='aic',
                                first_n=1, last_n=0, smooth_factor=5):
     """
@@ -141,61 +126,47 @@ def plot_session_fitted_choice(sess_key,
     :return:
     """
 
-    import pdb; pdb.set_trace()
-
     # Fetch actual data
     choice_history, reward_history, p_reward, _ = foraging_model.get_session_history(sess_key)
-
-    # Fetch fitted data
-    q_model_comparison = (foraging_model.FittedSessionModelComparison.RelativeStat
-                          & sess_key & {'model_comparison_idx': model_comparison_idx})
-    q_fitted = (q_model_comparison
-                * foraging_model.Model
-                * foraging_model.FittedSessionModel)
-
-    # model_comparison = foraging_model.FittedSessionModelComparison.
-
-    if not hasattr(model_comparison, 'plot_predictive'):
-        model_comparison.plot_predictive = [1, 2, 3]
-
     n_trials = np.shape(choice_history)[1]
 
-    ax = plot_session_lightweight([choice_history, reward_history, p_reward], smooth_factor=smooth_factor)
+    # Fetch fitted data
+    results, q_model_comparison = _get_model_comparison_results(sess_key, model_comparison_idx, sort)
 
-    # Predictive choice prob
-    for bb in model_comparison.plot_predictive:
-        bb = bb - 1
-        if bb < len(model_comparison.results):
-            this_id = model_comparison.results_sor3rt.index[bb] - 1
-            this_choice_prob = model_comparison.results_raw[this_id].predictive_choice_prob
-            this_result = model_comparison.results_sort.iloc[bb]
+    # -- Plot actual choice and reward history --
+    with sns.plotting_context("notebook", font_scale=1, rc={'style': 'ticks'}):
 
-            ax.plot(np.arange(0, n_trials), this_choice_prob[1, :], linewidth=max(1.5 - 0.3 * bb, 0.2),
-                    label='Model %g: %s, Km = %g\n%s\n%s' % (bb + 1, this_result.model, this_result.Km,
-                                                             this_result.para_notation, this_result.para_fitted))
+        ax = plot_session_lightweight([choice_history, reward_history, p_reward], smooth_factor=smooth_factor)
+        plt.gcf().text(0.05, 0.95, f'{(lab.WaterRestriction & sess_key).fetch1("water_restriction_number")}, '
+                            f'session {sess_key["session"]}, {results.n_trials[0]} trials\n'
+                            f'Model comparison: {(foraging_model.ModelComparison & q_model_comparison).fetch1("desc")}'
+                            f' (n = {len(results)})')
 
-    # Plot session starts
-    if len(trial_numbers) > 1:  # More than one sessions
-        for session_start in np.cumsum([0, *trial_numbers[:-1]]):
-            plt.axvline(session_start, color='b', linestyle='--', linewidth=2)
-            try:
-                plt.text(session_start + 1, 1, '%g' % model_comparison.session_num[session_start], fontsize=10,
-                         color='b')
-            except:
-                pass
+        # -- Plot fitted choice probability etc. --
+        for idx, result in pd.concat([results.iloc[:first_n], results.iloc[-last_n:]]).iterrows():
+            right_choice_prob = (foraging_model.FittedSessionModel.TrialLatentVariable
+                                & dict(result) & 'water_port="right"').fetch('choice_prob')
+            ax.plot(np.arange(0, n_trials), right_choice_prob, linewidth=max(1.5 - 0.3 * idx, 0.5),
+                    label=f'{idx + 1}: <{result.model_id}> '
+                          f'{result.model_notation}\n'
+                          f'({result.fitted_param})')
 
-    ax.legend(fontsize=7, loc=1, bbox_to_anchor=(0.985, 0.89), bbox_transform=plt.gcf().transFigure)
+        #TODO Plot session starts
+        # if len(trial_numbers) > 1:  # More than one sessions
+        #     for session_start in np.cumsum([0, *trial_numbers[:-1]]):
+        #         plt.axvline(session_start, color='b', linestyle='--', linewidth=2)
+        #         try:
+        #             plt.text(session_start + 1, 1, '%g' % model_comparison.session_num[session_start], fontsize=10,
+        #                      color='b')
+        #         except:
+        #             pass
 
-    # ax.set_xlim(0,300)
+        ax.legend(fontsize=7, loc=1, bbox_to_anchor=(0.985, 0.89), bbox_transform=plt.gcf().transFigure)
 
-    # fig.tight_layout()
-    sns.set()
     return
 
 
 def plot_session_lightweight(fake_data, fitted_data=None, smooth_factor=5, base_color='y'):
-    # sns.reset_orig()
-    sns.set(style="ticks", context="paper", font_scale=1.4)
 
     choice_history, reward_history, p_reward = fake_data
 
@@ -208,7 +179,7 @@ def plot_session_lightweight(fake_data, fitted_data=None, smooth_factor=5, base_
     unrewarded_trials = np.logical_not(rewarded_trials)
 
     # == Choice trace ==
-    fig = plt.figure(figsize=(9, 4), dpi=150)
+    fig = plt.figure(figsize=(11, 4), dpi=150)
 
     ax = fig.add_subplot(111)
     fig.subplots_adjust(left=0.1, right=0.8)
@@ -237,9 +208,39 @@ def plot_session_lightweight(fake_data, fitted_data=None, smooth_factor=5, base_
 
     ax.set_yticks([0, 1])
     ax.set_yticklabels(['Left', 'Right'])
-    # ax.set_xlim(0,300)
+    ax.set_xlabel('Trial')
 
-    # fig.tight_layout()
     sns.despine(trim=True)
 
     return ax
+
+
+# ---- Helper funcs -----
+
+def _get_model_comparison_results(sess_key, model_comparison_idx=0, sort=None):
+    """
+    Fetch relevent model comparison results of a specified session
+    :param sess_key:
+    :param model_comparison_idx:
+    :param sort: 'aic', 'bic', 'cross_valid_accuracy_test', etc.
+    :return: results in DataFrame, q_model_comparison
+    """
+    # Get all relevant models
+    q_model_comparison = (foraging_model.FittedSessionModelComparison.RelativeStat
+                          & sess_key & {'model_comparison_idx': model_comparison_idx})
+    q_result = (q_model_comparison
+                * foraging_model.Model
+                * foraging_model.FittedSessionModel)
+
+    # Add fitted params
+    q_result *= q_result.aggr(foraging_model.FittedSessionModel.Param * foraging_model.ModelParam,
+                              fitted_param='GROUP_CONCAT(ROUND(fitted_value,2) SEPARATOR ", ")')
+    results = pd.DataFrame(q_result.fetch())
+    results['para_notation_with_best_fit'] = [f'<{id}> {name}\n({value})' for id, name, value in
+                                              results[['model_id', 'model_notation', 'fitted_param']].values]
+
+    # Sort if necessary
+    if sort:
+        results.sort_values(by=[sort], ascending=sort != 'cross_valid_accuracy_test', ignore_index=True, inplace=True)
+
+    return results, q_model_comparison
