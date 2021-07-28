@@ -519,19 +519,23 @@ class PeriodForaging(dj.Lookup):
     period: varchar(30)
     ---
     -> TrialEventType.proj(start_event_type='trial_event_type')
-    start_trial_offset=0: smallint  # see psth_foraging.AlignType.trial_offset 
+    start_trial_shift=0: smallint  # see psth_foraging.AlignType.trial_offset 
     start_time_shift: float  # (s) any time-shift amount with respect to the start_event_type
     -> TrialEventType.proj(end_event_type='trial_event_type')
-    end_trial_offset=0: smallint   # see psth_foraging.AlignType.trial_offset 
+    end_trial_shift=0: smallint   # see psth_foraging.AlignType.trial_offset 
     end_time_shift: float    # (s) any time-shift amount with respect to the end_event_type
     """
 
-    contents = [('iti', 'trialend', 0, 0, 'bitcodestart', 1, 0),  # To be precise, should use 'zaberstart'??
+    contents = [('iti_all', 'trialend', 0, 0, 'bitcodestart', 1, 0),  # To be precise, should use 'zaberstart'??
+                ('iti_first_2', 'trialend', 0, 0, 'trialend', 0, 2),
+                ('iti_last_2', 'bitcodestart', 1, -2, 'bitcodestart', 1, 0),
+
                 ('delay', 'zaberready', 0, 0, 'go', 0, 0),
-                ('delay_bitcode', 'bitcodestart', 0, 0.146, 'go', 0, 0),
-                #TODO ('delay_effective')   # If early lick, from the last lick before go cue to go cue
-                ('post_choice', 'choice', 0, 0, 'trialend', 0, 0),   # Potential problem of double-dipping retraction?
+                ('go_to_end', 'go', 0, 0, 'trialend', 0, 0),
                 ('response', 'go', 0, 0, 'go', 0, 1.2),    # Is ths reasonable?
+
+                ('delay_bitcode', 'bitcodestart', 0, 0.146, 'go', 0, 0),
+                # TODO ('delay_effective')   # If early lick, from the last lick before go cue to go cue
                 ]
 
 

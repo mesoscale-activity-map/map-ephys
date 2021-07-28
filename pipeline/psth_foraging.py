@@ -3,6 +3,7 @@ from functools import partial
 from inspect import getmembers
 import numpy as np
 import datajoint as dj
+import pandas as pd
 
 from . import (lab, experiment, ephys)
 [lab, experiment, ephys]  # NOQA
@@ -400,18 +401,6 @@ class IndependentVariable(dj.Lookup):
         return contents
 
 
-@schema
-class UnitPeriodTrialFiring(dj.Computed):
-    definition = """
-    -> ephys.Unit
-    -> experiment.PeriodForaging
-    -> experiment.SessionTrial
-    ---
-    spike_count:  int
-    mean_firing_rate:  float    
-    """
-
-
 # @schema
 # class UnitPeriodSelectivity(dj.Computed):
 #     """
@@ -420,6 +409,7 @@ class UnitPeriodTrialFiring(dj.Computed):
 #     definition = """
 #     -> ephys.Unit
 #     -> experiment.PeriodForaging
+#     -> IndependentVariable
 #     ---
 #     -> Selectivity.proj(period_selectivity='selectivity')
 #     ipsi_firing_rate=0:           float  # mean firing rate of all ipsi-trials
@@ -569,3 +559,55 @@ def compute_unit_psth_and_raster(unit_key, trial_keys, align_type='go_cue', bin_
 
     return dict(bins=binning[1:], trials=trials, spikes_aligned=spikes_aligned,
                 psth=psth, psth_per_trial=psth_per_trial, raster=raster)
+
+
+def compute_unit_period_activity(unit_key, period):
+    """
+    Given unit and period, compute average firing rate over trials
+    I tried to put this in a table, but it's too slow... (too many elements)
+    @param unit_key:
+    @param period: -> experiment.PeriodForaging
+    @return: DataFrame(trial, spike_count, duration, firing_rate)
+    """
+
+    q_spike = ephys.Unit & unit_key
+    q_event = ephys.TrialEvent & unit_key
+    if not q_spike or not q_event:
+        return None
+
+    # for (the very few) sessions without zaber feedback signal, use 'bitcodestart' with manual correction
+    if period == 'delay' and \
+            not q_event & 'trial_event_type = "zaberready"':
+        period = 'delay_bitcode'
+
+    # -- Fetch global session times of given period, for each trial --
+    (start_event_type, start_trial_shift, start_time_shift,
+     end_event_type, end_trial_shift, end_time_shift) = (experiment.PeriodForaging & {'period': period}
+              ).fetch1('start_event_type', 'start_trial_shift', 'start_time_shift',
+                       'end_event_type', 'end_trial_shift', 'end_time_shift')
+    
+    start = {k['trial']: float(k['start_event_time'])
+             for k in (q_event & {'trial_event_type': start_event_type}).proj(
+            start_event_time=f'trial_event_time + {start_time_shift}').fetch(as_dict=True)}
+    end = {k['trial']: float(k['end_event_time'])
+             for k in (q_event & {'trial_event_type': end_event_type}).proj(
+            end_event_time=f'trial_event_time + {end_time_shift}').fetch(as_dict=True)}
+
+    # Handle edge effects due to trial shift
+    trials = np.array(list(start.keys()))
+    actual_trials = trials[(trials <= max(trials) - end_trial_shift) &
+                           (trials >= min(trials) - start_trial_shift)]
+
+    # -- Fetch and count spikes --
+    spikes = q_spike.fetch1('spike_times')
+    spike_counts, durations = [], []
+
+    for trial in actual_trials:
+        t_s = start[trial + start_trial_shift]
+        t_e = end[trial + end_trial_shift]
+
+        spike_counts.append(((t_s <= spikes) & (spikes < t_e)).sum())  # Much faster than sum(... & ...) (python sum on np array)!!
+        durations.append(t_e - t_s)
+
+    return {'trial': actual_trials, 'spike_counts': np.array(spike_counts),
+            'durations': np.array(durations), 'firing_rates': np.array(spike_counts) / np.array(durations)}
