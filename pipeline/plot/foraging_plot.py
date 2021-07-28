@@ -307,7 +307,7 @@ def plot_trials(df_behaviortrial,
             
     if plottype == '2lickport':
         if plot_every_choice:
-            ax1.plot(df_behaviortrial['trial'][rewarded],df_behaviortrial['trial_choice_plot'][rewarded],'k|',color='black',markersize=30,markeredgewidth=2)
+            ax1.plot(df_behaviortrial['trial'][rewarded],df_behaviortrial['trial_choice_plot'][rewarded],'|',color='black',markersize=30,markeredgewidth=2)
             ax1.plot(df_behaviortrial['trial'][unrewarded],df_behaviortrial['trial_choice_plot'][unrewarded],'|',color='gray',markersize=15,markeredgewidth=2)
         ax1.plot(df_behaviortrial['trial'],bias,'k-',label = 'choice')
         ax1.plot(df_behaviortrial['trial'],df_behaviortrial['reward_ratio'],'y-')
@@ -316,7 +316,7 @@ def plot_trials(df_behaviortrial,
     elif plottype == '3lickport':
         ax1.stackplot(np.asarray(df_behaviortrial['trial'],float),  leftchoices_filtered/allchoices_filtered ,  middlechoices_filtered/allchoices_filtered ,  rightchoices_filtered/allchoices_filtered ,colors=['r','g','b'], alpha=0.3 )
         if plot_every_choice:
-            ax1.plot(df_behaviortrial['trial'][rewarded],df_behaviortrial['trial_choice_plot'][rewarded],'k|',color='black',markersize=30,markeredgewidth=2)
+            ax1.plot(df_behaviortrial['trial'][rewarded],df_behaviortrial['trial_choice_plot'][rewarded],'|',color='black',markersize=30,markeredgewidth=2)
             ax1.plot(df_behaviortrial['trial'][unrewarded],df_behaviortrial['trial_choice_plot'][unrewarded],'|',color='gray',markersize=15,markeredgewidth=2)
         ax1.plot(df_behaviortrial['trial'],df_behaviortrial['reward_ratio_1'],'y-')
         ax1.plot(df_behaviortrial['trial'],df_behaviortrial['reward_ratio_2'],'y-')

@@ -143,7 +143,7 @@ def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
                             f' (n = {len(results)})')
 
         # -- Plot fitted choice probability etc. --
-        for idx, result in pd.concat([results.iloc[:first_n], results.iloc[-last_n:]]).iterrows():
+        for idx, result in pd.concat([results.iloc[:first_n], results.iloc[len(results)-last_n:]]).iterrows():
             right_choice_prob = (foraging_model.FittedSessionModel.TrialLatentVariable
                                 & dict(result) & 'water_port="right"').fetch('choice_prob')
             ax.plot(np.arange(0, n_trials), right_choice_prob, linewidth=max(1.5 - 0.3 * idx, 0.5),
@@ -186,7 +186,7 @@ def plot_session_lightweight(fake_data, fitted_data=None, smooth_factor=5, base_
 
     # Rewarded trials
     ax.plot(np.nonzero(rewarded_trials)[0], 0.5 + (choice_history[0, rewarded_trials] - 0.5) * 1.4,
-            'k|', color='black', markersize=20, markeredgewidth=2)
+            '|', color='black', markersize=20, markeredgewidth=2)
 
     # Unrewarded trials
     ax.plot(np.nonzero(unrewarded_trials)[0], 0.5 + (choice_history[0, unrewarded_trials] - 0.5) * 1.4,
