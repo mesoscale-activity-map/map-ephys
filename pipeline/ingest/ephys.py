@@ -1070,6 +1070,7 @@ def read_bitcode(bitcode_dir, h2o, skey):
             if rig == 'RRig-MTL' and len(trial_start_times) == len(behav_trials):
                 # for MTL rig, this is glitch in the recording system
                 # if the number of trial matches with behavior, then this is a 1-to-1 mapping
+                log.info('.... Unable to read bitcode! Recognize RRig-MTL session with matching number of behavior and ephys trials, using one-to-one trial mapping')
                 ephys_bitcodes = behavior_bitcodes
                 trial_numbers = behav_trials
                 ephys_trial_ref_times = trial_start_times + go_times
@@ -1077,7 +1078,7 @@ def read_bitcode(bitcode_dir, h2o, skey):
             else:
                 raise FileNotFoundError('Generate bitcode failed. No bitcode file'
                                         ' "*.XA_0_0.txt"'
-                                        ' for found in {}'.format(bitcode_dir))
+                                        ' found in {}'.format(bitcode_dir))
         else:
             ephys_bitcodes, trial_numbers, ephys_trial_start_times, ephys_trial_ref_times = [], [], [], []
             for bitcode, start_time in zip(bitcodes, trial_start_times):
