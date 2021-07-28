@@ -8,6 +8,7 @@ from . import (lab, experiment, ephys)
 [lab, experiment, ephys]  # NOQA
 
 from . import get_schema_name, dict_to_hash
+from pipeline import foraging_model
 
 schema = dj.schema(get_schema_name('psth_foraging'))
 log = logging.getLogger(__name__)
@@ -366,6 +367,40 @@ class AlignType(dj.Lookup):
 
 
 @schema
+class IndependentVariable(dj.Lookup):
+    """
+    Define independent variables over trial to generate psth or design matrix of regression
+    """
+    definition = """
+    var_name:  varchar(50)
+    ---
+    desc:   varchar(200)
+    """
+
+    @property
+    def contents(self):
+        contents = [
+            # Model-independent (trial facts)
+            ['choice_lr', 'left (0) or right (1)'],
+            ['choice_ic', 'ipsi (0) or contra (1)'],
+            ['reward', 'miss (0) or hit (1)'],
+
+            # Model-dependent (latent variables)
+            ['relative_action_value_lr', 'relative action value (Q_r - Q_l)'],
+            ['relative_action_value_ic', 'relative action value (Q_contra - Q_ipsi)'],
+            ['total_action_value', 'total action value (Q_r + Q_l)'],
+        ]
+
+        latent_vars = foraging_model.FittedSessionModel.TrialLatentVariable.heading.secondary_attributes
+
+        for side in ['left', 'right', 'ipsi', 'contra']:
+            for var in (latent_vars):
+                contents.append([f'{side}_{var}', f'{side} {var}'])
+
+        return contents
+
+
+@schema
 class UnitPeriodTrialFiring(dj.Computed):
     definition = """
     -> ephys.Unit
@@ -375,28 +410,6 @@ class UnitPeriodTrialFiring(dj.Computed):
     spike_count:  int
     mean_firing_rate:  float    
     """
-
-
-@schema
-class IndependentVariable(dj.Lookup):
-    definition = """
-    var_name:  varchar(50)
-    ---
-    desc:   varchar(200)
-    """
-    contents = [
-        ['choice_prob', 'fitted choice probability'],
-        ['action_value', 'fitted action value'],
-        ['relative_action_value', 'relative action value (Q_r - Q_l)'],
-        ['total_action_value', 'total action value (Q_r + Q_l)'],
-        ['choice', 'left or right'],
-        ['reward', 'reward or no reward']
-    ]
-
-    @classmethod
-    def get_trial_independent_variable(q_trial, ind_var):
-
-        pass
 
 
 # @schema

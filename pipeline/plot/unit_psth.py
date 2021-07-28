@@ -4,7 +4,8 @@ import datajoint as dj
 import matplotlib.pyplot as plt
 import pandas as pd
 from pipeline import psth, psth_foraging, ephys, lab, ccf, histology, experiment, foraging_model
-from pipeline.util import _get_trial_event_times, _get_ephys_trial_event_times, _get_units_hemisphere
+from pipeline.util import (_get_trial_event_times, _get_ephys_trial_event_times,
+                           _get_units_hemisphere, _get_unit_independent_variable)
 
 
 _plt_xlim = [-3, 3]
@@ -323,29 +324,8 @@ def plot_unit_psth_latent_variable_quantile(unit_key={'subject_id': 473361, 'ses
     if not ephys.TrialEvent & unit_key & 'trial_event_type = "zaberready"':
         align_types = [a + '_bitcode' if 'trial_start' in a else a for a in align_types]
 
-    hemi = _get_units_hemisphere(unit_key)
-    contra_ipsi = ['right', 'left'] if hemi == 'left' else ['left', 'right']
-
-    # Fetch predictive contra choice probabilities
-    q_lv = (foraging_model.FittedSessionModel.TrialLatentVariable
-            & unit_key
-            & {'model_id': model_id})
-
-    # Flatten latent variables to generate columns like 'left_action_value', 'right_choice_prob'
-    q_latent_variable_all = dj.U('trial') & q_lv
-    for lv in ['action_value', 'choice_prob', 'choice_kernel']:
-        for ci, lp in zip(['contra', 'ipsi'], contra_ipsi):
-            # Better way here?
-            q_latent_variable_all *= eval(f"(q_lv & {{'water_port': '{lp}'}}).proj({ci}_{lv}='{lv}', {lp}='water_port')")
-
-    # Add more combinations
-    q_latent_variable_all = q_latent_variable_all.proj(...,
-                                                       relative_action_value='contra_action_value - ipsi_action_value',
-                                                       total_action_value='contra_action_value + ipsi_action_value')
-
-    # Fetch trial number and desired latent variable
-    df = q_latent_variable_all.fetch(
-        format='frame').astype(float).reset_index()[['trial', latent_variable]]
+    # Fetch data
+    df = _get_unit_independent_variable(unit_key, var_name=latent_variable, model_id=model_id).astype(float)
 
     # Cut choice probabilities into quantiles
     if any(np.isnan(df[latent_variable])):
@@ -397,16 +377,17 @@ def plot_unit_psth_latent_variable_quantile(unit_key={'subject_id': 473361, 'ses
     ax_psth.legend(fontsize=10, ncol=2)
 
     # Add unit and model info
+    latent_var_desc = (psth_foraging.IndependentVariable & {'var_name': latent_variable}).fetch1('desc')
     unit_info = (f'{(lab.WaterRestriction & unit_key).fetch1("water_restriction_number")}, '
                  f'Session {(experiment.Session & unit_key).fetch1("session")}, {(experiment.Session & unit_key).fetch1("session_date")}, '
                  f'imec {unit_key["insertion_number"]-1}\n'
                  f'Unit #{unit_key["unit"]}, '
                  f'{(((ephys.Unit & unit_key) * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation).fetch1("annotation")}\n'
-                 f'PSTH grouped by === {latent_variable} ==='
+                 f'=== Grouped by: {latent_var_desc} ==='
                  )
     id, model_notation, desc, accuracy, n = (foraging_model.FittedSessionModel * foraging_model.Model & unit_key & {'model_id': model_id}).fetch1(
         'model_id', 'model_notation', 'desc', 'cross_valid_accuracy_test', 'n_trials')
     fig.text(0.1, 0.9, unit_info)
-    fig.text(0.4, 0.9, f'model <{id}> {model_notation}\n{desc}\n{n} trials, prediction accuracy (cross-valid) = {accuracy}')
+    fig.text(0.5, 0.9, f'model <{id}> {model_notation}\n{desc}\n{n} trials, prediction accuracy (cross-valid) = {accuracy}')
 
     return fig

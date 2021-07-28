@@ -1,5 +1,6 @@
 import numpy as np
-from . import (experiment, psth, ephys, psth_foraging)
+import datajoint as dj
+from . import (experiment, psth, ephys, psth_foraging, foraging_model)
 
 
 def _get_units_hemisphere(units):
@@ -61,8 +62,7 @@ def _get_ephys_trial_event_times(all_align_types, align_to, trial_keys):
     :param align_to: psth_foraging.AlignType(), event to align
     :param trial_keys: 
     """
-    
-    
+
     tr_events = {}
     min_len = np.inf
     for eve in all_align_types:
@@ -106,3 +106,59 @@ def _get_clustering_method(probe_insertion):
         return clustering_methods[0]
     else:
         raise ValueError(f'Found multiple clustering methods: {clustering_methods}')
+
+
+def _get_unit_independent_variable(unit_key, var_name=None, model_id=None):
+    """
+    Get independent variable over trial for a specified unit (ignored trials are skipped)
+    @param unit_key:
+    @param model_id:
+    @param var_name: -> psth_foraging.IndependentVariable
+    @return: if var_name = None, return the raw query containing all independent variables
+             else, return a DataFrame (trial, variable of interest)
+    """
+
+    if var_name is None or not any([_v in var_name for _v in ['choice', 'reward']]):
+        assert model_id is not None, 'model_id is not provided!'
+    if var_name is not None:
+        assert psth_foraging.IndependentVariable & {'var_name': var_name}, 'Invalid independent variable name!'
+
+    hemi = _get_units_hemisphere(unit_key)
+    contra, ipsi = ['right', 'left'] if hemi == 'left' else ['left', 'right']
+
+    # Get latent variables from model fitting
+    q_latent_variable = (foraging_model.FittedSessionModel.TrialLatentVariable
+                         & unit_key
+                         & {'model_id': model_id})
+
+    # Flatten latent variables to generate columns like 'left_action_value', 'right_choice_prob'
+    latent_variables = q_latent_variable.heading.secondary_attributes
+    q_latent_variable_all = dj.U('trial') & q_latent_variable
+    for lv in latent_variables:
+        for prefix, side in zip(['left_', 'right_', 'contra_', 'ipsi_'],
+                                ['left', 'right', contra, ipsi]):
+            # Better way here?
+            q_latent_variable_all *= eval(f"(q_latent_variable & {{'water_port': '{side}'}}).proj({prefix}{lv}='{lv}', {prefix}='water_port')")
+
+    # Add relative and total value
+    q_latent_variable_all = q_latent_variable_all.proj(...,
+                                                       relative_action_value_lr='right_action_value - left_action_value',
+                                                       relative_action_value_ic='contra_action_value - ipsi_action_value',
+                                                       total_action_value='contra_action_value + ipsi_action_value')
+
+    # Add choice
+    q_independent_variable = (q_latent_variable_all * experiment.WaterPortChoice).proj(...,
+                                                                                       choice='water_port',
+                                                                                       choice_lr='water_port="right"',
+                                                                                       choice_ic=f'water_port="{contra}"')
+
+    # Add reward
+    q_independent_variable = (q_independent_variable * experiment.BehaviorTrial).proj(...,
+                                                                                       reward='outcome="hit"'
+                                                                                       )
+
+    if var_name is None:
+        return q_independent_variable
+    else:
+        return q_independent_variable.fetch(
+            format='frame').reset_index()[['trial', var_name]]
