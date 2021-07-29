@@ -20,7 +20,8 @@ def populatemytables_core(arguments,runround):
 
         # psth_foraging.UnitPsth.populate(**arguments)
         
-        foraging_model.FittedSessionModel.populate(**arguments)
+        # foraging_model.FittedSessionModel.populate(**arguments)
+        psth_foraging.UnitPeriodLinearFit.populate(**arguments)
         
 def populatemytables(paralel = True, cores = 9):
     IDs = {k: v for k, v in zip(*lab.WaterRestriction().fetch('water_restriction_number', 'subject_id'))}              
