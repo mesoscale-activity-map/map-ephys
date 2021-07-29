@@ -137,7 +137,7 @@ def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
     ax = plot_session_lightweight([choice_history, reward_history, p_reward], smooth_factor=smooth_factor)
 
     # -- Plot fitted choice probability etc. --
-    for idx, result in pd.concat([results.iloc[:first_n], results.iloc[-last_n:]]).iterrows():
+    for idx, result in pd.concat([results.iloc[:first_n], results.iloc[len(results)-last_n:]]).iterrows():
         right_choice_prob = (foraging_model.FittedSessionModel.TrialLatentVariable
                             & dict(result) & 'water_port="right"').fetch('choice_prob')
         ax.plot(np.arange(0, n_trials), right_choice_prob, linewidth=max(1.5 - 0.3 * idx, 0.2),
@@ -179,14 +179,14 @@ def plot_session_lightweight(fake_data, fitted_data=None, smooth_factor=5, base_
     unrewarded_trials = np.logical_not(rewarded_trials)
 
     # == Choice trace ==
-    fig = plt.figure(figsize=(9, 4), dpi=150)
+    fig = plt.figure(figsize=(8, 3), dpi=150)
 
     ax = fig.add_subplot(111)
-    fig.subplots_adjust(left=0.1, right=0.8)
+    fig.subplots_adjust(left=0.1, right=0.7, bottom=0.05, top=0.7)
 
     # Rewarded trials
     ax.plot(np.nonzero(rewarded_trials)[0], 0.5 + (choice_history[0, rewarded_trials] - 0.5) * 1.4,
-            'k|', color='black', markersize=20, markeredgewidth=2)
+            '|', color='black', markersize=20, markeredgewidth=2)
 
     # Unrewarded trials
     ax.plot(np.nonzero(unrewarded_trials)[0], 0.5 + (choice_history[0, unrewarded_trials] - 0.5) * 1.4,

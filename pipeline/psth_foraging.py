@@ -566,7 +566,7 @@ def compute_unit_period_activity(unit_key, period):
     Given unit and period, compute average firing rate over trials
     I tried to put this in a table, but it's too slow... (too many elements)
     @param unit_key:
-    @param period: -> experiment.PeriodForaging
+    @param period: -> experiment.PeriodForaging, or arbitrary list in the same format
     @return: DataFrame(trial, spike_count, duration, firing_rate)
     """
 
@@ -581,10 +581,14 @@ def compute_unit_period_activity(unit_key, period):
         period = 'delay_bitcode'
 
     # -- Fetch global session times of given period, for each trial --
-    (start_event_type, start_trial_shift, start_time_shift,
-     end_event_type, end_trial_shift, end_time_shift) = (experiment.PeriodForaging & {'period': period}
-              ).fetch1('start_event_type', 'start_trial_shift', 'start_time_shift',
-                       'end_event_type', 'end_trial_shift', 'end_time_shift')
+    try:
+        (start_event_type, start_trial_shift, start_time_shift,
+         end_event_type, end_trial_shift, end_time_shift) = (experiment.PeriodForaging & {'period': period}
+                  ).fetch1('start_event_type', 'start_trial_shift', 'start_time_shift',
+                           'end_event_type', 'end_trial_shift', 'end_time_shift')
+    except:
+        (start_event_type, start_trial_shift, start_time_shift,
+         end_event_type, end_trial_shift, end_time_shift) = period
     
     start = {k['trial']: float(k['start_event_time'])
              for k in (q_event & {'trial_event_type': start_event_type}).proj(
