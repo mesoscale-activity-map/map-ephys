@@ -390,6 +390,7 @@ class IndependentVariable(dj.Lookup):
             ['relative_action_value_lr', 'relative action value (Q_r - Q_l)'],
             ['relative_action_value_ic', 'relative action value (Q_contra - Q_ipsi)'],
             ['total_action_value', 'total action value (Q_r + Q_l)'],
+            ['rpe', 'outcome - Q_chosen']
         ]
 
         latent_vars = foraging_model.FittedSessionModel.TrialLatentVariable.heading.secondary_attributes

@@ -108,20 +108,14 @@ def _get_clustering_method(probe_insertion):
         raise ValueError(f'Found multiple clustering methods: {clustering_methods}')
 
 
-def _get_unit_independent_variable(unit_key, var_name=None, model_id=None):
+def _get_unit_independent_variable(unit_key, model_id, var_name=None):
     """
     Get independent variable over trial for a specified unit (ignored trials are skipped)
     @param unit_key:
     @param model_id:
-    @param var_name: -> psth_foraging.IndependentVariable
-    @return: if var_name = None, return the raw query containing all independent variables
-             else, return a DataFrame (trial, variable of interest)
+    @param var_name
+    @return: DataFrame (trial, variables)
     """
-
-    if var_name is None or not any([_v in var_name for _v in ['choice', 'reward']]):
-        assert model_id is not None, 'model_id is not provided!'
-    if var_name is not None:
-        assert psth_foraging.IndependentVariable & {'var_name': var_name}, 'Invalid independent variable name!'
 
     hemi = _get_units_hemisphere(unit_key)
     contra, ipsi = ['right', 'left'] if hemi == 'left' else ['left', 'right']
@@ -153,12 +147,18 @@ def _get_unit_independent_variable(unit_key, var_name=None, model_id=None):
                                                                                        choice_ic=f'water_port="{contra}"')
 
     # Add reward
-    q_independent_variable = (q_independent_variable * experiment.BehaviorTrial).proj(...,
-                                                                                       reward='outcome="hit"'
-                                                                                       )
+    q_independent_variable = (q_independent_variable * experiment.BehaviorTrial.proj('outcome')).proj(...,
+                                                                                                       reward='outcome="hit"'
+                                                                                                       )
 
-    if var_name is None:
-        return q_independent_variable
-    else:
-        return q_independent_variable.fetch(
-            format='frame').reset_index()[['trial', var_name]]
+    df = q_independent_variable.fetch(format='frame', order_by='trial').reset_index()
+    
+    # Compute RPE
+    df['rpe'] = np.nan
+    df['rpe'][0] = df.reward[0]
+    for side in ['left', 'right']:
+        _idx = df[(df.choice == side) & (df.trial > 1)].index
+        df.rpe.iloc[_idx] = df.reward.iloc[_idx] - df[f'{side}_action_value'].iloc[_idx - 1].values
+
+
+    return df if var_name is None else df[var_name].values
