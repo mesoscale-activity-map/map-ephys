@@ -4,12 +4,14 @@ from inspect import getmembers
 import numpy as np
 import datajoint as dj
 import pandas as pd
+import statsmodels.api as sm
 
 from . import (lab, experiment, ephys)
 [lab, experiment, ephys]  # NOQA
 
 from . import get_schema_name, dict_to_hash
 from pipeline import foraging_model
+from pipeline.util import _get_unit_independent_variable
 
 schema = dj.schema(get_schema_name('psth_foraging'))
 log = logging.getLogger(__name__)
@@ -402,96 +404,138 @@ class IndependentVariable(dj.Lookup):
         return contents
 
 
-# @schema
-# class UnitPeriodSelectivity(dj.Computed):
-#     """
-#     Selectivity computed from psth_foraging.UnitPeriodTrialSpikeCount and TrialIndependentVariable
-#     """
-#     definition = """
-#     -> ephys.Unit
-#     -> experiment.PeriodForaging
-#     -> IndependentVariable
-#     ---
-#     -> Selectivity.proj(period_selectivity='selectivity')
-#     ipsi_firing_rate=0:           float  # mean firing rate of all ipsi-trials
-#     contra_firing_rate=0:         float  # mean firing rate of all contra-trials
-#     p_value=1:                    float  # all trial spike rate t-test p-value
-#     """
-#
-#     alpha = 0.05  # default alpha value
-#
-#     key_source = (experiment.Period
-#                   * (ephys.Unit & ephys.ProbeInsertion.InsertionLocation & 'unit_quality != "all"')
-#                   & foraging_sessions)
-#
-#     def make(self, key):
-#         '''
-#         Compute Period Selectivity for a given unit.
-#         '''
-#         log.debug('PeriodSelectivity.make(): key: {}'.format(key))
-#
-#         hemi = _get_units_hemisphere(key)
-#
-#         # retrieving the spikes of interest,
-#         spikes_q = ((ephys.Unit.TrialSpikes & key)
-#                     * (experiment.BehaviorTrial
-#                        & {'task': 'audio delay',
-#                           'early_lick': 'no early',
-#                           'outcome': 'hit',
-#                           'free_water': 0,
-#                           'auto_water': 0})
-#                     & (experiment.TrialEvent & 'trial_event_type = "delay"' & 'duration = 1.2')
-#                     - experiment.PhotostimEvent)
-#
-#         if not spikes_q:  # no spikes found
-#             self.insert1({**key, 'period_selectivity': 'non-selective'})
-#             return
-#
-#         # retrieving event times
-#         start_event, start_tshift, end_event, end_tshift = (experiment.Period & key).fetch1(
-#             'start_event_type', 'start_time_shift', 'end_event_type', 'end_time_shift')
-#         start_event_q = {k['trial']: float(k['start_event_time'])
-#                          for k in (experiment.TrialEvent & key & {'trial_event_type': start_event}).proj(
-#             start_event_time=f'trial_event_time + {start_tshift}').fetch(as_dict=True)}
-#         end_event_q = {k['trial']: float(k['end_event_time'])
-#                        for k in (experiment.TrialEvent & key & {'trial_event_type': end_event}).proj(
-#             end_event_time=f'trial_event_time + {end_tshift}').fetch(as_dict=True)}
-#         cue_event_q = {k['trial']: float(k['trial_event_time'])
-#                        for k in (experiment.TrialEvent & key & {'trial_event_type': 'go'}).fetch(as_dict=True)}
-#
-#         # compute spike rate during the period-of-interest for each trial
-#         freq_i, freq_c = [], []
-#         for trial, trial_instruct, spike_times in zip(*spikes_q.fetch('trial', 'trial_instruction', 'spike_times')):
-#             start_time = start_event_q[trial] - cue_event_q[trial]
-#             stop_time = end_event_q[trial] - cue_event_q[trial]
-#             spk_rate = np.logical_and(spike_times >= start_time, spike_times < stop_time).sum() / (stop_time - start_time)
-#             if hemi == trial_instruct:
-#                 freq_i.append(spk_rate)
-#             else:
-#                 freq_c.append(spk_rate)
-#
-#         # and testing for selectivity.
-#         t_stat, pval = sc_stats.ttest_ind(freq_i, freq_c, equal_var=True)
-#         # try:
-#         #     _stat, pval = sc_stats.mannwhitneyu(freq_i, freq_c)
-#         # except ValueError:
-#         #     pval = np.nan
-#
-#         freq_i_m = np.average(freq_i)
-#         freq_c_m = np.average(freq_c)
-#
-#         pval = 1 if np.isnan(pval) else pval
-#         if pval > self.alpha:
-#             pref = 'non-selective'
-#         else:
-#             pref = ('ipsi-selective' if freq_i_m > freq_c_m
-#                     else 'contra-selective')
-#
-#         self.insert1({**key, 'p_value': pval,
-#                       'period_selectivity': pref,
-#                       'ipsi_firing_rate': freq_i_m,
-#                       'contra_firing_rate': freq_c_m})
+@schema
+class LinearModel(dj.Lookup):
+    """
+    Define multivariate linear models for PeriodSelectivity fitting
+    """
+    definition = """
+    multi_linear_model: varchar(30)
+    ---
+    if_intercept: tinyint   # Whether intercept is included
+    """
 
+    class X(dj.Part):
+        definition = """
+        -> master
+        -> IndependentVariable
+        """
+
+    @classmethod
+    def load(cls):
+        contents = [
+            ['Q_l + Q_r + rpe', 1, ['left_action_value', 'right_action_value', 'rpe']],
+        ]
+
+        for m in contents:
+            cls.insert1(m[:2], skip_duplicates=True)
+            for iv in m[2]:
+                cls.X.insert1([m[0], iv], skip_duplicates=True)
+
+
+@schema
+class LinearModelPeriodToFit(dj.Lookup):
+    """
+    Subset of experiment.PeriodForaging (or adding sliding window here in the future?)
+    """
+    definition = """
+    -> experiment.PeriodForaging
+    """
+
+    contents = [
+        ('before_2', ), ('delay', ), ('go_to_end', ), ('go_1.2', ),
+        ('iti_all', ), ('iti_first_2', ), ('iti_last_2', )
+    ]
+
+
+@schema
+class LinearModelBehaviorModelToFit(dj.Lookup):
+    definition = """
+    behavior_model:  varchar(30)    # If 'best_aic' etc, the best behavioral model for each session; otherwise --> Model.model_id
+    """
+    contents = [['best_aic',]]
+
+
+@schema
+class UnitPeriodLinearFit(dj.Computed):
+    definition = """
+    -> ephys.Unit
+    -> LinearModelPeriodToFit
+    -> LinearModelBehaviorModelToFit
+    -> LinearModel
+    ---
+    actual_behavior_model:   int
+    model_r2=Null:  float   # r square
+    model_r2_adj=Null:   float  # r square adj.
+    model_p=Null:   float
+    """
+
+    class Param(dj.Part):
+        definition = """
+        -> master
+        -> LinearModel.X
+        ---
+        beta=Null: float
+        std_err=Null: float
+        p=Null:    float
+        t=Null:    float  #  t statistic
+
+        """
+        
+    def make(self, key):
+        # -- Fetech data --
+        period, behavior_model = key['period'], key['behavior_model']
+
+        # Parse period
+        if period in ['delay'] and not ephys.TrialEvent & key & 'trial_event_type = "zaberready"':
+            period = period + '_bitcode'  # Manually correction of bitcodestart to zaberready, if necessary
+
+        # Parse behavioral model_id
+        if behavior_model.isnumeric():
+            model_id = int(behavior_model)
+        else:
+            model_id = (foraging_model.FittedSessionModelComparison.BestModel &
+                        key & 'model_comparison_idx=0').fetch1(behavior_model)
+
+        # Parse independent variable
+        independent_variables = (LinearModel.X & key).fetch('var_name')
+        if_intercept = (LinearModel & key).fetch1('if_intercept')
+
+        # Get data
+        period_activity = compute_unit_period_activity(key, period)
+        all_iv = _get_unit_independent_variable(key, model_id=model_id)
+
+        # TODO Align ephys event with behavior using bitcode! (and save raw bitcodes)
+        trial = all_iv.trial  # Without ignored trials
+        trial_with_ephys = trial <= max(period_activity['trial'])
+        trial = trial[trial_with_ephys]  # Truncate behavior trial to max ephys length (this assumes the first trial is aligned, see ingest.ephys)
+        all_iv = all_iv[trial_with_ephys]  # Also truncate all ivs
+        firing = period_activity['firing_rates'][trial - 1]  # Align ephys trial and model trial (e.g., no ignored trials in model fitting)
+
+        # -- Fit --
+        y = pd.DataFrame({f'{period} firing': firing})
+        x = all_iv[independent_variables].astype(float)
+        model = sm.OLS(y, sm.add_constant(x) if if_intercept else x)
+        model_fit = model.fit()
+
+        # -- Insert --
+        self.insert1({**key,
+                      'model_r2': model_fit.rsquared,
+                      'model_r2_adj': model_fit.rsquared_adj,
+                      'model_p': model_fit.f_pvalue,
+                      'actual_behavior_model': model_id})
+
+        for para in [p for p in model.exog_names if p!='const']:
+            self.Param.insert1({**key,
+                                'var_name': para,
+                                'beta': model_fit.params[para],
+                                'std_err': model_fit.bse[para],
+                                'p': model_fit.pvalues[para],
+                                't': model_fit.tvalues[para]
+                                })
+
+
+# ============= Helpers =============
 
 def compute_unit_psth_and_raster(unit_key, trial_keys, align_type='go_cue', bin_size=0.04):
     """

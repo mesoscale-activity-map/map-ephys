@@ -418,8 +418,13 @@ def plot_unit_period_tuning(unit_key={'subject_id': 473361, 'session': 47, 'inse
     if model_id is None:
         model_id = (foraging_model.FittedSessionModelComparison.BestModel & unit_key & 'model_comparison_idx=0').fetch1('best_aic')
     all_iv = _get_unit_independent_variable(unit_key, model_id=model_id)
-    trial = all_iv.trial
-    firing = period_activity['firing_rates'][all_iv.trial - 1]   # Align ephys trial and model trial (e.g., no ignored trials in model fitting)
+
+    #TODO Align ephys event with behavior using bitcode! (and save raw bitcodes)
+    trial = all_iv.trial   # Without ignored trials
+    trial_with_ephys = trial <= max(period_activity['trial'])
+    trial = trial[trial_with_ephys]   # Truncate behavior trial to max ephys length (this assumes the first trial is aligned, see ingest.ephys)
+    all_iv = all_iv[trial_with_ephys]  # Also truncate all ivs
+    firing = period_activity['firing_rates'][trial - 1]   # Align ephys trial and model trial (e.g., no ignored trials in model fitting)
 
     # -- Plot all variables over trial --
     fig1, axs = plt.subplots(len(independent_variable) + 2, 1, sharex=True, dpi=200, figsize=(11, 14))
@@ -485,7 +490,7 @@ def linear_fit(y, x, intercept=True, if_plot=False):
             ax.set_title(label=f'$p$ = {p:.2g}, $t$ = {t:.3g}', fontsize=13)
             ax.set(xlabel=xname, ylabel=model.endog_names)
             ax.set_aspect(1.0 / ax.get_data_ratio(), adjustable='box')
-            ax.legend(handlelength=0, handletextpad=0, fancybox=True, fontsize=10)
+            ax.legend(handlelength=0, handletextpad=0, fancybox=True, fontsize=10, loc='upper right')
 
         axs[0].set_title(f'Multivariate linear model: $r^2$ = {model_fit.rsquared_adj:.2g}\n' + axs[0].get_title(), fontsize=13)
         for a in axs: a.label_outer()

@@ -526,17 +526,19 @@ class PeriodForaging(dj.Lookup):
     end_time_shift: float    # (s) any time-shift amount with respect to the end_event_type
     """
 
-    contents = [('iti_all', 'trialend', 0, 0, 'bitcodestart', 1, 0),  # To be precise, should use 'zaberstart'??
-                ('iti_first_2', 'trialend', 0, 0, 'trialend', 0, 2),
-                ('iti_last_2', 'bitcodestart', 1, -2, 'bitcodestart', 1, 0),
+    contents = [
+        ('before_2', 'bitcodestart', 0, -2, 'bitcodestart', 0, 0),  # = iti_last_2 of the *last* trial
+        ('delay', 'zaberready', 0, 0, 'go', 0, 0),
+        ('go_to_end', 'go', 0, 0, 'trialend', 0, 0),
+        ('go_1.2', 'go', 0, 0, 'go', 0, 1.2),  # Is ths reasonable?
 
-                ('delay', 'zaberready', 0, 0, 'go', 0, 0),
-                ('go_to_end', 'go', 0, 0, 'trialend', 0, 0),
-                ('response', 'go', 0, 0, 'go', 0, 1.2),    # Is ths reasonable?
+        ('iti_all', 'trialend', 0, 0, 'bitcodestart', 1, 0),  # To be precise, should use 'zaberstart'??
+        ('iti_first_2', 'trialend', 0, 0, 'trialend', 0, 2),
+        ('iti_last_2', 'bitcodestart', 1, -2, 'bitcodestart', 1, 0),
 
-                ('delay_bitcode', 'bitcodestart', 0, 0.146, 'go', 0, 0),
-                # TODO ('delay_effective')   # If early lick, from the last lick before go cue to go cue
-                ]
+        ('delay_bitcode', 'bitcodestart', 0, 0.146, 'go', 0, 0),
+        # TODO ('delay_effective')   # If early lick, from the last lick before go cue to go cue
+    ]
 
 
 # ============================= PROJECTS ==================================================
