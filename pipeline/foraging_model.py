@@ -409,12 +409,16 @@ def get_session_history(session_key, remove_ignored=True):
     # TODO: session QC (warm-up and decreased motivation etc.)
 
     # Formatting
-    _choice = (q_choice_outcome.fetch('choice') == 'right').astype(int)  # 0: left, 1: right
+    # 0: left, 1: right, np.nan: ignored
+    _choice = q_choice_outcome.fetch('choice')
+    _choice[_choice == 'left'] = 0
+    _choice[_choice == 'right'] = 1
+
     _reward = q_choice_outcome.fetch('outcome') == 'hit'
     reward_history = np.zeros([2, len(_reward)])  # .shape = (2, N trials)
     for c in (0, 1):
         reward_history[c, _choice == c] = (_reward[_choice == c] == True).astype(int)
-    choice_history = np.array([_choice])  # .shape = (1, N trials)
+    choice_history = np.array([_choice]).astype(float)  # .shape = (1, N trials)
 
     # p_reward (optional)
     q_p_reward = q_choice_outcome.proj() * experiment.SessionBlock.WaterPortRewardProbability & session_key

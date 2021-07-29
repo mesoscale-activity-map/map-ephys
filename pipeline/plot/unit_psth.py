@@ -2,10 +2,15 @@
 import numpy as np
 import datajoint as dj
 import matplotlib.pyplot as plt
+import seaborn as sns
 import pandas as pd
+import statsmodels.api as sm
+from scipy.stats import pearsonr
+
 from pipeline import psth, psth_foraging, ephys, lab, ccf, histology, experiment, foraging_model
 from pipeline.util import (_get_trial_event_times, _get_ephys_trial_event_times,
                            _get_units_hemisphere, _get_unit_independent_variable)
+from . import foraging_model_plot
 
 
 _plt_xlim = [-3, 3]
@@ -391,3 +396,98 @@ def plot_unit_psth_latent_variable_quantile(unit_key={'subject_id': 473361, 'ses
     fig.text(0.5, 0.9, f'model <{id}> {model_notation}\n{desc}\n{n} trials, prediction accuracy (cross-valid) = {accuracy}')
 
     return fig
+
+
+def plot_unit_period_tuning(unit_key={'subject_id': 473361, 'session': 47, 'insertion_number': 1, 'clustering_method': 'kilosort2', 'unit': 541},
+                            period='iti_all',
+                            independent_variable = ['left_action_value', 'right_action_value', 'rpe'],
+                            model_id=None):
+    """
+    Plot multivariate linear regression of firing rate of given unit, in given period, using given independent variables
+    @param unit_key:
+    @param period:
+    @param independent_variable:
+    @param model_id: if None, use the best aic model in all models
+    @return: figure
+    """
+
+    # Period activity
+    period_activity = psth_foraging.compute_unit_period_activity(unit_key, period)
+
+    # Latent variables
+    if model_id is None:
+        model_id = (foraging_model.FittedSessionModelComparison.BestModel & unit_key & 'model_comparison_idx=0').fetch1('best_aic')
+    all_iv = _get_unit_independent_variable(unit_key, model_id=model_id)
+    trial = all_iv.trial
+    firing = period_activity['firing_rates'][all_iv.trial - 1]   # Align ephys trial and model trial (e.g., no ignored trials in model fitting)
+
+    # -- Plot all variables over trial --
+    fig1, axs = plt.subplots(len(independent_variable) + 2, 1, sharex=True, dpi=200, figsize=(11, 14))
+    plt.subplots_adjust(right=0.8, hspace=0.2)
+
+    # Choice history (including ignored trials)
+    foraging_model_plot.plot_session_fitted_choice(unit_key, model_id=model_id, ax=axs[0], remove_ignored=False)
+
+    # Period firing rate
+    axs[1].plot(trial, firing, 'o-', ms=5)
+    axs[1].set_title(f'Mean firing rate in epoch: {period} (spikes / s)')
+
+    # Independent variables
+    for ax, iv in zip(axs[2:], independent_variable):
+        ax.plot(trial, all_iv[iv], 'k')
+        ax.set_title(iv)
+
+    for ax in axs.flat: ax.label_outer()
+
+    # -- Plot linear regression --
+    y = pd.DataFrame({f'{period} firing': firing})
+    x = all_iv[independent_variable].astype(float)
+    result, fig2 = linear_fit(y, x, if_plot=True)
+
+    return fig1, fig2
+
+
+def linear_fit(y, x, intercept=True, if_plot=False):
+    """
+    Simple linear regression Y = [b0] + b1 * x1 + b2 * x2 + ...
+    @param y: samples
+    @param x: [samples * independent variables] or DataFrame
+    @param intercept:
+    @param if_plot: whether if_plot
+    @return: Dict
+    """
+    model = sm.OLS(y, sm.add_constant(x) if intercept else x)
+    model_fit = model.fit()
+
+    if if_plot:
+        n_x = x.shape[1]
+
+        fig = plt.figure(dpi=150)
+        axs = np.atleast_1d(fig.subplots(1, n_x, sharey=True))
+        for ax, xx, xname, para, p, t in zip(axs,
+                                             model.exog[:, int(intercept):].T,
+                                             model.exog_names[int(intercept):],
+                                             model_fit.params[int(intercept):],
+                                             model_fit.pvalues[int(intercept):],
+                                             model_fit.tvalues[int(intercept):]):
+
+            # ax.plot(xx, y, 'o')
+            # ax.plot(np.sort(xx), model_fit.predict()[np.argsort(xx)], 'k-', lw=5 if p < 0.05 else 0.5, label=f'$p$ = {p:.2g}\n'
+            #                                                                         f'$t$ = {t:.3g}\n'
+            #                                                                         f'$r^2$ = {model_fit.rsquared_adj:.2g}')
+            (r_pearson, p_pearson) = pearsonr(xx, y.values.flatten())
+            sns.regplot(xx, y, ax=ax, truncate=False,
+                        scatter_kws={'alpha': 0.3, 's': 20},
+                        line_kws={'lw': 3, 'ls': '-'} if p < 0.05 else {'lw': 1, 'ls': ':'},
+                        label=f'Pearson $r$ = {r_pearson:.3g}\n$p$ = {p_pearson:.2g}'
+                        )
+
+            ax.set_title(label=f'$p$ = {p:.2g}, $t$ = {t:.3g}', fontsize=13)
+            ax.set(xlabel=xname, ylabel=model.endog_names)
+            ax.set_aspect(1.0 / ax.get_data_ratio(), adjustable='box')
+            ax.legend(handlelength=0, handletextpad=0, fancybox=True, fontsize=10)
+
+        axs[0].set_title(f'Multivariate linear model: $r^2$ = {model_fit.rsquared_adj:.2g}\n' + axs[0].get_title(), fontsize=13)
+        for a in axs: a.label_outer()
+
+    return dict(r_2_adj=model_fit.rsquared_adj, p=model_fit.pvalues, t=model_fit.tvalues, para=model_fit.params), fig
