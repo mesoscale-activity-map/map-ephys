@@ -485,8 +485,8 @@ def plot_training_summary(use_days_from_start=False):
     # highlight = {('FOR01', 'FOR02', 'FOR03', 'FOR04'): dict(color='r'),
     #               ('HH01', 'HH04', 'HH06', 'HH07'): dict(color='b'),
     #               }
-    highlight = {('HH08', 'HH11'): dict(marker='.'),
-                  ('HH12', 'HH13'): dict(marker='o')
+    highlight = {('HH09'): dict(marker='o'),
+                #   ('HH12', 'HH13'): dict(marker='o')
                   }
     
     fig1 = plt.figure(figsize=(20,12))

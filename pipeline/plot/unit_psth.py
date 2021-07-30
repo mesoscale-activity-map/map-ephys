@@ -400,7 +400,7 @@ def plot_unit_psth_latent_variable_quantile(unit_key={'subject_id': 473361, 'ses
 
 def plot_unit_period_tuning(unit_key={'subject_id': 473361, 'session': 47, 'insertion_number': 1, 'clustering_method': 'kilosort2', 'unit': 541},
                             period='iti_all',
-                            independent_variable = ['left_action_value', 'right_action_value', 'rpe'],
+                            independent_variable = ['contra_action_value', 'ipsi_action_value', 'rpe'],
                             model_id=None):
     """
     Plot multivariate linear regression of firing rate of given unit, in given period, using given independent variables

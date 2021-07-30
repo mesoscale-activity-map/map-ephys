@@ -425,6 +425,8 @@ class LinearModel(dj.Lookup):
     def load(cls):
         contents = [
             ['Q_l + Q_r + rpe', 1, ['left_action_value', 'right_action_value', 'rpe']],
+            ['Q_c + Q_i + rpe', 1, ['contra_action_value', 'ipsi_action_value', 'rpe']],
+            ['Q_rel + Q_tot + rpe', 1, ['relative_action_value_ic', 'total_action_value', 'rpe']]
         ]
 
         for m in contents:
