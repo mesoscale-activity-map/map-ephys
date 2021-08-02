@@ -1,4 +1,4 @@
-
+import logging
 import datajoint as dj
 import numpy as np
 import pathlib
@@ -9,6 +9,9 @@ from . import get_schema_name
 schema = dj.schema(get_schema_name('experiment'))
 
 ephys = dj.create_virtual_module('ephys', get_schema_name('ephys'))  # avoid circular dependency
+
+
+log = logging.getLogger(__name__)
 
 
 @schema
@@ -561,6 +564,18 @@ def extract_nidq_trial_data(session_key, channel):
     behav_trials, behavior_bitcodes = (TrialNote
                                        & {**session_key, 'trial_note_type': 'bitcode'}).fetch(
         'trial', 'trial_note', order_by='trial')
+
+    if ephys_bitcodes is None:
+        # no bitcodes (the nidq.XA.txt file for bitcode is not available)
+        if (Session & session_key).fetch1('rig') == 'RRig-MTL' and len(trial_start_times) == len(behav_trials):
+            # for MTL rig, this is glitch in the recording system
+            # if the number of trial matches with behavior, then this is a 1-to-1 mapping
+            log.info('.... Unable to read bitcode! Recognize RRig-MTL session with matching number of behavior and ephys trials, using one-to-one trial mapping')
+            ephys_bitcodes = behavior_bitcodes
+        else:
+            raise FileNotFoundError('Generate bitcode failed. No bitcode file'
+                                    ' "*.XA_0_0.txt"'
+                                    ' found in {}'.format(session_ephys_dir))
 
     chan_list = [channel]
     breathing_data, sampling_rate = ephys_ingest.read_SGLX_bin(nidq_bin_fp, chan_list)
