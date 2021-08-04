@@ -572,7 +572,7 @@ class ArchivedClustering(dj.Imported):
         spike_times : blob@archive_store  # (s) from the start of the first data point used in clustering
         spike_sites : blob@archive_store  # array of electrode associated with each spike
         spike_depths : blob@archive_store # (um) array of depths associated with each spike
-        trial_spike : blob@archive_store  # array of trial numbering per spike - same size as spike_times
+        trial_spike=null: blob@archive_store  # array of trial numbering per spike - same size as spike_times
         waveform : blob@archive_store     # average spike waveform  
         """
 

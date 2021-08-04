@@ -1720,7 +1720,7 @@ def extend_ephys_ingest(session_key):
                 return
 
 
-def archive_ingested_clustering_results(key):
+def archive_ingested_clustering_results(key, archive_trial_spike=False):
     """
     The input-argument "key" should be at the level of ProbeInsertion or its anscestor.
 
@@ -1767,28 +1767,30 @@ def archive_ingested_clustering_results(key):
     if is_archived:
         log.info('This set of clustering results has already been archived, skip archiving...')
     else:
-        # preparing spike_times and trial_spike
-        tr_no, tr_start = (experiment.SessionTrial & key).fetch(
-            'trial', 'start_time', order_by='trial')
-        tr_stop = np.append(tr_start[1:], np.inf)
+        if archive_trial_spike:
+            # preparing spike_times and trial_spike
+            tr_no, tr_start = (experiment.SessionTrial & key).fetch(
+                'trial', 'start_time', order_by='trial')
+            tr_stop = np.append(tr_start[1:], np.inf)
 
         # units
         archived_units = []
-        for units in q_archived_units:
+        for q_units in q_archived_units:
             # recompute trial_spike
             log.info('Archiving {} units'.format(len(units)))
-            units = units.fetch(as_dict=True)
-            for unit in tqdm(units):
-                after_start = unit['spike_times'] >= tr_start[:, None]
-                before_stop = unit['spike_times'] <= tr_stop[:, None]
-                in_trial = ((after_start & before_stop) * tr_no[:, None]).sum(axis=0)
-                unit['trial_spike'] = np.where(in_trial == 0, np.nan, in_trial).astype(int)
-            # for unit in tqdm(units):
-            #     trial_spike = np.full_like(unit['spike_times'], np.nan)
-            #     for tr, tstart, tstop in zip(tr_no, tr_start, tr_stop):
-            #         trial_idx = np.where((unit['spike_times'] >= tstart) & (unit['spike_times'] <= tstop))
-            #         trial_spike[trial_idx] = tr
-            #     unit['trial_spike'] = trial_spike
+            units = q_units.fetch(as_dict=True)
+            if archive_trial_spike:
+                for unit in tqdm(units):
+                    after_start = unit['spike_times'] >= tr_start[:, None]
+                    before_stop = unit['spike_times'] <= tr_stop[:, None]
+                    in_trial = ((after_start & before_stop) * tr_no[:, None]).sum(axis=0)
+                    unit['trial_spike'] = np.where(in_trial == 0, np.nan, in_trial).astype(int)
+                # for unit in tqdm(units):
+                #     trial_spike = np.full_like(unit['spike_times'], np.nan)
+                #     for tr, tstart, tstop in zip(tr_no, tr_start, tr_stop):
+                #         trial_idx = np.where((unit['spike_times'] >= tstart) & (unit['spike_times'] <= tstop))
+                #         trial_spike[trial_idx] = tr
+                #     unit['trial_spike'] = trial_spike
             archived_units.extend(units)
 
     def copy_and_delete():
