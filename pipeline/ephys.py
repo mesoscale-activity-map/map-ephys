@@ -1,5 +1,6 @@
 import datajoint as dj
 import numpy as np
+import pathlib
 from scipy.interpolate import CubicSpline
 from scipy import signal
 from scipy.stats import poisson
@@ -232,6 +233,7 @@ class ActionEvent(dj.Imported):
     action_event_time : float  # (s) from session start (global time)
     """
 
+
 @schema
 class UnitNote(dj.Imported):
     definition = """
@@ -244,18 +246,24 @@ class UnitNote(dj.Imported):
     key_source = ProbeInsertion & Unit.proj()
 
     def make(self, key):
-        from pipeline.ingest import ephys as ephys_ingest  # import here to avoid circular imports
+        # import here to avoid circular imports
+        from pipeline.ingest import ephys as ephys_ingest
+        from pipeline.util import _get_clustering_method
 
         ephys_file = (ephys_ingest.EphysIngest.EphysFile.proj(
             insertion_number='probe_insertion_number') & key).fetch1('ephys_file')
         rigpaths = ephys_ingest.get_ephys_paths()
         for rigpath in rigpaths:
+            rigpath = pathlib.Path(rigpath)
             if (rigpath / ephys_file).exists():
                 session_ephys_dir = rigpath / ephys_file
                 break
         else:
             raise FileNotFoundError(
                 'Error - No ephys data directory found for {}'.format(ephys_file))
+
+        key['clustering_method'] = _get_clustering_method(key)
+        units = (Unit & key).fetch('unit')
 
         ks = ephys_ingest.Kilosort(session_ephys_dir)
         curated_cluster_notes = ks.extract_curated_cluster_notes()
@@ -264,10 +272,11 @@ class UnitNote(dj.Imported):
         for curation_source, cluster_note in curated_cluster_notes.items():
             if curation_source == 'group':
                 continue
-            cluster_notes.extend([{**key, 'note_source': curation_source,
-                                   'unit': unit, 'unit_quality': note}
-                                  for unit, note in zip(cluster_note['cluster_ids'],
-                                                        cluster_note['cluster_notes'])])
+            cluster_notes.extend([{**key,
+                                   'note_source': curation_source,
+                                   'unit': u, 'unit_quality': note}
+                                  for u, note in zip(cluster_note['cluster_ids'],
+                                                     cluster_note['cluster_notes']) if u in units])
         self.insert(cluster_notes)
 
 

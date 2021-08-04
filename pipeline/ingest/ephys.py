@@ -1496,7 +1496,7 @@ class Kilosort:
                 df = pd.read_csv(cluster_file, sep="\t", header=0)
                 curated_cluster_notes[curation_source] = dict(
                     cluster_ids=np.array(df['cluster_id'].values),
-                    cluster_notes=np.array(df[curation_source].values))
+                    cluster_notes=np.array([v.strip() for v in df[curation_source].values]))
         return curated_cluster_notes
 
     def extract_cluster_noise_label(self):
