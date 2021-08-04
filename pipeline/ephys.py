@@ -264,6 +264,7 @@ class UnitNote(dj.Imported):
 
         key['clustering_method'] = _get_clustering_method(key)
         units = (Unit & key).fetch('unit')
+        unit_quality_types = UnitQualityType.fetch('unit_quality')
 
         ks = ephys_ingest.Kilosort(session_ephys_dir)
         curated_cluster_notes = ks.extract_curated_cluster_notes()
@@ -276,7 +277,8 @@ class UnitNote(dj.Imported):
                                    'note_source': curation_source,
                                    'unit': u, 'unit_quality': note}
                                   for u, note in zip(cluster_note['cluster_ids'],
-                                                     cluster_note['cluster_notes']) if u in units])
+                                                     cluster_note['cluster_notes'])
+                                  if u in units and note in unit_quality_types])
         self.insert(cluster_notes)
 
 
