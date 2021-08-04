@@ -1777,7 +1777,7 @@ def archive_ingested_clustering_results(key, archive_trial_spike=False):
         archived_units = []
         for q_units in q_archived_units:
             # recompute trial_spike
-            log.info('Archiving {} units'.format(len(units)))
+            log.info('Archiving {} units'.format(len(q_units)))
             units = q_units.fetch(as_dict=True)
             if archive_trial_spike:
                 for unit in tqdm(units):
