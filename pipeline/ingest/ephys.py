@@ -209,12 +209,15 @@ class EphysIngest(dj.Imported):
         trial_start = trial_start / hz
         trial_spikes = trial_spikes / hz
 
+        # units
+        unit_set = set(units)
+
         # build spike arrays
-        unit_spikes = np.array([spikes[np.where(units == u)] for u in set(units)]) - trial_start[0]
+        unit_spikes = np.array([spikes[np.where(units == u)] for u in unit_set]) - trial_start[0]
 
         unit_trial_spikes = np.array(
             [[trial_spikes[t][np.where(trial_units[t] == u)]
-              for t in range(len(trials))] for u in set(units)])
+              for t in range(len(trials))] for u in unit_set])
 
         q_electrodes = lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode & e_config_key
         site2electrode_map = {}
@@ -225,8 +228,8 @@ class EphysIngest(dj.Imported):
                                                         'shank_row': shank_row + 1}).fetch1('KEY')
 
         spike_sites = np.array([site2electrode_map[s]['electrode'] for s in spike_sites])
-        unit_spike_sites = np.array([spike_sites[np.where(units == u)] for u in set(units)])
-        unit_spike_depths = np.array([spike_depths[np.where(units == u)] for u in set(units)])
+        unit_spike_sites = np.array([spike_sites[np.where(units == u)] for u in unit_set])
+        unit_spike_depths = np.array([spike_depths[np.where(units == u)] for u in unit_set])
 
         if into_archive:
             log.info('.. inserting clustering timestamp and label')
@@ -244,12 +247,12 @@ class EphysIngest(dj.Imported):
                 'ephys_file': ef_path.relative_to(rigpath).as_posix()},
                 allow_direct_insert=True)
 
-            unit_spike_trial_num = np.array([spike_trial_num[np.where(units == u)] for u in set(units)])
+            unit_spike_trial_num = np.array([spike_trial_num[np.where(units == u)] for u in unit_set])
 
             with InsertBuffer(ephys.ArchivedClustering.Unit, 10, skip_duplicates=True,
                               allow_direct_insert=True) as ib:
 
-                for i, u in enumerate(set(units)):
+                for i, u in enumerate(unit_set):
                     if method in ['jrclust_v3', 'jrclust_v4']:
                         wf_chn_idx = 0
                     elif method in ['kilosort2']:
@@ -285,14 +288,14 @@ class EphysIngest(dj.Imported):
                 dj.conn().ping()
                 ephys.ArchivedClustering.ClusterMetric.insert(
                     [{**archive_key, 'unit': u, **metrics[u]}
-                     for u in set(units)], ignore_extra_fields=True, allow_direct_insert=True)
+                     for u in unit_set], ignore_extra_fields=True, allow_direct_insert=True)
                 ephys.ArchivedClustering.WaveformMetric.insert(
                     [{**archive_key, 'unit': u, **metrics[u]}
-                     for u in set(units)], ignore_extra_fields=True, allow_direct_insert=True)
+                     for u in unit_set], ignore_extra_fields=True, allow_direct_insert=True)
                 ephys.ArchivedClustering.UnitStat.insert(
                     [{**archive_key, 'unit': u, 'unit_amp': unit_amp[i], 'unit_snr': unit_snr[i],
                       'isi_violation': metrics[u]['isi_viol'], 'avg_firing_rate': metrics[u]['firing_rate']}
-                     for i, u in enumerate(set(units))], allow_direct_insert=True)
+                     for i, u in enumerate(unit_set)], allow_direct_insert=True)
         else:
             # insert Unit
             log.info('.. ephys.Unit')
@@ -300,7 +303,7 @@ class EphysIngest(dj.Imported):
             with InsertBuffer(ephys.Unit, 10, skip_duplicates=True,
                               allow_direct_insert=True) as ib:
 
-                for i, u in enumerate(set(units)):
+                for i, u in enumerate(unit_set):
                     if method in ['jrclust_v3', 'jrclust_v4']:
                         wf_chn_idx = 0
                     elif method in ['kilosort2']:
@@ -330,7 +333,7 @@ class EphysIngest(dj.Imported):
             with InsertBuffer(ephys.Unit.UnitTrial, 10000, skip_duplicates=True,
                               allow_direct_insert=True) as ib:
 
-                for i, u in enumerate(set(units)):
+                for i, u in enumerate(unit_set):
                     for t in range(len(trials)):
                         if len(unit_trial_spikes[i][t]):
                             ib.insert1({**skey,
@@ -346,7 +349,7 @@ class EphysIngest(dj.Imported):
             dj.conn().ping()
             with InsertBuffer(ephys.Unit.TrialSpikes, 10000, skip_duplicates=True,
                               allow_direct_insert=True) as ib:
-                for i, u in enumerate(set(units)):
+                for i, u in enumerate(unit_set):
                     for t in range(len(trials)):
                         ib.insert1({**skey,
                                     'insertion_number': probe,
@@ -373,26 +376,27 @@ class EphysIngest(dj.Imported):
                 dj.conn().ping()
                 ephys.ClusterMetric.insert([{**skey, 'insertion_number': probe,
                                              'clustering_method': method, 'unit': u, **metrics[u]}
-                                            for u in set(units)],
+                                            for u in unit_set],
                                            ignore_extra_fields=True, allow_direct_insert=True)
                 ephys.WaveformMetric.insert([{**skey, 'insertion_number': probe,
                                               'clustering_method': method, 'unit': u, **metrics[u]}
-                                             for u in set(units)],
+                                             for u in unit_set],
                                             ignore_extra_fields=True, allow_direct_insert=True)
                 ephys.UnitStat.insert([{**skey, 'insertion_number': probe,
                                         'clustering_method': method, 'unit': u,
                                         'isi_violation': metrics[u]['isi_viol'],
-                                        'avg_firing_rate': metrics[u]['firing_rate']} for u in set(units)],
+                                        'avg_firing_rate': metrics[u]['firing_rate']}
+                                       for u in unit_set],
                                       allow_direct_insert=True)
 
             if cluster_noise_label is not None:
                 dj.conn().ping()
                 log.info('.. inserting unit noise label')
-                ephys.UnitNoiseLabel.insert([
+                ephys.UnitNoiseLabel.insert((
                     {**skey, 'insertion_number': probe, 'clustering_method': method,
                      'unit': u, 'noise': note}
                     for u, note in zip(cluster_noise_label['cluster_ids'],
-                                       cluster_noise_label['cluster_notes']) if u in set(units)],
+                                       cluster_noise_label['cluster_notes']) if u in unit_set),
                     allow_direct_insert=True)
 
             dj.conn().ping()
@@ -402,7 +406,8 @@ class EphysIngest(dj.Imported):
                                            'clustering_method': method, 'unit': u,
                                            'clustering_time': creation_time,
                                            'quality_control': bool('qc' in clustering_label),
-                                           'manual_curation': bool('curated' in clustering_label)} for u in set(units)],
+                                           'manual_curation': bool('curated' in clustering_label)}
+                                          for u in unit_set],
                                          allow_direct_insert=True)
 
             log.info('.. inserting file load information')
