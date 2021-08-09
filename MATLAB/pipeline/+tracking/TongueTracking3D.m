@@ -29,8 +29,7 @@ classdef TongueTracking3D < dj.Computed
             
             load('Calib_Results_stereo.mat')
             
-            key_insert=fetch(tracking.getSchema().v.TrackingTongueTracking & key,'LIMIT 1');
-            key_insert=repmat(key_insert,1,length(bot_tongue_x));
+            key_insert=repmat(key,1,length(bot_tongue_x));
             
             for i = 1:length(bot_tongue_x) % loop over trials
                 Bx=cell2mat(bot_tongue_x(i));
