@@ -40,7 +40,7 @@ classdef TongueTracking3D < dj.Part
                 trial_key_tongue_position.tongue_y_s = Xc_1_right(2,:);
                 trial_key_tongue_position.tongue_z_s = Xc_1_right(3,:);
                 key.trial=i;
-                insert(self,insert_key_tongue_position);
+                insert(self,trial_key_tongue_position);
             end
 
         end
