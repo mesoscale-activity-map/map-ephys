@@ -10,6 +10,7 @@ tongue_y_s    :   longblob
 tongue_z_s    :   longblob
 %}
 
+
 classdef TongueTracking3D < dj.Computed
     properties
         keySource = (experiment.getSchema().v.Session & 'rig = "RRig-MTL"')...
@@ -29,8 +30,8 @@ classdef TongueTracking3D < dj.Computed
             
             load('Calib_Results_stereo.mat')
             
-            key_insert=fetch(tracking.getSchema().v.TrackingTongueTracking & key,'LIMIT 1');
-            key_insert=repmat(key_insert,1,length(bot_tongue_x));
+            key_insert=fetch(tracking.getSchema().v.TrackingTongueTracking & 'tracking_device = "Camera 4"' & key,'LIMIT 1');
+            key_insert=repmat(key_insert,1,numel(fiducial_labels));
             
             for i = 1:length(bot_tongue_x) % loop over trials
                 Bx=cell2mat(bot_tongue_x(i));
@@ -50,7 +51,7 @@ classdef TongueTracking3D < dj.Computed
                 key_insert(i).trial=i;
                 
             end
-            insert(self,key_insert);
+                insert(self,key_insert);
         end
     end
 end 
