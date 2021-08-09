@@ -91,7 +91,11 @@ class BanditModel:
                  # !! Important for predictive fitting !!
                  # If not None, calculate predictive_choice_probs(t) based on fit_choice_history(0:t-1) and fit_reward_history(0:t-1) for negLL calculation.
                  fit_choice_history = None,
-                 fit_reward_history = None,                 
+                 fit_reward_history = None,   
+                 fit_iti = None,            
+
+                 # For CANN
+                 eta = None,  
                  
                  ):     
 
@@ -107,6 +111,7 @@ class BanditModel:
         
         self.fit_choice_history = fit_choice_history
         self.fit_reward_history = fit_reward_history
+        self.iti = fit_iti
         self.if_fit_mode = self.fit_choice_history is not None   # In some cases we just need fit_c to fit the model
         
         if self.if_fit_mode: 
@@ -133,7 +138,8 @@ class BanditModel:
             
         # 2. for those involve softmax: b_undefined = 0, no constraint. cp_k = exp(Q/sigma + b_i) / sum(Q/sigma + b_i). Putting b_i outside /sigma to make it comparable across different softmax_temperatures
         elif forager in ['RW1972_softmax', 'LNP_softmax', 'Bari2019', 'Hattori2019',
-                         'RW1972_softmax_CK', 'LNP_softmax_CK', 'Bari2019_CK', 'Hattori2019_CK']:
+                         'RW1972_softmax_CK', 'LNP_softmax_CK', 'Bari2019_CK', 'Hattori2019_CK',
+                         'CANN']:
             if self.K == 2:
                 self.bias_terms = np.array([biasL, 0])  # Relative to right
             elif self.K == 3:
@@ -167,6 +173,11 @@ class BanditModel:
                 
             self.learn_rates = [learn_rate_unrew, learn_rate_rew]   # 0: unrewarded, 1: rewarded
             self.forget_rates = [forget_rate, 0]   # 0: unchosen, 1: chosen
+
+        elif 'CANN' in forager:
+            assert all(x is not None for x in (learn_rate, eta))
+            self.eta = eta
+            self.learn_rates = [learn_rate, learn_rate]
           
         # Choice kernel can be added to any reward-based forager
         if '_CK' in forager:  
@@ -193,15 +204,15 @@ class BanditModel:
             self.predictive_choice_prob[:, 0] = 1/self.K   # To be strict (actually no use)
             
         else:   # Generative mode
-            self.choice_history = np.zeros([1,self.n_trials], dtype = int)  # Choice history
-            self.reward_history = np.zeros([self.K, self.n_trials])    # Reward history, separated for each port (Corrado Newsome 2005)
+            self.choice_history = np.zeros([1,self.n_trials + 1], dtype = int)  # Choice history
+            self.reward_history = np.zeros([self.K, self.n_trials + 1])    # Reward history, separated for each port (Corrado Newsome 2005)
         
             # Generate baiting prob in block structure
             self.generate_p_reward()
             
             # Prepare reward for the first trial
             # For example, [0,1] represents there is reward baited at the RIGHT but not LEFT port.
-            self.reward_available = np.zeros([self.K, self.n_trials])    # Reward history, separated for each port (Corrado Newsome 2005)
+            self.reward_available = np.zeros([self.K, self.n_trials + 1])    # Reward history, separated for each port (Corrado Newsome 2005)
             self.reward_available[:,0] = (np.random.uniform(0,1,self.K) < self.p_reward[:, self.time]).astype(int)
         
         # Forager-specific
@@ -222,6 +233,10 @@ class BanditModel:
             self.loss_count = np.zeros([1, self.n_trials + 1])
             if not self.if_fit_mode:
                 self.loss_threshold_this = np.random.normal(self.loss_count_threshold_mean, self.loss_count_threshold_std)
+
+        elif 'CANN' in self.forager:
+            if not self.if_fit_mode:   # Override user input of iti
+                self.iti = np.ones([1, self.n_trials + 1]) 
                 
         # Choice kernel can be added to any forager
         if '_CK' in self.forager:
@@ -246,15 +261,16 @@ class BanditModel:
         # Adapted from Marton's code
         n_trials_now = 0
         block_size = []  
-        p_reward = np.zeros([2,self.n_trials])
+        n_trials = self.n_trials + 1
+        p_reward = np.zeros([2, n_trials])
         
         # Fill in trials until the required length
-        while n_trials_now < self.n_trials:
+        while n_trials_now < n_trials:
         
             # Number of trials in each block (Gaussian distribution)
             # I treat p_reward[0,1] as the ENTIRE lists of reward probability. RIGHT = 0, LEFT = 1. HH
             n_trials_this_block = np.rint(np.random.normal(block_size_base, block_size_sd)).astype(int) 
-            n_trials_this_block = min(n_trials_this_block, self.n_trials - n_trials_now)
+            n_trials_this_block = min(n_trials_this_block, n_trials - n_trials_now)
             
             block_size.append(n_trials_this_block)
                               
@@ -474,6 +490,24 @@ class BanditModel:
         # if self.forager in ['RW1972_softmax', 'Bari2019', 'Hattori2019']:
         #     self.q_estimation[:, self.time] = softmax(self.q_estimation[:, self.time], self.softmax_temperature)
 
+
+    def step_CANN(self,choice,reward, iti):
+        # Reward-dependent step size ('Hattori2019')
+        if reward:   
+            learn_rate_this = self.learn_rates[1]
+        else:
+            learn_rate_this = self.learn_rates[0]
+        
+        # Choice-dependent forgetting rate ('Hattori2019')
+        # Chosen:   Q(n+1) = (1- forget_rate_chosen) * Q(n) + step_size * (Reward - Q(n))
+        self.q_estimation[choice, self.time] = (self.q_estimation[choice, self.time - 1]  \
+                                              + learn_rate_this * (reward - self.q_estimation[choice, self.time - 1])) * np.exp(-self.eta * iti)
+                                             
+        # Unchosen: Q(n+1) = (1-forget_rate_unchosen) * Q(n)
+        unchosen_idx = [cc for cc in range(self.K) if cc != choice]
+        self.q_estimation[unchosen_idx, self.time] = self.q_estimation[unchosen_idx, self.time - 1] * np.exp(-self.eta * iti)
+
+
     def step_choice_kernel(self, choice):
         # Choice vector
         choice_vector = np.zeros([self.K])
@@ -505,7 +539,8 @@ class BanditModel:
             return self.act_EpsiGreedy()
             
         if self.forager in ['RW1972_softmax', 'LNP_softmax', 'Bari2019', 'Hattori2019',
-                            'RW1972_softmax_CK', 'LNP_softmax_CK', 'Bari2019_CK', 'Hattori2019_CK']:   # Probabilistic (Could have choice kernel)
+                            'RW1972_softmax_CK', 'LNP_softmax_CK', 'Bari2019_CK', 'Hattori2019_CK',
+                            'CANN']:   # Probabilistic (Could have choice kernel)
             return self.act_Probabilistic()
         
         print('No action found!!')
@@ -545,6 +580,9 @@ class BanditModel:
         elif self.forager in ['RW1972_softmax', 'RW1972_epsi', 'Bari2019', 'Hattori2019',
                               'RW1972_softmax_CK', 'Bari2019_CK', 'Hattori2019_CK']:    
             self.step_RWlike(choice, reward)
+
+        elif self.forager in ['CANN']:
+            self.step_CANN(choice, reward, self.iti[0, self.time])
                 
         elif self.forager in ['LNP_softmax', 'LNP_softmax_CK']:
             if self.if_fit_mode:
@@ -571,3 +609,4 @@ class BanditModel:
         if self.if_fit_mode:
             action = self.act()   # Allow the final update of action prob after the last trial (for comparing with ephys)
 
+        print(self.time)
