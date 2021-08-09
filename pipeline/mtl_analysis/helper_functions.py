@@ -161,3 +161,8 @@ def plot_tuning(session_key, unit_key):
     ax.set_xticklabels([])
     
     return fig
+
+def water2subject(water,date):
+    subject_id = (lab.WaterRestriction & {'water_restriction_number': water}).fetch('subject_id')
+    session_num = (experiment.Session() * lab.WaterRestriction & {'water_restriction_number': water, 'session_date': date}).fetch('session')
+    return subject_id, session_num
