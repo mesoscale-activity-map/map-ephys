@@ -11,14 +11,14 @@ tongue_z_s    :   longblob
 %}
 
 
-classdef TongueTracking3D < dj.Part
+classdef TongueTracking3D < dj.Computed
     properties
         keySource = (experiment.getSchema().v.Session & 'rig = "RRig-MTL"')...
             & (tracking.getSchema().v.Tracking & 'tracking_device = "Camera 3"')...
             & (tracking.getSchema().v.Tracking & 'tracking_device = "Camera 4"');
     end
     methods(Access=protected)        
-        function makeTuples(self, key)
+        function make(self, key)
             [bot_tongue_x, bot_tongue_y] = fetchn(tracking.getSchema().v.TrackingTongueTracking & 'tracking_device = "Camera 4"' & key, 'tongue_x', 'tongue_y');
             [sid_tongue_x, sid_tongue_y] = fetchn(tracking.getSchema().v.TrackingTongueTracking & 'tracking_device = "Camera 3"' & key, 'tongue_x', 'tongue_y');
 
