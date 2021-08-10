@@ -3,8 +3,8 @@ from pipeline import tracking
 from pipeline import experiment
 from pipeline.plot import behavior_plot
 from pipeline.mtl_analysis import helper_functions
-from pipeline import lab
-import datajoint as dj
+# import datajoint as dj
+# tracking = dj.create_virtual_module('tracking', 'map_v2_tracking')
 
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
