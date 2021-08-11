@@ -448,8 +448,8 @@ class AlignType(dj.Lookup):
     
     definition = """
     align_type_name: varchar(32)   # user-friendly name of alignment type
-    ---
     -> experiment.TrialEventType
+    ---
     align_type_description='':    varchar(256)    # description of this align type
     trial_offset=0:      smallint         # e.g., offset = 1 means the psth will be aligned to the event of the *next* trial.
     time_offset=0:       Decimal(10, 5)   # will be added to the event time for manual correction (e.g., bitcodestart to actual zaberready)  
@@ -468,7 +468,7 @@ class AlignType(dj.Lookup):
         # We have to estimate actual trial start by
         #   bitcodestart + bitcode width (42 ms for first few sessions) + zaber movement duration (~ 104 ms, very repeatable)
         ['trial_start_bitcode', 'bitcodestart', 'estimate actual trial start by bitcodestart + 146 ms', 0, 0.146, [-3, 2], [-2, 1]],
-        ['next_trial_start_bitcode', 'bitcodestart', 'estimate actual trial start by bitcodestart + 146 ms', 1, 0.146, [-10, 3], [-8, 1]]
+        ['next_trial_start_bitcode', 'bitcodestart', 'estimate actual trial start by bitcodestart + 146 ms', 1, 0.146, [-10, 3], [-8, 1]],
     ]
 
 
