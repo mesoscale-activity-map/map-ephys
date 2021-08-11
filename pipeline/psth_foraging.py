@@ -420,32 +420,55 @@ class UnitPsth(dj.Computed):
     
 @schema 
 class AlignType(dj.Lookup):
-    '''
-    Define flexible psth alignment types
-    '''
+    """
+    Define flexible psth alignment types for the foraging task.
+
+    For the previous delay-response task, we only align spikes to the go cue, and all PSTH has been aligned during ephys
+    ingestion (see `ephys.Unit.TrialSpikes`).
+
+    Here, for the foraging task, we would like to align spikes to any event, such as go cue, choice (reward), ITI, and
+    even the next trial's trial start. Because of this flexibility, we chose not to do alignment during ingestion, but
+    use this table to define all possible alignment types we want, and compute the PSTHs on-the-fly.
+
+    Notes:
+    1. When we fetch event times for `experiment.TrialEventType`, we use NI time (`ephys.TrialEvent`) instead of bpod
+       time (`experiment.TrialEvent`). See `compute_unit_psth_and_raster()`. See also
+       `ingest.util.compare_ni_and_bpod_times()` for a comparison between NI and bpod time and why NI time is more
+       reliable.
+
+    2. `trial_offset` is used to specify alignment type like the trial start of the *next* trial. This is
+       implemented by adding a `trial_offset` in the method `TrialCondition.get_trials()` above.
+
+       Say, we want to compute PSTH conditioned on all rewarded trials and aligned to the next trial start. Assuming
+       trials #1, 5, and 10 are the rewarded trials, then with `trial_offset` = 1, `TrialCondition.get_trials()` will
+       return trials #2, 6, and 11. Using this shifted `trial_keys`, `compute_unit_psth_and_raster` will effectively
+       align the spikes to the *next* trial start of all rewarded trials.
+
+    """
+    
     definition = """
-    idx:                 smallint
-    -> experiment.TrialEventType
+    align_type_name: varchar(32)   # user-friendly name of alignment type
     ---
-    align_type_name:     varchar(128)     # user-friendly name of alignment type
-    trial_offset=0:      smallint         # e.g., offset = 1 means the psth will be aligned to the event of the *next* trial
+    -> experiment.TrialEventType
+    align_type_description='':    varchar(256)    # description of this align type
+    trial_offset=0:      smallint         # e.g., offset = 1 means the psth will be aligned to the event of the *next* trial.
     time_offset=0:       Decimal(10, 5)   # will be added to the event time for manual correction (e.g., bitcodestart to actual zaberready)  
-    psth_win:            tinyblob   
-    xlim:                tinyblob
+    psth_win:            tinyblob    # [t_min, t_max], time window by which `compute_unit_psth_and_raster` counts spikes
+    xlim:                tinyblob    # [x_min, x_max], default xlim for plotting PSTH (could be overridden during plotting)
     """
     contents = [
-        [0, 'zaberready', 'trial_start', 0, 0, [-3, 2], [-2, 1]],
-        [1, 'go', 'go_cue', 0, 0, [-2, 5], [-1, 3]],
-        [2, 'choice', 'first_lick_after_go_cue', 0, 0, [-2, 5], [-1, 3]],
-        [3, 'trialend', 'iti_start', 0, 0, [-3, 10], [-2, 5]],
-        [4, 'zaberready', 'next_trial_start', 1, 0, [-10, 3], [-8, 1]],
+        ['trial_start', 'zaberready', '', 0, 0, [-3, 2], [-2, 1]],
+        ['go_cue', 'go', '', 0, 0, [-2, 5], [-1, 3]],
+        ['first_lick_after_go_cue', 'choice', 'first non-early lick', 0, 0, [-2, 5], [-1, 3]],
+        ['iti_start', 'trialend', '', 0, 0, [-3, 10], [-2, 5]],
+        ['next_trial_start', 'zaberready', '', 1, 0, [-10, 3], [-8, 1]],
 
         # In the first few sessions, zaber moter feedback is not recorded,
         # so we don't know the exact time of trial start ('zaberready').
         # We have to estimate actual trial start by
         #   bitcodestart + bitcode width (42 ms for first few sessions) + zaber movement duration (~ 104 ms, very repeatable)
-        [5, 'bitcodestart', 'trial_start_bitcode', 0, 0.146, [-3, 2], [-2, 1]],
-        [6, 'bitcodestart', 'next_trial_start_bitcode', 1, 0.146, [-10, 3], [-8, 1]]
+        ['trial_start_bitcode', 'bitcodestart', 'estimate actual trial start by bitcodestart + 146 ms', 0, 0.146, [-3, 2], [-2, 1]],
+        ['next_trial_start_bitcode', 'bitcodestart', 'estimate actual trial start by bitcodestart + 146 ms', 1, 0.146, [-10, 3], [-8, 1]]
     ]
 
 
