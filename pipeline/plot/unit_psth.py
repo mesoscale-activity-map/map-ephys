@@ -207,8 +207,33 @@ def plot_unit_psth_choice_outcome(unit_key,
                                   align_types=['trial_start', 'go_cue', 'first_lick_after_go_cue', 'iti_start', 'next_trial_start'],
                                   if_raster=True, if_exclude_early_lick=False,
                                   axs=None, title=''):
-    """
-    (for foraging task) Plot psth grouped by (choice x outcome)
+    """Plot psth grouped by (choice x outcome) for the foraging task.
+     
+    In general, PSTH is specificied by two things: trial conditions and alignment types. 
+
+    Here, trial conditions include all four combinitions of choice (ipsi or contra) and outcome (hit or miss), 
+    whereas align types are defined by the user. See `psth_foraging.AlignType`
+    
+    Parameters
+    ----------
+    unit_key : [type]
+        [description]
+    align_types : list, optional
+        list of align_type_name in psth_foraging.AlignType, by default ['trial_start', 'go_cue', 'first_lick_after_go_cue', 'iti_start', 'next_trial_start']
+    if_raster : bool, optional
+        whether to plot raster, by default True
+    axs : [type], optional
+        [description], by default None
+    title : str, optional
+        [description], by default ''
+    if_exclude_early_lick : bool, optional
+        whether to exclude early licks, by default False
+
+    Returns
+    -------
+    [type]
+        [description]
+        
     """
 
     # for (the very few) sessions without zaber feedback signal, use 'bitcodestart' with manual correction (see compute_unit_psth_and_raster)
