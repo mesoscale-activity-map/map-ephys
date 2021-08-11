@@ -1,8 +1,13 @@
 import numpy as np
 import datajoint as dj
+import pathlib
 from pipeline import ephys, experiment, tracking
+from pipeline.ingest import tracking as tracking_ingest
+
 from pipeline.mtl_analysis import helper_functions
 from pipeline.plot import behavior_plot
+
+
 schema = dj.schema('daveliu_analysis')
 
 
@@ -90,3 +95,38 @@ class JawTuning(dj.Computed):
 #         trace = tracking.Tracking & 
 #         tuning = helper_functions.compute_tuning_curve(spikes)
 #         self.insert1({**key, 'modulation_index': len(spikes)})
+
+
+
+
+@schema
+class WhiskerSVD(dj.Computed):
+    definition = """
+    -> tracking.Tracking
+    ---
+    mot_svd: longblob
+    """
+    
+    def make(self, key):
+        
+        from facemap import process
+        
+        roi_path = 'H://videos//bottom//DL027//2021_07_01//DL027_2021_07_01_bottom_0_proc.npy'
+        roi_data = np.load(roi_path, allow_pickle=True).item()
+        
+        video_root_dir = pathlib.Path('H:/videos')
+        
+        trial_path = (tracking_ingest.TrackingIngest.TrackingFile & key).fetch1('tracking_file')
+        
+        video_path = video_root_dir / trial_path
+        
+        video_path = video_path.parent / (video_path.stem + '.mp4')
+        
+        process.run([[video_path.as_posix()]], proc=roi_data)
+        
+        proc = np.load(video_path.parent / (video_path.stem + '_proc' + '.npy'), allow_pickle=True).item()
+        
+        self.insert1({**key, 'mot_svd': proc['motSVD'][1][:, :100]})
+        
+        
+    
