@@ -70,6 +70,7 @@ class Model(dj.Manual):
         -> master
         -> ModelParam
         ---
+        param_idx: int   # To keep params the same order as the original definition in MODELS, hence `fit_result.x`
         param_lower_bound: float
         param_higher_bound: float
         """
@@ -179,9 +180,9 @@ class Model(dj.Manual):
                           skip_duplicates=True)
 
             # Insert Model.Param
-            for param, lb, ub in zip(*model[1:4]):
+            for idx, (param, lb, ub) in enumerate(zip(*model[1:4])):
                 # The result table should save both effective and fixed params
-                Model.Param.insert1(dict(model_id=model_id, model_param=param,
+                Model.Param.insert1(dict(model_id=model_id, model_param=param, param_idx=idx,
                                          param_lower_bound=lb, param_higher_bound=ub),
                                     skip_duplicates=True)
 
@@ -256,20 +257,19 @@ class FittedSessionModel(dj.Computed):
                           cross_valid_accuracy_fit=np.mean(cross_valid_result.prediction_accuracy_fit),
                           cross_valid_accuracy_test=np.mean(cross_valid_result.prediction_accuracy_test),
                           cross_valid_accuracy_test_bias_only=np.mean(cross_valid_result.prediction_accuracy_test_bias_only),
-                          ),
-                     skip_duplicates=True, allow_direct_insert=True)
+                          )
+                     )
 
-        # Insert fitted params
-        for param, x in zip((Model.Param & key).fetch('model_param'), fit_result.x):
-            self.FittedParam.insert1(dict(**key, model_param=param, fitted_value=x))
+        # Insert fitted params (`order_by` is critical!)
+        self.FittedParam.insert([dict(**key, model_param=param, fitted_value=x) 
+	                         for param, x in zip((Model.Param & key).fetch('model_param', order_by='param_idx'), fit_result.x)])
         
         # Insert predictive choice probability
         for water_port_idx, water_port in enumerate(['left', 'right']):
             key['water_port'] = water_port
             self.PredictiveChoiceProb.insert(
                 [{**key, 'trial': trial_idx, 'choice_prob': this_prob} 
-                 for trial_idx, this_prob in zip(q_choice_outcome.fetch('trial'), fit_result.predictive_choice_prob[water_port_idx])],
-                skip_duplicates=True
+                 for trial_idx, this_prob in zip(q_choice_outcome.fetch('trial'), fit_result.predictive_choice_prob[water_port_idx])]
                 )
         
 
