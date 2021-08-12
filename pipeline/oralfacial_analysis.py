@@ -107,11 +107,13 @@ class WhiskerSVD(dj.Computed):
     mot_svd: longblob
     """
     
+    key_source = tracking.Tracking & (experiment.Session & 'rig = "RRig-MTL"') & 'tracking_device = "Camera 4"'
+    
     def make(self, key):
         
         from facemap import process
         
-        roi_path = 'H://videos//bottom//DL027//2021_07_01//DL027_2021_07_01_bottom_0_proc.npy'
+        roi_path = 'H://videos//bottom//DL004//2021_03_08//DL004_2021_03_08_bottom_0_proc.npy'
         roi_data = np.load(roi_path, allow_pickle=True).item()
         
         video_root_dir = pathlib.Path('H:/videos')
@@ -122,9 +124,9 @@ class WhiskerSVD(dj.Computed):
         
         video_path = video_path.parent / (video_path.stem + '.mp4')
         
-        process.run([[video_path.as_posix()]], proc=roi_data)
+        proc = process.run([[video_path.as_posix()]], proc=roi_data)
         
-        proc = np.load(video_path.parent / (video_path.stem + '_proc' + '.npy'), allow_pickle=True).item()
+        #proc = np.load(video_path.parent / (video_path.stem + '_proc' + '.npy'), allow_pickle=True).item()
         
         self.insert1({**key, 'mot_svd': proc['motSVD'][1][:, :100]})
         
