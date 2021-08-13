@@ -1,4 +1,6 @@
 import numpy as np
+from . import (experiment, psth, ephys, psth_foraging)
+
 
 def _get_units_hemisphere(units):
     """
@@ -21,8 +23,6 @@ def _get_units_hemisphere(units):
         raise ValueError('Ambiguous hemisphere: ML locations are all 0...')
         
 
-from . import (experiment, psth, ephys, psth_foraging)
-
 def _get_trial_event_times(events, units, trial_cond_name):
     """
     Get median event start times from all unit-trials from the specified "trial_cond_name" and "units" - aligned to GO CUE
@@ -30,9 +30,8 @@ def _get_trial_event_times(events, units, trial_cond_name):
     :param events: list of events
     """
     events = list(events) + ['go']
-    psth_schema = psth_foraging if 'foraging' in trial_cond_name else psth
 
-    tr_OI = (psth_schema.TrialCondition().get_trials(trial_cond_name) & units).proj()
+    tr_OI = (psth.TrialCondition().get_trials(trial_cond_name) & units).proj()
     tr_events = {}
     for eve in events:
         if eve not in tr_events:
@@ -47,6 +46,41 @@ def _get_trial_event_times(events, units, trial_cond_name):
             event_starts.append(np.nanmedian(etime.astype(float) - tr_events["go"].astype(float)))
 
     return np.array(present_events), np.array(event_starts)
+
+
+def _get_ephys_trial_event_times(all_align_types, align_to, trial_keys):
+    """
+    Similar to _get_trial_event_times, except:
+        1. for the foraging task only (using psth_foraging.TrialCondition)
+        2. use ephys.TrialEvent (NI time) instead of experiment.TrialEvent (bpod time)
+        3. directly use trial_keys instead of units + trial_cond_name to get trials
+        4. align to arbitrary event, not just GO CUE
+        5. allow trial_offset (like in psth_foraging), e.g., trial start of the *NEXT* trial
+        
+    :param all_align_types: list of psth_foraging.AlignType()
+    :param align_to: psth_foraging.AlignType(), event to align
+    :param trial_keys: 
+    """
+    
+    
+    tr_events = {}
+    for eve in all_align_types:
+        q_align = psth_foraging.AlignType & {'align_type_name': eve}
+        trial_offset, time_offset = q_align.fetch1('trial_offset', 'time_offset')
+        
+        offset_trial_keys = (experiment.BehaviorTrial & trial_keys.proj(_='trial', trial=f'trial + {trial_offset}'))
+        
+        times = (offset_trial_keys.aggr(
+            ephys.TrialEvent & q_align, trial_event_id='max(trial_event_id)')
+                 * ephys.TrialEvent).fetch('trial_event_time', order_by='trial').astype(float)
+        
+        tr_events[eve] = times + float(time_offset)
+  
+    event_starts = []
+    for etime in tr_events.values():
+        event_starts.append(np.nanmedian(etime - tr_events[align_to]))
+            
+    return np.array(event_starts)
 
 
 def _get_stim_onset_time(units, trial_cond_name):
