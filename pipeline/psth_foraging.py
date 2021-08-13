@@ -43,7 +43,7 @@ class TrialCondition(dj.Lookup):
                      
             # ----- Foraging task -------
             {
-                'trial_condition_name': 'foraging_L_hit_noearlylick',
+                'trial_condition_name': 'L_hit_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'foraging',
@@ -56,7 +56,7 @@ class TrialCondition(dj.Lookup):
                     }
             },
             {
-                'trial_condition_name': 'foraging_L_miss_noearlylick',
+                'trial_condition_name': 'L_miss_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'foraging',
@@ -67,9 +67,9 @@ class TrialCondition(dj.Lookup):
                     'auto_water': 0,
                     'free_water': 0
                     }
-            },            
+            },
             {
-                'trial_condition_name': 'foraging_R_hit_noearlylick',
+                'trial_condition_name': 'R_hit_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'foraging',
@@ -82,7 +82,7 @@ class TrialCondition(dj.Lookup):
                     }
             },
             {
-                'trial_condition_name': 'foraging_R_miss_noearlylick',
+                'trial_condition_name': 'R_miss_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'foraging',
@@ -93,9 +93,56 @@ class TrialCondition(dj.Lookup):
                     'auto_water': 0,
                     'free_water': 0
                     }
+            },            {
+                'trial_condition_name': 'L_hit',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'foraging',
+                    'task_protocol': 100,
+                    'water_port': 'left',
+                    'outcome': 'hit',
+                    'auto_water': 0,
+                    'free_water': 0
+                    }
             },
             {
-                'trial_condition_name': 'foraging_LR_hit_noearlylick',
+                'trial_condition_name': 'L_miss',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'foraging',
+                    'task_protocol': 100,
+                    'water_port': 'left',
+                    'outcome': 'miss',
+                    'auto_water': 0,
+                    'free_water': 0
+                    }
+            },
+            {
+                'trial_condition_name': 'R_hit',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'foraging',
+                    'task_protocol': 100,
+                    'water_port': 'right',
+                    'outcome': 'hit',
+                    'auto_water': 0,
+                    'free_water': 0
+                    }
+            },
+            {
+                'trial_condition_name': 'R_miss',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'foraging',
+                    'task_protocol': 100,
+                    'water_port': 'right',
+                    'outcome': 'miss',
+                    'auto_water': 0,
+                    'free_water': 0
+                    }
+            },
+            {
+                'trial_condition_name': 'LR_hit_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'foraging',
@@ -106,7 +153,17 @@ class TrialCondition(dj.Lookup):
                     'free_water': 0}
             },
             {
-                'trial_condition_name': 'foraging_LR_miss_noearlylick',
+                'trial_condition_name': 'LR_hit',
+                'trial_condition_func': '_get_trials_exclude_stim',
+                'trial_condition_arg': {
+                    'task': 'foraging',
+                    'task_protocol': 100,
+                    'outcome': 'hit',
+                    'auto_water': 0,
+                    'free_water': 0}
+            },
+            {
+                'trial_condition_name': 'LR_miss_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     'task': 'foraging',
@@ -117,7 +174,7 @@ class TrialCondition(dj.Lookup):
                     'free_water': 0}
             },
             {
-                'trial_condition_name': 'foraging_LR_all_noearlylick',
+                'trial_condition_name': 'LR_all_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -128,20 +185,20 @@ class TrialCondition(dj.Lookup):
                     'free_water': 0}
             },
             {
-                'trial_condition_name': 'foraging_L_all_noearlylick',
+                'trial_condition_name': 'L_all_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
                     'task': 'foraging',
                     'task_protocol': 100,
-                    'water_port': 'left', 
+                    'water_port': 'left',
                     'early_lick': 'no early',
                     'auto_water': 0,
                     'free_water': 0
                     }
             },
             {
-                'trial_condition_name': 'foraging_R_all_noearlylick',
+                'trial_condition_name': 'R_all_noearlylick',
                 'trial_condition_func': '_get_trials_exclude_stim',
                 'trial_condition_arg': {
                     '_outcome': 'ignore',
@@ -184,8 +241,8 @@ class TrialCondition(dj.Lookup):
                 for d in contents_data)
 
     @classmethod
-    def get_trials(cls, trial_condition_name):
-        return cls.get_func({'trial_condition_name': trial_condition_name})()
+    def get_trials(cls, trial_condition_name, trial_offset=0):
+        return cls.get_func({'trial_condition_name': trial_condition_name}, trial_offset)()
 
     @classmethod
     def get_cond_name_from_keywords(cls, keywords):
@@ -204,16 +261,16 @@ class TrialCondition(dj.Lookup):
         return sorted(matched_cond_names)
 
     @classmethod
-    def get_func(cls, key):
+    def get_func(cls, key, trial_offset=0):
         self = cls()
 
         func, args = (self & key).fetch1(
             'trial_condition_func', 'trial_condition_arg')
 
-        return partial(dict(getmembers(cls))[func], **args)
+        return partial(dict(getmembers(cls))[func], trial_offset, **args)
 
     @classmethod
-    def _get_trials_exclude_stim(cls, **kwargs):
+    def _get_trials_exclude_stim(cls, trial_offset, **kwargs):
         # Note: inclusion (attr) is AND - exclusion (_attr) is OR
         log.debug('_get_trials_exclude_stim: {}'.format(kwargs))
 
@@ -233,13 +290,18 @@ class TrialCondition(dj.Lookup):
 
         stim_key = {k: v for k, v in restr.items() if k in stim_attrs}
         behav_key = {k: v for k, v in restr.items() if k in behav_attrs}
-
-        return (((experiment.BehaviorTrial * experiment.WaterPortChoice & behav_key) - [{k: v} for k, v in _behav_key.items()]) -
+        
+        q = (((experiment.BehaviorTrial * experiment.WaterPortChoice & behav_key) - [{k: v} for k, v in _behav_key.items()]) -
                 ((experiment.PhotostimEvent * experiment.PhotostimBrainRegion * experiment.Photostim & stim_key)
                  - [{k: v} for k, v in _stim_key.items()]).proj())
+        
+        if trial_offset:
+            return experiment.BehaviorTrial & q.proj(_='trial', trial=f'trial + {trial_offset}')
+        else:
+            return q
 
     @classmethod
-    def _get_trials_include_stim(cls, **kwargs):
+    def _get_trials_include_stim(cls, trial_offset, **kwargs):
         # Note: inclusion (attr) is AND - exclusion (_attr) is OR
         log.debug('_get_trials_include_stim: {}'.format(kwargs))
 
@@ -260,9 +322,14 @@ class TrialCondition(dj.Lookup):
         stim_key = {k: v for k, v in restr.items() if k in stim_attrs}
         behav_key = {k: v for k, v in restr.items() if k in behav_attrs}
 
-        return (((experiment.BehaviorTrial * experiment.WaterPortChoice & behav_key) - [{k: v} for k, v in _behav_key.items()]) &
+        q = (((experiment.BehaviorTrial * experiment.WaterPortChoice & behav_key) - [{k: v} for k, v in _behav_key.items()]) &
                 ((experiment.PhotostimEvent * experiment.PhotostimBrainRegion * experiment.Photostim & stim_key)
                  - [{k: v} for k, v in _stim_key.items()]).proj())
+    
+        if trial_offset:
+            return experiment.BehaviorTrial & q.proj(_='trial', trial=f'trial + {trial_offset}')
+        else:
+            return q
 
 
 @schema
@@ -349,3 +416,126 @@ class UnitPsth(dj.Computed):
                                   for s, t in zip(spikes, trials)])]
 
         return dict(trials=trials, spikes=spikes, psth=unit_psth, raster=raster)
+    
+    
+@schema 
+class AlignType(dj.Lookup):
+    """
+    Define flexible psth alignment types for the foraging task.
+
+    For the previous delay-response task, we only align spikes to the go cue, and all PSTH has been aligned during ephys
+    ingestion (see `ephys.Unit.TrialSpikes`).
+
+    Here, for the foraging task, we would like to align spikes to any event, such as go cue, choice (reward), ITI, and
+    even the next trial's trial start. Because of this flexibility, we chose not to do alignment during ingestion, but
+    use this table to define all possible alignment types we want, and compute the PSTHs on-the-fly.
+
+    Notes:
+    1. When we fetch event times for `experiment.TrialEventType`, we use NI time (`ephys.TrialEvent`) instead of bpod
+       time (`experiment.TrialEvent`). See `compute_unit_psth_and_raster()`. See also
+       `ingest.util.compare_ni_and_bpod_times()` for a comparison between NI and bpod time and why NI time is more
+       reliable.
+
+    2. `trial_offset` is used to specify alignment type like the trial start of the *next* trial. This is
+       implemented by adding a `trial_offset` in the method `TrialCondition.get_trials()` above.
+
+       Say, we want to compute PSTH conditioned on all rewarded trials and aligned to the next trial start. Assuming
+       trials #1, 5, and 10 are the rewarded trials, then with `trial_offset` = 1, `TrialCondition.get_trials()` will
+       return trials #2, 6, and 11. Using this shifted `trial_keys`, `compute_unit_psth_and_raster` will effectively
+       align the spikes to the *next* trial start of all rewarded trials.
+
+    """
+    
+    definition = """
+    align_type_name: varchar(32)   # user-friendly name of alignment type
+    -> experiment.TrialEventType
+    ---
+    align_type_description='':    varchar(256)    # description of this align type
+    trial_offset=0:      smallint         # e.g., offset = 1 means the psth will be aligned to the event of the *next* trial.
+    time_offset=0:       Decimal(10, 5)   # will be added to the event time for manual correction (e.g., bitcodestart to actual zaberready)  
+    psth_win:            tinyblob    # [t_min, t_max], time window by which `compute_unit_psth_and_raster` counts spikes
+    xlim:                tinyblob    # [x_min, x_max], default xlim for plotting PSTH (could be overridden during plotting)
+    """
+    contents = [
+        ['trial_start', 'zaberready', '', 0, 0, [-3, 2], [-2, 1]],
+        ['go_cue', 'go', '', 0, 0, [-2, 5], [-1, 3]],
+        ['first_lick_after_go_cue', 'choice', 'first non-early lick', 0, 0, [-2, 5], [-1, 3]],
+        ['iti_start', 'trialend', '', 0, 0, [-3, 10], [-2, 5]],
+        ['next_trial_start', 'zaberready', '', 1, 0, [-10, 3], [-8, 1]],
+
+        # In the first few sessions, zaber moter feedback is not recorded,
+        # so we don't know the exact time of trial start ('zaberready').
+        # We have to estimate actual trial start by
+        #   bitcodestart + bitcode width (42 ms for first few sessions) + zaber movement duration (~ 104 ms, very repeatable)
+        ['trial_start_bitcode', 'bitcodestart', 'estimate actual trial start by bitcodestart + 146 ms', 0, 0.146, [-3, 2], [-2, 1]],
+        ['next_trial_start_bitcode', 'bitcodestart', 'estimate actual trial start by bitcodestart + 146 ms', 1, 0.146, [-10, 3], [-8, 1]],
+    ]
+
+
+def compute_unit_psth_and_raster(unit_key, trial_keys, align_type='go_cue', bin_size=0.04):
+    """
+    Align spikes of specified unit and trial-set to specified align_event_type,
+    compute psth with specified window and binsize, and generate data for raster plot.
+    (for foraging task only)
+
+    @param unit_key: key of a single unit to compute the PSTH for
+    @param trial_keys: list of all the trial keys to compute the PSTH over
+    @param align_type: psth_foraging.AlignType
+    @param bin_size: (in sec)
+    
+    Returns a dictionary of the form:
+      {
+         'bins': time bins,
+         'trials': ephys.Unit.TrialSpikes.trials,
+         'spikes_aligned': aligned spike times per trial
+         'psth': (bins x 1)
+         'psth_per_trial': (trial x bins)
+         'raster': Spike * Trial raster [np.array, np.array]
+      }
+    """
+    
+    q_align_type = AlignType & {'align_type_name': align_type}
+    
+    # -- Get global times for spike and event --
+    q_spike = ephys.Unit & unit_key  # Using ephys.Unit, not ephys.Unit.TrialSpikes
+    q_event = ephys.TrialEvent & trial_keys & q_align_type   # Using ephys.TrialEvent, not experiment.TrialEvent
+    if not q_spike or not q_event:
+        return None
+
+    # Session-wise spike times (relative to the first sTrig, i.e. 'bitcodestart'. see line 212 of ingest.ephys)
+    spikes = q_spike.fetch1('spike_times')
+    
+    # Session-wise event times (relative to session start)
+    events, trials = q_event.fetch('trial_event_time', 'trial', order_by='trial asc')
+    # Make event times also relative to the first sTrig
+    events -= (ephys.TrialEvent & trial_keys.proj(_='trial') & {'trial_event_type': 'bitcodestart', 'trial': 1}).fetch1('trial_event_time')
+    events = events.astype(float)
+    
+    # Manual correction of trialstart, if necessary
+    events += q_align_type.fetch('time_offset').astype(float)
+    
+    # -- Align spike times to each event --
+    win = q_align_type.fetch1('psth_win')
+    spikes_aligned = []
+    for e_t in events:
+        s_t = spikes[(e_t + win[0] <= spikes) & (spikes < e_t + win[1])]
+        spikes_aligned.append(s_t - e_t)
+    
+    # -- Compute psth --
+    binning = np.arange(win[0], win[1], bin_size)
+    
+    # psth (bins x 1)
+    all_spikes = np.concatenate(spikes_aligned)
+    psth, edges = np.histogram(all_spikes, bins=binning)
+    psth = psth / len(q_event) / bin_size
+    
+    # psth per trial (trial x bins)
+    psth_per_trial = np.vstack(np.histogram(trial_spike, bins=binning)[0] / bin_size for trial_spike in spikes_aligned)
+
+    # raster (all spike time, all trial number)
+    raster = [all_spikes,
+              np.concatenate([[t] * len(s)
+                              for s, t in zip(spikes_aligned, trials)])]
+
+    return dict(bins=binning[1:], trials=trials, spikes_aligned=spikes_aligned,
+                psth=psth, psth_per_trial=psth_per_trial, raster=raster)
