@@ -6,4 +6,4 @@ init
 
 %% run the populate routines
 parpopulate(tracking.TongueTracking3DBot)
-parpopulate(tracking.JawTracking3DSid)
+% parpopulate(tracking.JawTracking3DSid)

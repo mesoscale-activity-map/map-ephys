@@ -1,10 +1,8 @@
-from pipeline import ephys
-from pipeline import tracking
-from pipeline import experiment
+from pipeline import ephys, tracking, experiment
 from pipeline.plot import behavior_plot
 from pipeline.mtl_analysis import helper_functions
-# import datajoint as dj
-# tracking = dj.create_virtual_module('tracking', 'map_v2_tracking')
+import datajoint as dj
+v_tracking = dj.create_virtual_module('tracking', 'map_v2_tracking')
 
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
@@ -14,59 +12,124 @@ water='DL004'
 date='2021-03-08'
 subject, session = helper_functions.water2subject(water, date)
 #%%
+#session=experiment.Session & 'subject_id="2897"' & {'session': 1}
 session=experiment.Session & 'subject_id="2897"' & {'session': 1}
 session_key=session.fetch('KEY')
 #%% get traces and phase
 good_units=ephys.Unit * ephys.ClusterMetric * ephys.UnitStat & session_key & {'insertion_number': 2} & 'presence_ratio > 0.9' & 'amplitude_cutoff < 0.15' & 'avg_firing_rate > 0.2' & 'isi_violation < 10' & 'unit_amp > 150'
-
 unit_keys=good_units.fetch('KEY')
+bin_width = 0.017
 
-traces_s = tracking.Tracking.JawTracking & session_key & {'tracking_device': 'Camera 3'}
-traces_b = tracking.Tracking.JawTracking & session_key & {'tracking_device': 'Camera 4'}
-session_traces_s_y, session_traces_s_x = traces_s.fetch('jaw_y','jaw_x')
-session_traces_b_y, session_traces_b_x = traces_b.fetch('jaw_y','jaw_x')
-traces_length_s = [len(d) for d in session_traces_s_y]
-traces_length_b = [len(d) for d in session_traces_b_y]
-sample_number = int(np.median(traces_length_s))
-good_trial_ind = np.where((np.array(traces_length_s) == sample_number) & (np.array(traces_length_b) == sample_number))[0]
-good_traces_s_y = session_traces_s_y[good_trial_ind]
-good_traces = np.vstack(good_traces)
+# from the cameras
+tongue_thr = 0.95
+traces_s = tracking.Tracking.TongueTracking & session_key & {'tracking_device': 'Camera 3'}
+traces_b = tracking.Tracking.TongueTracking & session_key & {'tracking_device': 'Camera 4'}
+session_traces_s_l = traces_s.fetch('tongue_likelihood')
+session_traces_b_l = traces_b.fetch('tongue_likelihood')
+trial_key=(v_tracking.TongueTracking3DBot & session_key).fetch('trial', order_by='trial')
+session_traces_s_l = session_traces_s_l[trial_key-1]
+session_traces_b_l = session_traces_b_l[trial_key-1]
+session_traces_s_l = np.vstack(session_traces_s_l)
+session_traces_b_l = np.vstack(session_traces_b_l)
+session_traces_t_l = session_traces_b_l
+session_traces_t_l[np.where((session_traces_s_l > tongue_thr) & (session_traces_b_l > tongue_thr))] = 1
+session_traces_t_l[np.where((session_traces_s_l <= tongue_thr) & (session_traces_b_l <= tongue_thr))] = 0
 
+# from 3D calibration
+traces_s = v_tracking.JawTracking3DSid & session_key
+traces_b = v_tracking.TongueTracking3DBot & session_key
+session_traces_s_y, session_traces_s_x, session_traces_s_z = traces_s.fetch('jaw_y', 'jaw_x', 'jaw_z', order_by='trial')
+session_traces_b_y, session_traces_b_x, session_traces_b_z = traces_b.fetch('tongue_y', 'tongue_x', 'tongue_z', order_by='trial')
+session_traces_s_y = np.vstack(session_traces_s_y)
+session_traces_s_x = np.vstack(session_traces_s_x)
+session_traces_s_z = np.vstack(session_traces_s_z)
+session_traces_b_y = np.vstack(session_traces_b_y) * session_traces_t_l
+session_traces_b_x = np.vstack(session_traces_b_x) * session_traces_t_l
+session_traces_b_z = np.vstack(session_traces_b_z) * session_traces_t_l
+traces_len = np.size(session_traces_b_z, axis = 1)
+num_trial = np.size(session_traces_b_z, axis = 0)
+
+# phase caculation
 fs=(tracking.TrackingDevice() & 'tracking_device="Camera 3"').fetch1('sampling_rate')
+amp_x, phase_x=behavior_plot.compute_insta_phase_amp(session_traces_s_x, float(fs), freq_band=(5, 15))
+amp_y, phase_y=behavior_plot.compute_insta_phase_amp(session_traces_s_y, float(fs), freq_band=(5, 15))
+amp_z, phase_z=behavior_plot.compute_insta_phase_amp(session_traces_s_z, float(fs), freq_band=(5, 15))
+phase_x = phase_x + np.pi
+phase_y = phase_y + np.pi
+phase_z = phase_z + np.pi
 
-amp, phase=behavior_plot.compute_insta_phase_amp(good_traces, float(fs), freq_band=(5, 15))
-phase = phase + np.pi
+# format the video data
+session_traces_s_y = np.hstack(session_traces_s_y)
+session_traces_s_x = np.hstack(session_traces_s_x)
+session_traces_s_z = np.hstack(session_traces_s_z)
+session_traces_b_y = np.hstack(session_traces_b_y)
+session_traces_b_x = np.hstack(session_traces_b_x)
+session_traces_b_z = np.hstack(session_traces_b_z)
+# -- moving-average and down-sample
+window_size = int(bin_width/0.0034)  # sample
+kernel = np.ones(window_size) / window_size
+session_traces_s_x = np.convolve(session_traces_s_x, kernel, 'same')
+session_traces_s_x = session_traces_s_x[window_size::window_size]
+session_traces_s_y = np.convolve(session_traces_s_y, kernel, 'same')
+session_traces_s_y = session_traces_s_y[window_size::window_size]
+session_traces_s_z = np.convolve(session_traces_s_z, kernel, 'same')
+session_traces_s_z = session_traces_s_z[window_size::window_size]
+session_traces_b_x = np.convolve(session_traces_b_x, kernel, 'same')
+session_traces_b_x = session_traces_b_x[window_size::window_size]
+session_traces_b_y = np.convolve(session_traces_b_y, kernel, 'same')
+session_traces_b_y = session_traces_b_y[window_size::window_size]
+session_traces_b_z = np.convolve(session_traces_b_z, kernel, 'same')
+session_traces_b_z = session_traces_b_z[window_size::window_size]
+session_traces_s_x = np.reshape(session_traces_s_x,(-1,1))
+session_traces_s_y = np.reshape(session_traces_s_y,(-1,1))
+session_traces_s_z = np.reshape(session_traces_s_z,(-1,1))
+session_traces_b_x = np.reshape(session_traces_b_x,(-1,1))
+session_traces_b_y = np.reshape(session_traces_b_y,(-1,1))
+session_traces_b_z = np.reshape(session_traces_b_z,(-1,1))
 
-for j in range(20,21):
+# get breathing
+breathing, breathing_ts = (experiment.Breathing & session_key).fetch('breathing', 'breathing_timestamps', order_by='trial')
+breathing = breathing[trial_key-1]
+breathing_ts = breathing_ts[trial_key-1]
+good_breathing = breathing
+for i, d in enumerate(breathing):
+    good_breathing[i] = d[breathing_ts[i] < traces_len*3.4/1000]
+good_breathing = np.vstack(good_breathing)
+good_breathing = np.hstack(good_breathing)
+# -- moving-average
+window_size = int(bin_width/(breathing_ts[0][1]-breathing_ts[0][0]))  # sample
+kernel = np.ones(window_size) / window_size
+good_breathing = np.convolve(good_breathing, kernel, 'same')
+# -- down-sample
+good_breathing = good_breathing[window_size::window_size]
+good_breathing = np.reshape(good_breathing,(-1,1))
+
+# stimulus
+V_design_matrix = np.concatenate((session_traces_s_x, session_traces_s_y, session_traces_s_z, session_traces_b_x, session_traces_b_y, session_traces_b_z, good_breathing), axis=1)
+
+#set up GLM
+sm_log_Link = sm.genmod.families.links.log
+
+for j in range(20,21): # loop for each neuron
     unit_key=unit_keys[j]
-    all_spikes=(ephys.Unit.TrialSpikes & unit_key).fetch('spike_times')
-    good_spikes = np.array(all_spikes[good_trial_ind]*float(fs)) # get good spikes
-    good_spikes = [d.astype(int) for d in good_spikes]
+    all_spikes=(ephys.Unit.TrialSpikes & unit_key).fetch('spike_times', order_by='trial')
+    good_spikes = np.array(all_spikes[trial_key-1]) # get good spikes
 
     for i, d in enumerate(good_spikes):
-        good_spikes[i] = d[d < 1470]
+        good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
 
-    all_phase = []
-    for trial_idx in range(len(good_spikes)):
-        all_phase.append(phase[trial_idx][good_spikes[trial_idx]])
+    good_spikes = np.hstack(good_spikes)
+    
+    y, bin_edges = np.histogram(good_spikes, np.arange(0, traces_len*3.4/1000*num_trial, bin_width))
+    #y = np.reshape(y, (-1, 1))
+    #y = np.concatenate((y, np.ones( [len(y),1] )), axis=1)
+    
+    glm_poiss = sm.GLM(y, sm.add_constant(V_design_matrix), family=sm.families.Poisson(link=sm_log_Link))
 
-    all_phase=np.hstack(all_phase)
-    
-    # response
-    y
-    
-    # stimulus
-    V
-    
-    #% set up GLM
-    y = np.concatenate((y, np.ones( [len(y),1] )), axis=1)
-    sm_log_Link = sm.genmod.families.links.log
-    glm_binom = sm.GLM(sm.add_constant(y), sm.add_constant(V_design_matrix), family=sm.families.Poisson(link=sm_log_Link))
-    
-    
-    ## Run GLM fit
-    glm_result = glm_binom.fit()
+    glm_result = glm_poiss.fit()
     weights_py = glm_result.params 
-    
-    ## Compare the difference
+
+    # Compare the difference
     print(weights_py)
+#%%    
+

@@ -120,7 +120,7 @@ def plot_tracking(session_key, unit_key,
 
 def plot_tuning(session_key, unit_key):
     traces = tracking.Tracking.JawTracking & session_key & {'tracking_device': 'Camera 3'}
-    session_traces = traces.fetch('jaw_y')
+    session_traces = traces.fetch('jaw_y', order_by='trial')
     traces_length = [len(d) for d in session_traces]
     sample_number = int(np.median(traces_length))
     good_trial_ind = np.where(np.array(traces_length) == sample_number)[0]
@@ -132,7 +132,7 @@ def plot_tuning(session_key, unit_key):
     amp, phase=behavior_plot.compute_insta_phase_amp(good_traces, float(fs), freq_band=(5, 15))
     phase = phase + np.pi
 
-    all_spikes=(ephys.Unit.TrialSpikes & unit_key).fetch('spike_times')
+    all_spikes=(ephys.Unit.TrialSpikes & unit_key).fetch('spike_times', order_by='trial')
     good_spikes = np.array(all_spikes[good_trial_ind]*float(fs)) # get good spikes
     good_spikes = [d.astype(int) for d in good_spikes]
 
