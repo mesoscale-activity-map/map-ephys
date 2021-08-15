@@ -324,7 +324,7 @@ class FittedSessionModel(dj.Computed):
 
             self.TrialLatentVariable.insert(
                 [{**key, 'trial': i, 'choice_prob': prob, 'action_value': value, 'choice_kernel': ck}
-                 for i, prob, value, ck in zip(q_choice_outcome.fetch('trial'),
+                 for i, prob, value, ck in zip(q_choice_outcome.fetch('trial', order_by='trial'),
                                                choice_prob[water_port_idx, :],
                                                action_value[water_port_idx, :],
                                                choice_kernel[water_port_idx, :])]
@@ -409,11 +409,11 @@ def get_session_history(session_key, remove_ignored=True):
 
     # Formatting
     # 0: left, 1: right, np.nan: ignored
-    _choice = q_choice_outcome.fetch('choice')
+    _choice = q_choice_outcome.fetch('choice', order_by='trial')
     _choice[_choice == 'left'] = 0
     _choice[_choice == 'right'] = 1
 
-    _reward = q_choice_outcome.fetch('outcome') == 'hit'
+    _reward = q_choice_outcome.fetch('outcome', order_by='trial') == 'hit'
     reward_history = np.zeros([2, len(_reward)])  # .shape = (2, N trials)
     for c in (0, 1):
         reward_history[c, _choice == c] = (_reward[_choice == c] == True).astype(int)
@@ -421,7 +421,7 @@ def get_session_history(session_key, remove_ignored=True):
 
     # p_reward (optional)
     q_p_reward = q_choice_outcome.proj() * experiment.SessionBlock.WaterPortRewardProbability & session_key
-    p_reward = np.vstack([(q_p_reward & 'water_port="left"').fetch('reward_probability').astype(float),
-                          (q_p_reward & 'water_port="right"').fetch('reward_probability').astype(float)])
+    p_reward = np.vstack([(q_p_reward & 'water_port="left"').fetch('reward_probability', order_by='trial').astype(float),
+                          (q_p_reward & 'water_port="right"').fetch('reward_probability', order_by='trial').astype(float)])
 
     return choice_history, reward_history, p_reward, q_choice_outcome
