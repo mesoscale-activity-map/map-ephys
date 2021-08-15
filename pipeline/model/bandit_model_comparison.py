@@ -21,7 +21,7 @@ class BanditModelComparison:
     
     '''
     
-    def __init__(self, choice_history, reward_history, model, p_reward = None, session_num = None):
+    def __init__(self, choice_history, reward_history, model, iti=None, p_reward = None, session_num = None):
         """
 
         Parameters
@@ -41,6 +41,7 @@ class BanditModelComparison:
 
         self.models = model
         self.fit_choice_history, self.fit_reward_history, self.p_reward, self.session_num = choice_history, reward_history, p_reward, session_num
+        self.fit_iti = iti
         self.K, self.n_trials = np.shape(self.fit_reward_history)
         assert np.shape(self.fit_choice_history)[1] == self.n_trials, 'Choice length should be equal to reward length!'
         
@@ -67,8 +68,8 @@ class BanditModelComparison:
             if if_verbose: print('Model %g/%g: %15s, Km = %g ...'%(mm+1, len(self.models), forager, Km), end='')
             start = time.time()
                 
-            result_this = fit_bandit(forager, fit_names, fit_bounds, self.fit_choice_history, self.fit_reward_history, self.session_num,
-                                     fit_method = fit_method, **fit_settings, 
+            result_this = fit_bandit(forager, fit_names, fit_bounds, self.fit_choice_history, self.fit_reward_history, iti = self.fit_iti, 
+                                     session_num = self.session_num, fit_method = fit_method, **fit_settings, 
                                      pool = pool, if_predictive = True) #plot_predictive is not None)
             
             if if_verbose: print(' AIC = %g, BIC = %g (done in %.3g secs)' % (result_this.AIC, result_this.BIC, time.time()-start) )
@@ -108,7 +109,7 @@ class BanditModelComparison:
                 
             prediction_accuracy_test, prediction_accuracy_fit, prediction_accuracy_test_bias_only \
             = cross_validate_bandit(forager, fit_names, fit_bounds, 
-                                    self.fit_choice_history, self.fit_reward_history, self.session_num, 
+                                    self.fit_choice_history, self.fit_reward_history, self.fit_iti, self.session_num, 
                                     k_fold = k_fold, **fit_settings, pool = pool, if_verbose = if_verbose) #plot_predictive is not None)
             
             if if_verbose: print('  \n%g-fold CV: Test acc.= %s, Fit acc. = %s (done in %.3g secs)' % (k_fold, prediction_accuracy_test, prediction_accuracy_fit, time.time()-start) )

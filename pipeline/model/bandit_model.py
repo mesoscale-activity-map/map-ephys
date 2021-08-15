@@ -23,6 +23,11 @@
 #   4. Choice kernel
 #      Could be added to: 'RW1972_softmax_CK', 'LNP_softmax_CK', 'Bari2019_CK', 'Hattori2019_CK'
 #
+#   5. Network models (abstracted from Ulises' network models)
+#       1). 'CANN_iti': values decay in ITI
+#       2). 'Synaptic' 
+#
+#
 #  = Other types that can simulate but not fit =
 #   1. 'Random'
 #   2. 'IdealpHatGreedy'
@@ -95,7 +100,7 @@ class BanditModel:
                  # If not None, calculate predictive_choice_probs(t) based on fit_choice_history(0:t-1) and fit_reward_history(0:t-1) for negLL calculation.
                  fit_choice_history=None,
                  fit_reward_history=None,
-                 fit_iti=None,
+                 fit_iti=None,  # ITI [t] --> ITI between t and t + 1
 
                  # For CANN
                  tau_cann=None,
@@ -149,7 +154,7 @@ class BanditModel:
         # 2. for those involve softmax: b_undefined = 0, no constraint. cp_k = exp(Q/sigma + b_i) / sum(Q/sigma + b_i). Putting b_i outside /sigma to make it comparable across different softmax_temperatures
         elif forager in ['RW1972_softmax', 'LNP_softmax', 'Bari2019', 'Hattori2019',
                          'RW1972_softmax_CK', 'LNP_softmax_CK', 'Bari2019_CK', 'Hattori2019_CK',
-                         'CANN', 'synaptic']:
+                         'CANN', 'Synaptic']:
             if self.K == 2:
                 self.bias_terms = np.array([biasL, 0])  # Relative to right
             elif self.K == 3:
@@ -196,7 +201,7 @@ class BanditModel:
             self.tau_cann = tau_cann
             self.learn_rates = [learn_rate, learn_rate]
             
-        elif 'synaptic' in forager:
+        elif 'Synaptic' in forager:
             assert all(x is not None for x in (
                 learn_rate, forget_rate, I0, rho, softmax_temperature))
             self.I0 = I0
@@ -272,9 +277,9 @@ class BanditModel:
 
         elif 'CANN' in self.forager:
             if not self.if_fit_mode:   # Override user input of iti
-                self.iti = np.ones([1, self.n_trials + 1])
+                self.iti = np.ones(self.n_trials)
                 
-        elif 'synaptic' in self.forager:
+        elif 'Synaptic' in self.forager:
             self.w = np.full([self.K, self.n_trials + 1], np.nan)
             self.w[:, 0] = 0.1
 
@@ -571,7 +576,7 @@ class BanditModel:
         # if self.forager in ['RW1972_softmax', 'Bari2019', 'Hattori2019']:
         #     self.q_estimation[:, self.time] = softmax(self.q_estimation[:, self.time], self.softmax_temperature)
 
-    def step_CANN(self, choice, reward, iti):
+    def step_CANN(self, choice, reward):
         """
         Abstracted from Ulises' line attractor model
         """
@@ -579,16 +584,20 @@ class BanditModel:
             learn_rate_this = self.learn_rates[1]
         else:
             learn_rate_this = self.learn_rates[0]
+            
+        # ITI[self.time] --> ITI between (self.time) and (self.time + 1)
+        iti_time_minus1_to_time = self.iti[self.time - 1]
 
         # Choice-dependent forgetting rate ('Hattori2019')
         # Chosen:   Q(n+1) = (1- forget_rate_chosen) * Q(n) + step_size * (Reward - Q(n))
         self.q_estimation[choice, self.time] = (self.q_estimation[choice, self.time - 1]
-                                                + learn_rate_this * (reward - self.q_estimation[choice, self.time - 1])) * np.exp(- iti / self.tau_cann)
+                                                + learn_rate_this * (reward - self.q_estimation[choice, self.time - 1])
+                                                ) * np.exp( -iti_time_minus1_to_time / self.tau_cann)
 
         # Unchosen: Q(n+1) = (1-forget_rate_unchosen) * Q(n)
         unchosen_idx = [cc for cc in range(self.K) if cc != choice]
-        self.q_estimation[unchosen_idx, self.time] = self.q_estimation[unchosen_idx,
-                                                                       self.time - 1] * np.exp(- iti / self.tau_cann)
+        self.q_estimation[unchosen_idx, self.time] = self.q_estimation[unchosen_idx, self.time - 1
+                                                                       ] * np.exp( -iti_time_minus1_to_time / self.tau_cann)
         
     @staticmethod
     def f(x): 
@@ -651,7 +660,7 @@ class BanditModel:
 
         if self.forager in ['RW1972_softmax', 'LNP_softmax', 'Bari2019', 'Hattori2019',
                             'RW1972_softmax_CK', 'LNP_softmax_CK', 'Bari2019_CK', 'Hattori2019_CK',
-                            'CANN', 'synaptic']:   # Probabilistic (Could have choice kernel)
+                            'CANN', 'Synaptic']:   # Probabilistic (Could have choice kernel)
             return self.act_Probabilistic()
 
         print('No action found!!')
@@ -699,9 +708,9 @@ class BanditModel:
             self.step_RWlike(choice, reward)
 
         elif self.forager in ['CANN']:
-            self.step_CANN(choice, reward, self.iti[0, self.time])
+            self.step_CANN(choice, reward)
         
-        elif self.forager in ['synaptic']:
+        elif self.forager in ['Synaptic']:
             self.step_synaptic(choice, reward)
 
         elif self.forager in ['LNP_softmax', 'LNP_softmax_CK']:
@@ -731,5 +740,3 @@ class BanditModel:
         if self.if_fit_mode:
             # Allow the final update of action prob after the last trial (for comparing with ephys)
             action = self.act()
-
-        print(self.time)

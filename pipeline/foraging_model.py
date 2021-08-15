@@ -1,6 +1,6 @@
 import datajoint as dj
 import numpy as np
-from . import experiment, get_schema_name, foraging_analysis
+from . import experiment, ephys, get_schema_name, foraging_analysis
 from .model.bandit_model_comparison import BanditModelComparison
 
 schema = dj.schema(get_schema_name('foraging_model'))
@@ -19,6 +19,8 @@ class ModelClass(dj.Lookup):
         ['LNP', 'Linear-nonlinear-Possion (exponential recency-weighted average)'],
         ['Bari2019', 'Bari et al 2019 (different learning rates for chosen/unchosen)'],
         ['Hattori2019', 'Hattori et al 2019 (different learning rates for rew/unrew/unchosen)'],
+        ['CANN', "Abstracted from Ulises' continuous attractor neural network"],
+        ['Synaptic', "Abstracted from Ulises' synaptic model"]
     ]
 
 
@@ -46,6 +48,9 @@ class ModelParam(dj.Lookup):
         ['biasR', r'$b_R$'],
         ['choice_step_size', r'$\alpha_c$'],
         ['choice_softmax_temperature', r'$\sigma_c$'],
+        ['tau_cann', r'$\tau_{CANN}$'],
+        ['I0', r'$I_0$'],
+        ['rho', r'$\rho$']
     ]
 
 
@@ -148,6 +153,12 @@ class Model(dj.Manual):
             ['Hattori2019_CK', ['learn_rate_rew', 'learn_rate_unrew', 'forget_rate', 'softmax_temperature', 'biasL', 'choice_step_size', 'choice_softmax_temperature'],
              [0, 0, 0, 1e-2, -5, 1, 1e-2], [1, 1, 1, 15, 5, 1, 20], 'choice_step_size fixed at 1 --> Bari 2019: only the last choice matters'],
 
+            ['CANN', ['learn_rate', 'tau_cann', 'softmax_temperature', 'biasL'],
+             [0, 0, 1e-2, -5], [1, 1000, 15, 5], "Ulises' CANN model, ITI decay, with bias"],
+            
+            ['Synaptic', ['learn_rate', 'forget_rate', 'I0', 'rho', 'softmax_temperature', 'biasL'],
+             [0, 0, 0, 0, 1e-2, -5], [1, 1, 100, 1, 15, 5], "Ulises' synaptic model"],
+            
         ]
 
         # Parse and insert MODELS
@@ -244,7 +255,7 @@ class FittedSessionModel(dj.Computed):
     """
 
     key_source = (foraging_analysis.SessionTaskProtocol() & 'session_task_protocol = 100' & 'session_real_foraging'
-                  ) * Model()
+                  ) * Model() & 'is_bias'
 
     class Param(dj.Part):
         definition = """
@@ -281,11 +292,14 @@ class FittedSessionModel(dj.Computed):
         """
 
     def make(self, key):
-        choice_history, reward_history, p_reward, q_choice_outcome = get_session_history(key)
+        choice_history, reward_history, iti, p_reward, q_choice_outcome = get_session_history(key)
         model_str = (Model & key).fetch('fit_cmd')
 
         # --- Actual fitting ---
-        model_comparison_this = BanditModelComparison(choice_history, reward_history, model=model_str)
+        if (Model & key).fetch1('model_class') in ['CANN']:  # Only pass ITI if this is CANN model (to save some time?)
+            model_comparison_this = BanditModelComparison(choice_history, reward_history, iti=iti, model=model_str)
+        else:
+            model_comparison_this = BanditModelComparison(choice_history, reward_history, iti=None, model=model_str)
         model_comparison_this.fit(pool='', plot_predictive=None, if_verbose=False)  # Parallel on sessions, not on DE
         model_comparison_this.cross_validate(pool='', k_fold=2, if_verbose=False)
 
@@ -407,7 +421,7 @@ def get_session_history(session_key, remove_ignored=True):
 
     # TODO: session QC (warm-up and decreased motivation etc.)
 
-    # Formatting
+    # -- Choice and reward --
     # 0: left, 1: right, np.nan: ignored
     _choice = q_choice_outcome.fetch('choice', order_by='trial')
     _choice[_choice == 'left'] = 0
@@ -417,11 +431,37 @@ def get_session_history(session_key, remove_ignored=True):
     reward_history = np.zeros([2, len(_reward)])  # .shape = (2, N trials)
     for c in (0, 1):
         reward_history[c, _choice == c] = (_reward[_choice == c] == True).astype(int)
-    choice_history = np.array([_choice])  # .shape = (1, N trials)
-
-    # p_reward (optional)
+    choice_history = np.array([_choice]).astype(int)  # .shape = (1, N trials)
+    
+    # -- ITI --
+    # All previous models has an effective ITI of constant 1.
+    # For Ulises RNN model, an important prediction is that values in line attractor decay over (actual) time with time constant tau_CANN.
+    # This will take into consideration (1) different ITI of each trial, and (2) long effective ITI after ignored trials.
+    # Thus for CANN model, the ignored trials are also removed, but they contribute to model fitting in increasing the ITI.
+    
+    if len(ephys.TrialEvent & q_choice_outcome):  # Use NI times (trial start and trial end) if possible
+        trial_start = (ephys.TrialEvent & q_choice_outcome & 'trial_event_type = "bitcodestart"'
+                       ).fetch('trial_event_time', order_by='trial').astype(float)
+        trial_end = (ephys.TrialEvent & q_choice_outcome & 'trial_event_type = "trialend"'
+                     ).fetch('trial_event_time', order_by='trial').astype(float)
+        iti = trial_start[1:] - trial_end[:-1]  # ITI [t] --> ITI between trial t-1 and t
+    else:  # If not ephys session, we can only use PC time (should be fine because this fitting is not quite time-sensitive)
+        bpod_start_global = (experiment.SessionTrial & q_choice_outcome
+                             ).fetch('start_time', order_by='trial').astype(float)  # This is (global) PC time
+        bitcodestart_local = (experiment.TrialEvent & q_choice_outcome & 'trial_event_type = "bitcodestart"'
+                              ).fetch('trial_event_time', order_by='trial').astype(float)
+        trial_end_local = (experiment.TrialEvent & q_choice_outcome & 'trial_event_type = "trialend"'
+                           ).fetch('trial_event_time', order_by='trial').astype(float)
+        if bitcodestart_local and trial_end_local:
+            iti = (bpod_start_global[1:] + bitcodestart_local[1:]) - (bpod_start_global[:-1] + trial_end_local[:-1])
+        else:
+            iti = bpod_start_global[1:] - bpod_start_global[:-1]
+        
+    iti = np.hstack([0, iti])  # First trial iti is irrelevant
+    
+    # -- p_reward --
     q_p_reward = q_choice_outcome.proj() * experiment.SessionBlock.WaterPortRewardProbability & session_key
     p_reward = np.vstack([(q_p_reward & 'water_port="left"').fetch('reward_probability', order_by='trial').astype(float),
                           (q_p_reward & 'water_port="right"').fetch('reward_probability', order_by='trial').astype(float)])
 
-    return choice_history, reward_history, p_reward, q_choice_outcome
+    return choice_history, reward_history, iti, p_reward, q_choice_outcome
