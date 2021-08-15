@@ -113,6 +113,7 @@ def plot_session_model_comparison(sess_key={'subject_id': 473361, 'session': 47}
 
 
 def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
+                               specified_model_id=None,
                                model_comparison_idx=0, sort='aic',
                                first_n=1, last_n=0, smooth_factor=5):
     """
@@ -127,29 +128,44 @@ def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
     """
 
     # Fetch actual data
-    choice_history, reward_history, p_reward, _ = foraging_model.get_session_history(sess_key)
+    choice_history, reward_history, iti, p_reward, _ = foraging_model.get_session_history(sess_key)
     n_trials = np.shape(choice_history)[1]
 
     # Fetch fitted data
-    results, q_model_comparison = _get_model_comparison_results(sess_key, model_comparison_idx, sort)
-
+    if specified_model_id is None:  # No specified model, plot model comparison
+        results, q_model_comparison = _get_model_comparison_results(sess_key, model_comparison_idx, sort)
+    else:  # only plot specified model_id
+        q_result = (foraging_model.Model.proj(..., '-n_params') * foraging_model.FittedSessionModel) & sess_key & {'model_id': specified_model_id}
+        q_result *= q_result.aggr(foraging_model.FittedSessionModel.Param * foraging_model.ModelParam * foraging_model.Model.Param.proj('param_idx'),
+                                        fitted_param='GROUP_CONCAT(ROUND(fitted_value,2) ORDER BY param_idx SEPARATOR ", ")')
+        result = pd.DataFrame(q_result.fetch())
+        
     # -- Plot actual choice and reward history --
     with sns.plotting_context("notebook", font_scale=1, rc={'style': 'ticks'}):
-
         ax = plot_session_lightweight([choice_history, reward_history, p_reward], smooth_factor=smooth_factor)
-        plt.gcf().text(0.05, 0.95, f'{(lab.WaterRestriction & sess_key).fetch1("water_restriction_number")}, '
-                            f'session {sess_key["session"]}, {results.n_trials[0]} trials\n'
-                            f'Model comparison: {(foraging_model.ModelComparison & q_model_comparison).fetch1("desc")}'
-                            f' (n = {len(results)})')
 
         # -- Plot fitted choice probability etc. --
-        for idx, result in pd.concat([results.iloc[:first_n], results.iloc[len(results)-last_n:]]).iterrows():
+        if specified_model_id is None:
+            plt.gcf().text(0.05, 0.95, f'{(lab.WaterRestriction & sess_key).fetch1("water_restriction_number")}, '
+                    f'session {sess_key["session"]}, {results.n_trials[0]} trials\n'
+                    f'Model comparison: {(foraging_model.ModelComparison & q_model_comparison).fetch1("desc")}'
+                    f' (n = {len(results)})')
+            for idx, result in pd.concat([results.iloc[:first_n], results.iloc[len(results)-last_n:]]).iterrows():
+                right_choice_prob = (foraging_model.FittedSessionModel.TrialLatentVariable
+                                    & dict(result) & 'water_port="right"').fetch('choice_prob')
+                ax.plot(np.arange(0, n_trials), right_choice_prob, linewidth=max(1.5 - 0.3 * idx, 0.5),
+                        label=f'{idx + 1}: <{result.model_id}> '
+                            f'{result.model_notation}\n'
+                            f'({result.fitted_param})')
+                
+        else:  # Only plot specified model
             right_choice_prob = (foraging_model.FittedSessionModel.TrialLatentVariable
-                                & dict(result) & 'water_port="right"').fetch('choice_prob')
-            ax.plot(np.arange(0, n_trials), right_choice_prob, linewidth=max(1.5 - 0.3 * idx, 0.5),
-                    label=f'{idx + 1}: <{result.model_id}> '
-                          f'{result.model_notation}\n'
-                          f'({result.fitted_param})')
+                                & sess_key & {'model_id': specified_model_id} & 'water_port="right"').fetch('choice_prob')
+            ax.plot(np.arange(0, n_trials), right_choice_prob, linewidth=1.5,
+                    label=f'<{result.model_id[0]}> '
+                          f'{result.model_notation[0]}\n'
+                          f'({result.fitted_param[0]})')           
+                
 
         #TODO Plot session starts
         # if len(trial_numbers) > 1:  # More than one sessions
@@ -234,7 +250,7 @@ def _get_model_comparison_results(sess_key, model_comparison_idx=0, sort=None):
 
     # Add fitted params
     q_result *= q_result.aggr(foraging_model.FittedSessionModel.Param * foraging_model.ModelParam,
-                              fitted_param='GROUP_CONCAT(ROUND(fitted_value,2) SEPARATOR ", ")')
+                              fitted_param='GROUP_CONCAT(ROUND(fitted_value,2) ORDER BY param_idx SEPARATOR ", ")')
     results = pd.DataFrame(q_result.fetch())
     results['para_notation_with_best_fit'] = [f'<{id}> {name}\n({value})' for id, name, value in
                                               results[['model_id', 'model_notation', 'fitted_param']].values]
