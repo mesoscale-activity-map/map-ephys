@@ -241,7 +241,7 @@ class FittedSessionModel(dj.Computed):
     -> Model
     ---
     n_trials: int
-    n_params: int
+    n_params: int  # Number of effective params (return from the fitting function; should be the same as Model.n_params)
     log_likelihood: float  # raw log likelihood of the model
     aic: float   # AIC
     bic: float   # BIC
@@ -255,7 +255,7 @@ class FittedSessionModel(dj.Computed):
     """
 
     key_source = ((foraging_analysis.SessionTaskProtocol() & 'session_task_protocol = 100' & 'session_real_foraging'
-                  ) * Model() & 'is_bias') # * experiment.Session() & 'session_date > "2021-01-01"' # & 'model_id > 21' # & 'subject_id = 482350'
+                  ) * Model()) # * experiment.Session() & 'session_date > "2021-01-01"' # & 'model_id > 21' # & 'subject_id = 482350'
 
     class Param(dj.Part):
         definition = """

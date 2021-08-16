@@ -416,7 +416,7 @@ def plot_unit_psth_latent_variable_quantile(unit_key, model_id=11, n_quantile=5,
                  f'{(((ephys.Unit & unit_key) * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation).fetch1("annotation")}\n'
                  f'PSTH grouped by -- {latent_variable} ({side}) --'
                  )
-    id, model_notation, desc, accuracy, n = (foraging_model.FittedSessionModel * foraging_model.Model & unit_key & {'model_id': model_id}).fetch1(
+    id, model_notation, desc, accuracy, n = (foraging_model.FittedSessionModel * foraging_model.Model.proj(..., '-n_params') & unit_key & {'model_id': model_id}).fetch1(
         'model_id', 'model_notation', 'desc', 'cross_valid_accuracy_test', 'n_trials')
     fig.text(0.1, 0.9, unit_info)
     fig.text(0.4, 0.9, f'model <{id}> {model_notation}\n{desc}\n{n} trials, prediction accuracy (cross-valid) = {accuracy}')
