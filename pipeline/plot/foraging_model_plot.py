@@ -113,7 +113,7 @@ def plot_session_model_comparison(sess_key={'subject_id': 473361, 'session': 47}
 
 
 def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
-                               specified_model_id=None,
+                               specified_model_ids=None,
                                model_comparison_idx=0, sort='aic',
                                first_n=1, last_n=0, smooth_factor=5):
     """
@@ -132,40 +132,29 @@ def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
     n_trials = np.shape(choice_history)[1]
 
     # Fetch fitted data
-    if specified_model_id is None:  # No specified model, plot model comparison
+    if specified_model_ids is None:  # No specified model, plot model comparison
         results, q_model_comparison = _get_model_comparison_results(sess_key, model_comparison_idx, sort)
+        results_to_plot = pd.concat([results.iloc[:first_n], results.iloc[len(results)-last_n:]])
     else:  # only plot specified model_id
-        q_result = (foraging_model.Model.proj(..., '-n_params') * foraging_model.FittedSessionModel) & sess_key & {'model_id': specified_model_id}
-        q_result *= q_result.aggr(foraging_model.FittedSessionModel.Param * foraging_model.ModelParam * foraging_model.Model.Param.proj('param_idx'),
-                                        fitted_param='GROUP_CONCAT(ROUND(fitted_value,2) ORDER BY param_idx SEPARATOR ", ")')
-        result = pd.DataFrame(q_result.fetch())
+        results_to_plot = results = _get_specified_model_fitting_results(sess_key, specified_model_ids)
         
     # -- Plot actual choice and reward history --
     with sns.plotting_context("notebook", font_scale=1, rc={'style': 'ticks'}):
         ax = plot_session_lightweight([choice_history, reward_history, p_reward], smooth_factor=smooth_factor)
 
         # -- Plot fitted choice probability etc. --
-        if specified_model_id is None:
-            plt.gcf().text(0.05, 0.95, f'{(lab.WaterRestriction & sess_key).fetch1("water_restriction_number")}, '
-                    f'session {sess_key["session"]}, {results.n_trials[0]} trials\n'
-                    f'Model comparison: {(foraging_model.ModelComparison & q_model_comparison).fetch1("desc")}'
-                    f' (n = {len(results)})')
-            for idx, result in pd.concat([results.iloc[:first_n], results.iloc[len(results)-last_n:]]).iterrows():
-                right_choice_prob = (foraging_model.FittedSessionModel.TrialLatentVariable
-                                    & dict(result) & 'water_port="right"').fetch('choice_prob')
-                ax.plot(np.arange(0, n_trials), right_choice_prob, linewidth=max(1.5 - 0.3 * idx, 0.5),
-                        label=f'{idx + 1}: <{result.model_id}> '
+        model_str =  (f'Model comparison: {(foraging_model.ModelComparison & q_model_comparison).fetch1("desc")}'
+                      f'(n = {len(results)})') if specified_model_ids is None else ''
+        plt.gcf().text(0.05, 0.95, f'{(lab.WaterRestriction & sess_key).fetch1("water_restriction_number")}, '
+                                    f'session {sess_key["session"]}, {results.n_trials[0]} trials\n' + model_str)
+        
+        for idx, result in results_to_plot.iterrows():
+            right_choice_prob = (foraging_model.FittedSessionModel.TrialLatentVariable
+                                & dict(result) & 'water_port="right"').fetch('choice_prob')
+            ax.plot(np.arange(0, n_trials), right_choice_prob, linewidth=max(1.5 - 0.3 * idx, 0.5),
+                    label=f'{idx + 1}: <{result.model_id}> '
                             f'{result.model_notation}\n'
                             f'({result.fitted_param})')
-                
-        else:  # Only plot specified model
-            right_choice_prob = (foraging_model.FittedSessionModel.TrialLatentVariable
-                                & sess_key & {'model_id': specified_model_id} & 'water_port="right"').fetch('choice_prob')
-            ax.plot(np.arange(0, n_trials), right_choice_prob, linewidth=1.5,
-                    label=f'<{result.model_id[0]}> '
-                          f'{result.model_notation[0]}\n'
-                          f'({result.fitted_param[0]})')           
-                
 
         #TODO Plot session starts
         # if len(trial_numbers) > 1:  # More than one sessions
@@ -245,11 +234,11 @@ def _get_model_comparison_results(sess_key, model_comparison_idx=0, sort=None):
     q_model_comparison = (foraging_model.FittedSessionModelComparison.RelativeStat
                           & sess_key & {'model_comparison_idx': model_comparison_idx})
     q_result = (q_model_comparison
-                * foraging_model.Model
+                * foraging_model.Model.proj(..., '-n_params')
                 * foraging_model.FittedSessionModel)
 
     # Add fitted params
-    q_result *= q_result.aggr(foraging_model.FittedSessionModel.Param * foraging_model.ModelParam,
+    q_result *= q_result.aggr(foraging_model.FittedSessionModel.Param * foraging_model.Model.Param,
                               fitted_param='GROUP_CONCAT(ROUND(fitted_value,2) ORDER BY param_idx SEPARATOR ", ")')
     results = pd.DataFrame(q_result.fetch())
     results['para_notation_with_best_fit'] = [f'<{id}> {name}\n({value})' for id, name, value in
@@ -260,3 +249,12 @@ def _get_model_comparison_results(sess_key, model_comparison_idx=0, sort=None):
         results.sort_values(by=[sort], ascending=sort != 'cross_valid_accuracy_test', ignore_index=True, inplace=True)
 
     return results, q_model_comparison
+
+
+def  _get_specified_model_fitting_results(sess_key, specified_model_ids):
+    model_ids_str = ', '.join(str(id) for id in np.array([specified_model_ids]).ravel())
+    q_result = (foraging_model.Model.proj(..., '-n_params') * foraging_model.FittedSessionModel
+                ) & sess_key & f'model_id in ({model_ids_str})'
+    q_result *= q_result.aggr(foraging_model.FittedSessionModel.Param * foraging_model.ModelParam * foraging_model.Model.Param.proj('param_idx'),
+                                    fitted_param='GROUP_CONCAT(ROUND(fitted_value,2) ORDER BY param_idx SEPARATOR ", ")')
+    return pd.DataFrame(q_result.fetch())

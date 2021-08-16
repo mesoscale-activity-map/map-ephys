@@ -157,7 +157,7 @@ class Model(dj.Manual):
              [0, 0, 1e-2, -5], [1, 1000, 15, 5], "Ulises' CANN model, ITI decay, with bias"],
             
             ['Synaptic', ['learn_rate', 'forget_rate', 'I0', 'rho', 'softmax_temperature', 'biasL'],
-             [0, 0, 0, 0, 1e-2, -5], [1, 1, 100, 1, 15, 5], "Ulises' synaptic model"],
+             [0, 0, 0, 0, 1e-2, -5], [1, 1, 10, 1, 15, 5], "Ulises' synaptic model"],
             
         ]
 
@@ -254,8 +254,8 @@ class FittedSessionModel(dj.Computed):
     cross_valid_accuracy_test_bias_only = NULL: float    # accuracy predicted only by bias (testing set)
     """
 
-    key_source = (foraging_analysis.SessionTaskProtocol() & 'session_task_protocol = 100' & 'session_real_foraging'
-                  ) * Model() & 'is_bias'
+    key_source = ((foraging_analysis.SessionTaskProtocol() & 'session_task_protocol = 100' & 'session_real_foraging'
+                  ) * Model() & 'is_bias') # * experiment.Session() & 'session_date > "2021-01-01"' # & 'model_id > 21' # & 'subject_id = 482350'
 
     class Param(dj.Part):
         definition = """
@@ -439,7 +439,9 @@ def get_session_history(session_key, remove_ignored=True):
     # This will take into consideration (1) different ITI of each trial, and (2) long effective ITI after ignored trials.
     # Thus for CANN model, the ignored trials are also removed, but they contribute to model fitting in increasing the ITI.
     
-    if len(ephys.TrialEvent & q_choice_outcome):  # Use NI times (trial start and trial end) if possible
+    if (len(ephys.TrialEvent & q_choice_outcome) 
+        and len(dj.U('trial') & (ephys.TrialEvent & q_choice_outcome)) == len(dj.U('trial') & (experiment.TrialEvent & q_choice_outcome))):
+        # Use NI times (trial start and trial end) if (1) ephys exists (2) len(ephys) == len(behavior)
         trial_start = (ephys.TrialEvent & q_choice_outcome & 'trial_event_type = "bitcodestart"'
                        ).fetch('trial_event_time', order_by='trial').astype(float)
         trial_end = (ephys.TrialEvent & q_choice_outcome & 'trial_event_type = "trialend"'
