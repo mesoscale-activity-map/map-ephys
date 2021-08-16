@@ -1,6 +1,7 @@
 import numpy as np
 import datajoint as dj
 import pathlib
+from glob import glob
 from pipeline import ephys, experiment, tracking
 from pipeline.ingest import tracking as tracking_ingest
 
@@ -97,38 +98,37 @@ class JawTuning(dj.Computed):
 #         self.insert1({**key, 'modulation_index': len(spikes)})
 
 
-
-
 @schema
 class WhiskerSVD(dj.Computed):
     definition = """
-    -> tracking.Tracking
+    -> experiment.Session
     ---
     mot_svd: longblob
     """
     
-    key_source = tracking.Tracking & (experiment.Session & 'rig = "RRig-MTL"') & 'tracking_device = "Camera 4"'
+    key_source = experiment.Session & 'rig = "RRig-MTL"' & (tracking.Tracking  & 'tracking_device = "Camera 4"')
     
     def make(self, key):
         
         from facemap import process
         
-        roi_path = 'H://videos//bottom//DL004//2021_03_08//DL004_2021_03_08_bottom_0_proc.npy'
+        roi_path = 'H://videos//bottom//DL027//2021_07_01//DL027_2021_07_01_bottom_0_proc.npy'
         roi_data = np.load(roi_path, allow_pickle=True).item()
         
         video_root_dir = pathlib.Path('H:/videos')
         
-        trial_path = (tracking_ingest.TrackingIngest.TrackingFile & key).fetch1('tracking_file')
+        trial_path = (tracking_ingest.TrackingIngest.TrackingFile & 'tracking_device = "Camera 4"' & 'trial = 1' & key).fetch1('tracking_file')
         
         video_path = video_root_dir / trial_path
         
-        video_path = video_path.parent / (video_path.stem + '.mp4')
+        video_path = video_path.parent
         
-        proc = process.run([[video_path.as_posix()]], proc=roi_data)
+        video_files = glob(str(video_path) + "\\*.mp4")
+        video_files_l = [[video_files[0]]]
+        for ind_trial, file in enumerate(video_files[1:]):
+            video_files_l.append([file])
+            
+        proc = process.run(video_files_l, proc=roi_data)
         
-        #proc = np.load(video_path.parent / (video_path.stem + '_proc' + '.npy'), allow_pickle=True).item()
+        self.insert1({**key, 'mot_svd': proc['motSVD'][1][:, :3]})
         
-        self.insert1({**key, 'mot_svd': proc['motSVD'][1][:, :100]})
-        
-        
-    

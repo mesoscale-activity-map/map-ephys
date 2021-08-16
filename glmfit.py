@@ -1,4 +1,4 @@
-from pipeline import ephys, tracking, experiment
+from pipeline import ephys, tracking, experiment, oralfacial_analysis
 from pipeline.plot import behavior_plot
 from pipeline.mtl_analysis import helper_functions
 import datajoint as dj
@@ -12,7 +12,6 @@ water='DL004'
 date='2021-03-08'
 subject, session = helper_functions.water2subject(water, date)
 #%%
-#session=experiment.Session & 'subject_id="2897"' & {'session': 1}
 session=experiment.Session & 'subject_id="2897"' & {'session': 1}
 session_key=session.fetch('KEY')
 #%% get traces and phase
@@ -24,8 +23,8 @@ bin_width = 0.017
 tongue_thr = 0.95
 traces_s = tracking.Tracking.TongueTracking & session_key & {'tracking_device': 'Camera 3'}
 traces_b = tracking.Tracking.TongueTracking & session_key & {'tracking_device': 'Camera 4'}
-session_traces_s_l = traces_s.fetch('tongue_likelihood')
-session_traces_b_l = traces_b.fetch('tongue_likelihood')
+session_traces_s_l = traces_s.fetch('tongue_likelihood', order_by='trial')
+session_traces_b_l = traces_b.fetch('tongue_likelihood', order_by='trial')
 trial_key=(v_tracking.TongueTracking3DBot & session_key).fetch('trial', order_by='trial')
 session_traces_s_l = session_traces_s_l[trial_key-1]
 session_traces_b_l = session_traces_b_l[trial_key-1]
@@ -34,6 +33,7 @@ session_traces_b_l = np.vstack(session_traces_b_l)
 session_traces_t_l = session_traces_b_l
 session_traces_t_l[np.where((session_traces_s_l > tongue_thr) & (session_traces_b_l > tongue_thr))] = 1
 session_traces_t_l[np.where((session_traces_s_l <= tongue_thr) & (session_traces_b_l <= tongue_thr))] = 0
+session_traces_t_l = np.hstack(session_traces_t_l)
 
 # from 3D calibration
 traces_s = v_tracking.JawTracking3DSid & session_key
@@ -43,9 +43,9 @@ session_traces_b_y, session_traces_b_x, session_traces_b_z = traces_b.fetch('ton
 session_traces_s_y = np.vstack(session_traces_s_y)
 session_traces_s_x = np.vstack(session_traces_s_x)
 session_traces_s_z = np.vstack(session_traces_s_z)
-session_traces_b_y = np.vstack(session_traces_b_y) * session_traces_t_l
-session_traces_b_x = np.vstack(session_traces_b_x) * session_traces_t_l
-session_traces_b_z = np.vstack(session_traces_b_z) * session_traces_t_l
+session_traces_b_y = np.vstack(session_traces_b_y) 
+session_traces_b_x = np.vstack(session_traces_b_x)
+session_traces_b_z = np.vstack(session_traces_b_z)
 traces_len = np.size(session_traces_b_z, axis = 1)
 num_trial = np.size(session_traces_b_z, axis = 0)
 
@@ -80,13 +80,16 @@ session_traces_b_y = np.convolve(session_traces_b_y, kernel, 'same')
 session_traces_b_y = session_traces_b_y[window_size::window_size]
 session_traces_b_z = np.convolve(session_traces_b_z, kernel, 'same')
 session_traces_b_z = session_traces_b_z[window_size::window_size]
+session_traces_t_l = np.convolve(session_traces_t_l, kernel, 'same')
+session_traces_t_l = session_traces_t_l[window_size::window_size]
+session_traces_t_l[np.where(session_traces_t_l < 1)] = 0
 session_traces_s_x = np.reshape(session_traces_s_x,(-1,1))
 session_traces_s_y = np.reshape(session_traces_s_y,(-1,1))
 session_traces_s_z = np.reshape(session_traces_s_z,(-1,1))
-session_traces_b_x = np.reshape(session_traces_b_x,(-1,1))
-session_traces_b_y = np.reshape(session_traces_b_y,(-1,1))
-session_traces_b_z = np.reshape(session_traces_b_z,(-1,1))
-
+session_traces_b_x = np.reshape(session_traces_b_x * session_traces_t_l, (-1,1))
+session_traces_b_y = np.reshape(session_traces_b_y * session_traces_t_l, (-1,1))
+session_traces_b_z = np.reshape(session_traces_b_z * session_traces_t_l, (-1,1))
+#%%
 # get breathing
 breathing, breathing_ts = (experiment.Breathing & session_key).fetch('breathing', 'breathing_timestamps', order_by='trial')
 breathing = breathing[trial_key-1]
@@ -104,6 +107,18 @@ good_breathing = np.convolve(good_breathing, kernel, 'same')
 good_breathing = good_breathing[window_size::window_size]
 good_breathing = np.reshape(good_breathing,(-1,1))
 
+# get whisker
+session_traces_w = (oralfacial_analysis.WhiskerSVD & session_key & 'tracking_device="Camera 4"').fetch('mot_svd', order_by='trial')
+session_traces_w = session_traces_w[trial_key-1]
+good_traces_w = session_traces_w
+for i, d in enumerate(session_traces_w):
+    good_traces_w[i] = session_traces_w[i][:,0]
+#good_traces_w = np.hstack(np.vstack(good_traces_w))
+#window_size = int(bin_width/0.0034)  # sample
+#kernel = np.ones(window_size) / window_size
+#session_traces_w = np.convolve(session_traces_w, kernel, 'same')
+#session_traces_w = session_traces_w[window_size::window_size]
+#%%
 # stimulus
 V_design_matrix = np.concatenate((session_traces_s_x, session_traces_s_y, session_traces_s_z, session_traces_b_x, session_traces_b_y, session_traces_b_z, good_breathing), axis=1)
 
