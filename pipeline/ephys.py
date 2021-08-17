@@ -223,7 +223,7 @@ class TrialEvent(dj.Imported):
     trial_event_id: smallint
     ---
     -> experiment.TrialEventType
-    trial_event_time : float  # (s) from session start (global time)
+    trial_event_time : Decimal(10, 5)  # (s) from session start (global time)
     """    
 
 
@@ -237,7 +237,7 @@ class ActionEvent(dj.Imported):
     action_event_id: smallint
     ---
     -> experiment.ActionEventType
-    action_event_time : float  # (s) from session start (global time)
+    action_event_time : Decimal(10, 5)  # (s) from session start (global time)
     """
 
 
