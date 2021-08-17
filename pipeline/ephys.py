@@ -127,6 +127,7 @@ class LFP(dj.Imported):
 
 # ---- Clusters/Units/Spiketimes ----
 
+
 @schema
 class UnitQualityType(dj.Lookup):
     definition = """
