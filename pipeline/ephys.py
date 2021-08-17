@@ -30,6 +30,9 @@ if 'archive_store' not in dj.config['stores']:
     dj.config['stores']['archive_store'] = DEFAULT_ARCHIVE_STORE
 
 
+# ---- ProbeInsertion ----
+
+
 @schema
 class ProbeInsertion(dj.Manual):
     definition = """
@@ -101,6 +104,9 @@ class ProbeInsertionQuality(dj.Manual):
         """
 
 
+# ---- LFP ----
+
+
 @schema
 class LFP(dj.Imported):
     definition = """
@@ -119,6 +125,7 @@ class LFP(dj.Imported):
         lfp: longblob           # recorded lfp at this electrode
         """
 
+# ---- Clusters/Units/Spiketimes ----
 
 @schema
 class UnitQualityType(dj.Lookup):
@@ -501,17 +508,17 @@ class MAPClusterMetric(dj.Computed):
         drift_metric: float
         """
 
-    key_source = Unit & UnitStat
+    key_source = Unit & UnitStat & ProbeInsertionQuality
 
     def make(self, key):
-        # -- get trial-spikes
+        # -- get trial-spikes - use only trials in ProbeInsertionQuality.GoodTrial
         trial_spikes, trial_durations = (
                 Unit.TrialSpikes
                 * (experiment.TrialEvent & 'trial_event_type = "trialend"')
+                & ProbeInsertionQuality.GoodTrial
                 & key).fetch('spike_times', 'trial_event_time', order_by='trial')
         # -- compute trial spike-rates
         trial_spike_rates = [len(s) for s in trial_spikes] / trial_durations.astype(float)  # spikes/sec
-        # mean_spike_rate = (UnitStat & key).fetch1('avg_firing_rate')
         mean_spike_rate = np.mean(trial_spike_rates)
         # -- moving-average
         window_size = 6  # sample
