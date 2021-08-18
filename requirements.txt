@@ -1,4 +1,4 @@
-datajoint
+datajoint==0.12.9
 scipy
 h5py
 globus-sdk

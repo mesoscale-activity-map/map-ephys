@@ -681,7 +681,7 @@ class UnitLevelTrackingReport(dj.Computed):
         units_dir = store_stage / water_res_num / sess_date / str(key['insertion_number']) / 'units'
         units_dir.mkdir(parents=True, exist_ok=True)
 
-        fig1 = plt.figure(figsize = (16, 16))
+        fig1 = plt.figure(figsize=(16, 16))
         gs = GridSpec(4, 2)
 
         # 15 trials roughly in the middle of the session
