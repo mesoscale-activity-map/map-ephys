@@ -1,5 +1,6 @@
 import datajoint as dj
 import numpy as np
+import pathlib
 from scipy.interpolate import CubicSpline
 from scipy import signal
 from scipy.stats import poisson
@@ -27,6 +28,9 @@ if 'stores' not in dj.config:
 
 if 'archive_store' not in dj.config['stores']:
     dj.config['stores']['archive_store'] = DEFAULT_ARCHIVE_STORE
+
+
+# ---- ProbeInsertion ----
 
 
 @schema
@@ -100,6 +104,9 @@ class ProbeInsertionQuality(dj.Manual):
         """
 
 
+# ---- LFP ----
+
+
 @schema
 class LFP(dj.Imported):
     definition = """
@@ -117,6 +124,8 @@ class LFP(dj.Imported):
         ---
         lfp: longblob           # recorded lfp at this electrode
         """
+
+# ---- Clusters/Units/Spiketimes ----
 
 
 @schema
@@ -232,6 +241,7 @@ class ActionEvent(dj.Imported):
     action_event_time : Decimal(10, 5)  # (s) from session start (global time)
     """
 
+
 @schema
 class UnitNote(dj.Imported):
     definition = """
@@ -244,18 +254,25 @@ class UnitNote(dj.Imported):
     key_source = ProbeInsertion & Unit.proj()
 
     def make(self, key):
-        from pipeline.ingest import ephys as ephys_ingest  # import here to avoid circular imports
+        # import here to avoid circular imports
+        from pipeline.ingest import ephys as ephys_ingest
+        from pipeline.util import _get_clustering_method
 
         ephys_file = (ephys_ingest.EphysIngest.EphysFile.proj(
             insertion_number='probe_insertion_number') & key).fetch1('ephys_file')
         rigpaths = ephys_ingest.get_ephys_paths()
         for rigpath in rigpaths:
+            rigpath = pathlib.Path(rigpath)
             if (rigpath / ephys_file).exists():
                 session_ephys_dir = rigpath / ephys_file
                 break
         else:
             raise FileNotFoundError(
                 'Error - No ephys data directory found for {}'.format(ephys_file))
+
+        key['clustering_method'] = _get_clustering_method(key)
+        units = (Unit & key).fetch('unit')
+        unit_quality_types = UnitQualityType.fetch('unit_quality')
 
         ks = ephys_ingest.Kilosort(session_ephys_dir)
         curated_cluster_notes = ks.extract_curated_cluster_notes()
@@ -264,10 +281,12 @@ class UnitNote(dj.Imported):
         for curation_source, cluster_note in curated_cluster_notes.items():
             if curation_source == 'group':
                 continue
-            cluster_notes.extend([{**key, 'note_source': curation_source,
-                                   'unit': unit, 'unit_quality': note}
-                                  for unit, note in zip(cluster_note['cluster_ids'],
-                                                        cluster_note['cluster_notes'])])
+            cluster_notes.extend([{**key,
+                                   'note_source': curation_source,
+                                   'unit': u, 'unit_quality': note}
+                                  for u, note in zip(cluster_note['cluster_ids'],
+                                                     cluster_note['cluster_notes'])
+                                  if u in units and note in unit_quality_types])
         self.insert(cluster_notes)
 
 
@@ -490,17 +509,17 @@ class MAPClusterMetric(dj.Computed):
         drift_metric: float
         """
 
-    key_source = Unit & UnitStat
+    key_source = Unit & UnitStat & ProbeInsertionQuality
 
     def make(self, key):
-        # -- get trial-spikes
+        # -- get trial-spikes - use only trials in ProbeInsertionQuality.GoodTrial
         trial_spikes, trial_durations = (
                 Unit.TrialSpikes
                 * (experiment.TrialEvent & 'trial_event_type = "trialend"')
+                & ProbeInsertionQuality.GoodTrial
                 & key).fetch('spike_times', 'trial_event_time', order_by='trial')
         # -- compute trial spike-rates
         trial_spike_rates = [len(s) for s in trial_spikes] / trial_durations.astype(float)  # spikes/sec
-        # mean_spike_rate = (UnitStat & key).fetch1('avg_firing_rate')
         mean_spike_rate = np.mean(trial_spike_rates)
         # -- moving-average
         window_size = 6  # sample
@@ -561,7 +580,7 @@ class ArchivedClustering(dj.Imported):
         spike_times : blob@archive_store  # (s) from the start of the first data point used in clustering
         spike_sites : blob@archive_store  # array of electrode associated with each spike
         spike_depths : blob@archive_store # (um) array of depths associated with each spike
-        trial_spike : blob@archive_store  # array of trial numbering per spike - same size as spike_times
+        trial_spike=null: blob@archive_store  # array of trial numbering per spike - same size as spike_times
         waveform : blob@archive_store     # average spike waveform  
         """
 
