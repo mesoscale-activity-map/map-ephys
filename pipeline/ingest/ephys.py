@@ -907,7 +907,7 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
         'clustering_label': clustering_label,
         'ks_channel_map': ks.data['channel_map'] + 1,  # channel numbering in this pipeline is 1-based indexed
         'cluster_noise_label': cluster_noise_label,
-        'bitcode_raw': bitcode_raw,
+        'bitcode_raw': bitcode_raw
     }
 
     return data
