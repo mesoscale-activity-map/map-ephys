@@ -209,12 +209,15 @@ class EphysIngest(dj.Imported):
         trial_start = trial_start / hz
         trial_spikes = trial_spikes / hz
 
+        # units
+        unit_set = set(units)
+
         # build spike arrays
-        unit_spikes = np.array([spikes[np.where(units == u)] for u in set(units)]) - trial_start[0]
+        unit_spikes = np.array([spikes[np.where(units == u)] for u in unit_set]) - trial_start[0]
 
         unit_trial_spikes = np.array(
             [[trial_spikes[t][np.where(trial_units[t] == u)]
-              for t in range(len(trials))] for u in set(units)])
+              for t in range(len(trials))] for u in unit_set])
 
         q_electrodes = lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode & e_config_key
         site2electrode_map = {}
@@ -225,8 +228,8 @@ class EphysIngest(dj.Imported):
                                                         'shank_row': shank_row + 1}).fetch1('KEY')
 
         spike_sites = np.array([site2electrode_map[s]['electrode'] for s in spike_sites])
-        unit_spike_sites = np.array([spike_sites[np.where(units == u)] for u in set(units)])
-        unit_spike_depths = np.array([spike_depths[np.where(units == u)] for u in set(units)])
+        unit_spike_sites = np.array([spike_sites[np.where(units == u)] for u in unit_set])
+        unit_spike_depths = np.array([spike_depths[np.where(units == u)] for u in unit_set])
 
         if into_archive:
             log.info('.. inserting clustering timestamp and label')
@@ -244,12 +247,12 @@ class EphysIngest(dj.Imported):
                 'ephys_file': ef_path.relative_to(rigpath).as_posix()},
                 allow_direct_insert=True)
 
-            unit_spike_trial_num = np.array([spike_trial_num[np.where(units == u)] for u in set(units)])
+            unit_spike_trial_num = np.array([spike_trial_num[np.where(units == u)] for u in unit_set])
 
             with InsertBuffer(ephys.ArchivedClustering.Unit, 10, skip_duplicates=True,
                               allow_direct_insert=True) as ib:
 
-                for i, u in enumerate(set(units)):
+                for i, u in enumerate(unit_set):
                     if method in ['jrclust_v3', 'jrclust_v4']:
                         wf_chn_idx = 0
                     elif method in ['kilosort2']:
@@ -285,14 +288,14 @@ class EphysIngest(dj.Imported):
                 dj.conn().ping()
                 ephys.ArchivedClustering.ClusterMetric.insert(
                     [{**archive_key, 'unit': u, **metrics[u]}
-                     for u in set(units)], ignore_extra_fields=True, allow_direct_insert=True)
+                     for u in unit_set], ignore_extra_fields=True, allow_direct_insert=True)
                 ephys.ArchivedClustering.WaveformMetric.insert(
                     [{**archive_key, 'unit': u, **metrics[u]}
-                     for u in set(units)], ignore_extra_fields=True, allow_direct_insert=True)
+                     for u in unit_set], ignore_extra_fields=True, allow_direct_insert=True)
                 ephys.ArchivedClustering.UnitStat.insert(
                     [{**archive_key, 'unit': u, 'unit_amp': unit_amp[i], 'unit_snr': unit_snr[i],
                       'isi_violation': metrics[u]['isi_viol'], 'avg_firing_rate': metrics[u]['firing_rate']}
-                     for i, u in enumerate(set(units))], allow_direct_insert=True)
+                     for i, u in enumerate(unit_set)], allow_direct_insert=True)
         else:
             # insert Unit
             log.info('.. ephys.Unit')
@@ -300,7 +303,7 @@ class EphysIngest(dj.Imported):
             with InsertBuffer(ephys.Unit, 10, skip_duplicates=True,
                               allow_direct_insert=True) as ib:
 
-                for i, u in enumerate(set(units)):
+                for i, u in enumerate(unit_set):
                     if method in ['jrclust_v3', 'jrclust_v4']:
                         wf_chn_idx = 0
                     elif method in ['kilosort2']:
@@ -330,7 +333,7 @@ class EphysIngest(dj.Imported):
             with InsertBuffer(ephys.Unit.UnitTrial, 10000, skip_duplicates=True,
                               allow_direct_insert=True) as ib:
 
-                for i, u in enumerate(set(units)):
+                for i, u in enumerate(unit_set):
                     for t in range(len(trials)):
                         if len(unit_trial_spikes[i][t]):
                             ib.insert1({**skey,
@@ -346,7 +349,7 @@ class EphysIngest(dj.Imported):
             dj.conn().ping()
             with InsertBuffer(ephys.Unit.TrialSpikes, 10000, skip_duplicates=True,
                               allow_direct_insert=True) as ib:
-                for i, u in enumerate(set(units)):
+                for i, u in enumerate(unit_set):
                     for t in range(len(trials)):
                         ib.insert1({**skey,
                                     'insertion_number': probe,
@@ -373,26 +376,28 @@ class EphysIngest(dj.Imported):
                 dj.conn().ping()
                 ephys.ClusterMetric.insert([{**skey, 'insertion_number': probe,
                                              'clustering_method': method, 'unit': u, **metrics[u]}
-                                            for u in set(units)],
+                                            for u in unit_set],
                                            ignore_extra_fields=True, allow_direct_insert=True)
                 ephys.WaveformMetric.insert([{**skey, 'insertion_number': probe,
                                               'clustering_method': method, 'unit': u, **metrics[u]}
-                                             for u in set(units)],
+                                             for u in unit_set],
                                             ignore_extra_fields=True, allow_direct_insert=True)
                 ephys.UnitStat.insert([{**skey, 'insertion_number': probe,
                                         'clustering_method': method, 'unit': u,
                                         'isi_violation': metrics[u]['isi_viol'],
-                                        'avg_firing_rate': metrics[u]['firing_rate']} for u in set(units)],
+                                        'avg_firing_rate': metrics[u]['firing_rate']}
+                                       for u in unit_set],
                                       allow_direct_insert=True)
 
             if cluster_noise_label is not None:
                 dj.conn().ping()
                 log.info('.. inserting unit noise label')
-                ephys.UnitNoiseLabel.insert([
+                ephys.UnitNoiseLabel.insert((
                     {**skey, 'insertion_number': probe, 'clustering_method': method,
-                     'unit': unit, 'unit_quality': note}
-                    for unit, note in zip(cluster_noise_label['cluster_ids'],
-                                          cluster_noise_label['cluster_notes'])])
+                     'unit': u, 'noise': note}
+                    for u, note in zip(cluster_noise_label['cluster_ids'],
+                                       cluster_noise_label['cluster_notes']) if u in unit_set),
+                    allow_direct_insert=True)
 
             dj.conn().ping()
             log.info('.. inserting clustering timestamp and label')
@@ -401,7 +406,8 @@ class EphysIngest(dj.Imported):
                                            'clustering_method': method, 'unit': u,
                                            'clustering_time': creation_time,
                                            'quality_control': bool('qc' in clustering_label),
-                                           'manual_curation': bool('curated' in clustering_label)} for u in set(units)],
+                                           'manual_curation': bool('curated' in clustering_label)}
+                                          for u in unit_set],
                                          allow_direct_insert=True)
 
             log.info('.. inserting file load information')
@@ -900,8 +906,8 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
         'creation_time': creation_time,
         'clustering_label': clustering_label,
         'ks_channel_map': ks.data['channel_map'] + 1,  # channel numbering in this pipeline is 1-based indexed
-        'cluster_noise_label': cluster_noise_label
-        'bitcode_raw': bitcode_raw,
+        'cluster_noise_label': cluster_noise_label,
+        'bitcode_raw': bitcode_raw
     }
 
     return data
@@ -1053,6 +1059,7 @@ def read_bitcode(bitcode_dir, h2o, skey):
         ephys_bitcodes = bf['bitCodeS']  # ephys sync codes
         trial_numbers = bf['trialNum'].flatten() if 'trialNum' in bf else None
     elif bitcode_format == 'nidq.XA.txt':
+        bf = {}
         bitcodes, trial_start_times = build_bitcode(bitcode_dir.parent)
         if (experiment.BehaviorTrial & 'task = "multi-target-licking"' & skey):
             # multi-target-licking task: spiketimes w.r.t trial-start
@@ -1068,6 +1075,7 @@ def read_bitcode(bitcode_dir, h2o, skey):
             if rig == 'RRig-MTL' and len(trial_start_times) == len(behav_trials):
                 # for MTL rig, this is glitch in the recording system
                 # if the number of trial matches with behavior, then this is a 1-to-1 mapping
+                log.info('.... Unable to read bitcode! Recognize RRig-MTL session with matching number of behavior and ephys trials, using one-to-one trial mapping')
                 ephys_bitcodes = behavior_bitcodes
                 trial_numbers = behav_trials
                 ephys_trial_ref_times = trial_start_times + go_times
@@ -1075,7 +1083,7 @@ def read_bitcode(bitcode_dir, h2o, skey):
             else:
                 raise FileNotFoundError('Generate bitcode failed. No bitcode file'
                                         ' "*.XA_0_0.txt"'
-                                        ' for found in {}'.format(bitcode_dir))
+                                        ' found in {}'.format(bitcode_dir))
         else:
             ephys_bitcodes, trial_numbers, ephys_trial_start_times, ephys_trial_ref_times = [], [], [], []
             for bitcode, start_time in zip(bitcodes, trial_start_times):
@@ -1101,7 +1109,7 @@ def insert_ephys_events(skey, bf):
     '''
     all times are session-based
     '''
-    
+
     # --- Events available both from behavior .csv file (trial time) and ephys NIDQ (session time) ---
     # digMarkerPerTrial from bitcode.mat: [STRIG_, GOCUE_, CHOICEL_, CHOICER_, REWARD_, ITI_, BPOD_START_, ZABER_IN_POS_]
     # <--> ephys.TrialEventType: 'bitcodestart', 'go', 'choice', 'choice', 'reward', 'trialend', 'bpodstart', 'zaberinposition'
@@ -1110,7 +1118,7 @@ def insert_ephys_events(skey, bf):
     df = pd.DataFrame()
     headings = bf['headings'][0]
     digMarkerPerTrial = bf['digMarkerPerTrial']
-    
+
     for col, event_type in enumerate(headings):
         times = digMarkerPerTrial[:, col]
         not_nan = np.where(~np.isnan(times))[0]
@@ -1144,7 +1152,7 @@ def insert_ephys_events(skey, bf):
 
     if len(exist_lick):
         log.info(f'       loading licks from NIDQ ...')
-        
+
         for trial, *licks in enumerate(zip(*(bf[lick_wrapper[ltype]][0] for ltype in exist_lick))):
             lick_times = {ltype: ltime for ltype, ltime in zip(exist_lick, *licks)}
             all_lick_types = np.concatenate(
@@ -1493,7 +1501,7 @@ class Kilosort:
                 df = pd.read_csv(cluster_file, sep="\t", header=0)
                 curated_cluster_notes[curation_source] = dict(
                     cluster_ids=np.array(df['cluster_id'].values),
-                    cluster_notes=np.array(df[curation_source].values))
+                    cluster_notes=np.array([v.strip() for v in df[curation_source].values]))
         return curated_cluster_notes
 
     def extract_cluster_noise_label(self):
@@ -1717,7 +1725,7 @@ def extend_ephys_ingest(session_key):
                 return
 
 
-def archive_ingested_clustering_results(key):
+def archive_ingested_clustering_results(key, archive_trial_spike=False):
     """
     The input-argument "key" should be at the level of ProbeInsertion or its anscestor.
 
@@ -1764,28 +1772,30 @@ def archive_ingested_clustering_results(key):
     if is_archived:
         log.info('This set of clustering results has already been archived, skip archiving...')
     else:
-        # preparing spike_times and trial_spike
-        tr_no, tr_start = (experiment.SessionTrial & key).fetch(
-            'trial', 'start_time', order_by='trial')
-        tr_stop = np.append(tr_start[1:], np.inf)
+        if archive_trial_spike:
+            # preparing spike_times and trial_spike
+            tr_no, tr_start = (experiment.SessionTrial & key).fetch(
+                'trial', 'start_time', order_by='trial')
+            tr_stop = np.append(tr_start[1:], np.inf)
 
         # units
         archived_units = []
-        for units in q_archived_units:
+        for q_units in q_archived_units:
             # recompute trial_spike
-            log.info('Archiving {} units'.format(len(units)))
-            units = units.fetch(as_dict=True)
-            for unit in tqdm(units):
-                after_start = unit['spike_times'] >= tr_start[:, None]
-                before_stop = unit['spike_times'] <= tr_stop[:, None]
-                in_trial = ((after_start & before_stop) * tr_no[:, None]).sum(axis=0)
-                unit['trial_spike'] = np.where(in_trial == 0, np.nan, in_trial).astype(int)
-            # for unit in tqdm(units):
-            #     trial_spike = np.full_like(unit['spike_times'], np.nan)
-            #     for tr, tstart, tstop in zip(tr_no, tr_start, tr_stop):
-            #         trial_idx = np.where((unit['spike_times'] >= tstart) & (unit['spike_times'] <= tstop))
-            #         trial_spike[trial_idx] = tr
-            #     unit['trial_spike'] = trial_spike
+            log.info('Archiving {} units'.format(len(q_units)))
+            units = q_units.fetch(as_dict=True)
+            if archive_trial_spike:
+                for unit in tqdm(units):
+                    after_start = unit['spike_times'] >= tr_start[:, None]
+                    before_stop = unit['spike_times'] <= tr_stop[:, None]
+                    in_trial = ((after_start & before_stop) * tr_no[:, None]).sum(axis=0)
+                    unit['trial_spike'] = np.where(in_trial == 0, np.nan, in_trial).astype(int)
+                # for unit in tqdm(units):
+                #     trial_spike = np.full_like(unit['spike_times'], np.nan)
+                #     for tr, tstart, tstop in zip(tr_no, tr_start, tr_stop):
+                #         trial_idx = np.where((unit['spike_times'] >= tstart) & (unit['spike_times'] <= tstop))
+                #         trial_spike[trial_idx] = tr
+                #     unit['trial_spike'] = trial_spike
             archived_units.extend(units)
 
     def copy_and_delete():
