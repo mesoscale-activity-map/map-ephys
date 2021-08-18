@@ -106,18 +106,23 @@ good_breathing = np.convolve(good_breathing, kernel, 'same')
 # -- down-sample
 good_breathing = good_breathing[window_size::window_size]
 good_breathing = np.reshape(good_breathing,(-1,1))
-
+#%%
 # get whisker
-session_traces_w = (oralfacial_analysis.WhiskerSVD & session_key & 'tracking_device="Camera 4"').fetch('mot_svd', order_by='trial')
-session_traces_w = session_traces_w[trial_key-1]
-good_traces_w = session_traces_w
-for i, d in enumerate(session_traces_w):
-    good_traces_w[i] = session_traces_w[i][:,0]
-#good_traces_w = np.hstack(np.vstack(good_traces_w))
-#window_size = int(bin_width/0.0034)  # sample
-#kernel = np.ones(window_size) / window_size
-#session_traces_w = np.convolve(session_traces_w, kernel, 'same')
-#session_traces_w = session_traces_w[window_size::window_size]
+session_traces_w = (oralfacial_analysis.WhiskerSVD & session_key).fetch('mot_svd')
+if len(session_traces_w[0][:,0]) % 1471 != 0:
+    print('Bad videos in bottom view')
+    #return
+else:
+    num_trial_w = int(len(session_traces_w[0][:,0])/1471)
+    session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, 1471))
+    
+session_traces_w = session_traces_w[trial_key-1,:]
+session_traces_w = np.hstack(session_traces_w)
+window_size = int(bin_width/0.0034)  # sample
+kernel = np.ones(window_size) / window_size
+session_traces_w = np.convolve(session_traces_w, kernel, 'same')
+session_traces_w = session_traces_w[window_size::window_size]
+session_traces_w = np.reshape(session_traces_w,(-1,1))
 #%%
 # stimulus
 V_design_matrix = np.concatenate((session_traces_s_x, session_traces_s_y, session_traces_s_z, session_traces_b_x, session_traces_b_y, session_traces_b_z, good_breathing), axis=1)
