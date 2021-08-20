@@ -8,8 +8,8 @@ import statsmodels.api as sm
 import matplotlib.pyplot as plt
 import numpy as np
 #%%
-water='DL004'
-date='2021-03-08'
+water='DL023'
+date='2021-06-14'
 subject, session = helper_functions.water2subject(water, date)
 #%%
 session=experiment.Session & 'subject_id="2897"' & {'session': 1}
@@ -125,7 +125,7 @@ session_traces_w = session_traces_w[window_size::window_size]
 session_traces_w = np.reshape(session_traces_w,(-1,1))
 #%%
 # stimulus
-V_design_matrix = np.concatenate((session_traces_s_x, session_traces_s_y, session_traces_s_z, session_traces_b_x, session_traces_b_y, session_traces_b_z, good_breathing), axis=1)
+V_design_matrix = np.concatenate((session_traces_s_x, session_traces_s_y, session_traces_s_z, session_traces_b_x, session_traces_b_y, session_traces_b_z, good_breathing, session_traces_w), axis=1)
 
 #set up GLM
 sm_log_Link = sm.genmod.families.links.log

@@ -236,7 +236,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
                 bf_datetime = re.search(bf_reg_exp, bf).groups()[0]
                 bf_datetime = datetime.strptime(bf_datetime, bf_datetime_format)
                 s_datetime = sess_key.proj(s_dt='cast(concat(session_date, " ", session_time) as datetime)').fetch1('s_dt')
-                if abs((s_datetime - bf_datetime).total_seconds()) > 10800:  # no more than 3 hours
+                if abs((s_datetime - bf_datetime).total_seconds()) > 108000:  # no more than 3 hours
                     log.debug('\tUnmatched sess_dt ({}) and behavior_dt ({}). Skipping...'.format(s_datetime, bf_datetime))
                     continue
             else:
