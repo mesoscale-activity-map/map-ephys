@@ -459,7 +459,7 @@ def get_session_history(session_key, remove_ignored=True):
                               ).fetch('trial_event_time', order_by='trial').astype(float)
         trial_end_local = (experiment.TrialEvent & q_choice_outcome & 'trial_event_type = "trialend"'
                            ).fetch('trial_event_time', order_by='trial').astype(float)
-        if bitcodestart_local and trial_end_local:
+        if len(bitcodestart_local) and len(trial_end_local):
             iti = (bpod_start_global[1:] + bitcodestart_local[1:]) - (bpod_start_global[:-1] + trial_end_local[:-1])
         else:
             iti = bpod_start_global[1:] - bpod_start_global[:-1]
