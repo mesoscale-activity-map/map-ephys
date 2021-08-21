@@ -8,10 +8,13 @@ import statsmodels.api as sm
 import matplotlib.pyplot as plt
 import numpy as np
 #%%
-water='DL023'
-date='2021-06-14'
+water='DL025'
+date='2021-06-25'
 subject, session = helper_functions.water2subject(water, date)
 #%%
+# tongue
+#session=experiment.Session & 'subject_id="1114"' & {'session': 9}
+# jaw 20
 session=experiment.Session & 'subject_id="2897"' & {'session': 1}
 session_key=session.fetch('KEY')
 #%% get traces and phase
@@ -26,6 +29,8 @@ traces_b = tracking.Tracking.TongueTracking & session_key & {'tracking_device': 
 session_traces_s_l = traces_s.fetch('tongue_likelihood', order_by='trial')
 session_traces_b_l = traces_b.fetch('tongue_likelihood', order_by='trial')
 trial_key=(v_tracking.TongueTracking3DBot & session_key).fetch('trial', order_by='trial')
+test_t = trial_key[::5]
+trial_key=np.setdiff1d(trial_key,test_t)
 session_traces_s_l = session_traces_s_l[trial_key-1]
 session_traces_b_l = session_traces_b_l[trial_key-1]
 session_traces_s_l = np.vstack(session_traces_s_l)
@@ -36,8 +41,8 @@ session_traces_t_l[np.where((session_traces_s_l <= tongue_thr) & (session_traces
 session_traces_t_l = np.hstack(session_traces_t_l)
 
 # from 3D calibration
-traces_s = v_tracking.JawTracking3DSid & session_key
-traces_b = v_tracking.TongueTracking3DBot & session_key
+traces_s = v_tracking.JawTracking3DSid & session_key & [{'trial': tr} for tr in trial_key]
+traces_b = v_tracking.TongueTracking3DBot & session_key & [{'trial': tr} for tr in trial_key]
 session_traces_s_y, session_traces_s_x, session_traces_s_z = traces_s.fetch('jaw_y', 'jaw_x', 'jaw_z', order_by='trial')
 session_traces_b_y, session_traces_b_x, session_traces_b_z = traces_b.fetch('tongue_y', 'tongue_x', 'tongue_z', order_by='trial')
 session_traces_s_y = np.vstack(session_traces_s_y)
@@ -89,7 +94,7 @@ session_traces_s_z = np.reshape(session_traces_s_z,(-1,1))
 session_traces_b_x = np.reshape(session_traces_b_x * session_traces_t_l, (-1,1))
 session_traces_b_y = np.reshape(session_traces_b_y * session_traces_t_l, (-1,1))
 session_traces_b_z = np.reshape(session_traces_b_z * session_traces_t_l, (-1,1))
-#%%
+
 # get breathing
 breathing, breathing_ts = (experiment.Breathing & session_key).fetch('breathing', 'breathing_timestamps', order_by='trial')
 breathing = breathing[trial_key-1]
@@ -106,7 +111,7 @@ good_breathing = np.convolve(good_breathing, kernel, 'same')
 # -- down-sample
 good_breathing = good_breathing[window_size::window_size]
 good_breathing = np.reshape(good_breathing,(-1,1))
-#%%
+
 # get whisker
 session_traces_w = (oralfacial_analysis.WhiskerSVD & session_key).fetch('mot_svd')
 if len(session_traces_w[0][:,0]) % 1471 != 0:
@@ -148,7 +153,11 @@ for j in range(20,21): # loop for each neuron
 
     glm_result = glm_poiss.fit()
     weights_py = glm_result.params 
-
+    
+    sst_val = sum(map(lambda bins_edges: np.power(bins_edges,2),y-np.mean(y))) 
+    sse_val = sum(map(lambda bins_edges: np.power(bins_edges,2),glm_result.resid_response)) 
+    r2 = 1.0 - sse_val/sst_val
+    
     # Compare the difference
     print(weights_py)
 #%%    

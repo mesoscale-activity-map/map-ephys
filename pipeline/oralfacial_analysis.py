@@ -80,22 +80,71 @@ class JawTuning(dj.Computed):
         self.insert(units_jaw_tunings, ignore_extra_fields=True)
         
         
-# @schema
-# class BreathingTuning(dj.Computed):
-#     definition = """
-#     -> ephys.Unit
-#     ---
-#     modulation_index: float
-#     preferred_phase: float
-#     """
-#     # mtl sessions only
-#     key_source = ephys.Unit * (experiment.Session & 'rig = "RRig-MTL"')
+@schema
+class BreathingTuning(dj.Computed):
+    definition = """
+    -> ephys.Unit
+    ---
+    modulation_index: float
+    preferred_phase: float
+    """
+    # mtl sessions only
+    key_source = experiment.Session & experiment.Breathing & ephys.Unit & 'rig = "RRig-MTL"'
     
-#     def make(self, key):
-#         spikes = (ephys.Unit & key).fetch1('spike_times')
-#         trace = tracking.Tracking & 
-#         tuning = helper_functions.compute_tuning_curve(spikes)
-#         self.insert1({**key, 'modulation_index': len(spikes)})
+    def make(self, key):
+    
+        # get traces and phase
+        good_units=ephys.Unit * ephys.ClusterMetric * ephys.UnitStat & key & 'presence_ratio > 0.9' & 'amplitude_cutoff < 0.15' & 'avg_firing_rate > 0.2' & 'isi_violation < 10' & 'unit_amp > 150'
+        
+        unit_keys=good_units.fetch('KEY')
+        
+        traces = experiment.Breathing & key
+        
+        if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & key)) != len(traces):
+            print(f'Mismatch in tracking trial and ephys trial number: {key}')
+            return
+        
+        session_traces, breathing_ts = traces.fetch('breathing', 'breathing_timestamps', order_by='trial')
+        fs=25000
+        ds=100
+        good_traces = session_traces
+        for i, d in enumerate(session_traces):
+            good_traces[i] = d[breathing_ts[i] < 5][::ds]
+        traces_length = [len(d) for d in good_traces]
+        good_trial_ind = np.where(np.array(traces_length) == 5*fs/ds)[0]
+        good_traces = good_traces[good_trial_ind]
+        good_traces = np.vstack(good_traces)
+        
+        amp, phase=behavior_plot.compute_insta_phase_amp(good_traces, float(fs/ds), freq_band=(1, 15))
+        phase = phase + np.pi
+        
+        # compute phase and MI
+        units_breathing_tunings = []
+        for unit_key in unit_keys:
+            all_spikes=(ephys.Unit.TrialSpikes & unit_key).fetch('spike_times', order_by='trial')
+            good_spikes = np.array(all_spikes[good_trial_ind]*float(fs/ds)) # get good spikes and convert to indices
+            good_spikes = [d.astype(int) for d in good_spikes] # convert to intergers
+        
+            for i, d in enumerate(good_spikes):
+                good_spikes[i] = d[d < int(5*fs/ds)]
+        
+            all_phase = []
+            for trial_idx in range(len(good_spikes)):
+                all_phase.append(phase[trial_idx][good_spikes[trial_idx]])
+        
+            all_phase=np.hstack(all_phase)
+            
+            n_bins = 20
+            tofity, tofitx = np.histogram(all_phase, bins=n_bins)
+            baseline, tofitx = np.histogram(phase, bins=n_bins)  
+            tofitx = tofitx[:-1] + (tofitx[1] - tofitx[0])/2
+            tofity = tofity / baseline * float(fs/ds)
+            
+            preferred_phase,modulation_index=helper_functions.compute_phase_tuning(tofitx, tofity)             
+        
+            units_breathing_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase})
+            
+        self.insert(units_breathing_tunings, ignore_extra_fields=True)
 
 
 @schema
