@@ -3,13 +3,13 @@ from pipeline import tracking
 from pipeline import experiment
 from pipeline.plot import behavior_plot
 from pipeline.mtl_analysis import helper_functions
-from pipeline import lab
-import datajoint as dj
+#from pipeline import lab
+#import datajoint as dj
 
-from scipy import signal
-from scipy import optimize
+#from scipy import signalS
+#from scipy import optimize
 
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import numpy as np
 
 #%%
@@ -35,7 +35,7 @@ amp, phase=behavior_plot.compute_insta_phase_amp(good_traces, float(fs), freq_ba
 phase = phase + np.pi
 
 #%% compute phase and MI
-for j in range(20,21):
+for j in range(1,21):
     unit_key=unit_keys[j]
     all_spikes=(ephys.Unit.TrialSpikes & unit_key).fetch('spike_times')
     good_spikes = np.array(all_spikes[good_trial_ind]*float(fs)) # get good spikes
@@ -62,5 +62,6 @@ for j in range(20,21):
        
     preferred_phase,modulation_index=helper_functions.compute_phase_tuning(tofitx, tofity)
     
-#%% plotting
-helper_functions.plot_tuning(session_key, unit_key)
+    helper_functions.plot_tuning(session_key, unit_key)    
+
+

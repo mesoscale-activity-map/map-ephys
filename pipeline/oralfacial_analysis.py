@@ -11,6 +11,7 @@ from pipeline.plot import behavior_plot
 
 schema = dj.schema('daveliu_analysis')
 
+v_oralfacial_analysis = dj.create_virtual_module('oralfacial_analysis', 'daveliu_analysis')
 
 @schema
 class JawTuning(dj.Computed):
@@ -145,6 +146,73 @@ class BreathingTuning(dj.Computed):
             units_breathing_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase})
             
         self.insert(units_breathing_tunings, ignore_extra_fields=True)
+
+@schema
+class WhiskerTuning(dj.Computed):
+    definition = """
+    -> ephys.Unit
+    ---
+    modulation_index: float
+    preferred_phase: float
+    """
+    # mtl sessions only
+    key_source = experiment.Session & v_oralfacial_analysis.WhiskerSVD & ephys.Unit & 'rig = "RRig-MTL"'
+    
+    def make(self, key):
+    
+        # get traces and phase
+        good_units=ephys.Unit * ephys.ClusterMetric * ephys.UnitStat & key & 'presence_ratio > 0.9' & 'amplitude_cutoff < 0.15' & 'avg_firing_rate > 0.2' & 'isi_violation < 10' & 'unit_amp > 150'
+        
+        unit_keys=good_units.fetch('KEY')
+        
+        traces = tracking.Tracking.JawTracking & key & {'tracking_device': 'Camera 4'}
+        
+        if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & key)) != len(traces):
+            print(f'Mismatch in tracking trial and ephys trial number: {key}')
+            return
+        
+        session_traces_w = (v_oralfacial_analysis.WhiskerSVD & key).fetch('mot_svd')
+        
+        if len(session_traces_w[0][:,0]) % 1471 != 0:
+            print('Bad videos in bottom view')
+            return
+        else:
+            num_trial_w = int(len(session_traces_w[0][:,0])/1471)
+            session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, 1471))
+                                       
+        fs=(tracking.TrackingDevice & 'tracking_device="Camera 4"').fetch1('sampling_rate')
+        
+        amp, phase=behavior_plot.compute_insta_phase_amp(session_traces_w, float(fs), freq_band=(5, 20))
+        phase = phase + np.pi
+        
+        # compute phase and MI
+        units_whisker_tunings = []
+        for unit_key in unit_keys:
+            all_spikes=(ephys.Unit.TrialSpikes & unit_key).fetch('spike_times', order_by='trial')
+            good_spikes = np.array(all_spikes*float(fs)) # get good spikes and convert to indices
+            good_spikes = [d.astype(int) for d in good_spikes] # convert to intergers
+        
+            for i, d in enumerate(good_spikes):
+                good_spikes[i] = d[d < int(5*fs)]
+        
+            all_phase = []
+            for trial_idx in range(len(good_spikes)):
+                all_phase.append(phase[trial_idx][good_spikes[trial_idx]])
+        
+            all_phase=np.hstack(all_phase)
+            
+            n_bins = 20
+            tofity, tofitx = np.histogram(all_phase, bins=n_bins)
+            baseline, tofitx = np.histogram(phase, bins=n_bins)  
+            tofitx = tofitx[:-1] + (tofitx[1] - tofitx[0])/2
+            tofity = tofity / baseline * float(fs)
+            
+            #print(unit_key)
+            preferred_phase,modulation_index=helper_functions.compute_phase_tuning(tofitx, tofity)             
+        
+            units_whisker_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase})
+            
+        self.insert(units_whisker_tunings, ignore_extra_fields=True)
 
 
 @schema

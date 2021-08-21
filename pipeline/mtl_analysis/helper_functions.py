@@ -22,8 +22,11 @@ _tracked_jaw_features = [n for n in tracking.Tracking.JawTracking.heading.names 
 def compute_phase_tuning(datax, datay):
     max_fit_y=np.amax(datay)
     min_fit_y=np.amin(datay)
+    max_idx=np.where(datay == max_fit_y)
+    if np.size(max_idx)>1:
+        max_idx=max_idx[0][0]
     # fit curve
-    params, pcov = optimize.curve_fit(vonMise_f, datax, datay, p0 = [1, datax[np.where(datay == max_fit_y)], max_fit_y-min_fit_y, min_fit_y], bounds=(0, [np.pi/2, 2*np.pi, max_fit_y+min_fit_y, max_fit_y]))
+    params, pcov = optimize.curve_fit(vonMise_f, datax, datay, p0 = [1, datax[max_idx], max_fit_y-min_fit_y, min_fit_y], bounds=(0, [np.pi/2, 2*np.pi, max_fit_y+min_fit_y, max_fit_y]))
     preferred_phase=params[1]
     
     r_max=vonMise_f(params[1], params[0], params[1], params[2], params[3])

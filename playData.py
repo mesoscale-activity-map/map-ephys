@@ -2,8 +2,12 @@ import pathlib
 import numpy as np
 import matplotlib.pyplot as plt
 
+from pipeline.mtl_analysis import helper_functions
 from pipeline import oralfacial_analysis, experiment, ephys, histology
-
+#%%
+water='DL008'
+date='2021-04-11'
+subject, session = helper_functions.water2subject(water, date)
 #%% load data
 proc_path = pathlib.Path('H://videos//bottom//DL027//2021_07_01//DL027_2021_07_01_bottom_0_proc.npy')
 data = np.load(proc_path, allow_pickle=True).item()
@@ -31,3 +35,4 @@ duration = (ephys.WaveformMetric & qc_units & (ephys.ProbeInsertion.RecordableBr
 plt.hist(duration, bins=100)
 plt.xlabel('Peak-to-trough (ms)')
 plt.ylabel('Number of units')
+#%% check motSVD
