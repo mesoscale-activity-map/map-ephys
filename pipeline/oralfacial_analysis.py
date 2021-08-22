@@ -179,6 +179,10 @@ class WhiskerTuning(dj.Computed):
         else:
             num_trial_w = int(len(session_traces_w[0][:,0])/1471)
             session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, 1471))
+        trial_idx_nat = [d.astype(str) for d in np.arange(num_trial_w)]
+        trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
+        trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
+        session_traces_w=session_traces_w[trial_idx_nat,:]
                                        
         fs=(tracking.TrackingDevice & 'tracking_device="Camera 4"').fetch1('sampling_rate')
         

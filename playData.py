@@ -36,3 +36,12 @@ plt.hist(duration, bins=100)
 plt.xlabel('Peak-to-trough (ms)')
 plt.ylabel('Number of units')
 #%% check motSVD
+key = experiment.Session & {'subject_id': '3454', 'session': 2}
+session_traces_w = (oralfacial_analysis.WhiskerSVD & key).fetch('mot_svd')
+plt.plot(session_traces_w[0][:2000,0])
+#%%
+proc_path = pathlib.Path('H://videos//bottom//DL008//2021_04_11//DL008_2021_04_11_bottom_0_proc.npy')
+data = np.load(proc_path, allow_pickle=True).item()
+svd = data['motSVD'][1]
+#%%
+plt.plot(svd[500:1100,0])
