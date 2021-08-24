@@ -373,15 +373,18 @@ class GLMFit(dj.Computed):
                 y_roll=np.roll(y,tau)
                 glm_poiss = sm.GLM(y_roll, sm.add_constant(V_design_matrix), family=sm.families.Poisson(link=sm_log_Link))
             
-                glm_result = glm_poiss.fit()
+                try:
+                    glm_result = glm_poiss.fit()
+                    
+                    sst_val = sum(map(lambda x: np.power(x,2),y_roll-np.mean(y_roll))) 
+                    sse_val = sum(map(lambda x: np.power(x,2),glm_result.resid_response)) 
+                    
+                    weights_t[i,:] = glm_result.params
+                    r2s[i] = 1.0 - sse_val/sst_val
+                except:
+                    pass
                 
-                sst_val = sum(map(lambda x: np.power(x,2),y_roll-np.mean(y_roll))) 
-                sse_val = sum(map(lambda x: np.power(x,2),glm_result.resid_response)) 
-                
-                weights_t[i,:] = glm_result.params
-                r2s[i] = 1.0 - sse_val/sst_val
-                 
-            units_glm.append({**unit_key, 'r2': r2s, 'weight': weights_t})
+            units_glm.append({**unit_key, 'r2': r2s, 'weights': weights_t})
             print(unit_key)
             
         self.insert(units_glm, ignore_extra_fields=True)
