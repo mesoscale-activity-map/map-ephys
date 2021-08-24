@@ -13,9 +13,9 @@ date='2021-06-25'
 subject, session = helper_functions.water2subject(water, date)
 #%%
 # tongue
-#session=experiment.Session & 'subject_id="1114"' & {'session': 9}
+session=experiment.Session & 'subject_id="1114"' & {'session': 9}
 # jaw 20
-session=experiment.Session & 'subject_id="2897"' & {'session': 1}
+#session=experiment.Session & 'subject_id="2897"' & {'session': 1}
 session_key=session.fetch('KEY')
 #%% get traces and phase
 good_units=ephys.Unit * ephys.ClusterMetric * ephys.UnitStat & session_key & {'insertion_number': 2} & 'presence_ratio > 0.9' & 'amplitude_cutoff < 0.15' & 'avg_firing_rate > 0.2' & 'isi_violation < 10' & 'unit_amp > 150'
@@ -121,6 +121,10 @@ else:
     num_trial_w = int(len(session_traces_w[0][:,0])/1471)
     session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, 1471))
     
+trial_idx_nat = [d.astype(str) for d in np.arange(num_trial_w)]
+trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
+trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
+session_traces_w = session_traces_w[trial_idx_nat,:]    
 session_traces_w = session_traces_w[trial_key-1,:]
 session_traces_w = np.hstack(session_traces_w)
 window_size = int(bin_width/0.0034)  # sample
@@ -135,6 +139,8 @@ V_design_matrix = np.concatenate((session_traces_s_x, session_traces_s_y, sessio
 #set up GLM
 sm_log_Link = sm.genmod.families.links.log
 
+taus = np.arange(-5,6)
+
 for j in range(20,21): # loop for each neuron
     unit_key=unit_keys[j]
     all_spikes=(ephys.Unit.TrialSpikes & unit_key).fetch('spike_times', order_by='trial')
@@ -146,19 +152,24 @@ for j in range(20,21): # loop for each neuron
     good_spikes = np.hstack(good_spikes)
     
     y, bin_edges = np.histogram(good_spikes, np.arange(0, traces_len*3.4/1000*num_trial, bin_width))
-    #y = np.reshape(y, (-1, 1))
-    #y = np.concatenate((y, np.ones( [len(y),1] )), axis=1)
     
-    glm_poiss = sm.GLM(y, sm.add_constant(V_design_matrix), family=sm.families.Poisson(link=sm_log_Link))
-
-    glm_result = glm_poiss.fit()
-    weights_py = glm_result.params 
+    r2s=np.zeros(len(taus))
+    weights_t=np.zeros((len(taus),9))
+    for i, tau in enumerate(taus):
+        y_roll=np.roll(y,tau)
+        glm_poiss = sm.GLM(y_roll, sm.add_constant(V_design_matrix), family=sm.families.Poisson(link=sm_log_Link))
     
-    sst_val = sum(map(lambda bins_edges: np.power(bins_edges,2),y-np.mean(y))) 
-    sse_val = sum(map(lambda bins_edges: np.power(bins_edges,2),glm_result.resid_response)) 
-    r2 = 1.0 - sse_val/sst_val
-    
-    # Compare the difference
-    print(weights_py)
+        glm_result = glm_poiss.fit()
+        weights_py = glm_result.params 
+        
+        sst_val = sum(map(lambda x: np.power(x,2),y_roll-np.mean(y_roll))) 
+        sse_val = sum(map(lambda x: np.power(x,2),glm_result.resid_response)) 
+        r2 = 1.0 - sse_val/sst_val
+        
+        # Compare the difference
+        #print(weights_py)
+        print(r2)
+        weights_t[i,:] = weights_py 
+        r2s[i] = r2
 #%%    
 
