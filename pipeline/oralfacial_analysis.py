@@ -379,9 +379,10 @@ class GLMFit(dj.Computed):
                 sse_val = sum(map(lambda x: np.power(x,2),glm_result.resid_response)) 
                 
                 weights_t[i,:] = glm_result.params
-                r2s[i] = 1.0 - sse_val/sst_val            
-        
+                r2s[i] = 1.0 - sse_val/sst_val
+                 
             units_glm.append({**unit_key, 'r2': r2s, 'weight': weights_t})
+            print(unit_key)
             
         self.insert(units_glm, ignore_extra_fields=True)
 
