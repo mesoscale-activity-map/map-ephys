@@ -124,7 +124,7 @@ def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
     :param first_n: top best n competitors to plot
     :param last_n: last n competitors to plot
     :param smooth_factor: for actual data
-    :return:
+    :return: axis
     """
 
     # Fetch actual data
@@ -168,7 +168,7 @@ def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
 
         ax.legend(fontsize=7, loc=1, bbox_to_anchor=(0.985, 0.89), bbox_transform=plt.gcf().transFigure)
 
-    return
+    return ax
 
 
 def plot_session_lightweight(fake_data, fitted_data=None, smooth_factor=5, base_color='y'):
