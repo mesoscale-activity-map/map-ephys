@@ -14,9 +14,9 @@ import numpy as np
 
 _side_cam = {'tracking_device': 'Camera 3'}
 
-_tracked_nose_features = [n for n in tracking.Tracking.NoseTracking.heading.names if n not in tracking.Tracking.heading.names]
-_tracked_tongue_features = [n for n in tracking.Tracking.TongueTracking.heading.names if n not in tracking.Tracking.heading.names]
-_tracked_jaw_features = [n for n in tracking.Tracking.JawTracking.heading.names if n not in tracking.Tracking.heading.names]
+_tracked_nose_features = tracking.Tracking.NoseTracking.heading.secondary_attributes
+_tracked_tongue_features = tracking.Tracking.TongueTracking.heading.secondary_attributes
+_tracked_jaw_features = tracking.Tracking.JawTracking.heading.secondary_attributes
 
 
 def compute_phase_tuning(datax, datay):

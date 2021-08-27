@@ -418,7 +418,7 @@ class WhiskerSVD(dj.Computed):
         
         video_path = video_path.parent
         
-        video_files = glob(str(video_path) + "\\*.mp4")
+        video_files = list(video_path.glob('*.mp4'))
         video_files_l = [[video_files[0]]]
         for ind_trial, file in enumerate(video_files[1:]):
             video_files_l.append([file])
