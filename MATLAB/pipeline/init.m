@@ -2,7 +2,7 @@ clear all
 
 % Load configuration
 dj.config();
-dj.config.load('C:\Users\NuoLiLabTower2\map-ephys\dj_local_conf_m.json')
+dj.config.load('.\dj_local_conf.json')
 
 global databasePrefix
 databasePrefix = 'map_v2_';
