@@ -122,6 +122,7 @@ def plot_tracking(session_key, unit_key,
     return fig
 
 def plot_tuning(session_key, unit_key):
+    num_frame = 1470
     traces = tracking.Tracking.JawTracking & session_key & {'tracking_device': 'Camera 3'}
     session_traces = traces.fetch('jaw_y', order_by='trial')
     traces_length = [len(d) for d in session_traces]
@@ -140,7 +141,7 @@ def plot_tuning(session_key, unit_key):
     good_spikes = [d.astype(int) for d in good_spikes]
 
     for i, d in enumerate(good_spikes):
-        good_spikes[i] = d[d < 1470]
+        good_spikes[i] = d[d < num_frame]
 
     all_phase = []
     for trial_idx in range(len(good_spikes)):

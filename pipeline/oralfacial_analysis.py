@@ -2,7 +2,6 @@ import numpy as np
 import statsmodels.api as sm
 import datajoint as dj
 import pathlib
-from glob import glob
 from astropy.stats import kuiper_two
 from pipeline import ephys, experiment, tracking
 from pipeline.ingest import tracking as tracking_ingest
@@ -30,7 +29,7 @@ class JawTuning(dj.Computed):
     key_source = experiment.Session & ephys.Unit & tracking.Tracking & 'rig = "RRig-MTL"'
     
     def make(self, key):
-        
+        num_frame = 1470
         # get traces and phase
         good_units=ephys.Unit * ephys.ClusterMetric * ephys.UnitStat & key & 'presence_ratio > 0.9' & 'amplitude_cutoff < 0.15' & 'avg_firing_rate > 0.2' & 'isi_violation < 10' & 'unit_amp > 150'
         
@@ -62,7 +61,7 @@ class JawTuning(dj.Computed):
             good_spikes = [d.astype(int) for d in good_spikes] # convert to intergers
         
             for i, d in enumerate(good_spikes):
-                good_spikes[i] = d[d < 1470]
+                good_spikes[i] = d[d < num_frame]
         
             all_phase = []
             for trial_idx in range(len(good_spikes)):
@@ -164,7 +163,7 @@ class WhiskerTuning(dj.Computed):
     key_source = experiment.Session & v_oralfacial_analysis.WhiskerSVD & ephys.Unit & 'rig = "RRig-MTL"'
     
     def make(self, key):
-    
+        num_frame = 1471
         # get traces and phase
         good_units=ephys.Unit * ephys.ClusterMetric * ephys.UnitStat & key & 'presence_ratio > 0.9' & 'amplitude_cutoff < 0.15' & 'avg_firing_rate > 0.2' & 'isi_violation < 10' & 'unit_amp > 150'
         
@@ -178,12 +177,12 @@ class WhiskerTuning(dj.Computed):
         
         session_traces_w = (v_oralfacial_analysis.WhiskerSVD & key).fetch('mot_svd')
         
-        if len(session_traces_w[0][:,0]) % 1471 != 0:
+        if len(session_traces_w[0][:,0]) % num_frame != 0:
             print('Bad videos in bottom view')
             return
         else:
-            num_trial_w = int(len(session_traces_w[0][:,0])/1471)
-            session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, 1471))
+            num_trial_w = int(len(session_traces_w[0][:,0])/num_frame)
+            session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, num_frame))
         trial_idx_nat = [d.astype(str) for d in np.arange(num_trial_w)]
         trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
         trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
@@ -235,7 +234,7 @@ class GLMFit(dj.Computed):
     key_source = experiment.Session & v_tracking.TongueTracking3DBot & experiment.Breathing & v_oralfacial_analysis.WhiskerSVD & ephys.Unit & 'rig = "RRig-MTL"'
     
     def make(self, key):
-    
+        num_frame = 1471
         good_units=ephys.Unit * ephys.ClusterMetric * ephys.UnitStat & key & 'presence_ratio > 0.9' & 'amplitude_cutoff < 0.15' & 'avg_firing_rate > 0.2' & 'isi_violation < 10' & 'unit_amp > 150'
         unit_keys=good_units.fetch('KEY')
         bin_width = 0.017
@@ -331,12 +330,12 @@ class GLMFit(dj.Computed):
 
         # get whisker
         session_traces_w = (v_oralfacial_analysis.WhiskerSVD & key).fetch('mot_svd')
-        if len(session_traces_w[0][:,0]) % 1471 != 0:
+        if len(session_traces_w[0][:,0]) % num_frame != 0:
             print('Bad videos in bottom view')
             return
         else:
-            num_trial_w = int(len(session_traces_w[0][:,0])/1471)
-            session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, 1471))
+            num_trial_w = int(len(session_traces_w[0][:,0])/num_frame)
+            session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, num_frame))
             
         trial_idx_nat = [d.astype(str) for d in np.arange(num_trial_w)]
         trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
