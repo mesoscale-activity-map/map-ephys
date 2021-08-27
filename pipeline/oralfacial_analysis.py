@@ -3,6 +3,7 @@ import statsmodels.api as sm
 import datajoint as dj
 import pathlib
 from glob import glob
+from astropy.stats import kuiper_two
 from pipeline import ephys, experiment, tracking
 from pipeline.ingest import tracking as tracking_ingest
 
@@ -21,6 +22,7 @@ class JawTuning(dj.Computed):
     ---
     modulation_index: float
     preferred_phase: float
+    kuiper_test: float
     """
     # mtl sessions only
     # key_source = ephys.Unit * (experiment.Session & 'rig = "RRig-MTL"') * tracking.Tracking
@@ -68,6 +70,8 @@ class JawTuning(dj.Computed):
         
             all_phase=np.hstack(all_phase)
             
+            a, kuiper_test = kuiper_two(np.hstack(phase), all_phase)
+                        
             n_bins = 20
             tofity, tofitx = np.histogram(all_phase, bins=n_bins)
             baseline, tofitx = np.histogram(phase, bins=n_bins)  
@@ -77,7 +81,7 @@ class JawTuning(dj.Computed):
                
             preferred_phase,modulation_index=helper_functions.compute_phase_tuning(tofitx, tofity)             
         
-            units_jaw_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase})
+            units_jaw_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase, 'kuiper_test': kuiper_test})
             
         self.insert(units_jaw_tunings, ignore_extra_fields=True)
         
