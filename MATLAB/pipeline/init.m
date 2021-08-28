@@ -2,13 +2,13 @@ clear all
 
 % Load configuration
 dj.config();
-dj.config.load('../../dj_local_conf.json')
+dj.config.load('.\dj_local_conf.json')
 
 global databasePrefix
 databasePrefix = 'map_v2_';
 
 schema_names = {'lab', 'experiment', 'histology', ...
-    'ephys', 'tracking', 'ccf'};
+    'ephys', 'tracking', 'ccf', 'oralfacial_analysis'};
 
 for k = 1: numel(schema_names)
     clear schema
@@ -24,3 +24,4 @@ for k = 1: numel(schema_names)
     
     eval(['v_', schema_name, '.schema = schema;'])
 end
+
