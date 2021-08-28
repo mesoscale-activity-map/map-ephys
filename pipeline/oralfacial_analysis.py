@@ -69,7 +69,7 @@ class JawTuning(dj.Computed):
         
             all_phase=np.hstack(all_phase)
             
-            a, kuiper_test = kuiper_two(np.hstack(phase), all_phase)
+            _, kuiper_test = kuiper_two(np.hstack(phase), all_phase)
                         
             n_bins = 20
             tofity, tofitx = np.histogram(all_phase, bins=n_bins)
