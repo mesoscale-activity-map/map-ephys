@@ -13,8 +13,8 @@ from . import get_schema_name
 #schema = dj.schema('daveliu_analysis')
 schema = dj.schema(get_schema_name('oralfacial_analysis'))
 
-v_oralfacial_analysis = dj.create_virtual_module('oralfacial_analysis', 'daveliu_analysis')
-v_tracking = dj.create_virtual_module('tracking', 'map_v2_tracking')
+v_oralfacial_analysis = dj.create_virtual_module('oralfacial_analysis', get_schema_name('oralfacial_analysis'))
+v_tracking = dj.create_virtual_module('tracking', get_schema_name('tracking'))
 
 @schema
 class JawTuning(dj.Computed):
@@ -28,8 +28,6 @@ class JawTuning(dj.Computed):
     kuiper_test: float
     """
     # mtl sessions only
-    # key_source = ephys.Unit * (experiment.Session & 'rig = "RRig-MTL"') * tracking.Tracking
-    # key_source = ephys.Unit * (experiment.Session & 'rig = "RRig-MTL"') * tracking.Tracking * ephys.ClusterMetric * ephys.UnitStat & 'presence_ratio > 0.9' & 'amplitude_cutoff < 0.15' & 'avg_firing_rate > 0.2' & 'isi_violation < 10' & 'unit_amp > 150'
     key_source = experiment.Session & ephys.Unit & tracking.Tracking & 'rig = "RRig-MTL"'
     
     def make(self, key):
@@ -86,7 +84,6 @@ class JawTuning(dj.Computed):
             units_jaw_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase, 'jaw_x': tofitx, 'jaw_y': tofity, 'kuiper_test': kuiper_test})
             
         self.insert(units_jaw_tunings, ignore_extra_fields=True)
-        
         
 @schema
 class BreathingTuning(dj.Computed):

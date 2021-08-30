@@ -243,42 +243,9 @@ def plot_whisking(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(0
 
     return fig
 
-def plot_jaw_tuning(session_key, unit_key):
-    num_frame = 1470
-    traces = tracking.Tracking.JawTracking & session_key & {'tracking_device': 'Camera 3'}
-    if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & session_key)) != len(traces):
-        print(f'Mismatch in tracking trial and ephys trial number: {session_key}')
-        return
-    session_traces = traces.fetch('jaw_y', order_by='trial')
-    traces_length = [len(d) for d in session_traces]
-    sample_number = int(np.median(traces_length))
-    good_trial_ind = np.where(np.array(traces_length) == sample_number)[0]
-    good_traces = session_traces[good_trial_ind]
-    good_traces = np.vstack(good_traces)
-    
-    fs=(tracking.TrackingDevice() & 'tracking_device="Camera 3"').fetch1('sampling_rate')
-    
-    amp, phase=behavior_plot.compute_insta_phase_amp(good_traces, float(fs), freq_band=(5, 15))
-    phase = phase + np.pi
-
-    all_spikes=(ephys.Unit.TrialSpikes & unit_key).fetch('spike_times', order_by='trial')
-    good_spikes = np.array(all_spikes[good_trial_ind]*float(fs)) # get good spikes
-    good_spikes = [d.astype(int) for d in good_spikes]
-
-    for i, d in enumerate(good_spikes):
-        good_spikes[i] = d[d < num_frame]
-
-    all_phase = []
-    for trial_idx in range(len(good_spikes)):
-        all_phase.append(phase[trial_idx][good_spikes[trial_idx]])
-
-    all_phase=np.hstack(all_phase)
-    
-    n_bins = 20
-    tofity, tofitx = np.histogram(all_phase, bins=n_bins)
-    baseline, tofitx = np.histogram(phase, bins=n_bins)  
-    tofitx = tofitx[:-1] + (tofitx[1] - tofitx[0])/2
-    tofity = tofity / baseline * float(fs)
+def plot_jaw_tuning(unit_key):
+        
+    tofitx, tofity = (oralfacial_analysis.JawTuning() & unit_key).fetch1('jaw_x','jaw_y')
     max_fit_y=np.round(np.amax(tofity),1)
     
     fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
@@ -293,46 +260,9 @@ def plot_jaw_tuning(session_key, unit_key):
     
     return fig
 
-def plot_breathing_tuning(session_key, unit_key):
-    traces = experiment.Breathing & session_key
-    
-    if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & session_key)) != len(traces):
-        print(f'Mismatch in tracking trial and ephys trial number: {session_key}')
-        return
-    
-    session_traces, breathing_ts = traces.fetch('breathing', 'breathing_timestamps', order_by='trial')
-    fs=25000
-    ds=100
-    good_traces = session_traces
-    for i, d in enumerate(session_traces):
-        good_traces[i] = d[breathing_ts[i] < 5][::ds]
-    traces_length = [len(d) for d in good_traces]
-    good_trial_ind = np.where(np.array(traces_length) == 5*fs/ds)[0]
-    good_traces = good_traces[good_trial_ind]
-    good_traces = np.vstack(good_traces)
-    
-    amp, phase=behavior_plot.compute_insta_phase_amp(good_traces, float(fs/ds), freq_band=(1, 15))
-    phase = phase + np.pi
-    
-    # compute phase and MI
-    all_spikes=(ephys.Unit.TrialSpikes & unit_key).fetch('spike_times', order_by='trial')
-    good_spikes = np.array(all_spikes[good_trial_ind]*float(fs/ds)) # get good spikes and convert to indices
-    good_spikes = [d.astype(int) for d in good_spikes] # convert to intergers
+def plot_breathing_tuning(unit_key):
 
-    for i, d in enumerate(good_spikes):
-        good_spikes[i] = d[d < int(5*fs/ds)]
-
-    all_phase = []
-    for trial_idx in range(len(good_spikes)):
-        all_phase.append(phase[trial_idx][good_spikes[trial_idx]])
-
-    all_phase=np.hstack(all_phase)
-    
-    n_bins = 20
-    tofity, tofitx = np.histogram(all_phase, bins=n_bins)
-    baseline, tofitx = np.histogram(phase, bins=n_bins)  
-    tofitx = tofitx[:-1] + (tofitx[1] - tofitx[0])/2
-    tofity = tofity / baseline * float(fs/ds)
+    tofitx, tofity = (oralfacial_analysis.BreathingTuning() & unit_key).fetch1('breathing_x','breathing_y')
     max_fit_y=np.round(np.amax(tofity),1)
     
     fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
@@ -347,52 +277,9 @@ def plot_breathing_tuning(session_key, unit_key):
     
     return fig
 
-def plot_whisker_tuning(session_key, unit_key):
-    num_frame = 1471
-    # get traces and phase   
-    traces = tracking.Tracking.JawTracking & session_key & {'tracking_device': 'Camera 4'}
-    
-    if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & session_key)) != len(traces):
-        print(f'Mismatch in tracking trial and ephys trial number: {session_key}')
-        return
-    
-    session_traces_w = (oralfacial_analysis.WhiskerSVD & session_key).fetch('mot_svd')
-    
-    if len(session_traces_w[0][:,0]) % num_frame != 0:
-        print('Bad videos in bottom view')
-        return
-    else:
-        num_trial_w = int(len(session_traces_w[0][:,0])/num_frame)
-        session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, num_frame))
-    trial_idx_nat = [d.astype(str) for d in np.arange(num_trial_w)]
-    trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
-    trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
-    session_traces_w=session_traces_w[trial_idx_nat,:]
-                                   
-    fs=(tracking.TrackingDevice & 'tracking_device="Camera 4"').fetch1('sampling_rate')
-    
-    amp, phase=behavior_plot.compute_insta_phase_amp(session_traces_w, float(fs), freq_band=(5, 20))
-    phase = phase + np.pi
-    
-    # compute phase and MI   
-    all_spikes=(ephys.Unit.TrialSpikes & unit_key).fetch('spike_times', order_by='trial')
-    good_spikes = np.array(all_spikes*float(fs)) # get good spikes and convert to indices
-    good_spikes = [d.astype(int) for d in good_spikes] # convert to intergers
+def plot_whisker_tuning(unit_key):
 
-    for i, d in enumerate(good_spikes):
-        good_spikes[i] = d[d < int(5*fs)]
-
-    all_phase = []
-    for trial_idx in range(len(good_spikes)):
-        all_phase.append(phase[trial_idx][good_spikes[trial_idx]])
-
-    all_phase=np.hstack(all_phase)
-    
-    n_bins = 20
-    tofity, tofitx = np.histogram(all_phase, bins=n_bins)
-    baseline, tofitx = np.histogram(phase, bins=n_bins)  
-    tofitx = tofitx[:-1] + (tofitx[1] - tofitx[0])/2
-    tofity = tofity / baseline * float(fs)
+    tofitx, tofity = (oralfacial_analysis.WhiskerTuning() & unit_key).fetch1('whisker_x','whisker_y')
     max_fit_y=np.round(np.amax(tofity),1)
     
     fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
@@ -406,11 +293,6 @@ def plot_whisker_tuning(session_key, unit_key):
     plt.xticks(xT, xL)
     
     return fig
-
-
-def psth(spikes, trigger):
-    
-    return psth
 
 def water2subject(water,date):
     subject_id = (lab.WaterRestriction & {'water_restriction_number': water}).fetch('subject_id')
