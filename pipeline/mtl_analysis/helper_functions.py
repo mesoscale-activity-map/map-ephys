@@ -1,10 +1,6 @@
-from pipeline import ephys
-from pipeline import tracking
-from pipeline import experiment
+from pipeline import lab, experiment, ephys, tracking, oralfacial_analysis
 from pipeline.plot import behavior_plot
-from pipeline import lab
 
-from scipy import signal
 from scipy import optimize
 
 import matplotlib.pyplot as plt
@@ -52,9 +48,9 @@ def vonMise_f(x, std, mean, amp, baseline):
 
 def plot_tracking(session_key, unit_key,
                   tracking_feature='jaw_y', camera_key=_side_cam,
-                  trial_offset=0, trial_limit=10, xlim=(-0, 5), axs=None):
+                  trial_offset=0, trial_limit=10, xlim=(0, 5), axs=None):
     """
-    Plot jaw movement per trial, time-locked to cue-onset, with spike times overlay
+    Plot jaw movement per trial, time-locked to trial-onset, with spike times overlay
     :param session_key: session where the trials are from
     :param unit_key: unit for spike times overlay
     :param tracking_feature: which tracking feature to plot (default to `jaw_y`)
@@ -76,8 +72,15 @@ def plot_tracking(session_key, unit_key,
     
     tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & camera_key & session_key).fetch1('sampling_rate'))
 
-    l_trial_trk = trk & 'water_port="mtl-6"'
-    r_trial_trk = trk & 'water_port="mtl-5"'
+    trial_trk_1 = trk & 'water_port="mtl-1"'
+    trial_trk_2 = trk & 'water_port="mtl-2"'
+    trial_trk_3 = trk & 'water_port="mtl-3"'
+    trial_trk_4 = trk & 'water_port="mtl-4"'
+    trial_trk_5 = trk & 'water_port="mtl-5"'
+    trial_trk_6 = trk & 'water_port="mtl-6"'
+    trial_trk_7 = trk & 'water_port="mtl-7"'
+    trial_trk_8 = trk & 'water_port="mtl-8"'
+    trial_trk_9 = trk & 'water_port="mtl-9"'
 
     def get_trial_track(trial_tracks):
         if trial_offset < 1 and isinstance(trial_offset, float):
@@ -98,18 +101,19 @@ def plot_tracking(session_key, unit_key,
 
     fig = None
     if axs is None:
-        fig, axs = plt.subplots(1, 2, figsize=(16, 8))
-    assert len(axs) == 2
+        fig, axs = plt.subplots(3, 3, figsize=(16, 16))
+    assert len(axs) == 3
 
     h_spacing = 150
-    for trial_tracks, ax, ax_name, spk_color in zip((l_trial_trk, r_trial_trk), axs,
-                                                    ('left lick trials', 'right lick trials'), ('k', 'k')):
+    for trial_tracks, ax, ax_name, spk_color in zip((trial_trk_3,trial_trk_6,trial_trk_9,trial_trk_2,trial_trk_5,trial_trk_8,trial_trk_1,trial_trk_4,trial_trk_7), axs.flatten(),
+                                                    ('top-left trials', 'top-mid trials','top-right trials','mid-left trials','mid trials','mid-right trials','bot-left trials','bot-mid trials','bot-right trials'),
+                                                    ('k','k','k','k','k','k','k','k','k')):
         for tr_id, (trk_feat, tongue_out_bool, spike_times, tvec) in enumerate(get_trial_track(trial_tracks)):
             ax.plot(tvec, trk_feat + tr_id * h_spacing, '.k', markersize=1)
             ax.plot(tvec[tongue_out_bool], trk_feat[tongue_out_bool] + tr_id * h_spacing, '.', color='lime', markersize=2)
             ax.plot(spike_times, np.full_like(spike_times, trk_feat[tongue_out_bool].mean() + h_spacing/10) + tr_id * h_spacing,
-                    '|', color=spk_color, markersize=4)
-            #ax.set_title(ax_name)
+                    '.', color=spk_color, markersize=4)
+            ax.set_title(ax_name)
             ax.axvline(x=0, linestyle='--', color='k')
 
             # cosmetic
@@ -121,9 +125,130 @@ def plot_tracking(session_key, unit_key,
 
     return fig
 
-def plot_tuning(session_key, unit_key):
+def plot_breathing(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(0, 5), axs=None):
+    """
+    Plot breathing per trial, time-locked to trial-onset, with spike times overlay
+    :param session_key: session where the trials are from
+    :param unit_key: unit for spike times overlay
+    :param trial_offset: index of trial to plot from (if a decimal between 0 and 1, indicates the proportion of total trial to plot from)
+    :param trial_limit: number of trial to plot
+    """
+
+    if not experiment.Breathing & session_key:
+        print('No breathing data')
+        return
+
+    breathing = (experiment.Breathing & session_key & ephys.Unit.TrialSpikes)
+    
+    if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & session_key)) != len(breathing):
+        print(f'Mismatch in tracking trial and ephys trial number: {session_key}')
+        return
+
+    def get_trial_breathing(trial_breathing):
+        if trial_offset < 1 and isinstance(trial_offset, float):
+            offset = int(len(trial_breathing) * trial_offset)
+        else:
+            offset = trial_offset
+
+        for br in trial_breathing.fetch(as_dict=True, offset=offset, limit=trial_limit, order_by='trial'):
+            br_trace = br['breathing']       
+            tvec = br['breathing_timestamps']
+            spike_times = (ephys.Unit.TrialSpikes & br & unit_key).fetch1('spike_times')
+            yield br_trace, spike_times, tvec
+    
+    fig = None
+    if axs is None:
+        fig, ax = plt.subplots(1, 1, figsize=(16, 16))
+        
+    h_spacing = 3000
+
+    for tr_id, (br, spike_times, tvec) in enumerate(get_trial_breathing(breathing)):
+        ax.plot(tvec, br + tr_id * h_spacing, 'k')
+        ax.plot(spike_times, np.full_like(spike_times, br.mean() + h_spacing/3) + tr_id * h_spacing, '.k',  markersize=8)
+        ax.set_title('breathing')
+        ax.axvline(x=0, linestyle='--', color='k')
+
+        # cosmetic
+        ax.set_xlim(xlim)
+        #ax.set_yticks([])
+        ax.spines['left'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+
+    return fig
+
+def plot_whisking(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(0, 5), axs=None):
+    """
+    Plot whisking per trial, time-locked to trial-onset, with spike times overlay
+    :param session_key: session where the trials are from
+    :param unit_key: unit for spike times overlay
+    :param trial_offset: index of trial to plot from (if a decimal between 0 and 1, indicates the proportion of total trial to plot from)
+    :param trial_limit: number of trial to plot
+    """
+    
+    num_frame = 1471
+    traces = tracking.Tracking.JawTracking & session_key & {'tracking_device': 'Camera 4'}
+    
+    if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & session_key)) != len(traces):
+        print(f'Mismatch in tracking trial and ephys trial number: {session_key}')
+        return
+    
+    session_traces_w = (oralfacial_analysis.WhiskerSVD & session_key).fetch('mot_svd')
+    
+    if len(session_traces_w[0][:,0]) % num_frame != 0:
+        print('Bad videos in bottom view')
+        return
+    else:
+        num_trial_w = int(len(session_traces_w[0][:,0])/num_frame)
+        session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, num_frame))
+    trial_idx_nat = [d.astype(str) for d in np.arange(num_trial_w)]
+    trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
+    trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
+    session_traces_w=session_traces_w[trial_idx_nat,:]
+                                   
+    fs=(tracking.TrackingDevice & 'tracking_device="Camera 4"').fetch1('sampling_rate')
+    
+    def get_trial_whisking(trial_whisking):
+        if trial_offset < 1 and isinstance(trial_offset, float):
+            offset = int(len(trial_whisking) * trial_offset)
+        else:
+            offset = trial_offset
+
+        for tr_id, wh in enumerate(trial_whisking[offset:offset+trial_limit]):
+            wh_trace = wh
+
+            sample_counts = len(wh_trace)
+            tvec = np.arange(sample_counts) / fs
+            spike_times = (ephys.Unit.TrialSpikes & {'trial': tr_id+1+offset} & unit_key).fetch1('spike_times')
+            yield wh_trace, spike_times, tvec
+    
+    fig = None
+    if axs is None:
+        fig, ax = plt.subplots(1, 1, figsize=(16, 16))
+        
+    h_spacing =1000
+
+    for tr_id, (wh, spike_times, tvec) in enumerate(get_trial_whisking(session_traces_w)):
+        ax.plot(tvec, wh + tr_id * h_spacing, 'k')
+        ax.plot(spike_times, np.full_like(spike_times, wh.mean() + h_spacing/3) + tr_id * h_spacing, '.k',  markersize=8)
+        ax.set_title('whisking')
+        ax.axvline(x=0, linestyle='--', color='k')
+
+        # cosmetic
+        ax.set_xlim(xlim)
+        #ax.set_yticks([])
+        ax.spines['left'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+
+    return fig
+
+def plot_jaw_tuning(session_key, unit_key):
     num_frame = 1470
     traces = tracking.Tracking.JawTracking & session_key & {'tracking_device': 'Camera 3'}
+    if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & session_key)) != len(traces):
+        print(f'Mismatch in tracking trial and ephys trial number: {session_key}')
+        return
     session_traces = traces.fetch('jaw_y', order_by='trial')
     traces_length = [len(d) for d in session_traces]
     sample_number = int(np.median(traces_length))
@@ -154,7 +279,7 @@ def plot_tuning(session_key, unit_key):
     baseline, tofitx = np.histogram(phase, bins=n_bins)  
     tofitx = tofitx[:-1] + (tofitx[1] - tofitx[0])/2
     tofity = tofity / baseline * float(fs)
-    max_fit_y=np.amax(tofity)
+    max_fit_y=np.round(np.amax(tofity),1)
     
     fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
     ax.plot(np.append(tofitx,tofitx[0]), np.append(tofity,tofity[0]))
@@ -162,9 +287,126 @@ def plot_tuning(session_key, unit_key):
     ax.set_rticks([0, max_fit_y])  # Less radial ticks
     ax.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
     ax.grid(False)
-    ax.set_xticklabels([])
+    xT=plt.xticks()[0]
+    xL=['0','',r'$\frac{\pi}{2}$','',r'$\pi$','',r'$\frac{3\pi}{2}$','']
+    plt.xticks(xT, xL)
     
     return fig
+
+def plot_breathing_tuning(session_key, unit_key):
+    traces = experiment.Breathing & session_key
+    
+    if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & session_key)) != len(traces):
+        print(f'Mismatch in tracking trial and ephys trial number: {session_key}')
+        return
+    
+    session_traces, breathing_ts = traces.fetch('breathing', 'breathing_timestamps', order_by='trial')
+    fs=25000
+    ds=100
+    good_traces = session_traces
+    for i, d in enumerate(session_traces):
+        good_traces[i] = d[breathing_ts[i] < 5][::ds]
+    traces_length = [len(d) for d in good_traces]
+    good_trial_ind = np.where(np.array(traces_length) == 5*fs/ds)[0]
+    good_traces = good_traces[good_trial_ind]
+    good_traces = np.vstack(good_traces)
+    
+    amp, phase=behavior_plot.compute_insta_phase_amp(good_traces, float(fs/ds), freq_band=(1, 15))
+    phase = phase + np.pi
+    
+    # compute phase and MI
+    all_spikes=(ephys.Unit.TrialSpikes & unit_key).fetch('spike_times', order_by='trial')
+    good_spikes = np.array(all_spikes[good_trial_ind]*float(fs/ds)) # get good spikes and convert to indices
+    good_spikes = [d.astype(int) for d in good_spikes] # convert to intergers
+
+    for i, d in enumerate(good_spikes):
+        good_spikes[i] = d[d < int(5*fs/ds)]
+
+    all_phase = []
+    for trial_idx in range(len(good_spikes)):
+        all_phase.append(phase[trial_idx][good_spikes[trial_idx]])
+
+    all_phase=np.hstack(all_phase)
+    
+    n_bins = 20
+    tofity, tofitx = np.histogram(all_phase, bins=n_bins)
+    baseline, tofitx = np.histogram(phase, bins=n_bins)  
+    tofitx = tofitx[:-1] + (tofitx[1] - tofitx[0])/2
+    tofity = tofity / baseline * float(fs/ds)
+    max_fit_y=np.round(np.amax(tofity),1)
+    
+    fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
+    ax.plot(np.append(tofitx,tofitx[0]), np.append(tofity,tofity[0]))
+    ax.set_rmax(max_fit_y)
+    ax.set_rticks([0, max_fit_y])  # Less radial ticks
+    ax.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
+    ax.grid(False)
+    xT=plt.xticks()[0]
+    xL=['0','',r'$\frac{\pi}{2}$','',r'$\pi$','',r'$\frac{3\pi}{2}$','']
+    plt.xticks(xT, xL)
+    
+    return fig
+
+def plot_whisker_tuning(session_key, unit_key):
+    num_frame = 1471
+    # get traces and phase   
+    traces = tracking.Tracking.JawTracking & session_key & {'tracking_device': 'Camera 4'}
+    
+    if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & session_key)) != len(traces):
+        print(f'Mismatch in tracking trial and ephys trial number: {session_key}')
+        return
+    
+    session_traces_w = (oralfacial_analysis.WhiskerSVD & session_key).fetch('mot_svd')
+    
+    if len(session_traces_w[0][:,0]) % num_frame != 0:
+        print('Bad videos in bottom view')
+        return
+    else:
+        num_trial_w = int(len(session_traces_w[0][:,0])/num_frame)
+        session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, num_frame))
+    trial_idx_nat = [d.astype(str) for d in np.arange(num_trial_w)]
+    trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
+    trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
+    session_traces_w=session_traces_w[trial_idx_nat,:]
+                                   
+    fs=(tracking.TrackingDevice & 'tracking_device="Camera 4"').fetch1('sampling_rate')
+    
+    amp, phase=behavior_plot.compute_insta_phase_amp(session_traces_w, float(fs), freq_band=(5, 20))
+    phase = phase + np.pi
+    
+    # compute phase and MI   
+    all_spikes=(ephys.Unit.TrialSpikes & unit_key).fetch('spike_times', order_by='trial')
+    good_spikes = np.array(all_spikes*float(fs)) # get good spikes and convert to indices
+    good_spikes = [d.astype(int) for d in good_spikes] # convert to intergers
+
+    for i, d in enumerate(good_spikes):
+        good_spikes[i] = d[d < int(5*fs)]
+
+    all_phase = []
+    for trial_idx in range(len(good_spikes)):
+        all_phase.append(phase[trial_idx][good_spikes[trial_idx]])
+
+    all_phase=np.hstack(all_phase)
+    
+    n_bins = 20
+    tofity, tofitx = np.histogram(all_phase, bins=n_bins)
+    baseline, tofitx = np.histogram(phase, bins=n_bins)  
+    tofitx = tofitx[:-1] + (tofitx[1] - tofitx[0])/2
+    tofity = tofity / baseline * float(fs)
+    max_fit_y=np.round(np.amax(tofity),1)
+    
+    fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
+    ax.plot(np.append(tofitx,tofitx[0]), np.append(tofity,tofity[0]))
+    ax.set_rmax(max_fit_y)
+    ax.set_rticks([0, max_fit_y])  # Less radial ticks
+    ax.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
+    ax.grid(False)
+    xT=plt.xticks()[0]
+    xL=['0','',r'$\frac{\pi}{2}$','',r'$\pi$','',r'$\frac{3\pi}{2}$','']
+    plt.xticks(xT, xL)
+    
+    return fig
+
 
 def psth(spikes, trigger):
     

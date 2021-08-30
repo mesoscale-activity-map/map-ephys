@@ -8,8 +8,10 @@ from pipeline.ingest import tracking as tracking_ingest
 
 from pipeline.mtl_analysis import helper_functions
 from pipeline.plot import behavior_plot
+from . import get_schema_name
 
-schema = dj.schema('daveliu_analysis')
+#schema = dj.schema('daveliu_analysis')
+schema = dj.schema(get_schema_name('oralfacial_analysis'))
 
 v_oralfacial_analysis = dj.create_virtual_module('oralfacial_analysis', 'daveliu_analysis')
 v_tracking = dj.create_virtual_module('tracking', 'map_v2_tracking')
@@ -21,6 +23,8 @@ class JawTuning(dj.Computed):
     ---
     modulation_index: float
     preferred_phase: float
+    jaw_x: mediumblob
+    jaw_y: mediumblob
     kuiper_test: float
     """
     # mtl sessions only
@@ -76,11 +80,10 @@ class JawTuning(dj.Computed):
             baseline, tofitx = np.histogram(phase, bins=n_bins)  
             tofitx = tofitx[:-1] + (tofitx[1] - tofitx[0])/2
             tofity = tofity / baseline * float(fs)
-            
-               
+                           
             preferred_phase,modulation_index=helper_functions.compute_phase_tuning(tofitx, tofity)             
         
-            units_jaw_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase, 'kuiper_test': kuiper_test})
+            units_jaw_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase, 'jaw_x': tofitx, 'jaw_y': tofity, 'kuiper_test': kuiper_test})
             
         self.insert(units_jaw_tunings, ignore_extra_fields=True)
         
@@ -92,6 +95,8 @@ class BreathingTuning(dj.Computed):
     ---
     modulation_index: float
     preferred_phase: float
+    breathing_x: mediumblob
+    breathing_y: mediumblob
     """
     # mtl sessions only
     key_source = experiment.Session & experiment.Breathing & ephys.Unit & 'rig = "RRig-MTL"'
@@ -147,7 +152,7 @@ class BreathingTuning(dj.Computed):
             
             preferred_phase,modulation_index=helper_functions.compute_phase_tuning(tofitx, tofity)             
         
-            units_breathing_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase})
+            units_breathing_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase, 'breathing_x': tofitx, 'breathing_y': tofity})
             
         self.insert(units_breathing_tunings, ignore_extra_fields=True)
 
@@ -158,6 +163,8 @@ class WhiskerTuning(dj.Computed):
     ---
     modulation_index: float
     preferred_phase: float
+    whisker_x: mediumblob
+    whisker_y: mediumblob
     """
     # mtl sessions only
     key_source = experiment.Session & v_oralfacial_analysis.WhiskerSVD & ephys.Unit & 'rig = "RRig-MTL"'
@@ -218,7 +225,7 @@ class WhiskerTuning(dj.Computed):
             #print(unit_key)
             preferred_phase,modulation_index=helper_functions.compute_phase_tuning(tofitx, tofity)             
         
-            units_whisker_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase})
+            units_whisker_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase, 'whisker_x': tofitx, 'whisker_y': tofity})
             
         self.insert(units_whisker_tunings, ignore_extra_fields=True)
 
