@@ -1,5 +1,4 @@
 from pipeline import lab, experiment, ephys, tracking, oralfacial_analysis
-from pipeline.plot import behavior_plot
 
 from scipy import optimize
 
