@@ -169,7 +169,7 @@ def plot_breathing(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(
 
         # cosmetic
         ax.set_xlim(xlim)
-        #ax.set_yticks([])
+        ax.set_yticks([])
         ax.spines['left'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
@@ -235,7 +235,7 @@ def plot_whisking(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(0
 
         # cosmetic
         ax.set_xlim(xlim)
-        #ax.set_yticks([])
+        ax.set_yticks([])
         ax.spines['left'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
