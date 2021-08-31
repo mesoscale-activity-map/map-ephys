@@ -2,6 +2,7 @@ import numpy as np
 import statsmodels.api as sm
 import datajoint as dj
 import pathlib
+from scipy import stats
 from astropy.stats import kuiper_two
 from pipeline import ephys, experiment, tracking
 from pipeline.ingest import tracking as tracking_ingest
@@ -26,6 +27,7 @@ class JawTuning(dj.Computed):
     jaw_x: mediumblob
     jaw_y: mediumblob
     kuiper_test: float
+    di_perm: float
     """
     # mtl sessions only
     key_source = experiment.Session & ephys.Unit & tracking.Tracking & 'rig = "RRig-MTL"'
@@ -54,6 +56,7 @@ class JawTuning(dj.Computed):
         
         amp, phase=behavior_plot.compute_insta_phase_amp(good_traces, float(fs), freq_band=(5, 15))
         phase = phase + np.pi
+        phase_s=np.hstack(phase)
         
         # compute phase and MI
         units_jaw_tunings = []
@@ -71,17 +74,27 @@ class JawTuning(dj.Computed):
         
             all_phase=np.hstack(all_phase)
             
-            _, kuiper_test = kuiper_two(np.hstack(phase), all_phase)
+            _, kuiper_test = kuiper_two(phase_s, all_phase)
                         
             n_bins = 20
             tofity, tofitx = np.histogram(all_phase, bins=n_bins)
-            baseline, tofitx = np.histogram(phase, bins=n_bins)  
+            baseline, tofitx = np.histogram(phase_s, bins=n_bins)  
             tofitx = tofitx[:-1] + (tofitx[1] - tofitx[0])/2
             tofity = tofity / baseline * float(fs)
                            
-            preferred_phase,modulation_index=helper_functions.compute_phase_tuning(tofitx, tofity)             
+            preferred_phase,modulation_index=helper_functions.compute_phase_tuning(tofitx, tofity)
+            
+            n_perm = 100
+            n_spk = len(all_phase)
+            di_distr = np.zeros(n_perm)
+            for i_perm in range(n_perm):
+                tofity_p, _ = np.histogram(np.random.choice(phase_s, n_spk), bins=n_bins) 
+                tofity_p = tofity_p / baseline * float(fs)
+                _, di_distr[i_perm] = helper_functions.compute_phase_tuning(tofitx, tofity_p)
+                
+            _, di_perm = stats.mannwhitneyu(modulation_index,di_distr)          
         
-            units_jaw_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase, 'jaw_x': tofitx, 'jaw_y': tofity, 'kuiper_test': kuiper_test})
+            units_jaw_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase, 'jaw_x': tofitx, 'jaw_y': tofity, 'kuiper_test': kuiper_test, 'di_perm': di_perm})
             
         self.insert(units_jaw_tunings, ignore_extra_fields=True)
         
