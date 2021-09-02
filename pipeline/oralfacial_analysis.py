@@ -2,17 +2,20 @@ import numpy as np
 import statsmodels.api as sm
 import datajoint as dj
 import pathlib
+from scipy import stats
 from astropy.stats import kuiper_two
 from pipeline import ephys, experiment, tracking
 from pipeline.ingest import tracking as tracking_ingest
 
 from pipeline.mtl_analysis import helper_functions
 from pipeline.plot import behavior_plot
+from . import get_schema_name
 
-schema = dj.schema('daveliu_analysis')
+#schema = dj.schema('daveliu_analysis')
+schema = dj.schema(get_schema_name('oralfacial_analysis'))
 
-v_oralfacial_analysis = dj.create_virtual_module('oralfacial_analysis', 'daveliu_analysis')
-v_tracking = dj.create_virtual_module('tracking', 'map_v2_tracking')
+v_oralfacial_analysis = dj.create_virtual_module('oralfacial_analysis', get_schema_name('oralfacial_analysis'))
+v_tracking = dj.create_virtual_module('tracking', get_schema_name('tracking'))
 
 @schema
 class JawTuning(dj.Computed):
@@ -21,11 +24,12 @@ class JawTuning(dj.Computed):
     ---
     modulation_index: float
     preferred_phase: float
+    jaw_x: mediumblob
+    jaw_y: mediumblob
     kuiper_test: float
+    di_perm: float
     """
     # mtl sessions only
-    # key_source = ephys.Unit * (experiment.Session & 'rig = "RRig-MTL"') * tracking.Tracking
-    # key_source = ephys.Unit * (experiment.Session & 'rig = "RRig-MTL"') * tracking.Tracking * ephys.ClusterMetric * ephys.UnitStat & 'presence_ratio > 0.9' & 'amplitude_cutoff < 0.15' & 'avg_firing_rate > 0.2' & 'isi_violation < 10' & 'unit_amp > 150'
     key_source = experiment.Session & ephys.Unit & tracking.Tracking & 'rig = "RRig-MTL"'
     
     def make(self, key):
@@ -50,8 +54,9 @@ class JawTuning(dj.Computed):
         
         fs=(tracking.TrackingDevice & 'tracking_device="Camera 3"').fetch1('sampling_rate')
         
-        amp, phase=behavior_plot.compute_insta_phase_amp(good_traces, float(fs), freq_band=(5, 15))
+        amp, phase=behavior_plot.compute_insta_phase_amp(good_traces, float(fs), freq_band=(3, 15))
         phase = phase + np.pi
+        phase_s=np.hstack(phase)
         
         # compute phase and MI
         units_jaw_tunings = []
@@ -69,21 +74,29 @@ class JawTuning(dj.Computed):
         
             all_phase=np.hstack(all_phase)
             
-            _, kuiper_test = kuiper_two(np.hstack(phase), all_phase)
+            _, kuiper_test = kuiper_two(phase_s, all_phase)
                         
             n_bins = 20
             tofity, tofitx = np.histogram(all_phase, bins=n_bins)
-            baseline, tofitx = np.histogram(phase, bins=n_bins)  
+            baseline, tofitx = np.histogram(phase_s, bins=n_bins)  
             tofitx = tofitx[:-1] + (tofitx[1] - tofitx[0])/2
             tofity = tofity / baseline * float(fs)
+                           
+            preferred_phase,modulation_index=helper_functions.compute_phase_tuning(tofitx, tofity)
             
-               
-            preferred_phase,modulation_index=helper_functions.compute_phase_tuning(tofitx, tofity)             
+            n_perm = 100
+            n_spk = len(all_phase)
+            di_distr = np.zeros(n_perm)
+            for i_perm in range(n_perm):
+                tofity_p, _ = np.histogram(np.random.choice(phase_s, n_spk), bins=n_bins) 
+                tofity_p = tofity_p / baseline * float(fs)
+                _, di_distr[i_perm] = helper_functions.compute_phase_tuning(tofitx, tofity_p)
+                
+            _, di_perm = stats.mannwhitneyu(modulation_index,di_distr,alternative='greater')          
         
-            units_jaw_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase, 'kuiper_test': kuiper_test})
+            units_jaw_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase, 'jaw_x': tofitx, 'jaw_y': tofity, 'kuiper_test': kuiper_test, 'di_perm': di_perm})
             
         self.insert(units_jaw_tunings, ignore_extra_fields=True)
-        
         
 @schema
 class BreathingTuning(dj.Computed):
@@ -92,6 +105,8 @@ class BreathingTuning(dj.Computed):
     ---
     modulation_index: float
     preferred_phase: float
+    breathing_x: mediumblob
+    breathing_y: mediumblob
     """
     # mtl sessions only
     key_source = experiment.Session & experiment.Breathing & ephys.Unit & 'rig = "RRig-MTL"'
@@ -147,7 +162,7 @@ class BreathingTuning(dj.Computed):
             
             preferred_phase,modulation_index=helper_functions.compute_phase_tuning(tofitx, tofity)             
         
-            units_breathing_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase})
+            units_breathing_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase, 'breathing_x': tofitx, 'breathing_y': tofity})
             
         self.insert(units_breathing_tunings, ignore_extra_fields=True)
 
@@ -158,6 +173,8 @@ class WhiskerTuning(dj.Computed):
     ---
     modulation_index: float
     preferred_phase: float
+    whisker_x: mediumblob
+    whisker_y: mediumblob
     """
     # mtl sessions only
     key_source = experiment.Session & v_oralfacial_analysis.WhiskerSVD & ephys.Unit & 'rig = "RRig-MTL"'
@@ -218,7 +235,7 @@ class WhiskerTuning(dj.Computed):
             #print(unit_key)
             preferred_phase,modulation_index=helper_functions.compute_phase_tuning(tofitx, tofity)             
         
-            units_whisker_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase})
+            units_whisker_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase, 'whisker_x': tofitx, 'whisker_y': tofity})
             
         self.insert(units_whisker_tunings, ignore_extra_fields=True)
 
@@ -262,7 +279,7 @@ class GLMFit(dj.Computed):
         session_traces_b_l = np.vstack(session_traces_b_l)
         session_traces_t_l = session_traces_b_l
         session_traces_t_l[np.where((session_traces_s_l > tongue_thr) & (session_traces_b_l > tongue_thr))] = 1
-        session_traces_t_l[np.where((session_traces_s_l <= tongue_thr) & (session_traces_b_l <= tongue_thr))] = 0
+        session_traces_t_l[np.where((session_traces_s_l <= tongue_thr) | (session_traces_b_l <= tongue_thr))] = 0
         session_traces_t_l = np.hstack(session_traces_t_l)
 
         # from 3D calibration
