@@ -146,6 +146,8 @@ def plot_tracking(session_key, unit_key,
             ax.spines['left'].set_visible(False)
             ax.spines['right'].set_visible(False)
             ax.spines['top'].set_visible(False)
+            if ax_name == 'bot-mid trials':
+                ax.set_xlabel('s')
 
     return fig
 
@@ -198,6 +200,7 @@ def plot_breathing(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(
         ax.spines['left'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
+        ax.set_xlabel('s')
 
     return fig
 
@@ -264,6 +267,7 @@ def plot_whisking(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(0
         ax.spines['left'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
+        ax.set_xlabel('s')
 
     return fig
 
