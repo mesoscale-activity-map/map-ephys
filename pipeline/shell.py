@@ -430,8 +430,8 @@ def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': 
     log.info('ephys.MAPClusterMetric.populate()')
     ephys.MAPClusterMetric.populate(**populate_settings)
 
-    log.info('ephys.MAPClusterMetric.populate()')
-    histology.InterpolatedShankTrack.populate(**populate_settings)
+    log.info('ephys.InterpolatedShankTrack.populate()')
+    histology.InterpolatedShankTrack.populate(**populate_settings, max_calls=4)
 
     log.info('tracking.TrackingQC.populate()')
     tracking.TrackingQC.populate(**populate_settings)
@@ -555,7 +555,7 @@ def export_recording(*args):
     export.export_recording(ik, fn)
 
 
-def print_jobs_summary():
+def print_current_jobs():
     """
     Return a pandas.DataFrame on the status of each table currently being processed
 
@@ -582,7 +582,10 @@ def print_jobs_summary():
                                            newest_job='MAX(timestamp)')
         errored = dj.U('table_name').aggr(pipeline_module.schema.jobs & 'status = "error"',
                                           error_count='count(table_name)')
-        jobs_summary = reserved.join(errored, left=True)
+        if dj.__version__.startswith('0.13'):
+            jobs_summary = reserved.join(errored, left=True)
+        else:
+            jobs_summary = reserved.aggr(errored, ..., error_count='error_count', keep_all_rows=True)
 
         for job in jobs_summary.fetch(as_dict=True):
             job_status.append({
