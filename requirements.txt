@@ -13,3 +13,4 @@ numpy
 pybpod-gui-api
 pynrrd
 openpyxl
+statsmodels
