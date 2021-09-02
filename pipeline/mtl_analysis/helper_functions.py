@@ -21,7 +21,27 @@ def compute_phase_tuning(datax, datay):
     if np.size(max_idx)>1:
         max_idx=max_idx[0][0]
     # fit curve
-    params, pcov = optimize.curve_fit(vonMise_f, datax, datay, p0 = [1, datax[max_idx], max_fit_y-min_fit_y, min_fit_y], bounds=(0, [np.pi/2, 2*np.pi, max_fit_y+min_fit_y, max_fit_y]))
+    try:
+        params_h, pcov = optimize.curve_fit(vonMise_f, datax, datay, p0 = [1, datax[max_idx], max_fit_y-min_fit_y, min_fit_y], bounds=(0, [np.pi/2, 2*np.pi, max_fit_y+min_fit_y, max_fit_y]))
+    except:
+        print('fitting error')
+        params_h = [1, datax[max_idx], max_fit_y-min_fit_y, min_fit_y]
+    residuals = datay - vonMise_f(datax, *params_h) 
+    r_2_h = r_squared(datay, residuals)
+
+    try:
+        params_0, pcov = optimize.curve_fit(vonMise_f, datax, datay, p0 = [1, 0, max_fit_y-min_fit_y, min_fit_y], bounds=(0, [np.pi/2, 2*np.pi, max_fit_y+min_fit_y, max_fit_y]))
+    except:
+        print('fitting error')
+        params_0 = [1, datax[max_idx], max_fit_y-min_fit_y, min_fit_y]
+    residuals = datay - vonMise_f(datax, *params_0) 
+    r_2_0 = r_squared(datay, residuals)
+    
+    if r_2_0>r_2_h:
+        params = params_0
+    else:
+        params = params_h
+        
     preferred_phase=params[1]
     
     r_max=vonMise_f(params[1], params[0], params[1], params[2], params[3])
@@ -31,6 +51,11 @@ def compute_phase_tuning(datax, datay):
         
     return preferred_phase, modulation_index[0]
 
+def r_squared(datay, residuals):
+    ss_res = np.sum(residuals**2) 
+    ss_tot = np.sum((datay-np.mean(datay))**2)   
+    r_2 = 1 - (ss_res / ss_tot)
+    return r_2
 
 def min_dist(x1, x2):
     minD = np.abs(x1 - x2)
@@ -297,3 +322,51 @@ def water2subject(water,date):
     subject_id = (lab.WaterRestriction & {'water_restriction_number': water}).fetch('subject_id')
     session_num = (experiment.Session() * lab.WaterRestriction & {'water_restriction_number': water, 'session_date': date}).fetch('session')
     return subject_id, session_num
+
+def rose_plot(ax, angles, bins=16, density=None, offset=0, lab_unit="degrees", start_zero=False, **param_dict):
+    """
+    Plot polar histogram of angles on ax. ax must have been created using
+    subplot_kw=dict(projection='polar'). Angles are expected in radians.
+    """
+
+    # Wrap angles to [-pi, pi)
+    angles = (angles + np.pi) % (2*np.pi) - np.pi
+
+    # Set bins symetrically around zero
+    if start_zero:
+        # To have a bin edge at zero use an even number of bins
+        if bins % 2:
+            bins += 1
+        bins = np.linspace(-np.pi, np.pi, num=bins+1)
+
+    # Bin data and record counts
+    count, bin = np.histogram(angles, bins=bins)
+
+    # Compute width of each bin
+    widths = np.diff(bin)
+
+    # By default plot density (frequency potentially misleading)
+    if density is None or density is True:
+        # Area to assign each bin
+        area = count / angles.size
+        # Calculate corresponding bin radius
+        radius = (area / np.pi)**.5
+    else:
+        radius = count
+
+    # Plot data on ax
+    ax.bar(bin[:-1], radius, zorder=1, align='edge', width=widths,
+           edgecolor='C0', fill=True, linewidth=1)
+
+    # Set the direction of the zero angle
+    ax.set_theta_offset(offset)
+    max_r=np.round(np.amax(radius),0)
+    ax.set_rmax(max_r)
+    ax.set_rticks([0, max_r])  # Less radial ticks
+    ax.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
+    
+
+    if lab_unit == "radians":
+        label = ['$0$', r'$\pi/4$', r'$\pi/2$', r'$3\pi/4$',
+                  r'$\pi$', r'$5\pi/4$', r'$3\pi/2$', r'$7\pi/4$']
+        ax.set_xticklabels(label)

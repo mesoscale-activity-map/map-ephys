@@ -54,7 +54,7 @@ class JawTuning(dj.Computed):
         
         fs=(tracking.TrackingDevice & 'tracking_device="Camera 3"').fetch1('sampling_rate')
         
-        amp, phase=behavior_plot.compute_insta_phase_amp(good_traces, float(fs), freq_band=(5, 15))
+        amp, phase=behavior_plot.compute_insta_phase_amp(good_traces, float(fs), freq_band=(3, 15))
         phase = phase + np.pi
         phase_s=np.hstack(phase)
         
@@ -92,7 +92,7 @@ class JawTuning(dj.Computed):
                 tofity_p = tofity_p / baseline * float(fs)
                 _, di_distr[i_perm] = helper_functions.compute_phase_tuning(tofitx, tofity_p)
                 
-            _, di_perm = stats.mannwhitneyu(modulation_index,di_distr)          
+            _, di_perm = stats.mannwhitneyu(modulation_index,di_distr,alternative='greater')          
         
             units_jaw_tunings.append({**unit_key, 'modulation_index': modulation_index, 'preferred_phase': preferred_phase, 'jaw_x': tofitx, 'jaw_y': tofity, 'kuiper_test': kuiper_test, 'di_perm': di_perm})
             
@@ -279,7 +279,7 @@ class GLMFit(dj.Computed):
         session_traces_b_l = np.vstack(session_traces_b_l)
         session_traces_t_l = session_traces_b_l
         session_traces_t_l[np.where((session_traces_s_l > tongue_thr) & (session_traces_b_l > tongue_thr))] = 1
-        session_traces_t_l[np.where((session_traces_s_l <= tongue_thr) & (session_traces_b_l <= tongue_thr))] = 0
+        session_traces_t_l[np.where((session_traces_s_l <= tongue_thr) | (session_traces_b_l <= tongue_thr))] = 0
         session_traces_t_l = np.hstack(session_traces_t_l)
 
         # from 3D calibration
