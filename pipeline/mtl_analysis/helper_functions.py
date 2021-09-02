@@ -93,7 +93,6 @@ def plot_tracking(session_key, unit_key,
            * experiment.MultiTargetLickingSessionBlock.BlockTrial
            & camera_key & session_key & ephys.Unit.TrialSpikes)
     
-    
     tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & camera_key & session_key).fetch1('sampling_rate'))
 
     trial_trk_1 = trk & 'water_port="mtl-1"'
@@ -126,12 +125,17 @@ def plot_tracking(session_key, unit_key,
     fig = None
     if axs is None:
         fig, axs = plt.subplots(3, 3, figsize=(16, 16))
-    assert len(axs) == 3
+    assert len(axs) == 9
 
     h_spacing = 150
-    for trial_tracks, ax, ax_name, spk_color in zip((trial_trk_3,trial_trk_6,trial_trk_9,trial_trk_2,trial_trk_5,trial_trk_8,trial_trk_1,trial_trk_4,trial_trk_7), axs.flatten(),
-                                                    ('top-left trials', 'top-mid trials','top-right trials','mid-left trials','mid trials','mid-right trials','bot-left trials','bot-mid trials','bot-right trials'),
-                                                    ('k','k','k','k','k','k','k','k','k')):
+    for trial_tracks, ax, ax_name, spk_color in zip(
+            (trial_trk_3,trial_trk_6,trial_trk_9,trial_trk_2,trial_trk_5,trial_trk_8,trial_trk_1,trial_trk_4,trial_trk_7),
+            axs.flatten(),
+            ('top-left trials', 'top-mid trials','top-right trials','mid-left trials','mid trials','mid-right trials','bot-left trials','bot-mid trials','bot-right trials'),
+            ('k','k','k','k','k','k','k','k','k')):
+        if not len(trial_tracks):
+            ax.remove()
+            continue
         for tr_id, (trk_feat, tongue_out_bool, spike_times, tvec) in enumerate(get_trial_track(trial_tracks)):
             ax.plot(tvec, trk_feat + tr_id * h_spacing, '.k', markersize=1)
             ax.plot(tvec[tongue_out_bool], trk_feat[tongue_out_bool] + tr_id * h_spacing, '.', color='lime', markersize=2)
@@ -146,6 +150,8 @@ def plot_tracking(session_key, unit_key,
             ax.spines['left'].set_visible(False)
             ax.spines['right'].set_visible(False)
             ax.spines['top'].set_visible(False)
+            if not ax_name.startswith('bot'):
+                ax.set_xticks([])
             if ax_name == 'bot-mid trials':
                 ax.set_xlabel('s')
 
@@ -271,53 +277,65 @@ def plot_whisking(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(0
 
     return fig
 
-def plot_jaw_tuning(unit_key):
+def plot_jaw_tuning(unit_key, axs=None):
         
-    tofitx, tofity = (oralfacial_analysis.JawTuning() & unit_key).fetch1('jaw_x','jaw_y')
-    max_fit_y=np.round(np.amax(tofity),1)
-    
-    fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
-    ax.plot(np.append(tofitx,tofitx[0]), np.append(tofity,tofity[0]))
-    ax.set_rmax(max_fit_y)
-    ax.set_rticks([0, max_fit_y])  # Less radial ticks
-    ax.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
-    ax.grid(False)
-    xT=plt.xticks()[0]
-    xL=['0','',r'$\frac{\pi}{2}$','',r'$\pi$','',r'$\frac{3\pi}{2}$','']
+    tofitx, tofity = (oralfacial_analysis.JawTuning() & unit_key).fetch1('jaw_x', 'jaw_y')
+    max_fit_y = np.round(np.amax(tofity), 1)
+
+    fig = None
+    if axs is None:
+        fig, axs = plt.subplots(subplot_kw={'projection': 'polar'})
+
+    axs.plot(np.append(tofitx, tofitx[0]), np.append(tofity, tofity[0]))
+    axs.set_rmax(max_fit_y)
+    axs.set_rticks([0, max_fit_y])  # Less radial ticks
+    axs.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
+    axs.grid(False)
+    axs.set_title('Jaw tunning')
+    xT = plt.xticks()[0]
+    xL = ['0', '', r'$\frac{\pi}{2}$', '', r'$\pi$', '', r'$\frac{3\pi}{2}$', '']
     plt.xticks(xT, xL)
     
     return fig
 
-def plot_breathing_tuning(unit_key):
+def plot_breathing_tuning(unit_key, axs=None):
 
     tofitx, tofity = (oralfacial_analysis.BreathingTuning() & unit_key).fetch1('breathing_x','breathing_y')
     max_fit_y=np.round(np.amax(tofity),1)
-    
-    fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
-    ax.plot(np.append(tofitx,tofitx[0]), np.append(tofity,tofity[0]))
-    ax.set_rmax(max_fit_y)
-    ax.set_rticks([0, max_fit_y])  # Less radial ticks
-    ax.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
-    ax.grid(False)
-    xT=plt.xticks()[0]
-    xL=['0','',r'$\frac{\pi}{2}$','',r'$\pi$','',r'$\frac{3\pi}{2}$','']
+
+    fig = None
+    if axs is None:
+        fig, axs = plt.subplots(subplot_kw={'projection': 'polar'})
+
+    axs.plot(np.append(tofitx,tofitx[0]), np.append(tofity,tofity[0]))
+    axs.set_rmax(max_fit_y)
+    axs.set_rticks([0, max_fit_y])  # Less radial ticks
+    axs.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
+    axs.grid(False)
+    axs.set_title('Breathing tunning')
+    xT = plt.xticks()[0]
+    xL = ['0', '', r'$\frac{\pi}{2}$', '', r'$\pi$', '', r'$\frac{3\pi}{2}$', '']
     plt.xticks(xT, xL)
     
     return fig
 
-def plot_whisker_tuning(unit_key):
+def plot_whisker_tuning(unit_key, axs=None):
 
     tofitx, tofity = (oralfacial_analysis.WhiskerTuning() & unit_key).fetch1('whisker_x','whisker_y')
     max_fit_y=np.round(np.amax(tofity),1)
     
-    fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
-    ax.plot(np.append(tofitx,tofitx[0]), np.append(tofity,tofity[0]))
-    ax.set_rmax(max_fit_y)
-    ax.set_rticks([0, max_fit_y])  # Less radial ticks
-    ax.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
-    ax.grid(False)
-    xT=plt.xticks()[0]
-    xL=['0','',r'$\frac{\pi}{2}$','',r'$\pi$','',r'$\frac{3\pi}{2}$','']
+    fig = None
+    if axs is None:
+        fig, axs = plt.subplots(subplot_kw={'projection': 'polar'})
+
+    axs.plot(np.append(tofitx, tofitx[0]), np.append(tofity, tofity[0]))
+    axs.set_rmax(max_fit_y)
+    axs.set_rticks([0, max_fit_y])  # Less radial ticks
+    axs.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
+    axs.grid(False)
+    axs.set_title('Whisker tunning')
+    xT = plt.xticks()[0]
+    xL = ['0', '', r'$\frac{\pi}{2}$', '', r'$\pi$', '', r'$\frac{3\pi}{2}$', '']
     plt.xticks(xT, xL)
     
     return fig
