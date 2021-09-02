@@ -291,7 +291,7 @@ def plot_jaw_tuning(unit_key, axs=None):
     axs.set_rticks([0, max_fit_y])  # Less radial ticks
     axs.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
     axs.grid(False)
-    axs.set_title('Jaw tunning')
+    axs.set_title('Jaw tuning')
     xT = plt.xticks()[0]
     xL = ['0', '', r'$\frac{\pi}{2}$', '', r'$\pi$', '', r'$\frac{3\pi}{2}$', '']
     plt.xticks(xT, xL)
@@ -312,7 +312,7 @@ def plot_breathing_tuning(unit_key, axs=None):
     axs.set_rticks([0, max_fit_y])  # Less radial ticks
     axs.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
     axs.grid(False)
-    axs.set_title('Breathing tunning')
+    axs.set_title('Breathing tuning')
     xT = plt.xticks()[0]
     xL = ['0', '', r'$\frac{\pi}{2}$', '', r'$\pi$', '', r'$\frac{3\pi}{2}$', '']
     plt.xticks(xT, xL)
@@ -333,7 +333,7 @@ def plot_whisker_tuning(unit_key, axs=None):
     axs.set_rticks([0, max_fit_y])  # Less radial ticks
     axs.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
     axs.grid(False)
-    axs.set_title('Whisker tunning')
+    axs.set_title('Whisker tuning')
     xT = plt.xticks()[0]
     xL = ['0', '', r'$\frac{\pi}{2}$', '', r'$\pi$', '', r'$\frac{3\pi}{2}$', '']
     plt.xticks(xT, xL)

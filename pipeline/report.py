@@ -693,8 +693,8 @@ class UnitLevelTrackingReport(dj.Computed):
             mtl_plot.plot_tracking(
                 session, key,
                 tracking_feature='jaw_y',
-                xlim=(-0.5, 1),
-                trial_offset=0, trial_limit=10,
+                xlim=(0, 5),
+                trial_offset=0, trial_limit=5,
                 axs=np.array([fig1.add_subplot(gs[row_idx, col_idx])
                               for row_idx, col_idx in itertools.product(
                         range(1, 4), range(3))]))
