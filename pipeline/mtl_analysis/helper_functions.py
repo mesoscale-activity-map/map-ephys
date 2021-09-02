@@ -251,7 +251,7 @@ def plot_tracking(session_key, unit_key,
 
         for tr in trial_tracks.fetch(as_dict=True, offset=offset, limit=trial_limit, order_by='trial'):
             trk_feat = tr[tracking_feature]
-            tongue_out_bool = tr['tongue_likelihood'] > 0.9
+            tongue_out_bool = tr['tongue_likelihood'] > 0.95
 
             sample_counts = len(trk_feat)
             tvec = np.arange(sample_counts) / tracking_fs
@@ -277,8 +277,8 @@ def plot_tracking(session_key, unit_key,
         for tr_id, (trk_feat, tongue_out_bool, spike_times, tvec) in enumerate(get_trial_track(trial_tracks)):
             ax.plot(tvec, trk_feat + tr_id * h_spacing, '.k', markersize=1)
             ax.plot(tvec[tongue_out_bool], trk_feat[tongue_out_bool] + tr_id * h_spacing, '.', color='lime', markersize=2)
-            ax.plot(spike_times, np.full_like(spike_times, trk_feat[tongue_out_bool].mean() + h_spacing/10) + tr_id * h_spacing,
-                    '.', color=spk_color, markersize=4)
+            ax.plot(spike_times, np.full_like(spike_times, trk_feat[tongue_out_bool].mean() + h_spacing/3) + tr_id * h_spacing,
+                        color=spk_color, marker='$I$', linestyle='None', markersize=6)
             ax.set_title(ax_name)
             ax.axvline(x=0, linestyle='--', color='k')
 
@@ -334,7 +334,7 @@ def plot_breathing(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(
 
     for tr_id, (br, spike_times, tvec) in enumerate(get_trial_breathing(breathing)):
         ax.plot(tvec, br + tr_id * h_spacing, 'k')
-        ax.plot(spike_times, np.full_like(spike_times, br.mean() + h_spacing/3) + tr_id * h_spacing, '.k',  markersize=8)
+        ax.plot(spike_times, np.full_like(spike_times, br.mean() + h_spacing/2) + tr_id * h_spacing, color='k', marker='$I$', linestyle='None', markersize=12)
         ax.set_title('breathing')
         ax.axvline(x=0, linestyle='--', color='k')
 
@@ -401,7 +401,7 @@ def plot_whisking(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(0
 
     for tr_id, (wh, spike_times, tvec) in enumerate(get_trial_whisking(session_traces_w)):
         ax.plot(tvec, wh + tr_id * h_spacing, 'k')
-        ax.plot(spike_times, np.full_like(spike_times, wh.mean() + h_spacing/3) + tr_id * h_spacing, '.k',  markersize=8)
+        ax.plot(spike_times, np.full_like(spike_times, wh.mean() + h_spacing/2) + tr_id * h_spacing, color='k', marker='$I$', linestyle='None', markersize=12)
         ax.set_title('whisking')
         ax.axvline(x=0, linestyle='--', color='k')
 
