@@ -628,3 +628,44 @@ class ArchivedClustering(dj.Imported):
         velocity_above=null: float
         velocity_below=null: float   
         """
+
+# ---- Unit restriction criteria based on brain regions ----
+
+
+brain_area_unit_restrictions = {
+    'Medulla': 'unit_amp > 150 '
+               'AND avg_firing_rate > 0.2 '
+               'AND presence_ratio > 0.9 '
+               'AND isi_violation < 10 '
+               'AND amplitude_cutoff < 0.15',
+    'ALM': 'unit_amp > 100 '
+           'AND avg_firing_rate > 0.2 '
+           'AND presence_ratio > 0.95 '
+           'AND isi_violation < 0.1 '
+           'AND amplitude_cutoff < 0.1',
+    'Midbrain': 'unit_amp > 100 '
+                'AND avg_firing_rate > 0.1 '
+                'AND presence_ratio > 0.9 '
+                'AND isi_violation < 1 '
+                'AND amplitude_cutoff < 0.08',
+    'Thalamus': 'unit_amp > 90 '
+                'AND avg_firing_rate > 0.1 '
+                'AND presence_ratio > 0.9 '
+                'AND isi_violation < 0.05 '
+                'AND amplitude_cutoff < 0.08',
+    'Striatum': 'unit_amp > 70 '
+                'AND avg_firing_rate > 0.1 '
+                'AND presence_ratio > 0.9 '
+                'AND isi_violation < 0.5 '
+                'AND amplitude_cutoff < 0.1'
+}
+
+
+def check_unit_criteria(unit_key):
+    brain_area = (ProbeInsertion.RecordableBrainRegion & unit_key).fetch('brain_area', limit=1)[0]
+    if brain_area in brain_area_unit_restrictions:
+        unit_query = (Unit * ClusterMetric * UnitStat
+                      & unit_key & brain_area_unit_restrictions[brain_area])
+        return bool(unit_query)
+
+    return True

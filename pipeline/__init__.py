@@ -85,3 +85,10 @@ def dict_to_hash(input_dict):
         hashed.update(str(k).encode())
         hashed.update(str(v).encode())
     return hashed.hexdigest()
+
+
+class FailedUnitCriteriaError(Exception):
+    """Raise when unit criteria not met"""
+    def __init__(self, msg=None):
+        super().__init__('FailedUnitCriteriaError: \n{}'.format(msg))
+    pass
