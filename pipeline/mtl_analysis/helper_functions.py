@@ -186,7 +186,7 @@ def plot_all_traces(session_key, unit_key,
 
             # cosmetic
             ax.set_xlim(xlim)
-            #ax.set_yticks([])
+            ax.set_yticks([])
             ax.spines['left'].set_visible(False)
             ax.spines['right'].set_visible(False)
             ax.spines['top'].set_visible(False)
