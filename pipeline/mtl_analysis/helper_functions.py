@@ -161,7 +161,7 @@ def plot_all_traces(session_key, unit_key,
     fig = None
     if axs is None:
         fig, axs = plt.subplots(3, 3, figsize=(16, 16))
-    #assert len(axs) == 3
+    assert len(axs) == 3
 
     h_spacing = 80
     h_spacing_b = 2500
