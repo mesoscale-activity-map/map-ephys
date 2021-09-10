@@ -402,11 +402,12 @@ def plot_jaw_tuning(unit_key):
     max_fit_y=np.round(np.amax(tofity),1)
     
     fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
-    ax.plot(np.append(tofitx,tofitx[0]), np.append(tofity,tofity[0]))
+    ax.plot(np.append(tofitx,tofitx[0]), np.append(tofity,tofity[0]), 'k')
     ax.set_rmax(max_fit_y)
     ax.set_rticks([0, max_fit_y])  # Less radial ticks
     ax.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
     ax.grid(False)
+    ax.set_title('Jaw tuning')
     xT=plt.xticks()[0]
     xL=['0','',r'$\frac{\pi}{2}$','',r'$\pi$','',r'$\frac{3\pi}{2}$','']
     plt.xticks(xT, xL)
@@ -419,11 +420,12 @@ def plot_breathing_tuning(unit_key):
     max_fit_y=np.round(np.amax(tofity),1)
     
     fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
-    ax.plot(np.append(tofitx,tofitx[0]), np.append(tofity,tofity[0]))
+    ax.plot(np.append(tofitx,tofitx[0]), np.append(tofity,tofity[0]), 'b')
     ax.set_rmax(max_fit_y)
     ax.set_rticks([0, max_fit_y])  # Less radial ticks
     ax.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
     ax.grid(False)
+    ax.set_title('Breathing tuning')
     xT=plt.xticks()[0]
     xL=['0','',r'$\frac{\pi}{2}$','',r'$\pi$','',r'$\frac{3\pi}{2}$','']
     plt.xticks(xT, xL)
@@ -436,11 +438,12 @@ def plot_whisker_tuning(unit_key):
     max_fit_y=np.round(np.amax(tofity),1)
     
     fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
-    ax.plot(np.append(tofitx,tofitx[0]), np.append(tofity,tofity[0]))
+    ax.plot(np.append(tofitx,tofitx[0]), np.append(tofity,tofity[0]), 'r')
     ax.set_rmax(max_fit_y)
     ax.set_rticks([0, max_fit_y])  # Less radial ticks
     ax.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
     ax.grid(False)
+    ax.set_title('Whisking tuning')
     xT=plt.xticks()[0]
     xL=['0','',r'$\frac{\pi}{2}$','',r'$\pi$','',r'$\frac{3\pi}{2}$','']
     plt.xticks(xT, xL)
