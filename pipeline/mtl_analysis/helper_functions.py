@@ -195,18 +195,6 @@ def plot_all_traces(session_key, unit_key,
 
     return fig
 
-fig1 = plt.figure(figsize=(16, 16))
-gs = GridSpec(3, 4)
-
-plot_all_traces(daves_session_key,unit_key,axs=np.array([fig1.add_subplot(gs[row_idx, col_idx])
-                              for row_idx, col_idx in itertools.product(
-                        range(0,3), range(0,3))]))
-mtl_plot.plot_jaw_tuning(unit_key, axs=fig1.add_subplot(gs[0, 3], polar=True))
-mtl_plot.plot_whisker_tuning(unit_key, axs=fig1.add_subplot(gs[1, 3], polar=True))
-mtl_plot.plot_breathing_tuning(unit_key, axs=fig1.add_subplot(gs[2, 3], polar=True))
-fig1.subplots_adjust(wspace=0.2)
-fig1.subplots_adjust(hspace=0.8)
-
 
 def plot_tracking(session_key, unit_key,
                   tracking_feature='jaw_y', camera_key=_side_cam,
