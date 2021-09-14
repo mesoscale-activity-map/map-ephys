@@ -744,7 +744,7 @@ class UnitMTLTrackingReport(dj.Computed):
         gs = GridSpec(4, 3)
 
         session = experiment.Session & key
-        mtl_plot.plot_tracking(
+        mtl_plot.plot_all_traces(
             session, key,
             tracking_feature='jaw_y',
             xlim=(0, 5),
