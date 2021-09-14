@@ -751,7 +751,7 @@ class UnitMTLTrackingReport(dj.Computed):
             trial_offset=0, trial_limit=5,
             axs=np.array([fig1.add_subplot(gs[row_idx, col_idx])
                           for row_idx, col_idx in itertools.product(
-                    range(0, 4), range(3))]))
+                    range(3), range(3))]))
 
         mtl_plot.plot_jaw_tuning(key, axs=fig1.add_subplot(gs[0, 3], polar=True))
         mtl_plot.plot_whisker_tuning(key, axs=fig1.add_subplot(gs[1, 3], polar=True))
