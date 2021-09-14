@@ -412,7 +412,7 @@ def plot_jaw_tuning(unit_key, axs=None):
     if axs is None:
         fig, axs = plt.subplots(subplot_kw={'projection': 'polar'})
 
-    axs.plot(np.append(tofitx, tofitx[0]), np.append(tofity, tofity[0], color='k'))
+    axs.plot(np.append(tofitx, tofitx[0]), np.append(tofity, tofity[0]), color='k')
     axs.set_rmax(max_fit_y)
     axs.set_rticks([0, max_fit_y])  # Less radial ticks
     axs.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
@@ -454,7 +454,7 @@ def plot_whisker_tuning(unit_key, axs=None):
     if axs is None:
         fig, axs = plt.subplots(subplot_kw={'projection': 'polar'})
 
-    axs.plot(np.append(tofitx, tofitx[0]), np.append(tofity, tofity[0], color='r'))
+    axs.plot(np.append(tofitx, tofitx[0]), np.append(tofity, tofity[0]), color='r')
     axs.set_rmax(max_fit_y)
     axs.set_rticks([0, max_fit_y])  # Less radial ticks
     axs.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
