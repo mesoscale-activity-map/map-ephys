@@ -636,7 +636,8 @@ def erd(*args):
 
 def automate_computation():
     from pipeline import report
-    populate_settings = {'reserve_jobs': True, 'suppress_errors': True, 'display_progress': True}
+    populate_settings = {'reserve_jobs': True, 'suppress_errors': True,
+                         'display_progress': True, 'max_calls': 100}
     while True:
         log.info('Populate for: Ephys - PSTH - Report')
         populate_ephys(populate_settings)
