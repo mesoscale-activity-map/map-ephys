@@ -115,13 +115,13 @@ def plot_all_traces(session_key, unit_key,
     if len(session_traces_w[0][:,0]) % num_frame != 0:
         print('Bad videos in bottom view')
         return
-    else:
-        num_trial_w = int(len(session_traces_w[0][:,0])/num_frame)
-        session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, num_frame))
+
+    num_trial_w = int(len(session_traces_w[0][:,0])/num_frame)
+    session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, num_frame))
     trial_idx_nat = [d.astype(str) for d in np.arange(num_trial_w)]
     trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
     trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
-    session_traces_w=session_traces_w[trial_idx_nat,:]
+    session_traces_w = session_traces_w[trial_idx_nat,:]
     
     tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & camera_key & session_key).fetch1('sampling_rate'))
 
@@ -161,11 +161,12 @@ def plot_all_traces(session_key, unit_key,
     fig = None
     if axs is None:
         fig, axs = plt.subplots(3, 3, figsize=(16, 16))
-    assert len(axs) == 3
+    assert len(axs) == 9
 
     h_spacing = 80
     h_spacing_b = 2500
-    h_spacing_w = 600
+    h_spacing_w = 750
+
     for trial_tracks, ax, ax_name, spk_color in zip((trial_trk_3,trial_trk_6,trial_trk_9,trial_trk_2,trial_trk_5,trial_trk_8,trial_trk_1,trial_trk_4,trial_trk_7), axs.flatten(),
                                                     ('top-left trials', 'top-mid trials','top-right trials','mid-left trials','mid trials','mid-right trials','bot-left trials','bot-mid trials','bot-right trials'),
                                                     ('k','k','k','k','k','k','k','k','k')):
@@ -195,6 +196,7 @@ def plot_all_traces(session_key, unit_key,
 
     return fig
 
+  
 def plot_tracking(session_key, unit_key,
                   tracking_feature='jaw_y', camera_key=_side_cam,
                   trial_offset=0, trial_limit=10, xlim=(0, 5), axs=None):
@@ -412,7 +414,7 @@ def plot_jaw_tuning(unit_key, axs=None):
     if axs is None:
         fig, axs = plt.subplots(subplot_kw={'projection': 'polar'})
 
-    axs.plot(np.append(tofitx, tofitx[0]), np.append(tofity, tofity[0]))
+    axs.plot(np.append(tofitx, tofitx[0]), np.append(tofity, tofity[0]), color='k')
     axs.set_rmax(max_fit_y)
     axs.set_rticks([0, max_fit_y])  # Less radial ticks
     axs.set_rlabel_position(-22.5)  # Move radial labels away from plotted line
@@ -454,7 +456,7 @@ def plot_whisker_tuning(unit_key, axs=None):
     if axs is None:
         fig, axs = plt.subplots(subplot_kw={'projection': 'polar'})
 
-    axs.plot(np.append(tofitx, tofitx[0]), np.append(tofity, tofity[0]))
+    axs.plot(np.append(tofitx, tofitx[0]), np.append(tofity, tofity[0]), color='r')
     axs.set_rmax(max_fit_y)
     axs.set_rticks([0, max_fit_y])  # Less radial ticks
     axs.set_rlabel_position(-22.5)  # Move radial labels away from plotted line

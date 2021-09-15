@@ -741,24 +741,23 @@ class UnitMTLTrackingReport(dj.Computed):
         # this is a Multi-Target-Licking type of session (coming from RRig-MTL)
         # use plotting function from analysis_mtl
         fig1 = plt.figure(figsize=(16, 16))
-        gs = GridSpec(4, 3)
+        gs = GridSpec(3, 4)
 
         session = experiment.Session & key
-        mtl_plot.plot_tracking(
+        mtl_plot.plot_all_traces(
             session, key,
             tracking_feature='jaw_y',
             xlim=(0, 5),
             trial_offset=0, trial_limit=5,
             axs=np.array([fig1.add_subplot(gs[row_idx, col_idx])
                           for row_idx, col_idx in itertools.product(
-                    range(1, 4), range(3))]))
+                    range(3), range(3))]))
 
-        mtl_plot.plot_jaw_tuning(key, axs=fig1.add_subplot(gs[0, 0], polar=True))
-        mtl_plot.plot_whisker_tuning(key, axs=fig1.add_subplot(gs[0, 1], polar=True))
-        mtl_plot.plot_breathing_tuning(key, axs=fig1.add_subplot(gs[0, 2], polar=True))
+        mtl_plot.plot_jaw_tuning(key, axs=fig1.add_subplot(gs[0, 3], polar=True))
+        mtl_plot.plot_breathing_tuning(key, axs=fig1.add_subplot(gs[1, 3], polar=True))
 
         fig1.subplots_adjust(wspace=0.2)
-        fig1.subplots_adjust(hspace=0.8)
+        fig1.subplots_adjust(hspace=0.6)
 
         # ---- Save fig and insert ----
         fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_u{key["unit"]:03}_'
@@ -835,6 +834,7 @@ report_tables = [SessionLevelReport,
                  ProbeLevelReport,
                  ProbeLevelPhotostimEffectReport,
                  UnitLevelEphysReport,
+                 UnitMTLTrackingReport,
                  UnitLevelTrackingReport,
                  SessionLevelCDReport,
                  SessionLevelProbeTrack,
