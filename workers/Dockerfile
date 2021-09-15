@@ -11,8 +11,7 @@ RUN git clone https://github.com/mesoscale-activity-map/map-ephys /dj_map
 
 RUN pip install --upgrade pip && pip install . && pip install --upgrade scipy matplotlib==3.1.3
 
-RUN pip uninstall datajoint -y
-RUN pip install --ignore-installed datajoint==0.12.*
+RUN pip install datajoint==0.12.*
 
 COPY ./dj_local_conf.json /dj_map/dj_local_conf.json
 
