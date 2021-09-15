@@ -11,7 +11,6 @@ from pipeline.mtl_analysis import helper_functions
 from pipeline.plot import behavior_plot
 from . import get_schema_name
 
-#schema = dj.schema('daveliu_analysis')
 schema = dj.schema(get_schema_name('oralfacial_analysis'))
 
 v_oralfacial_analysis = dj.create_virtual_module('oralfacial_analysis', get_schema_name('oralfacial_analysis'))
@@ -271,7 +270,7 @@ class GLMFit(dj.Computed):
         session_traces_s_l = traces_s.fetch('tongue_likelihood', order_by='trial')
         session_traces_b_l = traces_b.fetch('tongue_likelihood', order_by='trial')
         trial_key=(v_tracking.TongueTracking3DBot & key).fetch('trial', order_by='trial')
-        test_t = trial_key[::5]
+        test_t = trial_key[::5] # test trials
         trial_key=np.setdiff1d(trial_key,test_t)
         session_traces_s_l = session_traces_s_l[trial_key-1]
         session_traces_b_l = session_traces_b_l[trial_key-1]
