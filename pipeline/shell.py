@@ -16,7 +16,8 @@ from pymysql.err import OperationalError
 
 
 from pipeline import (lab, experiment, tracking, ephys, report, psth, psth_foraging, ccf,
-                      histology, export, publication, globus, foraging_analysis, foraging_model,
+                      histology, export, publication, globus,
+                      oralfacial_analysis, foraging_analysis, foraging_model,
                       get_schema_name)
 
 pipeline_modules = [lab, ccf, experiment, ephys, publication, report,
@@ -431,7 +432,7 @@ def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': 
     ephys.MAPClusterMetric.populate(**populate_settings)
 
     log.info('ephys.InterpolatedShankTrack.populate()')
-    histology.InterpolatedShankTrack.populate(**populate_settings, max_calls=4)
+    histology.InterpolatedShankTrack.populate(**populate_settings, max_calls=1)
 
     log.info('tracking.TrackingQC.populate()')
     tracking.TrackingQC.populate(**populate_settings)
@@ -474,6 +475,11 @@ def populate_foraging_analysis(populate_settings={'reserve_jobs': True, 'display
 
     log.info('foraging_analysis.BlockEfficiency.populate()')
     foraging_analysis.BlockEfficiency.populate(**populate_settings)
+
+
+def populate_oralfacial_analysis(populate_settings={'reserve_jobs': True, 'display_progress': True}):
+    log.info('oralfacial_analysis.GLMFit.populate()')
+    oralfacial_analysis.GLMFit.populate(**populate_settings, max_calls=5)
 
 
 def generate_report(populate_settings={'reserve_jobs': True, 'display_progress': True}):
@@ -636,6 +642,7 @@ def automate_computation():
         populate_ephys(populate_settings)
         populate_psth(populate_settings)
         populate_foraging_analysis(populate_settings)
+        populate_oralfacial_analysis(populate_settings)
         generate_report(populate_settings)
 
         log.info('report.delete_outdated_session_plots()')
