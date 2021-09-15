@@ -14,3 +14,4 @@ pybpod-gui-api
 pynrrd
 openpyxl
 statsmodels
+astropy
