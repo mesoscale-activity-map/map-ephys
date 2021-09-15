@@ -46,6 +46,7 @@ class CCF(dj.Lookup):
     ccf_x   :  int   # (um)  Left-to-Right (ML axis)
     ccf_y   :  int   # (um)  Superior-to-Inferior (DV axis)
     ccf_z   :  int   # (um)  Anterior-to-Posterior (AP axis)
+    index(ccf_y, ccf_z)
     """
 
 

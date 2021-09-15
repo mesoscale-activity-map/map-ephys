@@ -63,7 +63,7 @@ class TrackingIngest(dj.Imported):
                               'bottom': ('bottom', 'bottom_face'),
                               'body': ('body', 'side_body')}
 
-    def make(self, key):
+    def make(self, key, tracking_exists=False):
         '''
         TrackingIngest .make() function
         '''
@@ -88,6 +88,10 @@ class TrackingIngest(dj.Imported):
         for device in (tracking.TrackingDevice & camera_restriction).fetch(as_dict=True):
             tdev = device['tracking_device']
             cam_pos = device['tracking_position']
+
+            if tracking_exists and (tracking.Tracking & key & device):
+                log.info('\nSession tracking exists for: {} ({}). Skipping...'.format(tdev, cam_pos))
+                continue
 
             log.info('\n-------------------------------------')
             log.info('\nSearching for session tracking data directory for: {} ({})'.format(tdev, cam_pos))
@@ -252,7 +256,8 @@ class TrackingIngest(dj.Imported):
 
         log.info('\n---------------------')
         if tracking_files:
-            self.insert1(key)
+            if not tracking_exists:
+                self.insert1(key)
             self.TrackingFile.insert(tracking_files)
 
             log.info('Tracking ingestion completed: {k}'.format(k=key))

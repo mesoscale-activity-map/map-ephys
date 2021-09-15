@@ -16,11 +16,14 @@ import io
 from PIL import Image
 import itertools
 
-from pipeline import experiment, ephys, psth, tracking, lab, histology, ccf, foraging_analysis
+from pipeline import get_schema_name, FailedUnitCriteriaError
+from pipeline import (experiment, ephys, psth, tracking, lab, histology, ccf,
+                      foraging_analysis, oralfacial_analysis)
+
 from pipeline.plot import behavior_plot, unit_characteristic_plot, unit_psth, histology_plot, PhotostimError, foraging_plot
-from pipeline import get_schema_name
 from pipeline.plot.util import _plot_with_sem, _jointplot_w_hue
 from pipeline.util import _get_trial_event_times
+from pipeline.mtl_analysis import helper_functions as mtl_plot
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -648,9 +651,13 @@ class UnitLevelEphysReport(dj.Computed):
     """
 
     # only units UnitPSTH computed, and with InsertionLocation present
-    key_source = ephys.Unit & ephys.ProbeInsertion.InsertionLocation & psth.UnitPsth & 'unit_quality != "all"'
+    key_source = (ephys.Unit & ephys.ProbeInsertion.InsertionLocation
+                  & psth.UnitPsth & 'unit_quality != "all"')
 
     def make(self, key):
+        if not ephys.check_unit_criteria(key):
+            raise FailedUnitCriteriaError(f'Unit {key} did not meet selection criteria')
+
         water_res_num, sess_date = get_wr_sessdate(key)
         units_dir = store_stage / water_res_num / sess_date / str(key['insertion_number']) / 'units'
         units_dir.mkdir(parents=True, exist_ok=True)
@@ -677,6 +684,9 @@ class UnitLevelTrackingReport(dj.Computed):
     key_source = ephys.Unit & tracking.Tracking & 'unit_quality != "all"'
 
     def make(self, key):
+        if not ephys.check_unit_criteria(key):
+            raise FailedUnitCriteriaError(f'Unit {key} did not meet selection criteria')
+
         water_res_num, sess_date = get_wr_sessdate(key)
         units_dir = store_stage / water_res_num / sess_date / str(key['insertion_number']) / 'units'
         units_dir.mkdir(parents=True, exist_ok=True)
@@ -687,8 +697,9 @@ class UnitLevelTrackingReport(dj.Computed):
         # 15 trials roughly in the middle of the session
         session = experiment.Session & key
         behavior_plot.plot_tracking(session, key, tracking_feature='jaw_y', xlim=(-0.5, 1),
-                                    trial_offset=0.5, trial_limit=15, axs=np.array([fig1.add_subplot(gs[:3, col])
-                                                                                    for col in range(2)]))
+                                    trial_offset=0.5, trial_limit=15,
+                                    axs=np.array([fig1.add_subplot(gs[:3, col])
+                                                  for col in range(2)]))
 
         axs = np.array([fig1.add_subplot(gs[-1, col], polar=True) for col in range(2)])
         behavior_plot.plot_unit_jaw_phase_dist(experiment.Session & key, key, axs=axs)
@@ -700,6 +711,57 @@ class UnitLevelTrackingReport(dj.Computed):
         # ---- Save fig and insert ----
         fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_u{key["unit"]:03}_'
         fig_dict = save_figs((fig1,), ('unit_behavior',), units_dir, fn_prefix)
+
+        plt.close('all')
+        self.insert1({**key, **fig_dict})
+
+
+@schema
+class UnitMTLTrackingReport(dj.Computed):
+    definition = """
+    -> ephys.Unit
+    ---
+    unit_mtl_tracking: filepath@report_store
+    """
+
+    # only units with ingested tracking
+    key_source = (ephys.Unit & tracking.Tracking
+                  & oralfacial_analysis.JawTuning
+                  & oralfacial_analysis.BreathingTuning
+                  & oralfacial_analysis.WhiskerTuning)
+
+    def make(self, key):
+        if not ephys.check_unit_criteria(key):
+            raise FailedUnitCriteriaError(f'Unit {key} did not meet selection criteria')
+
+        water_res_num, sess_date = get_wr_sessdate(key)
+        units_dir = store_stage / water_res_num / sess_date / str(key['insertion_number']) / 'units'
+        units_dir.mkdir(parents=True, exist_ok=True)
+
+        # this is a Multi-Target-Licking type of session (coming from RRig-MTL)
+        # use plotting function from analysis_mtl
+        fig1 = plt.figure(figsize=(16, 16))
+        gs = GridSpec(3, 4)
+
+        session = experiment.Session & key
+        mtl_plot.plot_all_traces(
+            session, key,
+            tracking_feature='jaw_y',
+            xlim=(0, 5),
+            trial_offset=0, trial_limit=5,
+            axs=np.array([fig1.add_subplot(gs[row_idx, col_idx])
+                          for row_idx, col_idx in itertools.product(
+                    range(3), range(3))]))
+
+        mtl_plot.plot_jaw_tuning(key, axs=fig1.add_subplot(gs[0, 3], polar=True))
+        mtl_plot.plot_breathing_tuning(key, axs=fig1.add_subplot(gs[1, 3], polar=True))
+
+        fig1.subplots_adjust(wspace=0.2)
+        fig1.subplots_adjust(hspace=0.6)
+
+        # ---- Save fig and insert ----
+        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_u{key["unit"]:03}_'
+        fig_dict = save_figs((fig1,), ('unit_mtl_tracking',), units_dir, fn_prefix)
 
         plt.close('all')
         self.insert1({**key, **fig_dict})
@@ -772,6 +834,7 @@ report_tables = [SessionLevelReport,
                  ProbeLevelReport,
                  ProbeLevelPhotostimEffectReport,
                  UnitLevelEphysReport,
+                 UnitMTLTrackingReport,
                  UnitLevelTrackingReport,
                  SessionLevelCDReport,
                  SessionLevelProbeTrack,
