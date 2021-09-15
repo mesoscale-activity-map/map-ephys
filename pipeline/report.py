@@ -754,11 +754,10 @@ class UnitMTLTrackingReport(dj.Computed):
                     range(3), range(3))]))
 
         mtl_plot.plot_jaw_tuning(key, axs=fig1.add_subplot(gs[0, 3], polar=True))
-        mtl_plot.plot_whisker_tuning(key, axs=fig1.add_subplot(gs[1, 3], polar=True))
-        mtl_plot.plot_breathing_tuning(key, axs=fig1.add_subplot(gs[2, 3], polar=True))
+        mtl_plot.plot_breathing_tuning(key, axs=fig1.add_subplot(gs[1, 3], polar=True))
 
         fig1.subplots_adjust(wspace=0.2)
-        fig1.subplots_adjust(hspace=0.8)
+        fig1.subplots_adjust(hspace=0.6)
 
         # ---- Save fig and insert ----
         fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_u{key["unit"]:03}_'
