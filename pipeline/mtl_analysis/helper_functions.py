@@ -115,13 +115,13 @@ def plot_all_traces(session_key, unit_key,
     if len(session_traces_w[0][:,0]) % num_frame != 0:
         print('Bad videos in bottom view')
         return
-    else:
-        num_trial_w = int(len(session_traces_w[0][:,0])/num_frame)
-        session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, num_frame))
-        trial_idx_nat = [d.astype(str) for d in np.arange(num_trial_w)]
-        trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
-        trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
-        session_traces_w=session_traces_w[trial_idx_nat,:]
+
+    num_trial_w = int(len(session_traces_w[0][:,0])/num_frame)
+    session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, num_frame))
+    trial_idx_nat = [d.astype(str) for d in np.arange(num_trial_w)]
+    trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
+    trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
+    session_traces_w = session_traces_w[trial_idx_nat,:]
     
     tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & camera_key & session_key).fetch1('sampling_rate'))
 
@@ -166,6 +166,7 @@ def plot_all_traces(session_key, unit_key,
     h_spacing = 80
     h_spacing_b = 2500
     h_spacing_w = 750
+
     for trial_tracks, ax, ax_name, spk_color in zip((trial_trk_3,trial_trk_6,trial_trk_9,trial_trk_2,trial_trk_5,trial_trk_8,trial_trk_1,trial_trk_4,trial_trk_7), axs.flatten(),
                                                     ('top-left trials', 'top-mid trials','top-right trials','mid-left trials','mid trials','mid-right trials','bot-left trials','bot-mid trials','bot-right trials'),
                                                     ('k','k','k','k','k','k','k','k','k')):
@@ -195,7 +196,7 @@ def plot_all_traces(session_key, unit_key,
 
     return fig
 
-
+  
 def plot_tracking(session_key, unit_key,
                   tracking_feature='jaw_y', camera_key=_side_cam,
                   trial_offset=0, trial_limit=10, xlim=(0, 5), axs=None):
@@ -218,7 +219,7 @@ def plot_tracking(session_key, unit_key,
            * experiment.MultiTargetLickingSessionBlock.WaterPort
            * experiment.MultiTargetLickingSessionBlock.BlockTrial
            & camera_key & session_key & ephys.Unit.TrialSpikes)
-    
+        
     tracking_fs = float((tracking.TrackingDevice & tracking.Tracking & camera_key & session_key).fetch1('sampling_rate'))
 
     trial_trk_1 = trk & 'water_port="mtl-1"'
@@ -260,7 +261,8 @@ def plot_tracking(session_key, unit_key,
             ('top-left trials', 'top-mid trials','top-right trials','mid-left trials','mid trials','mid-right trials','bot-left trials','bot-mid trials','bot-right trials'),
             ('k','k','k','k','k','k','k','k','k')):
         if not len(trial_tracks):
-            ax.remove()
+            ax.set_xticks([])
+            ax.set_yticks([])
             continue
         for tr_id, (trk_feat, tongue_out_bool, spike_times, tvec) in enumerate(get_trial_track(trial_tracks)):
             ax.plot(tvec, trk_feat + tr_id * h_spacing, '.k', markersize=1)
