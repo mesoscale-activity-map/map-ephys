@@ -261,7 +261,7 @@ class GLMFit(dj.Computed):
 
         # from the cameras
         tongue_thr = 0.95
-        traces_s = tracking.Tracking.TongueTracking & key & {'tracking_device': 'Camera 3'}
+        traces_s = tracking.Tracking.TongueTracking & key & {'tracking_device': 'Camera 3'} 
         traces_b = tracking.Tracking.TongueTracking & key & {'tracking_device': 'Camera 4'}
         
         if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & key)) != len(traces_s):
@@ -271,11 +271,19 @@ class GLMFit(dj.Computed):
             print(f'Mismatch in tracking trial and ephys trial number: {key}')
             return
         
+        trial_key_o=(v_tracking.TongueTracking3DBot & key).fetch('trial', order_by='trial')
+        traces_s = tracking.Tracking.TongueTracking & key & {'tracking_device': 'Camera 3'} & [{'trial': tr} for tr in trial_key_o]
+        traces_b = tracking.Tracking.TongueTracking & key & {'tracking_device': 'Camera 4'} & [{'trial': tr} for tr in trial_key_o]
+        
         session_traces_s_l_o = traces_s.fetch('tongue_likelihood', order_by='trial')
         session_traces_b_l_o = traces_b.fetch('tongue_likelihood', order_by='trial')
-        trial_key=(v_tracking.TongueTracking3DBot & key).fetch('trial', order_by='trial')
-        test_t = trial_key[::5] # test trials
-        trial_key=np.setdiff1d(trial_key,test_t)
+        
+        test_t_o = trial_key_o[::5] # test trials
+        _,_,test_t=np.intersect1d(test_t_o,trial_key_o,return_indices=True)
+        test_t=test_t+1
+        trial_key=np.setdiff1d(trial_key_o,test_t_o)
+        _,_,trial_key=np.intersect1d(trial_key,trial_key_o,return_indices=True)
+        trial_key=trial_key+1
         
         session_traces_s_l = session_traces_s_l_o[trial_key-1]
         session_traces_b_l = session_traces_b_l_o[trial_key-1]
@@ -296,8 +304,8 @@ class GLMFit(dj.Computed):
         session_traces_t_l_t = np.hstack(session_traces_t_l_t)
 
         # from 3D calibration
-        traces_s = v_tracking.JawTracking3DSid & key
-        traces_b = v_tracking.TongueTracking3DBot & key
+        traces_s = v_tracking.JawTracking3DSid & key & [{'trial': tr} for tr in trial_key_o]
+        traces_b = v_tracking.TongueTracking3DBot & key & [{'trial': tr} for tr in trial_key_o]
         session_traces_s_y_o, session_traces_s_x_o, session_traces_s_z_o = traces_s.fetch('jaw_y', 'jaw_x', 'jaw_z', order_by='trial')
         session_traces_b_y_o, session_traces_b_x_o, session_traces_b_z_o = traces_b.fetch('tongue_y', 'tongue_x', 'tongue_z', order_by='trial')
         session_traces_s_y_o = stats.zscore(np.vstack(session_traces_s_y_o),axis=None)
@@ -388,7 +396,7 @@ class GLMFit(dj.Computed):
         session_traces_b_z_t = np.reshape(session_traces_b_z_t * session_traces_t_l_t, (-1,1))
 
         # get breathing
-        breathing, breathing_ts = (experiment.Breathing & key).fetch('breathing', 'breathing_timestamps', order_by='trial')
+        breathing, breathing_ts = (experiment.Breathing & key & [{'trial': tr} for tr in trial_key_o]).fetch('breathing', 'breathing_timestamps', order_by='trial')
         good_breathing = breathing
         for i, d in enumerate(breathing):
             good_breathing[i] = d[breathing_ts[i] < traces_len*3.4/1000]
@@ -425,6 +433,7 @@ class GLMFit(dj.Computed):
         trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
         session_traces_w = session_traces_w[trial_idx_nat,:]
         session_traces_w_o = stats.zscore(session_traces_w,axis=None)
+        session_traces_w_o = session_traces_w_o[trial_key_o-1]
         
         session_traces_w = session_traces_w_o[trial_key-1,:]
         session_traces_w = np.hstack(session_traces_w)
