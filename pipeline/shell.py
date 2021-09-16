@@ -581,7 +581,7 @@ def print_current_jobs():
     """
     job_status = []
     for pipeline_module in (experiment, tracking, ephys, histology,
-                            psth, foraging_analysis, report):
+                            psth, foraging_analysis, oralfacial_analysis, report):
         reserved = dj.U('table_name').aggr(pipeline_module.schema.jobs & 'status = "reserved"',
                                            reserve_count='count(table_name)',
                                            oldest_job='MIN(timestamp)',
