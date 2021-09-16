@@ -161,11 +161,11 @@ def plot_all_traces(session_key, unit_key,
     fig = None
     if axs is None:
         fig, axs = plt.subplots(3, 3, figsize=(16, 16))
-    assert len(axs) == 9
+    assert len(axs.flatten()) == 9
 
     h_spacing = 80
     h_spacing_b = 2500
-    h_spacing_w = 750
+    h_spacing_w = 600
 
     for trial_tracks, ax, ax_name, spk_color in zip((trial_trk_3,trial_trk_6,trial_trk_9,trial_trk_2,trial_trk_5,trial_trk_8,trial_trk_1,trial_trk_4,trial_trk_7), axs.flatten(),
                                                     ('top-left trials', 'top-mid trials','top-right trials','mid-left trials','mid trials','mid-right trials','bot-left trials','bot-mid trials','bot-right trials'),
