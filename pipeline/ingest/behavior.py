@@ -1071,7 +1071,6 @@ def load_delay_response_matfile(skey, matlab_filepath):
 
         t = trial(*t)  # convert list of items to a 'trial' structure
         trial_number += 1  # increment trial counter
-
         log.debug('BehaviorIngest.make(): parsing trial {i}'.format(i=trial_number))
 
         # covert state data names into a lookup dictionary
@@ -1291,7 +1290,8 @@ def load_delay_response_matfile(skey, matlab_filepath):
         elif photostim_period == 'late-delay':
             valid_protocol = protocol_type > 4
 
-        if t.stim and valid_protocol and gui.Autolearn == 4 and this_trial_delay_duration == 1.2:
+        if (t.stim and valid_protocol and gui.Autolearn == 4
+                and np.round(this_trial_delay_duration, 2) == 1.2):
             log.debug('BehaviorIngest.make(): t.stim == {}'.format(t.stim))
             rows['photostim_trial'].append(tkey)
             if photostim_period == 'early-delay':  # same as the delay-onset
