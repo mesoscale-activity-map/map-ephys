@@ -479,7 +479,7 @@ def populate_foraging_analysis(populate_settings={'reserve_jobs': True, 'display
 
 def populate_oralfacial_analysis(populate_settings={'reserve_jobs': True, 'display_progress': True}):
     log.info('oralfacial_analysis.GLMFit.populate()')
-    oralfacial_analysis.GLMFit.populate(**populate_settings, max_calls=5)
+    oralfacial_analysis.GLMFit.populate(**populate_settings, max_calls=100)
 
 
 def generate_report(populate_settings={'reserve_jobs': True, 'display_progress': True}):
@@ -640,10 +640,10 @@ def automate_computation():
                          'display_progress': True, 'max_calls': 100}
     while True:
         log.info('Populate for: Ephys - PSTH - Report')
+        populate_oralfacial_analysis(populate_settings)
         populate_ephys(populate_settings)
         populate_psth(populate_settings)
         populate_foraging_analysis(populate_settings)
-        populate_oralfacial_analysis(populate_settings)
         generate_report(populate_settings)
 
         log.info('report.delete_outdated_session_plots()')
