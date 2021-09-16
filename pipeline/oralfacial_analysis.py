@@ -461,7 +461,7 @@ class GLMFit(dj.Computed):
         units_glm = []
 
         for unit_key in unit_keys: # loop for each neuron
-            all_spikes=(ephys.Unit.TrialSpikes & unit_key).fetch('spike_times', order_by='trial')
+            all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in trial_key_o]).fetch('spike_times', order_by='trial')
             
             good_spikes = np.array(all_spikes[trial_key-1]) # get good spikes
             for i, d in enumerate(good_spikes):
