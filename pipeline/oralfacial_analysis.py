@@ -494,7 +494,7 @@ class GLMFit(dj.Computed):
                     sst_val = sum(map(lambda x: np.power(x,2),y_roll_t-np.mean(y_roll_t))) 
                     sse_val = sum(map(lambda x: np.power(x,2),y_roll_t-y_roll_t_p)) 
                     r2s_t[i] = 1.0 - sse_val/sst_val
-                    predict_ys[i,:]=y_roll_t
+                    predict_ys[i,:]=y_roll_t_p
                     weights_t[i,:] = glm_result.params
                     
                 except:
