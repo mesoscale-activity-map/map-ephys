@@ -69,7 +69,13 @@ def fix_photostim_trial(session_keys={}):
 def _fix_one_session(key):
     log.info('Running fix for session: {}'.format(key))
     key = (experiment.Session & key).fetch1()
-    behavior_fp = (behavior_ingest.BehaviorIngest.BehaviorFile & key).fetch1('behavior_file')
+
+    behavior_file_query = behavior_ingest.BehaviorIngest.BehaviorFile & key
+    if len(behavior_file_query) != 1:
+        log.warning('Session with multiple behavior files, skipping...')
+        return None, None
+
+    behavior_fp = behavior_file_query.fetch1('behavior_file')
 
     for rig, rig_path, _ in behavior_ingest.get_behavior_paths():
         try:
@@ -120,23 +126,27 @@ def _fix_one_session(key):
             log.info('BehaviorIngest.make(): ... experiment.Photostim')
             for stim in photostim_ids:
                 experiment.Photostim.insert1(
-                    dict(key, **photostims[stim]), ignore_extra_fields=True)
+                    dict(key, **photostims[stim]),
+                    ignore_extra_fields=True,
+                    skip_duplicates=True)
 
                 experiment.Photostim.PhotostimLocation.insert(
                     (dict(key, **loc,
                           photo_stim=photostims[stim]['photo_stim'])
                      for loc in photostims[stim]['locations']),
-                    ignore_extra_fields=True)
+                    ignore_extra_fields=True, skip_duplicates=True)
 
         log.info('BehaviorIngest.make(): ... experiment.PhotostimTrial')
         experiment.PhotostimTrial.insert(photostim_trials,
                                          ignore_extra_fields=True,
-                                         allow_direct_insert=True)
+                                         allow_direct_insert=True,
+                                         skip_duplicates=True)
 
         log.info('BehaviorIngest.make(): ... experiment.PhotostimTrialEvent')
         experiment.PhotostimEvent.insert(photostim_trial_events,
                                          ignore_extra_fields=True,
-                                         allow_direct_insert=True)
+                                         allow_direct_insert=True,
+                                         skip_duplicates=True)
 
     return True, missing_photostim_trials
 
