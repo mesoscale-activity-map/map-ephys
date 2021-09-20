@@ -650,7 +650,8 @@ class UnitLevelEphysReport(dj.Computed):
     unit_psth: filepath@report_store
     """
 
-    # only units UnitPSTH computed, and with InsertionLocation present
+    # only units with UnitPSTH computed (delay-response task only),
+    # and with InsertionLocation present
     key_source = (ephys.Unit & ephys.ProbeInsertion.InsertionLocation
                   & psth.UnitPsth & 'unit_quality != "all"')
 
@@ -680,8 +681,10 @@ class UnitLevelTrackingReport(dj.Computed):
     unit_behavior: filepath@report_store
     """
 
-    # only units with ingested tracking
-    key_source = ephys.Unit & tracking.Tracking & 'unit_quality != "all"'
+    # only units from delay-response task with ingested tracking
+    key_source = (ephys.Unit & tracking.Tracking & 'unit_quality != "all"'
+                  & (experiment.Session
+                     & (experiment.BehaviorTrial & 'task = "audio delay"')))
 
     def make(self, key):
         if not ephys.check_unit_criteria(key):

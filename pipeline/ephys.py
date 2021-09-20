@@ -297,7 +297,7 @@ class UnitNoiseLabel(dj.Imported):
     (https://github.com/jenniferColonell/ecephys_spike_sorting/tree/master/ecephys_spike_sorting/modules/noise_templates)
     """
     definition = """ 
-    # labeling based on the noiseTemplate module - output to "cluster_group.tsv" file
+    # labeling based on the noiseTemplate module - output to cluster_group.tsv file
     -> Unit
     ---
     noise: enum('good', 'noise')
