@@ -432,7 +432,7 @@ def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': 
     ephys.MAPClusterMetric.populate(**populate_settings)
 
     log.info('ephys.InterpolatedShankTrack.populate()')
-    histology.InterpolatedShankTrack.populate(**populate_settings, max_calls=1)
+    histology.InterpolatedShankTrack.populate(**dict(populate_settings, max_calls=1))
 
     log.info('tracking.TrackingQC.populate()')
     tracking.TrackingQC.populate(**populate_settings)
@@ -479,7 +479,7 @@ def populate_foraging_analysis(populate_settings={'reserve_jobs': True, 'display
 
 def populate_oralfacial_analysis(populate_settings={'reserve_jobs': True, 'display_progress': True}):
     log.info('oralfacial_analysis.GLMFit.populate()')
-    oralfacial_analysis.GLMFit.populate(**populate_settings, max_calls=5)
+    oralfacial_analysis.GLMFit.populate(**dict(populate_settings, max_calls=100))
 
 
 def generate_report(populate_settings={'reserve_jobs': True, 'display_progress': True}):
@@ -581,7 +581,7 @@ def print_current_jobs():
     """
     job_status = []
     for pipeline_module in (experiment, tracking, ephys, histology,
-                            psth, foraging_analysis, report):
+                            psth, foraging_analysis, oralfacial_analysis, report):
         reserved = dj.U('table_name').aggr(pipeline_module.schema.jobs & 'status = "reserved"',
                                            reserve_count='count(table_name)',
                                            oldest_job='MIN(timestamp)',
@@ -640,10 +640,10 @@ def automate_computation():
                          'display_progress': True, 'max_calls': 100}
     while True:
         log.info('Populate for: Ephys - PSTH - Report')
+        populate_oralfacial_analysis(populate_settings)
         populate_ephys(populate_settings)
         populate_psth(populate_settings)
         populate_foraging_analysis(populate_settings)
-        populate_oralfacial_analysis(populate_settings)
         generate_report(populate_settings)
 
         log.info('report.delete_outdated_session_plots()')

@@ -54,7 +54,8 @@ def fix_photostim_trial(session_keys={}):
     This fix applies to sessions ingested with the BehaviorIngest's make() only,
     as opposed to BehaviorBpodIngest (for Foraging Task)
     """
-    sessions_2_update = (experiment.Session & behavior_ingest.BehaviorIngest & experiment.PhotostimTrial & session_keys)
+    sessions_2_update = (experiment.Session & behavior_ingest.BehaviorIngest
+                         & experiment.PhotostimTrial & session_keys)
     sessions_2_update = sessions_2_update - FixPhotostimTrial
 
     if not sessions_2_update:
