@@ -206,7 +206,7 @@ class WhiskerTuning(dj.Computed):
                                        
         fs=(tracking.TrackingDevice & 'tracking_device="Camera 4"').fetch1('sampling_rate')
         
-        amp, phase=behavior_plot.compute_insta_phase_amp(session_traces_w, float(fs), freq_band=(5, 20))
+        amp, phase=behavior_plot.compute_insta_phase_amp(session_traces_w, float(fs), freq_band=(3, 25))
         phase = phase + np.pi
         
         # compute phase and MI
