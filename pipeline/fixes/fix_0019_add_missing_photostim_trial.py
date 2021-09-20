@@ -15,7 +15,7 @@ from pipeline.fixes import schema, FixHistory
 os.environ['DJ_SUPPORT_FILEPATH_MANAGEMENT'] = "TRUE"
 
 log = logging.getLogger(__name__)
-
+log.setLevel('INFO')
 
 """
 Many photostim trials are falsely not labeled as photostim trials,
@@ -73,13 +73,13 @@ def _fix_one_session(key):
 
     for rig, rig_path, _ in behavior_ingest.get_behavior_paths():
         try:
-            path = next(pathlib.Path(rig_path).glob(f'*{behavior_fp}'))
+            path = next(pathlib.Path(rig_path).rglob(f'{behavior_fp}*'))
             break
         except StopIteration:
             pass
     else:
         log.warning(f'Behavior file not found on this machine: {behavior_fp}')
-        return
+        return None, None
 
     # distinguishing "delay-response" task or "multi-target-licking" task
     task_type = behavior_ingest.detect_task_type(path)
@@ -88,7 +88,7 @@ def _fix_one_session(key):
     # skip too small behavior file (only for 'delay-response' task)
     if task_type == 'delay-response' and os.stat(path).st_size / 1024 < 1000:
         log.info('skipping file {} - too small'.format(path))
-        return
+        return None, None
 
     log.debug('loading file {}'.format(path))
 
