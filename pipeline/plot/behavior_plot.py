@@ -141,6 +141,9 @@ def plot_tracking(session_key, unit_key,
     l_trial_trk = trk & 'trial_instruction="left"' & 'early_lick="no early"' & 'outcome="hit"'
     r_trial_trk = trk & 'trial_instruction="right"' & 'early_lick="no early"' & 'outcome="hit"'
 
+    if not l_trial_trk or not r_trial_trk:
+        raise Exception('No trial matching the required conditions for this session: {}'.format(session_key))
+
     def get_trial_track(trial_tracks):
         if trial_offset < 1 and isinstance(trial_offset, float):
             offset = int(len(trial_tracks) * trial_offset)
@@ -199,6 +202,9 @@ def plot_unit_jaw_phase_dist(session_key, unit_key, bin_counts=20, axs=None):
 
     l_trial_trk = trk & 'trial_instruction="left"' & 'early_lick="no early"' & 'outcome="hit"'
     r_trial_trk = trk & 'trial_instruction="right"' & 'early_lick="no early"' & 'outcome="hit"'
+
+    if not l_trial_trk or not r_trial_trk:
+        raise Exception('No trial matching the required conditions for this session: {}'.format(session_key))
 
     def get_trial_track(trial_tracks):
         jaws, spike_times, go_times = (ephys.Unit.TrialSpikes * trial_tracks * experiment.TrialEvent
