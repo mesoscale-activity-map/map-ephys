@@ -597,6 +597,6 @@ class ContactLick(dj.Computed):
                     inside=np.where(((xp-lick_x_med)**2 + (yp-lick_y_med)**2 + (zp-lick_z_med)**2) < radius**2)
                     if lickE1[j]-lickS1[j]>10 and lickE1[j]-lickS1[j]<35  and np.size(inside)>0:
                         contacts.append(lickS1[j]*ts)              
-            trial_contact.append({**key, 'trial': trials[i], 'contact_times': contacts})
+            trial_contact.append({**key, 'trial': trials[i], 'tracking_device': 'Camera 4', 'contact_times': contacts})
             
         self.insert(trial_contact, ignore_extra_fields=True)
