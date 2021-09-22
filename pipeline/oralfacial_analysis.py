@@ -538,4 +538,65 @@ class WhiskerSVD(dj.Computed):
         proc = process.run(video_files_l, proc=roi_data)
         
         self.insert1({**key, 'mot_svd': proc['motSVD'][1][:, :3]})
+
+@schema
+class ContactLick(dj.Computed):
+    definition = """
+    -> tracking.Tracking
+    ---
+    contact_times: mediumblob
+    """
+    
+    key_source = experiment.Session & v_tracking.TongueTracking3DBot & v_tracking.LickPortTracking3DBot & ephys.Unit & 'rig = "RRig-MTL"'
+    
+    def make(self, key):
         
+        good_units=ephys.Unit * ephys.ClusterMetric * ephys.UnitStat & key & 'presence_ratio > 0.9' & 'amplitude_cutoff < 0.15' & 'avg_firing_rate > 0.2' & 'isi_violation < 10' & 'unit_amp > 150'
+        unit_keys=good_units.fetch('KEY')
+        ts = 0.0034
+        radius=1
+        ton_thr = 0.95
+        
+        bot_ton_x, bot_ton_y, bot_ton_z,trials = (v_tracking.TongueTracking3DBot & key).fetch('tongue_x','tongue_y','tongue_z','trial',order_by = 'trial')
+        bot_tongue_l = (v_tracking.Tracking.TongueTracking & key & 'tracking_device = "Camera 4"' & [{'trial': tr} for tr in trials]).fetch('tongue_likelihood', order_by = 'trial')
+        sid_tongue_l = (v_tracking.Tracking.TongueTracking & key & 'tracking_device = "Camera 3"' & [{'trial': tr} for tr in trials]).fetch('tongue_likelihood', order_by = 'trial')
+        bot_lic_x, bot_lic_y, bot_lic_z = (v_tracking.LickPortTracking3DBot & key).fetch('lickport_x','lickport_y','lickport_z', order_by = 'trial')
+
+        bot_tongue_l = np.vstack(bot_tongue_l)
+        sid_tongue_l = np.vstack(sid_tongue_l)
+        likelihood = bot_tongue_l
+        likelihood[np.where((sid_tongue_l > ton_thr) & (bot_tongue_l > ton_thr))] = 1
+        likelihood[np.where((sid_tongue_l <= ton_thr) | (bot_tongue_l <= ton_thr))] = 0
+
+        bot_ton_x=np.vstack(bot_ton_x)
+        bot_ton_y=np.vstack(bot_ton_y)
+        bot_ton_z=np.vstack(bot_ton_z)
+        bot_lic_x=np.vstack(bot_lic_x)
+        bot_lic_y=np.vstack(bot_lic_y)
+        bot_lic_z=np.vstack(bot_lic_z)
+
+        trial_contact = []
+
+        for i in np.arange(np.size(bot_ton_x,axis=0)):
+            lickSpan=np.where(likelihood[i,:]==1)[0]
+            lickBreak=np.diff(lickSpan)
+            lickS=np.concatenate(([0], np.where(lickBreak>1)[0]+1))
+            
+            contacts = []
+            if len(lickS)>1:
+                lickS1=lickSpan[lickS]
+                lickE1=np.concatenate((lickSpan[lickS[1:]-1], [lickSpan[-1]]))
+                lick_x_med=np.median(bot_lic_x[i,350:])
+                lick_y_med=np.median(bot_lic_y[i,350:])
+                lick_z_med=np.median(bot_lic_z[i,350:])       
+                
+                for j in np.arange(len(lickS1)):
+                    xp=bot_ton_x[i,lickS1[j]:lickE1[j]]
+                    yp=bot_ton_y[i,lickS1[j]:lickE1[j]]
+                    zp=bot_ton_z[i,lickS1[j]:lickE1[j]]
+                    inside=np.where(((xp-lick_x_med)**2 + (yp-lick_y_med)**2 + (zp-lick_z_med)**2) < radius**2)
+                    if lickE1[j]-lickS1[j]>10 and lickE1[j]-lickS1[j]<35  and np.size(inside)>0:
+                        contacts.append(lickS1[j]*ts)              
+            trial_contact.append({**key, 'trial': trials[i], 'contact_times': contacts})
+            
+        self.insert(trial_contact, ignore_extra_fields=True)
