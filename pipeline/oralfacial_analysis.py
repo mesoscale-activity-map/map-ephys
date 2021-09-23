@@ -598,11 +598,13 @@ class ContactLick(dj.Computed):
             
         self.insert(trial_contact, ignore_extra_fields=True)
 
+@schema
 class DirectionTuning(dj.Computed):
     definition = """
     -> ephys.Unit
     ---
     direction_tuning: mediumblob
+    
     """
 
     key_source = experiment.Session & v_oralfacial_analysis.ContactLick & ephys.Unit & 'rig = "RRig-MTL"'
