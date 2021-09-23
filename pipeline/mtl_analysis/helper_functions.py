@@ -520,3 +520,49 @@ def rose_plot(ax, angles, bins=16, density=None, offset=0, lab_unit="degrees", s
         label = ['$0$', r'$\pi/4$', r'$\pi/2$', r'$3\pi/4$',
                   r'$\pi$', r'$5\pi/4$', r'$3\pi/2$', r'$7\pi/4$']
         ax.set_xticklabels(label)
+        
+def plot_glmfit(unit_key, num_time=2000):
+
+    taus = np.arange(-5,6)
+    t_vec=np.arange(num_time)*0.017
+    test_y, predict_y, test_x, r2_t, weights = (oralfacial_analysis.GLMFit() & unit_key).fetch('test_y','predict_y','test_x','r2_t','weights')
+    max_r2_idx=np.where(r2_t[0]==np.max(r2_t[0]))
+    weights_r=np.round(weights[0],decimals=2)
+    
+    fig, ax = plt.subplots(1, 1, figsize=(24, 16))
+    
+    ax.plot(t_vec, test_x[0][:num_time, 1]+6,color='k',label='jaw ' +str(weights_r[max_r2_idx[0][0],2]))
+    ax.plot(t_vec, test_x[0][:num_time, 4]+6,color='g',label='tongue '+str(weights_r[max_r2_idx[0][0],5]))
+    ax.plot(t_vec, test_x[0][:num_time, 6]+12,color='b',label='breathing ' +str(weights_r[max_r2_idx[0][0],7]))
+    ax.plot(t_vec, test_x[0][:num_time, 7]+14,color='r',label='whisking '+str(weights_r[max_r2_idx[0][0],8]))
+    test_y_roll=np.roll(test_y[0],taus[max_r2_idx[0][0]])
+    ax.plot(t_vec,test_y_roll[:num_time],color='k',label='test')
+    ax.plot(t_vec,predict_y[0][max_r2_idx[0][0]][:num_time],color='r',label='prediction')
+    ax.legend(loc='upper left')
+    ax.set_xlabel('s')
+    ax.set_title('r2 = '+ str(np.round(r2_t[0][max_r2_idx[0][0]],decimals=3)))
+    
+    # cosmetic
+    ax.set_xlim((t_vec[0],t_vec[-1]))
+    ax.set_yticks([])
+    ax.spines['left'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    
+    return fig
+
+def plot_dir_tuning(unit_key):
+
+    dir_tuning=(oralfacial_analysis.DirectionTuning() & unit_key).fetch('direction_tuning')
+    fr_mat=[[dir_tuning[0][2],dir_tuning[0][5],dir_tuning[0][8]], [dir_tuning[0][1],dir_tuning[0][4],dir_tuning[0][7]], [dir_tuning[0][0],dir_tuning[0][3],dir_tuning[0][6]]]
+
+    fig, ax = plt.subplots(1, 1, figsize=(3, 3))
+    neg=ax.imshow(fr_mat,vmin = 0, cmap='Reds', interpolation='none')
+    fig.colorbar(neg,ax=ax, location='right', anchor=(0, 0.3), shrink=0.7)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.spines['left'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    
+    return fig
