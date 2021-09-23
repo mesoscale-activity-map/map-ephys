@@ -550,9 +550,6 @@ class ContactLick(dj.Computed):
     key_source = experiment.Session & v_tracking.TongueTracking3DBot & v_tracking.LickPortTracking3DBot & ephys.Unit & 'rig = "RRig-MTL"'
     
     def make(self, key):
-        
-        good_units=ephys.Unit * ephys.ClusterMetric * ephys.UnitStat & key & 'presence_ratio > 0.9' & 'amplitude_cutoff < 0.15' & 'avg_firing_rate > 0.2' & 'isi_violation < 10' & 'unit_amp > 150'
-        unit_keys=good_units.fetch('KEY')
         ts = 0.0034
         radius=1
         ton_thr = 0.95
@@ -600,3 +597,37 @@ class ContactLick(dj.Computed):
             trial_contact.append({**key, 'trial': trials[i], 'tracking_device': 'Camera 4', 'contact_times': contacts})
             
         self.insert(trial_contact, ignore_extra_fields=True)
+
+class DirectionTuning(dj.Computed):
+    definition = """
+    -> ephys.Unit
+    ---
+    direction_tuning: mediumblob
+    """
+
+    key_source = experiment.Session & v_oralfacial_analysis.ContactLick & ephys.Unit & 'rig = "RRig-MTL"'
+    
+    def make(self, key):
+        good_units=ephys.Unit * ephys.ClusterMetric * ephys.UnitStat & key & 'presence_ratio > 0.9' & 'amplitude_cutoff < 0.15' & 'avg_firing_rate > 0.2' & 'isi_violation < 10' & 'unit_amp > 150'
+        unit_keys=good_units.fetch('KEY')
+
+        contact_times, trials,water_port=(v_oralfacial_analysis.ContactLick * experiment.MultiTargetLickingSessionBlock.BlockTrial * experiment.MultiTargetLickingSessionBlock.WaterPort & key).fetch('contact_times','trial','water_port', order_by = 'trial')
+
+        unit_dir=[]
+        for unit_key in unit_keys: # loop for each neuron
+            all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in trials]).fetch('spike_times', order_by='trial')
+            direction_spk=np.zeros(9)
+            direction_lick=np.zeros(9)
+            for i in np.arange(len(trials)):
+                tr_fr=np.zeros(len(contact_times[i]))
+                dir_idx=int(water_port[i][-1])-1
+                for j in np.arange(len(tr_fr)):
+                    tr_fr[j], _ = np.histogram(all_spikes[i], bins=1, range=(contact_times[i][j]-.05, contact_times[i][j]+.1))
+                direction_spk[dir_idx]=direction_spk[dir_idx]+sum(tr_fr)
+                direction_lick[dir_idx]=direction_lick[dir_idx]+len(tr_fr)
+                
+            direction_tun=direction_spk/direction_lick
+                
+            unit_dir.append({**unit_key, 'direction_tuning': direction_tun})
+            
+        self.insert(unit_dir, ignore_extra_fields=True)
