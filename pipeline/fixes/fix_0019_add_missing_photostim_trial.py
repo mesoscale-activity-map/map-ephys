@@ -15,7 +15,7 @@ from pipeline.fixes import schema, FixHistory
 os.environ['DJ_SUPPORT_FILEPATH_MANAGEMENT'] = "TRUE"
 
 log = logging.getLogger(__name__)
-
+log.setLevel('INFO')
 
 """
 Many photostim trials are falsely not labeled as photostim trials,
@@ -69,17 +69,23 @@ def fix_photostim_trial(session_keys={}):
 def _fix_one_session(key):
     log.info('Running fix for session: {}'.format(key))
     key = (experiment.Session & key).fetch1()
-    behavior_fp = (behavior_ingest.BehaviorIngest.BehaviorFile & key).fetch1('behavior_file')
+
+    behavior_file_query = behavior_ingest.BehaviorIngest.BehaviorFile & key
+    if len(behavior_file_query) != 1:
+        log.warning('Session with multiple behavior files, skipping...')
+        return None, None
+
+    behavior_fp = behavior_file_query.fetch1('behavior_file')
 
     for rig, rig_path, _ in behavior_ingest.get_behavior_paths():
         try:
-            path = next(pathlib.Path(rig_path).glob(f'*{behavior_fp}'))
+            path = next(pathlib.Path(rig_path).rglob(f'{behavior_fp}*'))
             break
         except StopIteration:
             pass
     else:
         log.warning(f'Behavior file not found on this machine: {behavior_fp}')
-        return
+        return None, None
 
     # distinguishing "delay-response" task or "multi-target-licking" task
     task_type = behavior_ingest.detect_task_type(path)
@@ -88,7 +94,7 @@ def _fix_one_session(key):
     # skip too small behavior file (only for 'delay-response' task)
     if task_type == 'delay-response' and os.stat(path).st_size / 1024 < 1000:
         log.info('skipping file {} - too small'.format(path))
-        return
+        return None, None
 
     log.debug('loading file {}'.format(path))
 
@@ -120,23 +126,27 @@ def _fix_one_session(key):
             log.info('BehaviorIngest.make(): ... experiment.Photostim')
             for stim in photostim_ids:
                 experiment.Photostim.insert1(
-                    dict(key, **photostims[stim]), ignore_extra_fields=True)
+                    dict(key, **photostims[stim]),
+                    ignore_extra_fields=True,
+                    skip_duplicates=True)
 
                 experiment.Photostim.PhotostimLocation.insert(
                     (dict(key, **loc,
                           photo_stim=photostims[stim]['photo_stim'])
                      for loc in photostims[stim]['locations']),
-                    ignore_extra_fields=True)
+                    ignore_extra_fields=True, skip_duplicates=True)
 
         log.info('BehaviorIngest.make(): ... experiment.PhotostimTrial')
         experiment.PhotostimTrial.insert(photostim_trials,
                                          ignore_extra_fields=True,
-                                         allow_direct_insert=True)
+                                         allow_direct_insert=True,
+                                         skip_duplicates=True)
 
         log.info('BehaviorIngest.make(): ... experiment.PhotostimTrialEvent')
         experiment.PhotostimEvent.insert(photostim_trial_events,
                                          ignore_extra_fields=True,
-                                         allow_direct_insert=True)
+                                         allow_direct_insert=True,
+                                         skip_duplicates=True)
 
     return True, missing_photostim_trials
 
