@@ -636,8 +636,9 @@ class UnitPassingCriteria(dj.Computed):
     definition = """
     -> Unit
     ---
-    criteria_passed : bool      #boolean based on criteria
+    criteria_passed : bool      #true or false based on whether a unit passes the criteria
     """
+    key_source = Unit & ClusterMetric & UnitStat
 
     def make(self,key):
         #insert value returned from check_unit_criteria into criteria_passed
