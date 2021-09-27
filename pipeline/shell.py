@@ -16,7 +16,8 @@ from pymysql.err import OperationalError
 
 
 from pipeline import (lab, experiment, tracking, ephys, report, psth, psth_foraging, ccf,
-                      histology, export, publication, globus, foraging_analysis, foraging_model,
+                      histology, export, publication, globus,
+                      oralfacial_analysis, foraging_analysis, foraging_model,
                       get_schema_name)
 
 pipeline_modules = [lab, ccf, experiment, ephys, publication, report,
@@ -434,7 +435,7 @@ def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': 
     ephys.UnitPassingCriteria.populate(**populate_settings)
 
     log.info('ephys.InterpolatedShankTrack.populate()')
-    histology.InterpolatedShankTrack.populate(**populate_settings, max_calls=4)
+    histology.InterpolatedShankTrack.populate(**dict(populate_settings, max_calls=1))
 
     log.info('tracking.TrackingQC.populate()')
     tracking.TrackingQC.populate(**populate_settings)
@@ -477,6 +478,11 @@ def populate_foraging_analysis(populate_settings={'reserve_jobs': True, 'display
 
     log.info('foraging_analysis.BlockEfficiency.populate()')
     foraging_analysis.BlockEfficiency.populate(**populate_settings)
+
+
+def populate_oralfacial_analysis(populate_settings={'reserve_jobs': True, 'display_progress': True}):
+    log.info('oralfacial_analysis.GLMFit.populate()')
+    oralfacial_analysis.GLMFit.populate(**dict(populate_settings, max_calls=100))
 
 
 def generate_report(populate_settings={'reserve_jobs': True, 'display_progress': True}):
@@ -578,7 +584,7 @@ def print_current_jobs():
     """
     job_status = []
     for pipeline_module in (experiment, tracking, ephys, histology,
-                            psth, foraging_analysis, report):
+                            psth, foraging_analysis, oralfacial_analysis, report):
         reserved = dj.U('table_name').aggr(pipeline_module.schema.jobs & 'status = "reserved"',
                                            reserve_count='count(table_name)',
                                            oldest_job='MIN(timestamp)',
@@ -633,9 +639,11 @@ def erd(*args):
 
 def automate_computation():
     from pipeline import report
-    populate_settings = {'reserve_jobs': True, 'suppress_errors': True, 'display_progress': True}
+    populate_settings = {'reserve_jobs': True, 'suppress_errors': True,
+                         'display_progress': True, 'max_calls': 100}
     while True:
         log.info('Populate for: Ephys - PSTH - Report')
+        populate_oralfacial_analysis(populate_settings)
         populate_ephys(populate_settings)
         populate_psth(populate_settings)
         populate_foraging_analysis(populate_settings)

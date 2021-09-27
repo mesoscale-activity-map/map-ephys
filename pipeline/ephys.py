@@ -297,7 +297,7 @@ class UnitNoiseLabel(dj.Imported):
     (https://github.com/jenniferColonell/ecephys_spike_sorting/tree/master/ecephys_spike_sorting/modules/noise_templates)
     """
     definition = """ 
-    # labeling based on the noiseTemplate module - output to "cluster_group.tsv" file
+    # labeling based on the noiseTemplate module - output to cluster_group.tsv file
     -> Unit
     ---
     noise: enum('good', 'noise')
@@ -677,6 +677,13 @@ brain_area_unit_restrictions = {
 
 
 def check_unit_criteria(unit_key):
+    """
+    Check if the various statistics/metrics of a given unit passes
+     the predefined criteria for the particular brain region
+     (defined in "brain_area_unit_restrictions")
+    Note: not handling the case where the unit is from a probe that penetrated through
+    multiple brain areas (the first one is picked)
+    """
     brain_area = (ProbeInsertion.RecordableBrainRegion & unit_key).fetch('brain_area', limit=1)[0]
     if brain_area in brain_area_unit_restrictions:
         unit_query = (Unit * ClusterMetric * UnitStat
