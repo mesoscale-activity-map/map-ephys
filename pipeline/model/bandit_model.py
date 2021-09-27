@@ -26,6 +26,7 @@
 #   5. Network models (abstracted from Ulises' network models)
 #       1). 'CANN_iti': values decay in ITI
 #       2). 'Synaptic' 
+#       3). 'Synaptic_W>0': positive W
 #
 #
 #  = Other types that can simulate but not fit =
@@ -154,7 +155,7 @@ class BanditModel:
         # 2. for those involve softmax: b_undefined = 0, no constraint. cp_k = exp(Q/sigma + b_i) / sum(Q/sigma + b_i). Putting b_i outside /sigma to make it comparable across different softmax_temperatures
         elif forager in ['RW1972_softmax', 'LNP_softmax', 'Bari2019', 'Hattori2019',
                          'RW1972_softmax_CK', 'LNP_softmax_CK', 'Bari2019_CK', 'Hattori2019_CK',
-                         'CANN', 'Synaptic']:
+                         'CANN', 'Synaptic', 'Synaptic_W>0']:
             if self.K == 2:
                 self.bias_terms = np.array([biasL, 0])  # Relative to right
             elif self.K == 3:
@@ -619,6 +620,10 @@ class BanditModel:
         # Unchosen side
         self.w[1 - choice, self.time] = (1 - self.forget_rates[0]) * self.w[1 - choice, self.time - 1]
         
+        # Rectify w if needed
+        if self.forager == 'Synaptic_W>0':
+            self.w[self.w[:, self.time] < 0, self.time] = 0
+        
         # -- Update u --
         for side in [0, 1]:
             self.q_estimation[side, self.time] = self.f(self.I0 * (1 - self.w[1 - side, self.time]) / 
@@ -660,7 +665,7 @@ class BanditModel:
 
         if self.forager in ['RW1972_softmax', 'LNP_softmax', 'Bari2019', 'Hattori2019',
                             'RW1972_softmax_CK', 'LNP_softmax_CK', 'Bari2019_CK', 'Hattori2019_CK',
-                            'CANN', 'Synaptic']:   # Probabilistic (Could have choice kernel)
+                            'CANN', 'Synaptic', 'Synaptic_W>0']:   # Probabilistic (Could have choice kernel)
             return self.act_Probabilistic()
 
         print('No action found!!')
