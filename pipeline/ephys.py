@@ -629,6 +629,21 @@ class ArchivedClustering(dj.Imported):
         velocity_below=null: float   
         """
 
+
+@schema
+class UnitPassingCriteria(dj.Computed):
+    """ This table computes whether a unit_key passes a selection criteria """
+    definition = """
+    -> Unit
+    ---
+    criteria_passed : bool      #boolean based on criteria
+    """
+
+    def make(self,key):
+        #insert value returned from check_unit_criteria into criteria_passed
+        self.insert1(dict(key, criteria_passed=check_unit_criteria(key)))
+
+        
 # ---- Unit restriction criteria based on brain regions ----
 
 
@@ -669,3 +684,7 @@ def check_unit_criteria(unit_key):
         return bool(unit_query)
 
     return True
+
+
+
+ 

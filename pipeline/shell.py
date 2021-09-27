@@ -430,6 +430,9 @@ def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': 
     log.info('ephys.MAPClusterMetric.populate()')
     ephys.MAPClusterMetric.populate(**populate_settings)
 
+    log.info('ephys.UnitPassingCriteria.populate()')
+    ephys.UnitPassingCriteria.populate(**populate_settings)
+
     log.info('ephys.InterpolatedShankTrack.populate()')
     histology.InterpolatedShankTrack.populate(**populate_settings, max_calls=4)
 
