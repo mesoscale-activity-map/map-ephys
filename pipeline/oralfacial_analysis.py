@@ -302,6 +302,12 @@ class GLMFit(dj.Computed):
         session_traces_t_l_t[np.where((session_traces_s_l_t > tongue_thr) & (session_traces_b_l_t > tongue_thr))] = 1
         session_traces_t_l_t[np.where((session_traces_s_l_t <= tongue_thr) | (session_traces_b_l_t <= tongue_thr))] = 0
         session_traces_t_l_t = np.hstack(session_traces_t_l_t)
+        
+        session_traces_s_l_f = np.vstack(session_traces_s_l_o)
+        session_traces_b_l_f = np.vstack(session_traces_b_l_o)
+        session_traces_t_l_f = session_traces_b_l_f
+        session_traces_t_l_f[np.where((session_traces_s_l_f > tongue_thr) & (session_traces_b_l_f > tongue_thr))] = 1
+        session_traces_t_l_f[np.where((session_traces_s_l_f <= tongue_thr) | (session_traces_b_l_f <= tongue_thr))] = 0
 
         # from 3D calibration
         traces_s = v_tracking.JawTracking3DSid & key & [{'trial': tr} for tr in trial_key_o]
@@ -311,9 +317,18 @@ class GLMFit(dj.Computed):
         session_traces_s_y_o = stats.zscore(np.vstack(session_traces_s_y_o),axis=None)
         session_traces_s_x_o = stats.zscore(np.vstack(session_traces_s_x_o),axis=None)
         session_traces_s_z_o = stats.zscore(np.vstack(session_traces_s_z_o),axis=None)
-        session_traces_b_y_o = stats.zscore(np.vstack(session_traces_b_y_o),axis=None) 
-        session_traces_b_x_o = stats.zscore(np.vstack(session_traces_b_x_o),axis=None)
-        session_traces_b_z_o = stats.zscore(np.vstack(session_traces_b_z_o),axis=None)
+        session_traces_b_y_o = np.vstack(session_traces_b_y_o)
+        traces_y_mean=np.mean(session_traces_b_y_o[np.where(session_traces_t_l_f == 1)])
+        traces_y_std=np.std(session_traces_b_y_o[np.where(session_traces_t_l_f == 1)])
+        session_traces_b_y_o = (session_traces_b_y_o - traces_y_mean)/traces_y_std
+        session_traces_b_x_o = np.vstack(session_traces_b_x_o)
+        traces_x_mean=np.mean(session_traces_b_x_o[np.where(session_traces_t_l_f == 1)])
+        traces_x_std=np.std(session_traces_b_x_o[np.where(session_traces_t_l_f == 1)])
+        session_traces_b_x_o = (session_traces_b_x_o - traces_x_mean)/traces_x_std
+        session_traces_b_z_o = np.vstack(session_traces_b_z_o)
+        traces_z_mean=np.mean(session_traces_b_z_o[np.where(session_traces_t_l_f == 1)])
+        traces_z_std=np.std(session_traces_b_z_o[np.where(session_traces_t_l_f == 1)])
+        session_traces_b_z_o = (session_traces_b_z_o - traces_z_mean)/traces_z_std
         
         session_traces_s_y = session_traces_s_y_o[trial_key-1]
         session_traces_s_x = session_traces_s_x_o[trial_key-1]

@@ -3,6 +3,7 @@ from pipeline import lab, experiment, ephys, tracking, oralfacial_analysis
 from scipy import optimize
 
 import matplotlib.pyplot as plt
+plt.rcParams['font.size'] = 48
 import numpy as np
 
 # ======== Define some useful variables ==============
@@ -199,7 +200,7 @@ def plot_all_traces(session_key, unit_key,
   
 def plot_tracking(session_key, unit_key,
                   tracking_feature='jaw_y', camera_key=_side_cam,
-                  trial_offset=0, trial_limit=10, xlim=(0, 5), axs=None):
+                  trial_offset=0, trial_limit=3, xlim=(0, 5), axs=None):
     """
     Plot jaw movement per trial, time-locked to trial-onset, with spike times overlay
     :param session_key: session where the trials are from
@@ -251,8 +252,8 @@ def plot_tracking(session_key, unit_key,
 
     fig = None
     if axs is None:
-        fig, axs = plt.subplots(3, 3, figsize=(16, 16))
-    assert len(axs) == 9
+        fig, axs = plt.subplots(3, 3, figsize=(84, 12))
+    assert len(axs.flatten()) == 9
 
     h_spacing = 150
     for trial_tracks, ax, ax_name, spk_color in zip(
@@ -265,10 +266,10 @@ def plot_tracking(session_key, unit_key,
             ax.set_yticks([])
             continue
         for tr_id, (trk_feat, tongue_out_bool, spike_times, tvec) in enumerate(get_trial_track(trial_tracks)):
-            ax.plot(tvec, trk_feat + tr_id * h_spacing, '.k', markersize=1)
-            ax.plot(tvec[tongue_out_bool], trk_feat[tongue_out_bool] + tr_id * h_spacing, '.', color='lime', markersize=2)
+            ax.plot(tvec, trk_feat + tr_id * h_spacing, '.k', markersize=8)
+            ax.plot(tvec[tongue_out_bool], trk_feat[tongue_out_bool] + tr_id * h_spacing, '.', color='lime', markersize=8)
             ax.plot(spike_times, np.full_like(spike_times, trk_feat[tongue_out_bool].mean() + h_spacing/3) + tr_id * h_spacing,
-                        color=spk_color, marker='$I$', linestyle='None', markersize=6)
+                        color=spk_color, marker='$I$', linestyle='None', markersize=16)
             ax.set_title(ax_name)
             ax.axvline(x=0, linestyle='--', color='k')
 
@@ -285,7 +286,7 @@ def plot_tracking(session_key, unit_key,
 
     return fig
 
-def plot_breathing(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(0, 5), axs=None):
+def plot_breathing(session_key, unit_key, trial_offset=0, trial_limit=3, xlim=(0, 5), axs=None):
     """
     Plot breathing per trial, time-locked to trial-onset, with spike times overlay
     :param session_key: session where the trials are from
@@ -318,7 +319,7 @@ def plot_breathing(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(
     
     fig = None
     if axs is None:
-        fig, ax = plt.subplots(1, 1, figsize=(16, 16))
+        fig, ax = plt.subplots(1, 1, figsize=(48, 4))
         
     h_spacing = 3000
 
