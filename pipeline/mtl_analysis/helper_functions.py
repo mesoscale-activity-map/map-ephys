@@ -3,6 +3,7 @@ from pipeline import lab, experiment, ephys, tracking, oralfacial_analysis
 from scipy import optimize
 
 import matplotlib.pyplot as plt
+plt.rcParams['font.size'] = 48
 import numpy as np
 
 # ======== Define some useful variables ==============
@@ -199,7 +200,7 @@ def plot_all_traces(session_key, unit_key,
   
 def plot_tracking(session_key, unit_key,
                   tracking_feature='jaw_y', camera_key=_side_cam,
-                  trial_offset=0, trial_limit=10, xlim=(0, 5), axs=None):
+                  trial_offset=0, trial_limit=3, xlim=(0, 5), axs=None):
     """
     Plot jaw movement per trial, time-locked to trial-onset, with spike times overlay
     :param session_key: session where the trials are from
@@ -251,8 +252,8 @@ def plot_tracking(session_key, unit_key,
 
     fig = None
     if axs is None:
-        fig, axs = plt.subplots(3, 3, figsize=(16, 16))
-    assert len(axs) == 9
+        fig, axs = plt.subplots(3, 3, figsize=(84, 12))
+    assert len(axs.flatten()) == 9
 
     h_spacing = 150
     for trial_tracks, ax, ax_name, spk_color in zip(
@@ -265,10 +266,10 @@ def plot_tracking(session_key, unit_key,
             ax.set_yticks([])
             continue
         for tr_id, (trk_feat, tongue_out_bool, spike_times, tvec) in enumerate(get_trial_track(trial_tracks)):
-            ax.plot(tvec, trk_feat + tr_id * h_spacing, '.k', markersize=1)
-            ax.plot(tvec[tongue_out_bool], trk_feat[tongue_out_bool] + tr_id * h_spacing, '.', color='lime', markersize=2)
+            ax.plot(tvec, trk_feat + tr_id * h_spacing, '.k', markersize=8)
+            ax.plot(tvec[tongue_out_bool], trk_feat[tongue_out_bool] + tr_id * h_spacing, '.', color='lime', markersize=8)
             ax.plot(spike_times, np.full_like(spike_times, trk_feat[tongue_out_bool].mean() + h_spacing/3) + tr_id * h_spacing,
-                        color=spk_color, marker='$I$', linestyle='None', markersize=6)
+                        color=spk_color, marker='$I$', linestyle='None', markersize=16)
             ax.set_title(ax_name)
             ax.axvline(x=0, linestyle='--', color='k')
 
@@ -285,7 +286,7 @@ def plot_tracking(session_key, unit_key,
 
     return fig
 
-def plot_breathing(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(0, 5), axs=None):
+def plot_breathing(session_key, unit_key, trial_offset=0, trial_limit=3, xlim=(0, 5), axs=None):
     """
     Plot breathing per trial, time-locked to trial-onset, with spike times overlay
     :param session_key: session where the trials are from
@@ -318,7 +319,7 @@ def plot_breathing(session_key, unit_key, trial_offset=0, trial_limit=10, xlim=(
     
     fig = None
     if axs is None:
-        fig, ax = plt.subplots(1, 1, figsize=(16, 16))
+        fig, ax = plt.subplots(1, 1, figsize=(48, 4))
         
     h_spacing = 3000
 
@@ -520,3 +521,49 @@ def rose_plot(ax, angles, bins=16, density=None, offset=0, lab_unit="degrees", s
         label = ['$0$', r'$\pi/4$', r'$\pi/2$', r'$3\pi/4$',
                   r'$\pi$', r'$5\pi/4$', r'$3\pi/2$', r'$7\pi/4$']
         ax.set_xticklabels(label)
+        
+def plot_glmfit(unit_key, num_time=2000):
+
+    taus = np.arange(-5,6)
+    t_vec=np.arange(num_time)*0.017
+    test_y, predict_y, test_x, r2_t, weights = (oralfacial_analysis.GLMFit() & unit_key).fetch('test_y','predict_y','test_x','r2_t','weights')
+    max_r2_idx=np.where(r2_t[0]==np.max(r2_t[0]))
+    weights_r=np.round(weights[0],decimals=2)
+    
+    fig, ax = plt.subplots(1, 1, figsize=(24, 16))
+    
+    ax.plot(t_vec, test_x[0][:num_time, 1]+6,color='k',label='jaw ' +str(weights_r[max_r2_idx[0][0],2]))
+    ax.plot(t_vec, test_x[0][:num_time, 4]+6,color='g',label='tongue '+str(weights_r[max_r2_idx[0][0],5]))
+    ax.plot(t_vec, test_x[0][:num_time, 6]+12,color='b',label='breathing ' +str(weights_r[max_r2_idx[0][0],7]))
+    ax.plot(t_vec, test_x[0][:num_time, 7]+14,color='r',label='whisking '+str(weights_r[max_r2_idx[0][0],8]))
+    test_y_roll=np.roll(test_y[0],taus[max_r2_idx[0][0]])
+    ax.plot(t_vec,test_y_roll[:num_time],color='k',label='test')
+    ax.plot(t_vec,predict_y[0][max_r2_idx[0][0]][:num_time],color='r',label='prediction')
+    ax.legend(loc='upper left')
+    ax.set_xlabel('s')
+    ax.set_title('r2 = '+ str(np.round(r2_t[0][max_r2_idx[0][0]],decimals=3)))
+    
+    # cosmetic
+    ax.set_xlim((t_vec[0],t_vec[-1]))
+    ax.set_yticks([])
+    ax.spines['left'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    
+    return fig
+
+def plot_dir_tuning(unit_key):
+
+    dir_tuning=(oralfacial_analysis.DirectionTuning() & unit_key).fetch('direction_tuning')
+    fr_mat=[[dir_tuning[0][2],dir_tuning[0][5],dir_tuning[0][8]], [dir_tuning[0][1],dir_tuning[0][4],dir_tuning[0][7]], [dir_tuning[0][0],dir_tuning[0][3],dir_tuning[0][6]]]
+
+    fig, ax = plt.subplots(1, 1, figsize=(3, 3))
+    neg=ax.imshow(fr_mat,vmin = 0, cmap='Reds', interpolation='none')
+    fig.colorbar(neg,ax=ax, location='right', anchor=(0, 0.3), shrink=0.7)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.spines['left'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    
+    return fig
