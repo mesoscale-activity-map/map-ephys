@@ -14,6 +14,7 @@ from pipeline import lab, ephys, experiment, ccf, histology, report
 from pipeline import get_schema_name, dict_to_hash
 
 from pipeline.ingest import behavior as behavior_ingest
+from pipeline.ingest import ephys as ephys_ingest
 
 schema = dj.schema(get_schema_name('ingest_histology'))
 
@@ -78,7 +79,9 @@ class HistologyIngest(dj.Imported):
         log.info('\n======================================================')
         log.info('HistologyIngest().make(): key: {}'.format(key))
 
-        self.session = (experiment.Session * lab.WaterRestriction.proj('water_restriction_number') & key).fetch1()
+        self.session = (experiment.Session
+                        * lab.WaterRestriction.proj('water_restriction_number')
+                        & key).fetch1()
 
         rigpaths = get_histology_paths()
 
@@ -97,7 +100,10 @@ class HistologyIngest(dj.Imported):
             log.warning('Missing BehaviorFile for session: {}. Skipping...'.format(self.session))
             return
 
-        self.q_behavior_file = ((behavior_ingest.BehaviorIngest.BehaviorFile + behavior_ingest.BehaviorBpodIngest.BehaviorFile) & key)
+        self.q_behavior_file = ((behavior_ingest.BehaviorIngest.BehaviorFile
+                                 + behavior_ingest.BehaviorBpodIngest.BehaviorFile) & key)
+        self.q_ephys_file = (ephys_ingest.EphysIngest.EphysFile.proj(
+            insertion_number='probe_insertion_number') & key)
 
         for rigpath in rigpaths:
             if self.rig == 'RRig-MTL':
@@ -113,8 +119,15 @@ class HistologyIngest(dj.Imported):
                 if directory.exists():
                     self.directory = directory
                     break
+
+                directory = (pathlib.Path(rigpath) / self.q_ephys_file.fetch1('ephys_file')).parent
+                try:
+                    self.directory = next(directory.rglob('channel_locations*.json')).parent
+                    break
+                except StopIteration:
+                    pass
         else:
-            log.warning('Histology folder for animal: {} not found. Skipping...'.format(self.water))
+            log.warning('Histology folder not found! Probe Insertion: {}({}). Skipping...'.format(self.water, key))
             return
 
         # ingest histology
@@ -447,13 +460,8 @@ class HistologyIngest(dj.Imported):
         """
 
         # Detecting format #2 (.json)
-        if self.rig == 'RRig-MTL':
-            filename_prefix = ''
-        else:
-            filename_prefix = '{}_{}_{}_'.format(
-                self.water, self.session_date_str, self.probe)
-
-        format_number = 2 if len(list(self.directory.glob('{}channel_locations*.json'.format(filename_prefix)))) else 1
+        channel_locations_files = list(self.directory.glob('*channel_locations*.json'))
+        format_number = 2 if len(channel_locations_files) else 1
 
         if format_number == 1:
             file_format_map = {'landmark_file': '_siteInfo.mat',
@@ -523,16 +531,9 @@ class HistologyIngest(dj.Imported):
         elif format_number == 2:
             log.debug('format 2 detected..')
 
-            channel_locations_files = list(self.directory.glob(
-                '{}channel_locations*.json'.format(filename_prefix)))
             xyz_picks_files = list(self.directory.glob('xyz_picks*.json'))
 
-            if len(channel_locations_files) < 1:
-                raise FileNotFoundError(
-                    'Probe {} histology file {} not found!'.format(
-                        self.probe,
-                        '{}channel_locations*.json'.format(filename_prefix)))
-            elif len(channel_locations_files) == 1:
+            if len(channel_locations_files) == 1:
                 corresponding_shanks = [1]
                 if len(self.shanks) != 1:
                     raise HistologyFileError(
