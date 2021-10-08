@@ -474,6 +474,11 @@ def water2subject(water,date):
     session_num = (experiment.Session() * lab.WaterRestriction & {'water_restriction_number': water, 'session_date': date}).fetch('session')
     return subject_id, session_num
 
+def subject2water(subject,session_num):
+    water = (lab.WaterRestriction & {'subject_id': subject}).fetch('water_restriction_number')
+    date = (experiment.Session() * lab.WaterRestriction & {'subject_id': subject, 'session': session_num}).fetch('session_date')
+    return water, date
+
 def rose_plot(ax, angles, bins=16, density=None, offset=0, lab_unit="degrees", start_zero=False, **param_dict):
     """
     Plot polar histogram of angles on ax. ax must have been created using
@@ -534,7 +539,7 @@ def plot_glmfit(unit_key, num_time=2000):
     
     ax.plot(t_vec, test_x[0][:num_time, 1]+6,color='k',label='jaw ' +str(weights_r[max_r2_idx[0][0],2]))
     ax.plot(t_vec, test_x[0][:num_time, 4]+6,color='g',label='tongue '+str(weights_r[max_r2_idx[0][0],5]))
-    ax.plot(t_vec, test_x[0][:num_time, 6]+12,color='b',label='breathing ' +str(weights_r[max_r2_idx[0][0],7]))
+    ax.plot(t_vec, test_x[0][:num_time, 6]+10,color='b',label='breathing ' +str(weights_r[max_r2_idx[0][0],7]))
     ax.plot(t_vec, test_x[0][:num_time, 7]+14,color='r',label='whisking '+str(weights_r[max_r2_idx[0][0],8]))
     test_y_roll=np.roll(test_y[0],taus[max_r2_idx[0][0]])
     ax.plot(t_vec,test_y_roll[:num_time],color='k',label='test')
@@ -554,16 +559,19 @@ def plot_glmfit(unit_key, num_time=2000):
 
 def plot_dir_tuning(unit_key):
 
-    dir_tuning=(oralfacial_analysis.DirectionTuning() & unit_key).fetch('direction_tuning')
+    dir_tuning, dir_idx=(oralfacial_analysis.DirectionTuning() & unit_key).fetch('direction_tuning','direction_index')
     fr_mat=[[dir_tuning[0][2],dir_tuning[0][5],dir_tuning[0][8]], [dir_tuning[0][1],dir_tuning[0][4],dir_tuning[0][7]], [dir_tuning[0][0],dir_tuning[0][3],dir_tuning[0][6]]]
 
     fig, ax = plt.subplots(1, 1, figsize=(3, 3))
     neg=ax.imshow(fr_mat,vmin = 0, cmap='Reds', interpolation='none')
     fig.colorbar(neg,ax=ax, location='right', anchor=(0, 0.3), shrink=0.7)
+    ax.set_title(str(np.round(dir_idx[0],decimals=2)))
     ax.set_xticks([])
     ax.set_yticks([])
     ax.spines['left'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    
     
     return fig

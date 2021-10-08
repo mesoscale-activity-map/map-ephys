@@ -619,6 +619,8 @@ class DirectionTuning(dj.Computed):
     -> ephys.Unit
     ---
     direction_tuning: mediumblob
+    direction_index: float
+    preferred_phase: float
     
     """
 
@@ -644,7 +646,15 @@ class DirectionTuning(dj.Computed):
                 direction_lick[dir_idx]=direction_lick[dir_idx]+len(tr_fr)
                 
             direction_tun=direction_spk/direction_lick
-                
-            unit_dir.append({**unit_key, 'direction_tuning': direction_tun})
+            
+            tuning_y=direction_tun[[7,8,5,2,1,0,3,6]]
+            tuning_x=np.linspace(0,7*np.pi/4,8)
+            tuning_y_n=tuning_y[~np.isnan(tuning_y)]
+            tuning_x_n=tuning_x[~np.isnan(tuning_y)]
+            pref_phase,dir_idx=helper_functions.compute_phase_tuning(tuning_x_n, tuning_y_n)
+            if np.isnan(dir_idx):
+                dir_idx=0
+                pref_phase=0
+            unit_dir.append({**unit_key, 'direction_tuning': direction_tun, 'preferred_phase': pref_phase, 'direction_index': dir_idx})
             
         self.insert(unit_dir, ignore_extra_fields=True)
