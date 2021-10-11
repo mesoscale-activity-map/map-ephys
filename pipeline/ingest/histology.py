@@ -235,33 +235,33 @@ class HistologyIngest(dj.Imported):
 
                 log.debug('loading format 2 channels from {}'.format(channel_locations_file))
                 with open(channel_locations_file, 'r') as fh:
-                    cloc_raw = json.loads(fh.read())
+                    chn_loc_raw = json.loads(fh.read())
 
-                cloc_data = {'origin': cloc_raw['origin']}
+                chn_loc_data = {'origin': chn_loc_raw['origin']}
 
-                if len(cloc_data['origin'].keys()) > 1:
+                if len(chn_loc_data['origin'].keys()) > 1:
                     log.error('More than one origin region found ({}). skipping.'.format(
-                        cloc_data['origin']))
+                        chn_loc_data['origin']))
                     return
 
                 # ensuring channel data is sorted;
-                cloc_keymap = {int(k.split('_')[1]): k for k
-                               in cloc_raw.keys() if 'channel_' in k}
+                chn_loc_keymap = {int(k.split('_')[1]): k for k
+                                  in chn_loc_raw.keys() if 'channel_' in k}
 
-                cloc_data['channels'] = np.array(
-                    [tuple(cloc_raw[cloc_keymap[k]].values()) for k in sorted(
-                        cloc_keymap.keys())],
+                chn_loc_data['channels'] = np.array(
+                    [tuple(chn_loc_raw[chn_loc_keymap[k]].values()) for k in sorted(
+                        chn_loc_keymap.keys())],
                     dtype=[
                         ('x', np.float), ('y', np.float), ('z', np.float),
                         ('axial', np.float), ('lateral', np.float),
                         ('brain_region_id', np.int), ('brain_region', np.object)])
 
                 # get/scale xyz positions
-                pos_xyz_raw = np.array([cloc_data['channels'][i]
+                pos_xyz_raw = np.array([chn_loc_data['channels'][i]
                                         for i in ('x', 'y', 'z')]).T
 
-                pos_origin = cloc_data['origin'][
-                    list(cloc_data['origin'].keys())[0]]
+                pos_origin = chn_loc_data['origin'][
+                    list(chn_loc_data['origin'].keys())[0]]
 
                 pos_xyz = np.copy(pos_xyz_raw)
 
@@ -279,13 +279,18 @@ class HistologyIngest(dj.Imported):
                                     & {'shank': shank_no}).fetch(order_by='electrode asc')
 
                 rec_electrodes = np.array(
-                    [cloc_data['channels']['lateral'],
-                     cloc_data['channels']['axial']]).T
+                    [chn_loc_data['channels']['lateral'],
+                     chn_loc_data['channels']['axial']]).T
 
-                # adjusting to boundaries, # FIXME: WHY, ISOK?
-                # also: example session was -= 11; this seems more robust.
-                rec_electrodes[:, 0] = (
-                    16 * (np.around(rec_electrodes[:, 0] / 16) - 1))
+                # adjusting for the lateral offset
+                # npx 1.0 probes has an alternating offset of 0um and 16um between the rows
+                # npx 2.0 probes do not have this offset (i.e. offset = 0um for all rows)
+                lateral_offset = np.abs(np.diff((lab.ProbeType.Electrode & self.egroup
+                                                 & {'shank_col': 1, 'shank': shank_no}
+                                                 & 'shank_row in (1, 2)').fetch('x_coord'))[0])
+                if lateral_offset:
+                    rec_electrodes[:, 0] = (lateral_offset * (np.floor(
+                        rec_electrodes[:, 0] / lateral_offset)))
 
                 # to find corresponding electrodes,
                 elec_coord = np.array(
