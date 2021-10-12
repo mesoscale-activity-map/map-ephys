@@ -532,7 +532,7 @@ def compute_unit_psth_and_raster(unit_key, trial_keys, align_type='go_cue', bin_
     psth = psth / len(q_event) / bin_size
     
     # psth per trial (trial x bins)
-    psth_per_trial = np.vstack(np.histogram(trial_spike, bins=binning)[0] / bin_size for trial_spike in spikes_aligned)
+    psth_per_trial = np.vstack([np.histogram(trial_spike, bins=binning)[0] / bin_size for trial_spike in spikes_aligned])
 
     # raster (all spike time, all trial number)
     raster = [all_spikes,

@@ -386,7 +386,7 @@ def plot_unit_psth_latent_variable_quantile(unit_key, model_id=11, n_quantile=5,
         psths = []
         for rank in range(n_quantile):
             # Group trials
-            trial_num = df[df.quantile_rank == rank]
+            trial_num = df[df.quantile_rank == rank].copy()
             trial_num.trial += offset    # Model and ephys trial number are now aligned. No need for additional offset=-1 here
                                          #    behavior & ephys:   -->  ITI(t-1) --> |  --> choice (t), reward(t)         --> ITI (t) -->       |
                                          #  model:      Q(t-1) --> choice prob(t-1) | --> choice (t), reward(t)  --> Q(t) --> choice prob (t)  |
