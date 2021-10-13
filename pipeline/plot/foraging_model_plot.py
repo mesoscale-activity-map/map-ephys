@@ -115,7 +115,7 @@ def plot_session_model_comparison(sess_key={'subject_id': 473361, 'session': 47}
 def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
                                specified_model_ids=None,
                                model_comparison_idx=0, sort='aic',
-                               first_n=1, last_n=0, model_id=None,
+                               first_n=1, last_n=0,
                                remove_ignored=True, smooth_factor=5,
                                ax=None):
 
@@ -126,7 +126,7 @@ def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
     :param sort: {'aic', 'bic', 'cross_validation_test'}
     :param first_n: top best n competitors to plot
     :param last_n: last n competitors to plot
-    :param model_id: if not None, override first_n and last_n
+    :param specified_model_ids: if not None, override first_n and last_n
     :param smooth_factor: for actual data
     :return: axis
     """
@@ -144,7 +144,7 @@ def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
         
     # -- Plot actual choice and reward history --
     with sns.plotting_context("notebook", font_scale=1, rc={'style': 'ticks'}):
-        ax = plot_session_lightweight([choice_history, reward_history, p_reward], smooth_factor=smooth_factor)
+        ax = plot_session_lightweight([choice_history, reward_history, p_reward], smooth_factor=smooth_factor, ax=ax)
 
         # -- Plot fitted choice probability etc. --
         model_str =  (f'Model comparison: {(foraging_model.ModelComparison & q_model_comparison).fetch1("desc")}'
@@ -153,10 +153,10 @@ def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
                                     f'session {sess_key["session"]}, {results.n_trials[0]} trials\n' + model_str)
         
         for idx, result in results_to_plot.iterrows():
-            right_choice_prob = (foraging_model.FittedSessionModel.TrialLatentVariable
-                                & dict(result) & 'water_port="right"').fetch('choice_prob')
-            ax.plot(np.arange(0, n_trials), right_choice_prob, linewidth=max(1.5 - 0.3 * idx, 0.5),
-                    label=f'{idx + 1}: <{result.model_id}> '
+            trial, right_choice_prob = (foraging_model.FittedSessionModel.TrialLatentVariable
+                                & dict(result) & 'water_port="right"').fetch('trial', 'choice_prob')
+            ax.plot(np.arange(0, n_trials) if remove_ignored else trial, right_choice_prob, linewidth=max(1.5 - 0.3 * idx, 0.2),
+                    label=f'{idx + 1}: <{result.model_id}>'
                             f'{result.model_notation}\n'
                             f'({result.fitted_param})')
 

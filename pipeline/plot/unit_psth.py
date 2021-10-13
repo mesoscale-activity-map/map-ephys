@@ -452,11 +452,11 @@ def plot_unit_period_tuning(unit_key={'subject_id': 473361, 'session': 47, 'inse
     firing = period_activity['firing_rates'][trial - 1]   # Align ephys trial and model trial (e.g., no ignored trials in model fitting)
 
     # -- Plot all variables over trial --
-    fig1, axs = plt.subplots(len(independent_variable) + 2, 1, sharex=True, dpi=200, figsize=(11, 14))
+    fig1, axs = plt.subplots(len(independent_variable) + 2, 1, sharex=True, dpi=150, figsize=(11, 14))
     plt.subplots_adjust(right=0.8, hspace=0.2)
 
     # Choice history (including ignored trials)
-    foraging_model_plot.plot_session_fitted_choice(unit_key, model_id=model_id, ax=axs[0], remove_ignored=False)
+    foraging_model_plot.plot_session_fitted_choice(unit_key, specified_model_ids=model_id, ax=axs[0], remove_ignored=False)
 
     # Period firing rate
     axs[1].plot(trial, firing, 'o-', ms=5)
@@ -492,7 +492,7 @@ def linear_fit(y, x, intercept=True, if_plot=False):
     if if_plot:
         n_x = x.shape[1]
 
-        fig = plt.figure(dpi=150)
+        fig = plt.figure(dpi=150, figsize=(10, 5))
         axs = np.atleast_1d(fig.subplots(1, n_x, sharey=True))
         for ax, xx, xname, para, p, t in zip(axs,
                                              model.exog[:, int(intercept):].T,
@@ -506,7 +506,7 @@ def linear_fit(y, x, intercept=True, if_plot=False):
             #                                                                         f'$t$ = {t:.3g}\n'
             #                                                                         f'$r^2$ = {model_fit.rsquared_adj:.2g}')
             (r_pearson, p_pearson) = pearsonr(xx, y.values.flatten())
-            sns.regplot(xx, y, ax=ax, truncate=False,
+            sns.regplot(x=xx, y=y, ax=ax, truncate=False,
                         scatter_kws={'alpha': 0.3, 's': 20},
                         line_kws={'lw': 3, 'ls': '-'} if p < 0.05 else {'lw': 1, 'ls': ':'},
                         label=f'Pearson $r$ = {r_pearson:.3g}\n$p$ = {p_pearson:.2g}'

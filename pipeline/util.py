@@ -108,10 +108,10 @@ def _get_unit_independent_variable(unit_key, model_id, var_name=None):
     
     # Compute RPE
     df['rpe'] = np.nan
-    df['rpe'][0] = df.reward[0]
+    df.loc[0, 'rpe'] = df.reward[0]
     for side in ['left', 'right']:
         _idx = df[(df.choice == side) & (df.trial > 1)].index
-        df.rpe.iloc[_idx] = df.reward.iloc[_idx] - df[f'{side}_action_value'].iloc[_idx - 1].values
+        df.loc[_idx, 'rpe'] = df.reward.iloc[_idx] - df[f'{side}_action_value'].iloc[_idx - 1].values
 
     return df if var_name is None else df[['trial', var_name]]
 
@@ -121,7 +121,8 @@ def _get_sess_info(sess_key):
 
     return f"{s['water_restriction_number']}, Session {s['session']}, {s['session_date']}\n" \
            f"{s['session_total_trial_num']} trials, ignored {s['session_ignore_num']/s['session_total_trial_num']*100:.2g}%\n" \
-           f"foraging eff. {s['session_foraging_eff_optimal']*100:.3g}% (adj. {s['session_foraging_eff_optimal_random_seed']*100:.3g}%)"
+           f"foraging eff. {s['session_foraging_eff_optimal']*100 if s['session_foraging_eff_optimal'] is not None else -1:.3g}%" \
+           f"(adj. {s['session_foraging_eff_optimal_random_seed']*100 if s['session_foraging_eff_optimal_random_seed'] is not None else -1:.3g}%)"
 
 
 from . import psth, psth_foraging

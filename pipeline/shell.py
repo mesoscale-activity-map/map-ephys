@@ -1,6 +1,5 @@
 # map-ephys interative shell module
 import os
-os.chdir(r'd:\scripts\map-ephys')
 import sys
 import logging
 from code import interact
