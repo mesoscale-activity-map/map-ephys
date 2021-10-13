@@ -15,7 +15,7 @@ from statannot import add_stat_annotation
 from matplotlib.patches import Rectangle
 from matplotlib.gridspec import GridSpec
 
-from pipeline import lab, foraging_model
+from pipeline import lab, foraging_model, util
 from ..model.util import moving_average
 
 
@@ -115,7 +115,10 @@ def plot_session_model_comparison(sess_key={'subject_id': 473361, 'session': 47}
 def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
                                specified_model_ids=None,
                                model_comparison_idx=0, sort='aic',
-                               first_n=1, last_n=0, smooth_factor=5):
+                               first_n=1, last_n=0, model_id=None,
+                               remove_ignored=True, smooth_factor=5,
+                               ax=None):
+
     """
     Plot actual and fitted choice trace of a specified session
     :param sess_key: could across several sessions
@@ -123,12 +126,13 @@ def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
     :param sort: {'aic', 'bic', 'cross_validation_test'}
     :param first_n: top best n competitors to plot
     :param last_n: last n competitors to plot
+    :param model_id: if not None, override first_n and last_n
     :param smooth_factor: for actual data
     :return: axis
     """
 
     # Fetch actual data
-    choice_history, reward_history, iti, p_reward, _ = foraging_model.get_session_history(sess_key)
+    choice_history, reward_history, iti, p_reward, _ = foraging_model.get_session_history(sess_key, remove_ignored=remove_ignored)
     n_trials = np.shape(choice_history)[1]
 
     # Fetch fitted data
@@ -166,56 +170,69 @@ def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
         #         except:
         #             pass
 
-        ax.legend(fontsize=7, loc=1, bbox_to_anchor=(0.985, 0.89), bbox_transform=plt.gcf().transFigure)
+    ax.legend(fontsize=5, loc='upper left', bbox_to_anchor=(1, 1.3))
+    ax.text(0, 1.1, util._get_sess_info(sess_key), fontsize=10, transform=ax.transAxes)
+
+    # fig.tight_layout()
+    # sns.set()
 
     return ax
 
 
-def plot_session_lightweight(fake_data, fitted_data=None, smooth_factor=5, base_color='y'):
+def plot_session_lightweight(data, fitted_data=None, smooth_factor=5, base_color='y', ax=None):
+    # sns.reset_orig()
 
-    choice_history, reward_history, p_reward = fake_data
+    with sns.plotting_context("notebook", font_scale=1):
 
-    # == Fetch data ==
-    n_trials = np.shape(choice_history)[1]
+        choice_history, reward_history, p_reward = data
 
-    p_reward_fraction = p_reward[1, :] / (np.sum(p_reward, axis=0))
+        # == Fetch data ==
+        n_trials = np.shape(choice_history)[1]
 
-    rewarded_trials = np.any(reward_history, axis=0)
-    unrewarded_trials = np.logical_not(rewarded_trials)
+        p_reward_fraction = p_reward[1, :] / (np.sum(p_reward, axis=0))
 
-    # == Choice trace ==
-    fig = plt.figure(figsize=(11, 4), dpi=150)
+        ignored_trials = np.isnan(choice_history[0])
+        rewarded_trials = np.any(reward_history, axis=0)
+        unrewarded_trials = np.logical_not(np.logical_or(rewarded_trials, ignored_trials))
 
-    ax = fig.add_subplot(111)
-    fig.subplots_adjust(left=0.1, right=0.8)
+        # == Choice trace ==
+        fig = plt.figure(figsize=(8, 3), dpi=200)
 
-    # Rewarded trials
-    ax.plot(np.nonzero(rewarded_trials)[0], 0.5 + (choice_history[0, rewarded_trials] - 0.5) * 1.4,
-            '|', color='black', markersize=20, markeredgewidth=2)
+        if ax is None:
+            ax = fig.add_subplot(111)
+            fig.subplots_adjust(left=0.1, right=0.8, bottom=0.05, top=0.7)
 
-    # Unrewarded trials
-    ax.plot(np.nonzero(unrewarded_trials)[0], 0.5 + (choice_history[0, unrewarded_trials] - 0.5) * 1.4,
-            '|', color='gray', markersize=10, markeredgewidth=1)
+        # Rewarded trials
+        ax.plot(np.nonzero(rewarded_trials)[0], 0.5 + (choice_history[0, rewarded_trials] - 0.5) * 1.4,
+                '|', color='black', markersize=10, markeredgewidth=2)
 
-    # Base probability
-    ax.plot(np.arange(0, n_trials), p_reward_fraction, color=base_color, label='base rew. prob.', lw=1.5)
+        # Unrewarded trials
+        ax.plot(np.nonzero(unrewarded_trials)[0], 0.5 + (choice_history[0, unrewarded_trials] - 0.5) * 1.4,
+                '|', color='gray', markersize=6, markeredgewidth=1)
 
-    # Smoothed choice history
-    y = moving_average(choice_history, smooth_factor)
-    x = np.arange(0, len(y)) + int(smooth_factor / 2)
-    ax.plot(x, y, linewidth=1.5, color='black', label='choice (smooth = %g)' % smooth_factor)
+        # Ignored trials
+        ax.plot(np.nonzero(ignored_trials)[0], [1.1] * sum(ignored_trials),
+                'x', color='red', markersize=2, markeredgewidth=0.5)
 
-    # For each session, if any
-    if fitted_data is not None:
-        ax.plot(np.arange(0, n_trials), fitted_data[1, :], linewidth=1.5, label='model')
+        # Base probability
+        ax.plot(np.arange(0, n_trials), p_reward_fraction, color=base_color, label='base rew. prob.', lw=1.5)
 
-    ax.legend(fontsize=10, loc=1, bbox_to_anchor=(0.985, 0.89), bbox_transform=plt.gcf().transFigure)
+        # Smoothed choice history
+        y = moving_average(choice_history, smooth_factor)
+        x = np.arange(0, len(y)) + int(smooth_factor / 2)
+        ax.plot(x, y, linewidth=1.5, color='black', label='choice (smooth = %g)' % smooth_factor)
 
-    ax.set_yticks([0, 1])
-    ax.set_yticklabels(['Left', 'Right'])
-    ax.set_xlabel('Trial')
+        # For each session, if any
+        if fitted_data is not None:
+            ax.plot(np.arange(0, n_trials), fitted_data[1, :], linewidth=1.5, label='model')
 
-    sns.despine(trim=True)
+        ax.legend(fontsize=5, loc='upper left', bbox_to_anchor=(1, 1.3))
+        ax.set_yticks([0, 1])
+        ax.set_yticklabels(['Left', 'Right'])
+        # ax.set_xlim(0,300)
+
+        # fig.tight_layout()
+        sns.despine(trim=True)
 
     return ax
 

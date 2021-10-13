@@ -15,8 +15,8 @@ class ModelClass(dj.Lookup):
     """
     contents = [
         ['LossCounting', 'Count the number of losses and switch when the number exceeds a threshold'],
-        ['RW1972', 'Rescorla–Wagner model (single learnig rate)'],
-        ['LNP', 'Linear-nonlinear-Possion (exponential recency-weighted average)'],
+        ['RW1972', 'Rescorla–Wagner model (single learning rate)'],
+        ['LNP', 'Linear-nonlinear-Poisson (exponential recency-weighted average)'],
         ['Bari2019', 'Bari et al 2019 (different learning rates for chosen/unchosen)'],
         ['Hattori2019', 'Hattori et al 2019 (different learning rates for rew/unrew/unchosen)'],
         ['CANN', "Abstracted from Ulises' continuous attractor neural network"],

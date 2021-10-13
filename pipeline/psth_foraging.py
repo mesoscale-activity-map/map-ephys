@@ -3,11 +3,15 @@ from functools import partial
 from inspect import getmembers
 import numpy as np
 import datajoint as dj
+import pandas as pd
+import statsmodels.api as sm
 
 from . import (lab, experiment, ephys)
 [lab, experiment, ephys]  # NOQA
 
 from . import get_schema_name, dict_to_hash
+from pipeline import foraging_model
+from pipeline.util import _get_unit_independent_variable
 
 schema = dj.schema(get_schema_name('psth_foraging'))
 log = logging.getLogger(__name__)
@@ -331,92 +335,6 @@ class TrialCondition(dj.Lookup):
         else:
             return q
 
-
-@schema
-class UnitPsth(dj.Computed):
-    definition = """
-    -> TrialCondition
-    -> ephys.Unit
-    ---
-    unit_psth=NULL: longblob
-    """
-    psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
-
-    @property
-    def key_source(self):
-        """
-        For those conditions that include stim, process those with PhotostimBrainRegion already computed only
-        Only units not of type "all"
-        """
-        nostim = (ephys.Unit * (TrialCondition & 'trial_condition_func = "_get_trials_exclude_stim"')
-                  & 'unit_quality != "all"')
-        stim = ((ephys.Unit & (experiment.Session & experiment.PhotostimBrainRegion))
-                * (TrialCondition & 'trial_condition_func = "_get_trials_include_stim"') & 'unit_quality != "all"')
-        return nostim.proj() + stim.proj() & foraging_sessions
-
-    def make(self, key):
-        log.debug('UnitPsth.make(): key: {}'.format(key))
-
-        # expand TrialCondition to trials,
-        trials = TrialCondition.get_trials(key['trial_condition_name'])
-
-        # fetch related spike times
-        q = (ephys.Unit.TrialSpikes & key & trials.proj())
-        spikes = q.fetch('spike_times')
-
-        if len(spikes) == 0:
-            log.warning('no spikes found for key {} - null psth'.format(key))
-            self.insert1(key)
-            return
-
-        # compute psth & store
-        unit_psth = self.compute_psth(spikes)
-
-        self.insert1({**key, 'unit_psth': unit_psth})
-
-    @staticmethod
-    def compute_psth(session_unit_spikes):
-        spikes = np.concatenate(session_unit_spikes)
-
-        xmin, xmax, bins = UnitPsth.psth_params.values()
-        psth, edges = np.histogram(spikes, bins=np.arange(xmin, xmax, bins))
-        psth = psth / len(session_unit_spikes) / bins
-
-        return np.array([psth, edges[1:]])
-
-    @classmethod
-    def get_plotting_data(cls, unit_key, condition_key):
-        """
-        Retrieve / build data needed for a Unit PSTH Plot based on the given
-        unit condition and included / excluded condition (sub-)variables.
-        Returns a dictionary of the form:
-          {
-             'trials': ephys.Unit.TrialSpikes.trials,
-             'spikes': ephys.Unit.TrialSpikes.spikes,
-             'psth': UnitPsth.unit_psth,
-             'raster': Spike * Trial raster [np.array, np.array]
-          }
-        """
-        # from sys import exit as sys_exit  # NOQA
-        # from code import interact
-        # from collections import ChainMap
-        # interact('unitpsth make', local=dict(ChainMap(locals(), globals())))
-
-        trials = TrialCondition.get_func(condition_key)()
- 
-        unit_psth = (UnitPsth & {**condition_key, **unit_key}).fetch1('unit_psth')
-        if unit_psth is None:
-            raise Exception('No spikes found for this unit and trial-condition')
-
-        spikes, trials = (ephys.Unit.TrialSpikes & trials & unit_key).fetch(
-            'spike_times', 'trial', order_by='trial asc')
-
-        raster = [np.concatenate(spikes),
-                  np.concatenate([[t] * len(s)
-                                  for s, t in zip(spikes, trials)])]
-
-        return dict(trials=trials, spikes=spikes, psth=unit_psth, raster=raster)
-    
     
 @schema 
 class AlignType(dj.Lookup):
@@ -473,6 +391,176 @@ class AlignType(dj.Lookup):
         ['next_two_trial_start_bitcode', 'bitcodestart', '', 2, 0.146, [-10, 5], [-8, 3]],
     ]
 
+
+@schema
+class IndependentVariable(dj.Lookup):
+    """
+    Define independent variables over trial to generate psth or design matrix of regression
+    """
+    definition = """
+    var_name:  varchar(50)
+    ---
+    desc:   varchar(200)
+    """
+
+    @property
+    def contents(self):
+        contents = [
+            # Model-independent (trial facts)
+            ['choice_lr', 'left (0) or right (1)'],
+            ['choice_ic', 'ipsi (0) or contra (1)'],
+            ['reward', 'miss (0) or hit (1)'],
+
+            # Model-dependent (latent variables)
+            ['relative_action_value_lr', 'relative action value (Q_r - Q_l)'],
+            ['relative_action_value_ic', 'relative action value (Q_contra - Q_ipsi)'],
+            ['total_action_value', 'total action value (Q_r + Q_l)'],
+            ['rpe', 'outcome - Q_chosen']
+        ]
+
+        latent_vars = foraging_model.FittedSessionModel.TrialLatentVariable.heading.secondary_attributes
+
+        for side in ['left', 'right', 'ipsi', 'contra']:
+            for var in (latent_vars):
+                contents.append([f'{side}_{var}', f'{side} {var}'])
+
+        return contents
+
+
+@schema
+class LinearModel(dj.Lookup):
+    """
+    Define multivariate linear models for PeriodSelectivity fitting
+    """
+    definition = """
+    multi_linear_model: varchar(30)
+    ---
+    if_intercept: tinyint   # Whether intercept is included
+    """
+
+    class X(dj.Part):
+        definition = """
+        -> master
+        -> IndependentVariable
+        """
+
+    @classmethod
+    def load(cls):
+        contents = [
+            ['Q_l + Q_r + rpe', 1, ['left_action_value', 'right_action_value', 'rpe']],
+            ['Q_c + Q_i + rpe', 1, ['contra_action_value', 'ipsi_action_value', 'rpe']],
+            ['Q_rel + Q_tot + rpe', 1, ['relative_action_value_ic', 'total_action_value', 'rpe']]
+        ]
+
+        for m in contents:
+            cls.insert1(m[:2], skip_duplicates=True)
+            for iv in m[2]:
+                cls.X.insert1([m[0], iv], skip_duplicates=True)
+
+
+@schema
+class LinearModelPeriodToFit(dj.Lookup):
+    """
+    Subset of experiment.PeriodForaging (or adding sliding window here in the future?)
+    """
+    definition = """
+    -> experiment.PeriodForaging
+    """
+
+    contents = [
+        ('before_2', ), ('delay', ), ('go_to_end', ), ('go_1.2', ),
+        ('iti_all', ), ('iti_first_2', ), ('iti_last_2', )
+    ]
+
+
+@schema
+class LinearModelBehaviorModelToFit(dj.Lookup):
+    definition = """
+    behavior_model:  varchar(30)    # If 'best_aic' etc, the best behavioral model for each session; otherwise --> Model.model_id
+    """
+    contents = [['best_aic',]]
+
+
+@schema
+class UnitPeriodLinearFit(dj.Computed):
+    definition = """
+    -> ephys.Unit
+    -> LinearModelPeriodToFit
+    -> LinearModelBehaviorModelToFit
+    -> LinearModel
+    ---
+    actual_behavior_model:   int
+    model_r2=Null:  float   # r square
+    model_r2_adj=Null:   float  # r square adj.
+    model_p=Null:   float
+    """
+
+    class Param(dj.Part):
+        definition = """
+        -> master
+        -> LinearModel.X
+        ---
+        beta=Null: float
+        std_err=Null: float
+        p=Null:    float
+        t=Null:    float  #  t statistic
+
+        """
+        
+    def make(self, key):
+        # -- Fetech data --
+        period, behavior_model = key['period'], key['behavior_model']
+
+        # Parse period
+        if period in ['delay'] and not ephys.TrialEvent & key & 'trial_event_type = "zaberready"':
+            period = period + '_bitcode'  # Manually correction of bitcodestart to zaberready, if necessary
+
+        # Parse behavioral model_id
+        if behavior_model.isnumeric():
+            model_id = int(behavior_model)
+        else:
+            model_id = (foraging_model.FittedSessionModelComparison.BestModel &
+                        key & 'model_comparison_idx=0').fetch1(behavior_model)
+
+        # Parse independent variable
+        independent_variables = (LinearModel.X & key).fetch('var_name')
+        if_intercept = (LinearModel & key).fetch1('if_intercept')
+
+        # Get data
+        period_activity = compute_unit_period_activity(key, period)
+        all_iv = _get_unit_independent_variable(key, model_id=model_id)
+
+        # TODO Align ephys event with behavior using bitcode! (and save raw bitcodes)
+        trial = all_iv.trial  # Without ignored trials
+        trial_with_ephys = trial <= max(period_activity['trial'])
+        trial = trial[trial_with_ephys]  # Truncate behavior trial to max ephys length (this assumes the first trial is aligned, see ingest.ephys)
+        all_iv = all_iv[trial_with_ephys]  # Also truncate all ivs
+        firing = period_activity['firing_rates'][trial - 1]  # Align ephys trial and model trial (e.g., no ignored trials in model fitting)
+
+        # -- Fit --
+        y = pd.DataFrame({f'{period} firing': firing})
+        x = all_iv[independent_variables].astype(float)
+        model = sm.OLS(y, sm.add_constant(x) if if_intercept else x)
+        model_fit = model.fit()
+
+        # -- Insert --
+        self.insert1({**key,
+                      'model_r2': model_fit.rsquared,
+                      'model_r2_adj': model_fit.rsquared_adj,
+                      'model_p': model_fit.f_pvalue,
+                      'actual_behavior_model': model_id})
+
+        for para in [p for p in model.exog_names if p!='const']:
+            self.Param.insert1({**key,
+                                'var_name': para,
+                                'beta': model_fit.params[para],
+                                'std_err': model_fit.bse[para],
+                                'p': model_fit.pvalues[para],
+                                't': model_fit.tvalues[para]
+                                })
+
+
+# ============= Helpers =============
 
 def compute_unit_psth_and_raster(unit_key, trial_keys, align_type='go_cue', bin_size=0.04):
     """
@@ -541,3 +629,59 @@ def compute_unit_psth_and_raster(unit_key, trial_keys, align_type='go_cue', bin_
 
     return dict(bins=binning[1:], trials=trials, spikes_aligned=spikes_aligned,
                 psth=psth, psth_per_trial=psth_per_trial, raster=raster)
+
+
+def compute_unit_period_activity(unit_key, period):
+    """
+    Given unit and period, compute average firing rate over trials
+    I tried to put this in a table, but it's too slow... (too many elements)
+    @param unit_key:
+    @param period: -> experiment.PeriodForaging, or arbitrary list in the same format
+    @return: DataFrame(trial, spike_count, duration, firing_rate)
+    """
+
+    q_spike = ephys.Unit & unit_key
+    q_event = ephys.TrialEvent & unit_key
+    if not q_spike or not q_event:
+        return None
+
+    # for (the very few) sessions without zaber feedback signal, use 'bitcodestart' with manual correction
+    if period == 'delay' and \
+            not q_event & 'trial_event_type = "zaberready"':
+        period = 'delay_bitcode'
+
+    # -- Fetch global session times of given period, for each trial --
+    try:
+        (start_event_type, start_trial_shift, start_time_shift,
+         end_event_type, end_trial_shift, end_time_shift) = (experiment.PeriodForaging & {'period': period}
+                  ).fetch1('start_event_type', 'start_trial_shift', 'start_time_shift',
+                           'end_event_type', 'end_trial_shift', 'end_time_shift')
+    except:
+        (start_event_type, start_trial_shift, start_time_shift,
+         end_event_type, end_trial_shift, end_time_shift) = period
+    
+    start = {k['trial']: float(k['start_event_time'])
+             for k in (q_event & {'trial_event_type': start_event_type}).proj(
+            start_event_time=f'trial_event_time + {start_time_shift}').fetch(as_dict=True)}
+    end = {k['trial']: float(k['end_event_time'])
+             for k in (q_event & {'trial_event_type': end_event_type}).proj(
+            end_event_time=f'trial_event_time + {end_time_shift}').fetch(as_dict=True)}
+
+    # Handle edge effects due to trial shift
+    trials = np.array(list(start.keys()))
+    actual_trials = trials[(trials <= max(trials) - end_trial_shift) &
+                           (trials >= min(trials) - start_trial_shift)]
+
+    # -- Fetch and count spikes --
+    spikes = q_spike.fetch1('spike_times')
+    spike_counts, durations = [], []
+
+    for trial in actual_trials:
+        t_s = start[trial + start_trial_shift]
+        t_e = end[trial + end_trial_shift]
+
+        spike_counts.append(((t_s <= spikes) & (spikes < t_e)).sum())  # Much faster than sum(... & ...) (python sum on np array)!!
+        durations.append(t_e - t_s)
+
+    return {'trial': actual_trials, 'spike_counts': np.array(spike_counts),
+            'durations': np.array(durations), 'firing_rates': np.array(spike_counts) / np.array(durations)}

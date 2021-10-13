@@ -1,6 +1,6 @@
 # map-ephys interative shell module
-
 import os
+os.chdir(r'd:\scripts\map-ephys')
 import sys
 import logging
 from code import interact
@@ -12,7 +12,6 @@ import pandas as pd
 import re
 import datajoint as dj
 from pymysql.err import OperationalError
-
 
 from pipeline import (lab, experiment, tracking, ephys, report, psth, psth_foraging, ccf,
                       histology, export, publication, globus, foraging_analysis, foraging_model,
