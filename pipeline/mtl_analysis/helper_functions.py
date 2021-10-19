@@ -474,6 +474,11 @@ def water2subject(water,date):
     session_num = (experiment.Session() * lab.WaterRestriction & {'water_restriction_number': water, 'session_date': date}).fetch('session')
     return subject_id, session_num
 
+def subject2water(subject,session_num):
+    water = (lab.WaterRestriction & {'subject_id': subject}).fetch('water_restriction_number')
+    date = (experiment.Session() * lab.WaterRestriction & {'subject_id': subject, 'session': session_num}).fetch('session_date')
+    return water, date
+
 def rose_plot(ax, angles, bins=16, density=None, offset=0, lab_unit="degrees", start_zero=False, **param_dict):
     """
     Plot polar histogram of angles on ax. ax must have been created using
@@ -532,10 +537,10 @@ def plot_glmfit(unit_key, num_time=2000):
     
     fig, ax = plt.subplots(1, 1, figsize=(24, 16))
     
-    ax.plot(t_vec, test_x[0][:num_time, 1]+6,color='k',label='jaw ' +str(weights_r[max_r2_idx[0][0],2]))
-    ax.plot(t_vec, test_x[0][:num_time, 4]+6,color='g',label='tongue '+str(weights_r[max_r2_idx[0][0],5]))
+    ax.plot(t_vec, test_x[0][:num_time, 1]+6,color='k',label='jaw DV'+str(weights_r[max_r2_idx[0][0],2])+' ML'+str(weights_r[max_r2_idx[0][0],3])+' AP'+str(weights_r[max_r2_idx[0][0],1])) # jaw y (DV)
+    ax.plot(t_vec, test_x[0][:num_time, 3]+6,color='g',label='tongue DV'+str(weights_r[max_r2_idx[0][0],6])+' ML'+str(weights_r[max_r2_idx[0][0],4])+' AP'+str(weights_r[max_r2_idx[0][0],5])) # tongue x (ML)
     ax.plot(t_vec, test_x[0][:num_time, 6]+12,color='b',label='breathing ' +str(weights_r[max_r2_idx[0][0],7]))
-    ax.plot(t_vec, test_x[0][:num_time, 7]+14,color='r',label='whisking '+str(weights_r[max_r2_idx[0][0],8]))
+    ax.plot(t_vec, test_x[0][:num_time, 7]+16,color='r',label='whisking '+str(weights_r[max_r2_idx[0][0],8]))
     test_y_roll=np.roll(test_y[0],taus[max_r2_idx[0][0]])
     ax.plot(t_vec,test_y_roll[:num_time],color='k',label='test')
     ax.plot(t_vec,predict_y[0][max_r2_idx[0][0]][:num_time],color='r',label='prediction')
@@ -554,15 +559,81 @@ def plot_glmfit(unit_key, num_time=2000):
 
 def plot_dir_tuning(unit_key):
 
-    dir_tuning=(oralfacial_analysis.DirectionTuning() & unit_key).fetch('direction_tuning')
+    dir_tuning, dir_idx=(oralfacial_analysis.DirectionTuning() & unit_key).fetch('direction_tuning','direction_index')
     fr_mat=[[dir_tuning[0][2],dir_tuning[0][5],dir_tuning[0][8]], [dir_tuning[0][1],dir_tuning[0][4],dir_tuning[0][7]], [dir_tuning[0][0],dir_tuning[0][3],dir_tuning[0][6]]]
 
     fig, ax = plt.subplots(1, 1, figsize=(3, 3))
     neg=ax.imshow(fr_mat,vmin = 0, cmap='Reds', interpolation='none')
     fig.colorbar(neg,ax=ax, location='right', anchor=(0, 0.3), shrink=0.7)
+    ax.set_title(str(np.round(dir_idx[0],decimals=2)))
     ax.set_xticks([])
     ax.set_yticks([])
     ax.spines['left'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+        
+    return fig
+
+def plot_breathing_hist(session_key):
+
+    inspir_onset=(oralfacial_analysis.MovementTiming & session_key).fetch1('inspiration_onset')
+    
+    fig, ax = plt.subplots(1, 1, figsize=(3, 3))
+
+    ax.hist(1/np.diff(inspir_onset), 100,range=[0,12])
+    ax.set_xlabel('Frequency (Hz)')
+    ax.set_ylabel('Number of breaths')
+    
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+
+    return fig
+
+def volcano_plot_licking(session_key):
+    inspir_onset,lick_onset_time,lick_offset_time,ton_onset=(oralfacial_analysis.MovementTiming & session_key).fetch1('inspiration_onset','lick_onset','lick_offset','tongue_onset')
+    
+    inspir_onset_l=[] # restrict by whisking bouts
+    for i,val in enumerate(lick_onset_time):
+        inspir_onset_l.append(inspir_onset[(inspir_onset>(lick_onset_time[i]+0.2)) & (inspir_onset<(lick_offset_time[i]-0.2))])
+    inspir_onset_l=np.array(inspir_onset_l)
+    inspir_onset_l=np.hstack(inspir_onset_l)
+    
+    licks = []
+    
+    ibi = np.zeros(len(inspir_onset_l)-3)
+    ibi2 = np.zeros(len(inspir_onset_l)-4)
+    
+    max_ibi=np.max(np.diff(inspir_onset))
+    
+    for i,_ in enumerate(inspir_onset_l[2:-2]):
+        
+        lick=ton_onset[(ton_onset > inspir_onset_l[i]) & (ton_onset<inspir_onset_l[i+2])]
+    
+        licks.append(lick - inspir_onset_l[i])
+    
+        ibi[i] = inspir_onset_l[i+1] - inspir_onset_l[i]
+        ibi2[i] = inspir_onset_l[i+2] - inspir_onset_l[i]
+    
+    ibi = ibi[:-1]
+    licks[:] = [ele for i, ele in enumerate(licks) if ibi[i]<max_ibi]
+    ibi2=ibi2[ibi<max_ibi]
+    ibi=ibi[ibi<max_ibi]
+    
+    sorted_indexes=np.argsort(ibi)
+    sorted_indexes=sorted_indexes[::-1]
+    
+    fig, ax = plt.subplots(1, 1, figsize=(12, 12))
+    
+    for i,_ in enumerate(licks):
+        ax.plot(licks[sorted_indexes[i]],i*np.ones(len(licks[sorted_indexes[i]])),'.b',markersize=4)
+        ax.plot(0,i,'.r',markersize=4)
+        ax.plot(ibi[sorted_indexes[i]],i,'.r',markersize=4)
+        ax.plot(ibi2[sorted_indexes[i]],i,'.r',markersize=4)
+    ax.set_xlim([-0.5,1])
+    ax.set_xlabel('Time from measured inspiration onset (s)')
+    ax.set_ylabel('Breath number')
+    
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
     
