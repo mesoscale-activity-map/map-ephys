@@ -426,7 +426,7 @@ def get_session_history(session_key, remove_ignored=True):
     # Fetch data
     q_choice_outcome = (experiment.WaterPortChoice.proj(choice='water_port')
                         * experiment.BehaviorTrial.proj('outcome', 'early_lick')
-                        * experiment.SessionBlock.BlockTrial) & session_key  # Remove ignored trials
+                        * experiment.SessionBlock.BlockTrial) & session_key
     if remove_ignored:
         q_choice_outcome &= 'outcome != "ignore"'
 
@@ -442,7 +442,11 @@ def get_session_history(session_key, remove_ignored=True):
     reward_history = np.zeros([2, len(_reward)])  # .shape = (2, N trials)
     for c in (0, 1):
         reward_history[c, _choice == c] = (_reward[_choice == c] == True).astype(int)
-    choice_history = np.array([_choice]).astype(float)  # .shape = (1, N trials)
+        
+    if remove_ignored:  # For model fitting, turn to integer
+        choice_history = np.array([_choice]).astype(int)  # .shape = (1, N trials)
+    else:  # Include np.NaNs, can't be integers
+        choice_history = np.array([_choice]).astype(float)  # .shape = (1, N trials)
     
     # -- ITI --
     # All previous models has an effective ITI of constant 1.
