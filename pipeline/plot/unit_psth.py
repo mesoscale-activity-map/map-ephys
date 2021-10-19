@@ -445,7 +445,7 @@ def plot_unit_period_tuning(unit_key={'subject_id': 473361, 'session': 47, 'inse
     all_iv = _get_unit_independent_variable(unit_key, model_id=model_id)
 
     #TODO Align ephys event with behavior using bitcode! (and save raw bitcodes)
-    trial = all_iv.trial   # Without ignored trials
+    trial = all_iv.trial   # Original trial numbers but without ignored trials
     trial_with_ephys = trial <= max(period_activity['trial'])
     trial = trial[trial_with_ephys]   # Truncate behavior trial to max ephys length (this assumes the first trial is aligned, see ingest.ephys)
     all_iv = all_iv[trial_with_ephys]  # Also truncate all ivs
@@ -459,13 +459,22 @@ def plot_unit_period_tuning(unit_key={'subject_id': 473361, 'session': 47, 'inse
     foraging_model_plot.plot_session_fitted_choice(unit_key, specified_model_ids=model_id, ax=axs[0], remove_ignored=False)
 
     # Period firing rate
-    axs[1].plot(trial, firing, 'o-', ms=5)
+    trial_with_nan = np.arange(np.min(trial), np.max(trial + 1))
+    firing_with_nan = np.empty(trial_with_nan.shape)
+    firing_with_nan[:] = np.nan
+    firing_with_nan[trial - 1] = firing
+    axs[1].plot(trial_with_nan, firing_with_nan, 'o-', ms=5)
     axs[1].set_title(f'Mean firing rate in epoch: {period} (spikes / s)')
 
     # Independent variables
     for ax, iv in zip(axs[2:], independent_variable):
-        ax.plot(trial, all_iv[iv], 'k')
+        # To show gaps in ignored trials
+        iv_with_nan = np.empty(trial_with_nan.shape)
+        iv_with_nan[:] = np.nan
+        iv_with_nan[trial - 1] = all_iv[iv] 
+        ax.plot(trial_with_nan, iv_with_nan, 'k')
         ax.set_title(iv)
+        ax.set_xlabel('Original trial number')
 
     for ax in axs.flat: ax.label_outer()
 

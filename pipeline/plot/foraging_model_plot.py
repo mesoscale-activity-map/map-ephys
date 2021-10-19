@@ -172,6 +172,7 @@ def plot_session_fitted_choice(sess_key={'subject_id': 473361, 'session': 47},
 
     ax.legend(fontsize=5, loc='upper left', bbox_to_anchor=(1, 1.3))
     ax.text(0, 1.1, util._get_sess_info(sess_key), fontsize=10, transform=ax.transAxes)
+    ax.set_xlabel('Trial number (finished trials only)' if remove_ignored else 'Original trial number')
 
     # fig.tight_layout()
     # sns.set()

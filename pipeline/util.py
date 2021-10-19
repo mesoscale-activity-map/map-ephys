@@ -120,7 +120,7 @@ def _get_sess_info(sess_key):
     s = (experiment.Session * foraging_analysis.SessionStats * lab.WaterRestriction & sess_key).fetch1()
 
     return f"{s['water_restriction_number']}, Session {s['session']}, {s['session_date']}\n" \
-           f"{s['session_total_trial_num']} trials, ignored {s['session_ignore_num']/s['session_total_trial_num']*100:.2g}%\n" \
+           f"Total {s['session_total_trial_num']} trials, finished {s['session_total_trial_num'] - s['session_ignore_num']}, ignore rate {s['session_ignore_num']/s['session_total_trial_num']*100:.2g}%\n" \
            f"foraging eff. {s['session_foraging_eff_optimal']*100 if s['session_foraging_eff_optimal'] is not None else -1:.3g}%" \
            f"(adj. {s['session_foraging_eff_optimal_random_seed']*100 if s['session_foraging_eff_optimal_random_seed'] is not None else -1:.3g}%)"
 
