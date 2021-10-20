@@ -593,7 +593,7 @@ def plot_breathing_hist(session_key):
 def volcano_plot_licking(session_key):
     inspir_onset,lick_onset_time,lick_offset_time,ton_onset=(oralfacial_analysis.MovementTiming & session_key).fetch1('inspiration_onset','lick_onset','lick_offset','tongue_onset')
     
-    inspir_onset_l=[] # restrict by whisking bouts
+    inspir_onset_l=[] # restrict by licking bouts
     for i,val in enumerate(lick_onset_time):
         inspir_onset_l.append(inspir_onset[(inspir_onset>(lick_onset_time[i]+0.2)) & (inspir_onset<(lick_offset_time[i]-0.2))])
     inspir_onset_l=np.array(inspir_onset_l)
@@ -608,7 +608,7 @@ def volcano_plot_licking(session_key):
     
     for i,_ in enumerate(inspir_onset_l[2:-2]):
         
-        lick=ton_onset[(ton_onset > inspir_onset_l[i]) & (ton_onset<inspir_onset_l[i+2])]
+        lick=ton_onset[(ton_onset > inspir_onset_l[i-2]) & (ton_onset<inspir_onset_l[i+2])]
     
         licks.append(lick - inspir_onset_l[i])
     
@@ -627,6 +627,55 @@ def volcano_plot_licking(session_key):
     
     for i,_ in enumerate(licks):
         ax.plot(licks[sorted_indexes[i]],i*np.ones(len(licks[sorted_indexes[i]])),'.b',markersize=4)
+        ax.plot(0,i,'.r',markersize=4)
+        ax.plot(ibi[sorted_indexes[i]],i,'.r',markersize=4)
+        ax.plot(ibi2[sorted_indexes[i]],i,'.r',markersize=4)
+    ax.set_xlim([-0.5,1])
+    ax.set_xlabel('Time from measured inspiration onset (s)')
+    ax.set_ylabel('Breath number')
+    
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    
+    return fig
+
+def volcano_plot_whisking(session_key):
+    inspir_onset,whisk_onset_time,whisk_offset_time,whisker_onset=(oralfacial_analysis.MovementTiming & session_key).fetch1('inspiration_onset','whisk_onset','whisk_offset','whisker_onset')
+    
+    inspir_onset_l=[] # restrict by licking bouts
+    for i,val in enumerate(whisk_onset_time):
+        inspir_onset_l.append(inspir_onset[(inspir_onset>(whisk_onset_time[i]+0.2)) & (inspir_onset<(whisk_offset_time[i]-0.2))])
+    inspir_onset_l=np.array(inspir_onset_l)
+    inspir_onset_l=np.hstack(inspir_onset_l)
+    
+    whisks = []
+    
+    ibi = np.zeros(len(inspir_onset_l)-3)
+    ibi2 = np.zeros(len(inspir_onset_l)-4)
+    
+    max_ibi=np.max(np.diff(inspir_onset))
+    
+    for i,_ in enumerate(inspir_onset_l[2:-2]):
+        
+        whisk=whisker_onset[(whisker_onset > inspir_onset_l[i-2]) & (whisker_onset<inspir_onset_l[i+2])]
+    
+        whisks.append(whisk - inspir_onset_l[i])
+    
+        ibi[i] = inspir_onset_l[i+1] - inspir_onset_l[i]
+        ibi2[i] = inspir_onset_l[i+2] - inspir_onset_l[i]
+    
+    ibi = ibi[:-1]
+    whisks[:] = [ele for i, ele in enumerate(whisks) if ibi[i]<max_ibi]
+    ibi2=ibi2[ibi<max_ibi]
+    ibi=ibi[ibi<max_ibi]
+    
+    sorted_indexes=np.argsort(ibi)
+    sorted_indexes=sorted_indexes[::-1]
+    
+    fig, ax = plt.subplots(1, 1, figsize=(12, 12))
+    
+    for i,_ in enumerate(whisks):
+        ax.plot(whisks[sorted_indexes[i]],i*np.ones(len(whisks[sorted_indexes[i]])),'.b',markersize=4)
         ax.plot(0,i,'.r',markersize=4)
         ax.plot(ibi[sorted_indexes[i]],i,'.r',markersize=4)
         ax.plot(ibi2[sorted_indexes[i]],i,'.r',markersize=4)

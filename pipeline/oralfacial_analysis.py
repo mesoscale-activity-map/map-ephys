@@ -1022,7 +1022,7 @@ class MovementTiming(dj.Computed):
         amp_b, phase_b=behavior_plot.compute_insta_phase_amp(good_breathing, 1/bin_width, freq_band=(1, 15)) # breathing
         phase_b = phase_b + np.pi
 
-        threshold = 1
+        threshold = np.pi
         cond = (phase_b < threshold) & (np.roll(phase_b,-1) >= threshold)
         inspir_onset=np.argwhere(cond)[:,0]*bin_width # get onset of breath
 
