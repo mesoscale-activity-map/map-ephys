@@ -16,7 +16,7 @@ def negLL_func(fit_value, *argss):
     Compute negative likelihood (Core func)
     '''
     # Arguments interpretation
-    forager, fit_names, choice_history, reward_history, session_num, para_fixed, fit_set = argss
+    forager, fit_names, choice_history, reward_history, iti, session_num, para_fixed, fit_set = argss
     
     kwargs_all = {'forager': forager, **para_fixed}  # **kargs includes all other fixed parameters
     for (nn, vv) in zip(fit_names, fit_value):
@@ -41,11 +41,11 @@ def negLL_func(fit_value, *argss):
         reward_this = reward_history[:, session_num == ss]
         
         # Run **PREDICTIVE** simulation    
-        bandit = BanditModel(**kwargs_all, fit_choice_history = choice_this, fit_reward_history = reward_this)  # Into the fitting mode
+        bandit = BanditModel(**kwargs_all, fit_choice_history = choice_this, fit_reward_history = reward_this, fit_iti = iti)  # Into the fitting mode
         bandit.simulate()
         
         # Compute negative likelihood
-        predictive_choice_prob = bandit.predictive_choice_prob  # Get all predictive choice probability [K, num_trials]
+        predictive_choice_prob = bandit.predictive_choice_prob[:, :-1]  # Get all predictive choice probability [K, num_trials], exclude the final update after the last trial
         likelihood_each_trial = predictive_choice_prob [choice_this[0,:], range(len(choice_this[0]))]  # Get the actual likelihood for each trial
         
         # Deal with numerical precision
@@ -78,7 +78,7 @@ def callback_history(x, **kargs):
     return
 
 
-def fit_each_init(forager, fit_names, fit_bounds, choice_history, reward_history, session_num, fit_method, callback):
+def fit_each_init(forager, fit_names, fit_bounds, choice_history, reward_history, iti, session_num, fit_method, callback):
     '''
     For local optimizers, fit using ONE certain initial condition    
     '''
@@ -89,12 +89,13 @@ def fit_each_init(forager, fit_names, fit_bounds, choice_history, reward_history
     # Append the initial point
     if callback != None: callback_history(x0)
         
-    fitting_result = optimize.minimize(negLL_func, x0, args = (forager, fit_names, choice_history, reward_history, session_num, {}, []), method = fit_method,
+    fitting_result = optimize.minimize(negLL_func, x0, args = (forager, fit_names, choice_history, reward_history, iti, session_num, {}, []), method = fit_method,
                                        bounds = optimize.Bounds(fit_bounds[0], fit_bounds[1]), callback = callback, )
     return fitting_result
 
 
-def fit_bandit(forager, fit_names, fit_bounds, choice_history, reward_history, session_num = None, 
+def fit_bandit(forager, fit_names, fit_bounds, choice_history, reward_history, 
+               iti = None, session_num = None, 
                if_predictive = False, if_generative = False,  # Whether compute predictive or generative choice sequence
                if_history = False, fit_method = 'DE', DE_pop_size = 16, n_x0s = 1, pool = ''):
     '''
@@ -110,7 +111,7 @@ def fit_bandit(forager, fit_names, fit_bounds, choice_history, reward_history, s
     if fit_method == 'DE':
         
         # Use DE's own parallel method
-        fitting_result = optimize.differential_evolution(func = negLL_func, args = (forager, fit_names, choice_history, reward_history, session_num, {}, []),
+        fitting_result = optimize.differential_evolution(func = negLL_func, args = (forager, fit_names, choice_history, reward_history, iti, session_num, {}, []),
                                                          bounds = optimize.Bounds(fit_bounds[0], fit_bounds[1]), 
                                                          mutation=(0.5, 1), recombination = 0.7, popsize = DE_pop_size, strategy = 'best1bin', 
                                                          disp = False, 
@@ -132,7 +133,7 @@ def fit_bandit(forager, fit_names, fit_bounds, choice_history, reward_history, s
             # Must use two separate for loops, one for assigning and one for harvesting!
             for nn in range(n_x0s):
                 # Assign jobs
-                pool_results.append(pool.apply_async(fit_each_init, args = (forager, fit_names, fit_bounds, choice_history, reward_history, session_num, fit_method, 
+                pool_results.append(pool.apply_async(fit_each_init, args = (forager, fit_names, fit_bounds, choice_history, reward_history, iti, session_num, fit_method, 
                                                                             None)))   # We can have multiple histories only in serial mode
             for rr in pool_results:
                 # Get data    
@@ -143,7 +144,7 @@ def fit_bandit(forager, fit_names, fit_bounds, choice_history, reward_history, s
                 # We can have multiple histories only in serial mode
                 if if_history: fit_history = []  # Clear this history
                 
-                result = fit_each_init(forager, fit_names, fit_bounds, choice_history, reward_history, session_num, fit_method,
+                result = fit_each_init(forager, fit_names, fit_bounds, choice_history, reward_history, iti, session_num, fit_method,
                                        callback = callback_history if if_history else None)
                 
                 fitting_parallel_results.append(result)
@@ -191,6 +192,8 @@ def fit_bandit(forager, fit_names, fit_bounds, choice_history, reward_history, s
         
         unique_session = np.unique(session_num)
         predictive_choice_prob = []
+        action_value = []
+        choice_kernel = []
         fitting_result.trial_numbers = []
         
         # -- For each session --
@@ -201,15 +204,25 @@ def fit_bandit(forager, fit_names, fit_bounds, choice_history, reward_history, s
             fitting_result.trial_numbers.append(np.sum(session_num == ss))
             
             # Run **PREDICTIVE** simulation using the fitted data
-            bandit = BanditModel(forager = forager, **kwargs_all, fit_choice_history = choice_this, fit_reward_history = reward_this)  # Into the fitting mode
+            bandit = BanditModel(forager = forager, **kwargs_all, 
+                                 fit_choice_history = choice_this, fit_reward_history = reward_this, fit_iti = iti)  # Into the fitting mode
             bandit.simulate()
-            predictive_choice_prob.append(bandit.predictive_choice_prob)
+            
+            # Save latent variables
+            predictive_choice_prob.append(bandit.predictive_choice_prob)  # Length = n_trial + 1, with the final update after the last trial
+            if hasattr(bandit, 'q_estimation'):
+                action_value.append(bandit.q_estimation)  # Length = n_trial + 1, with the final update after the last trial
+            if hasattr(bandit, 'choice_kernel'):
+                choice_kernel.append(bandit.choice_kernel)  # Length = n_trial + 1, with the final update after the last trial
         
         fitting_result.predictive_choice_prob = np.hstack(predictive_choice_prob)
-        this_predictive_choice = np.argmax(fitting_result.predictive_choice_prob, axis = 0)
+        if action_value: fitting_result.action_value = np.hstack(action_value)
+        if choice_kernel: fitting_result.choice_kernel = np.hstack(choice_kernel)
+        
+        this_predictive_choice = np.argmax(fitting_result.predictive_choice_prob[:, :-1], axis = 0)   # Exclude the last update
         fitting_result.prediction_accuracy = np.sum(this_predictive_choice == choice_this) / fitting_result.n_trials
         
-    # === Run generative choice sequence ==  #!!!
+    # === Run generative choice sequence ==  #TODO
         
 
     return fitting_result
@@ -217,7 +230,7 @@ def fit_bandit(forager, fit_names, fit_bounds, choice_history, reward_history, s
 
 import random
 
-def cross_validate_bandit(forager, fit_names, fit_bounds, choice_history, reward_history, session_num = None, k_fold = 2, 
+def cross_validate_bandit(forager, fit_names, fit_bounds, choice_history, reward_history, iti = None, session_num = None, k_fold = 2, 
                           DE_pop_size = 16, pool = '', if_verbose = True):
     '''
     k-fold cross-validation
@@ -241,7 +254,7 @@ def cross_validate_bandit(forager, fit_names, fit_bounds, choice_history, reward
         
         # == Fit data using fit_set_this ==
         if if_verbose: print('%g/%g...'%(kk+1, k_fold), end = '')
-        fitting_result = optimize.differential_evolution(func = negLL_func, args = (forager, fit_names, choice_history, reward_history, session_num, {}, fit_set_this),
+        fitting_result = optimize.differential_evolution(func = negLL_func, args = (forager, fit_names, choice_history, reward_history, iti, session_num, {}, fit_set_this),
                                                          bounds = optimize.Bounds(fit_bounds[0], fit_bounds[1]), 
                                                          mutation=(0.5, 1), recombination = 0.7, popsize = DE_pop_size, strategy = 'best1bin', 
                                                          disp = False, 
@@ -269,9 +282,9 @@ def cross_validate_bandit(forager, fit_names, fit_bounds, choice_history, reward
             reward_this = reward_history[:, session_num == ss]
             
             # Run PREDICTIVE simulation    
-            bandit = BanditModel(forager = forager, **kwargs_all, fit_choice_history = choice_this, fit_reward_history = reward_this)  # Into the fitting mode
+            bandit = BanditModel(forager = forager, **kwargs_all, fit_choice_history = choice_this, fit_reward_history = reward_this, fit_iti = iti)  # Into the fitting mode
             bandit.simulate()
-            predictive_choice_prob.extend(bandit.predictive_choice_prob)
+            predictive_choice_prob.extend(bandit.predictive_choice_prob[:, :-1])   # Exclude the final update after the last trial
             
         # Get prediction accuracy of the test_set and fitting_set
         predictive_choice_prob = np.array(predictive_choice_prob)
