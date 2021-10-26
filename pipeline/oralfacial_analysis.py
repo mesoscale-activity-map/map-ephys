@@ -4,7 +4,7 @@ import datajoint as dj
 import pathlib
 from scipy import stats
 from astropy.stats import kuiper_two
-from pipeline import ephys, experiment, tracking
+from pipeline import ephys, experiment, tracking, InsertBuffer
 from pipeline.ingest import tracking as tracking_ingest
 
 from pipeline.mtl_analysis import helper_functions
@@ -703,46 +703,51 @@ class GLMFitNoLick(dj.Computed):
 
         taus = np.arange(-5,6)
 
-        units_glm = []
-
-        for unit_key in unit_keys: # loop for each neuron
-
-            all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in trial_key]).fetch('spike_times', order_by='trial')
+        #units_glm = []
+        
+        with InsertBuffer(self, 10, skip_duplicates=True, ignore_extra_fields=True, allow_direct_insert=True) as ib:
             
-            good_spikes =all_spikes # get good spikes
-            for i, d in enumerate(good_spikes):
-                good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
-            good_spikes = np.hstack(good_spikes)    
-            y, bin_edges = np.histogram(good_spikes, np.arange(0, traces_len*3.4/1000*num_trial, bin_width))
-            y=y[good_period_idx]    
-            
-            r2s=np.zeros(len(taus))
-            weights_t=np.zeros((len(taus),9))
-            predict_ys=np.zeros((len(taus),len(y)))
-            for i, tau in enumerate(taus):
-                y_roll=np.roll(y,tau)
-                glm_poiss = sm.GLM(y_roll, sm.add_constant(V_design_matrix), family=sm.families.Poisson(link=sm_log_Link))
+            for unit_key in unit_keys: # loop for each neuron
+    
+                all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in trial_key]).fetch('spike_times', order_by='trial')
                 
-                try:
-                    glm_result = glm_poiss.fit()
+                good_spikes =all_spikes # get good spikes
+                for i, d in enumerate(good_spikes):
+                    good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
+                good_spikes = np.hstack(good_spikes)    
+                y, bin_edges = np.histogram(good_spikes, np.arange(0, traces_len*3.4/1000*num_trial, bin_width))
+                y=y[good_period_idx]    
+                
+                r2s=np.zeros(len(taus))
+                weights_t=np.zeros((len(taus),9))
+                predict_ys=np.zeros((len(taus),len(y)))
+                for i, tau in enumerate(taus):
+                    y_roll=np.roll(y,tau)
+                    glm_poiss = sm.GLM(y_roll, sm.add_constant(V_design_matrix), family=sm.families.Poisson(link=sm_log_Link))
                     
-                    sst_val = sum(map(lambda x: np.power(x,2),y_roll-np.mean(y_roll))) 
-                    sse_val = sum(map(lambda x: np.power(x,2),glm_result.resid_response)) 
-                    r2 = 1.0 - sse_val/sst_val
+                    try:
+                        glm_result = glm_poiss.fit()
+                        
+                        sst_val = sum(map(lambda x: np.power(x,2),y_roll-np.mean(y_roll))) 
+                        sse_val = sum(map(lambda x: np.power(x,2),glm_result.resid_response)) 
+                        r2 = 1.0 - sse_val/sst_val
+                        
+                        r2s[i] = r2
+                        
+                        y_roll_t_p=glm_result.predict(sm.add_constant(V_design_matrix))
+                        predict_ys[i,:]=y_roll_t_p
+                        weights_t[i,:] = glm_result.params
+                        
+                    except:
+                        pass
                     
-                    r2s[i] = r2
-                    
-                    y_roll_t_p=glm_result.predict(sm.add_constant(V_design_matrix))
-                    predict_ys[i,:]=y_roll_t_p
-                    weights_t[i,:] = glm_result.params
-                    
-                except:
+                #units_glm.append({**unit_key, 'r2_nolick': r2s, 'weights_nolick': weights_t, 'y_nolick': y, 'predict_y_nolick': predict_ys, 'x_nolick': V_design_matrix})
+                print(unit_key)
+                ib.insert1({**unit_key, 'r2_nolick': r2s, 'weights_nolick': weights_t, 'y_nolick': y, 'predict_y_nolick': predict_ys, 'x_nolick': V_design_matrix})
+                if ib.flush():
                     pass
-                
-            units_glm.append({**unit_key, 'r2_nolick': r2s, 'weights_nolick': weights_t, 'y_nolick': y, 'predict_y_nolick': predict_ys, 'x_nolick': V_design_matrix})
-            print(unit_key)
-            
-        self.insert(units_glm, ignore_extra_fields=True)
+                        
+        #self.insert(units_glm, ignore_extra_fields=True)
 
 @schema
 class WhiskerSVD(dj.Computed):

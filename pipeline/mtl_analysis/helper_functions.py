@@ -557,6 +557,36 @@ def plot_glmfit(unit_key, num_time=2000):
     
     return fig
 
+def plot_glmfit_nolick(unit_key, num_time=2000):
+
+    taus = np.arange(-5,6)
+    t_vec=np.arange(num_time)*0.017
+    test_y, predict_y, test_x, r2_t, weights = (oralfacial_analysis.GLMFitNoLick() & unit_key).fetch('y_nolick','predict_y_nolick','x_nolick','r2_nolick','weights_nolick')
+    max_r2_idx=np.where(r2_t[0]==np.max(r2_t[0]))
+    weights_r=np.round(weights[0],decimals=2)
+    
+    fig, ax = plt.subplots(1, 1, figsize=(24, 16))
+    
+    ax.plot(t_vec, test_x[0][:num_time, 1]+6,color='k',label='jaw DV'+str(weights_r[max_r2_idx[0][0],2])+' ML'+str(weights_r[max_r2_idx[0][0],3])+' AP'+str(weights_r[max_r2_idx[0][0],1])) # jaw y (DV)
+    ax.plot(t_vec, test_x[0][:num_time, 3]+6,color='g',label='tongue DV'+str(weights_r[max_r2_idx[0][0],6])+' ML'+str(weights_r[max_r2_idx[0][0],4])+' AP'+str(weights_r[max_r2_idx[0][0],5])) # tongue x (ML)
+    ax.plot(t_vec, test_x[0][:num_time, 6]+12,color='b',label='breathing ' +str(weights_r[max_r2_idx[0][0],7]))
+    ax.plot(t_vec, test_x[0][:num_time, 7]+16,color='r',label='whisking '+str(weights_r[max_r2_idx[0][0],8]))
+    test_y_roll=np.roll(test_y[0],taus[max_r2_idx[0][0]])
+    ax.plot(t_vec,test_y_roll[:num_time],color='k',label='test')
+    ax.plot(t_vec,predict_y[0][max_r2_idx[0][0]][:num_time],color='r',label='prediction')
+    ax.legend(loc='upper left')
+    ax.set_xlabel('s')
+    ax.set_title('r2 = '+ str(np.round(r2_t[0][max_r2_idx[0][0]],decimals=3)))
+    
+    # cosmetic
+    ax.set_xlim((t_vec[0],t_vec[-1]))
+    ax.set_yticks([])
+    ax.spines['left'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    
+    return fig
+
 def plot_dir_tuning(unit_key):
 
     dir_tuning, dir_idx=(oralfacial_analysis.DirectionTuning() & unit_key).fetch('direction_tuning','direction_index')
@@ -682,6 +712,55 @@ def volcano_plot_whisking(session_key):
     ax.set_xlim([-0.5,1])
     ax.set_xlabel('Time from measured inspiration onset (s)')
     ax.set_ylabel('Breath number')
+    
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    
+    return fig
+
+def volcano_plot_breathing(session_key):
+    inspir_onset,lick_onset_time,lick_offset_time,ton_onset=(oralfacial_analysis.MovementTiming & session_key).fetch1('inspiration_onset','lick_onset','lick_offset','tongue_onset')
+    
+    ton_onset_l=[] # restrict by licking bouts
+    for i,val in enumerate(lick_onset_time):
+        ton_onset_l.append(ton_onset[(ton_onset>(lick_onset_time[i]+0.2)) & (ton_onset<(lick_offset_time[i]-0.2))])
+    ton_onset_l=np.array(ton_onset_l)
+    ton_onset_l=np.hstack(ton_onset_l)
+    
+    breaths = []
+    
+    ili = np.zeros(len(ton_onset_l)-3)
+    ili2 = np.zeros(len(ton_onset_l)-4)
+    
+    max_ili=np.max(np.diff(inspir_onset))
+    
+    for i,_ in enumerate(ton_onset_l[2:-2]):
+        
+        breath=inspir_onset[(inspir_onset > ton_onset_l[i-2]) & (inspir_onset<ton_onset_l[i+2])]
+    
+        breaths.append(breath - ton_onset_l[i])
+    
+        ili[i] = ton_onset_l[i+1] - ton_onset_l[i]
+        ili2[i] = ton_onset_l[i+2] - ton_onset_l[i]
+    
+    ili = ili[:-1]
+    breaths[:] = [ele for i, ele in enumerate(breaths) if ili[i]<max_ili]
+    ili2=ili2[ili<max_ili]
+    ili=ili[ili<max_ili]
+    
+    sorted_indexes=np.argsort(ili)
+    sorted_indexes=sorted_indexes[::-1]
+    
+    fig, ax = plt.subplots(1, 1, figsize=(12, 12))
+    
+    for i,_ in enumerate(breaths):
+        ax.plot(breaths[sorted_indexes[i]],i*np.ones(len(breaths[sorted_indexes[i]])),'.b',markersize=4)
+        ax.plot(0,i,'.r',markersize=4)
+        ax.plot(ili[sorted_indexes[i]],i,'.r',markersize=4)
+        ax.plot(ili2[sorted_indexes[i]],i,'.r',markersize=4)
+    ax.set_xlim([-0.5,1])
+    ax.set_xlabel('Time from measured tongue onset (s)')
+    ax.set_ylabel('Lick number')
     
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
