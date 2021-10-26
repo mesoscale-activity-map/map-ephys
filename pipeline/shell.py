@@ -158,6 +158,7 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
         from_excel = False
 
     df.columns = [cname.lower().replace(' ', '_') for cname in df.columns]
+    df = df[df['session_date'].notna()]
 
     insertion_locations = []
     recordable_brain_regions = []
