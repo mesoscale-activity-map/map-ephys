@@ -9,7 +9,7 @@ def populatemytables_core(arguments,runround):
     if runround == 1:
         # foraging_analysis.TrialStats().populate(**arguments)
         # foraging_analysis.BlockStats().populate(**arguments)
-        # foraging_analysis.SessionTaskProtocol().populate(**arguments)
+        # foraging_analysis.SessionTaskProtocol().populate(**arguments)  #  Important for model fitting
         # foraging_analysis.SessionStats().populate(**arguments)
         # foraging_analysis.BlockFraction().populate(**arguments)
         # foraging_analysis.SessionMatching().populate(**arguments)
@@ -20,8 +20,8 @@ def populatemytables_core(arguments,runround):
 
         # psth_foraging.UnitPsth.populate(**arguments)
         
-        # foraging_model.FittedSessionModel.populate(**arguments)
-        psth_foraging.UnitPeriodLinearFit.populate(**arguments)
+        foraging_model.FittedSessionModel.populate(**arguments)
+        # psth_foraging.UnitPeriodLinearFit.populate(**arguments)
         
 def populatemytables(paralel = True, cores = 9):
     IDs = {k: v for k, v in zip(*lab.WaterRestriction().fetch('water_restriction_number', 'subject_id'))}              
@@ -55,7 +55,7 @@ if __name__ == '__main__' and use_ray == False:  # This is a workaround for mp.a
     # shell.logsetup('INFO')
     # shell.ingest_foraging_behavior()
     
-    cores = int(mp.cpu_count()) - 2  # Auto core number selection
+    cores = int(mp.cpu_count()) - 5  # Auto core number selection
     pool = mp.Pool(processes=cores)
     
     populatemytables(paralel=True, cores=cores)
