@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import seaborn as sns
 from datetime import timedelta
+from scipy import stats
 #dj.conn()
 
 
@@ -94,7 +95,8 @@ def extract_trials(plottype = '2lickport',
                                                                              
     # Handle p_{waterport}_reward
     for water_port in experiment.WaterPort.fetch('water_port'):
-        p_reward_this = (q_session_block_trial * experiment.SessionBlock.WaterPortRewardProbability 
+        p_reward_this = (q_session_block_trial * experiment.SessionBlock.WaterPortRewardProbability
+                         & (experiment.TrialEvent & 'trial_event_type = "go"')
                                                       & 'water_port = "{}"'.format(water_port)).fetch(
                                                           'reward_probability', order_by=('session','trial')).astype(float)
         if len(p_reward_this) == len(df_behaviortrial):
@@ -305,7 +307,7 @@ def plot_trials(df_behaviortrial,
             
     if plottype == '2lickport':
         if plot_every_choice:
-            ax1.plot(df_behaviortrial['trial'][rewarded],df_behaviortrial['trial_choice_plot'][rewarded],'k|',color='black',markersize=30,markeredgewidth=2)
+            ax1.plot(df_behaviortrial['trial'][rewarded],df_behaviortrial['trial_choice_plot'][rewarded],'|',color='black',markersize=30,markeredgewidth=2)
             ax1.plot(df_behaviortrial['trial'][unrewarded],df_behaviortrial['trial_choice_plot'][unrewarded],'|',color='gray',markersize=15,markeredgewidth=2)
         ax1.plot(df_behaviortrial['trial'],bias,'k-',label = 'choice')
         ax1.plot(df_behaviortrial['trial'],df_behaviortrial['reward_ratio'],'y-')
@@ -314,7 +316,7 @@ def plot_trials(df_behaviortrial,
     elif plottype == '3lickport':
         ax1.stackplot(np.asarray(df_behaviortrial['trial'],float),  leftchoices_filtered/allchoices_filtered ,  middlechoices_filtered/allchoices_filtered ,  rightchoices_filtered/allchoices_filtered ,colors=['r','g','b'], alpha=0.3 )
         if plot_every_choice:
-            ax1.plot(df_behaviortrial['trial'][rewarded],df_behaviortrial['trial_choice_plot'][rewarded],'k|',color='black',markersize=30,markeredgewidth=2)
+            ax1.plot(df_behaviortrial['trial'][rewarded],df_behaviortrial['trial_choice_plot'][rewarded],'|',color='black',markersize=30,markeredgewidth=2)
             ax1.plot(df_behaviortrial['trial'][unrewarded],df_behaviortrial['trial_choice_plot'][unrewarded],'|',color='gray',markersize=15,markeredgewidth=2)
         ax1.plot(df_behaviortrial['trial'],df_behaviortrial['reward_ratio_1'],'y-')
         ax1.plot(df_behaviortrial['trial'],df_behaviortrial['reward_ratio_2'],'y-')
@@ -483,8 +485,8 @@ def plot_training_summary(use_days_from_start=False):
     # highlight = {('FOR01', 'FOR02', 'FOR03', 'FOR04'): dict(color='r'),
     #               ('HH01', 'HH04', 'HH06', 'HH07'): dict(color='b'),
     #               }
-    highlight = {('HH01', 'HH04'): dict(marker='.'),
-                  ('HH06', 'HH07'): dict(marker='o')
+    highlight = {('HH09'): dict(marker='o'),
+                #   ('HH12', 'HH13'): dict(marker='o')
                   }
     
     fig1 = plt.figure(figsize=(20,12))
@@ -546,7 +548,7 @@ def plot_training_summary(use_days_from_start=False):
         double_dip_hit = this_mouse_session_stats['session_double_dipping_ratio_hit'].to_numpy(dtype=np.float) * 100
         double_dip_miss = this_mouse_session_stats['session_double_dipping_ratio_miss'].to_numpy(dtype=np.float) * 100
         
-        matching_idx = this_mouse_session_stats['match_idx'] 
+        matching_idx = this_mouse_session_stats['match_idx']    
         matching_bias = this_mouse_session_stats['bias']        
         
         # Plot settings
@@ -567,9 +569,9 @@ def plot_training_summary(use_days_from_start=False):
         ax2[0,0].plot(total_trial_num, foraging_eff, **plot_setting)
         ax2[0,2].plot(foraging_eff, foraging_eff_random_seed, '.')
         
-        # -- 3. Matching bias --
+        # -- 3. Matching bias and slope--
         ax[1,0].plot(x, abs(matching_bias.astype(float)), **plot_setting)
-        ax2[0,1].plot(matching_idx, foraging_eff, '.')
+        ax[1,2].plot(x, matching_idx, **plot_setting)
         
         # -- 4. Early lick ratio --
         ax[1,1].plot(x, early_lick_ratio, **plot_setting)
@@ -594,9 +596,9 @@ def plot_training_summary(use_days_from_start=False):
     ax[0,2].set(xlabel=x_name, title='Foraging efficiency (optimal_random_seed) %')
     ax[1,0].set(xlabel=x_name, title='abs(matching bias)', ylim=(-0.1, 5))
     ax[1,1].set(xlabel=x_name, title='Early lick trials %')
+    ax[1,2].set(xlabel=x_name, title='Matching slope', ylim=(-0.1,1.1))
     
     ax2[0,0].set(xlabel='Total finished trials', ylabel='Foraging efficiency (optimal) %')
-    ax2[0,1].set(xlabel='Matching slope', ylabel='Foraging efficiency (optimal) %')
     ax2[0,2].set(xlabel='Foraging eff optimal', ylabel='Foraging eff random seed')
     ax2[0,2].plot([0,100], [0,100], 'k--')
     ax2[1,0].set(xlabel=x_name, title='Mean reward prob sum')
@@ -610,6 +612,39 @@ def plot_training_summary(use_days_from_start=False):
     ax3[1,0].set(xlabel=x_name, title='Double dipping if miss (%)')
     ax3[1,1].set(title='Double dipping (%)', xlabel='if hit', ylabel='if miss')
     ax3[1,1].plot([0,100], [0,100], 'k--')
+    
+    # == Matching idx vs foraging eff (quick and dirty) ==
+    matching_vs_eff_setting = {('water_restriction_number NOT LIKE "HH%"', ): dict(marker='.', color='grey', linestyle = 'None'),
+                               ('water_restriction_number = "HH01"', 'water_restriction_number = "HH04"'): dict(markersize=7, marker='o', color='b', linestyle = 'None'),
+                               # 'water_restriction_number LIKE "HH%"': dict(marker='o', color='b', linestyle = 'None'),
+                               ('water_restriction_number = "HH06"', 'water_restriction_number = "HH07"'): dict(marker='o', color='r', linestyle = 'None'),
+                               # ('water_restriction_number = "FOR01"', 'water_restriction_number = "FOR02"',
+                               #  'water_restriction_number = "FOR03"', 'water_restriction_number = "FOR04"'): dict(marker='v', color='r', linestyle = 'None')
+                              }
+    
+    for ss in matching_vs_eff_setting:
+        q_this_sessions = (foraging_analysis.SessionTaskProtocol * lab.WaterRestriction 
+                           & 'session_real_foraging=1' & 'session_task_protocol=100'
+                           & ss
+                          )
+        
+        this_matching_eff = (foraging_analysis.SessionStats 
+                           * (foraging_analysis.SessionMatching.WaterPortMatching.proj('match_idx', 'bias') & 'water_port="right"') 
+                            & q_this_sessions
+                           ).fetch('match_idx', 'session_foraging_eff_optimal')
+        
+        x = this_matching_eff[0].astype(float)
+        y = this_matching_eff[1].astype(float)*100
+        mask = ~np.isnan(x) & ~np.isnan(y)
+        k, b, r_value, p, std_err = stats.linregress(x[mask], y[mask])
+        
+        ax2[0,1].plot(this_matching_eff[0], this_matching_eff[1]*100, **matching_vs_eff_setting[ss])
+        ax2[0,1].plot([np.nanmin(x),np.nanmax(x)], [k*np.nanmin(x)+b, k*np.nanmax(x)+b,], '-', color=matching_vs_eff_setting[ss]['color'], label='r = %.2g\np = %.2g'%(r_value, p))
+
+        
+    ax2[0,1].legend(fontsize=15)
+    ax2[0,1].set(xlabel='Matching slope', ylabel='Foraging efficiency (optimal) %', xlim=(0,1), ylim=(50,110))
+
 
     #%%
     
@@ -673,6 +708,170 @@ def plot_session_trial_events(key_subject_id_session = dict(subject_id=472184, s
     ax3.axvline(x=0, color='k', lw=0.5)
     ax3.set(xlabel='Time to Go Cue (s)', title='Reaction time') # Fix the ylim of left and right licks
     ax3.legend()
+    
+
+def analyze_runlength(result_path = "..\\results\\model_comparison\\", combine_prefix = 'model_comparison_15_', 
+                          group_results_name = 'group_results.npz', mice_of_interest = ['FOR05', 'FOR06'], 
+                          efficiency_partitions = [30, 30],  block_partitions = [70, 70], if_first_plot = True):
+    sns.set()
+
+    # Load dataframe
+    data = np.load(result_path + group_results_name, allow_pickle=True)
+    group_results = data.f.group_results.item()
+    results_all_mice = group_results['results_all_mice'] 
+    
+    palette_all = sns.color_palette("RdYlGn", max(results_all_mice['session_number'].unique()))
+
+    for mouse in mice_of_interest:
+        
+        # Load raw data
+        data_raw = np.load(result_path + combine_prefix + mouse + '.npz', allow_pickle=True)
+        data_raw = data_raw.f.results_each_mice.item()
+        
+        df_this = results_all_mice[results_all_mice.mice == mouse].copy()
+        df_this[['foraging_efficiency', 'prediction_accuracy_CV_test', 'prediction_accuracy_bias_only']] *= 100
+
+        efficiency_thres = np.percentile(df_this.foraging_efficiency, [100-efficiency_partitions[0], efficiency_partitions[1]])
+
+        #%% Plot foraging histogram 
+        if if_first_plot: 
+            
+            x = df_this.prediction_accuracy_NONCV
+            y = df_this.foraging_efficiency
+            (r, p) = pearsonr(x, y)
+  
+            g = sns.jointplot(x="prediction_accuracy_CV_test", y="foraging_efficiency", data = df_this.sort_values(by = 'session_number'), 
+                              kind="reg", color="b", marginal_kws = {'bins':20,'color':'k'}, joint_kws = {'marker':'', 'color':'k', 
+                                                                                                          'label':'r$^2$ = %.3f, p = %.3f'%(r**2,p)})
+            
+            palette = []
+            for s in np.sort(df_this['session_number'].unique()):
+                palette.append(palette_all[s-1])
+
+            g.plot_joint(plt.scatter, color = palette, sizes = df_this.n_trials**2 / 3000, alpha = 0.7)
+            plt.legend()
+            ax = plt.gca()
+            ax.axvline(50, c='k', ls='--')
+            ax.axhline(100, c='k', ls='--')
+            
+            ax.axhline(efficiency_thres[1], c='r', ls='-.', lw = 2)        
+            ax.axhline(efficiency_thres[0], c='g', ls='-.', lw = 2)
+            plt.gcf().text(0.01, 0.95, mouse)
+
+        #%% Get grand runlength (Lau)
+        good_session_idxs = df_this[df_this.foraging_efficiency >= efficiency_thres[0]].session_idx
+        bad_session_idxs = df_this[df_this.foraging_efficiency <= efficiency_thres[1]].session_idx
+        
+        grand_session_idxs = [good_session_idxs, bad_session_idxs]
+        grand_session_idxs_markers = [mouse + ' best %g%% sessions (n = %g)' % (efficiency_partitions[0], len(good_session_idxs)), 
+                                      mouse + ' worst %g%% sessions (n = %g)' % (efficiency_partitions[1], len(bad_session_idxs))]
+        
+        for this_session_idxs, this_marker in zip(grand_session_idxs, grand_session_idxs_markers):
+            
+            df_run_length_Lau_all = [pd.DataFrame(), pd.DataFrame()] # First and last trials in each block
+            
+            for this_idx in this_session_idxs:
+                #%%
+                this_class = data_raw['model_comparison_session_wise'][this_idx - 1]
+                this_session_num = df_this[df_this.session_idx == this_idx].session_number.values
+                
+                p_reward = data_raw['model_comparison_grand'].p_reward[:, data_raw['model_comparison_grand'].session_num == this_session_num]
+                
+                # Runlength analysis
+                this_df_run_length_Lau = analyze_runlength_Lau2005(this_class.fit_choice_history, p_reward, block_partitions = block_partitions)
+                
+                for i in [0,1]:
+                    df_run_length_Lau_all[i] = df_run_length_Lau_all[i].append(this_df_run_length_Lau[i])
+                
+            fig = plot_runlength_Lau2005(df_run_length_Lau_all, block_partitions)
+            fig.text(0.1, 0.92, this_marker + ', mean foraging eff. = %g%%, %g blocks' %\
+                           (np.mean(df_this.foraging_efficiency[this_session_idxs - 1]), len(df_run_length_Lau_all[0])), fontsize = 15)
+            plt.show()
+            
+            
+def plot_runlength_Lau2005(df_run_length_Lau, block_partitions = ['unknown', 'unknown']):
+    #%%
+    # --- Plotting ---
+    fig = plt.figure(figsize=(10, 8), dpi = 150)
+    gs = GridSpec(2, 3, hspace = 0.6, wspace = 0.4, 
+                  left = 0.1, right = 0.95, bottom = 0.14, top = 0.85)
+    
+    annotations = ['First %g%% trials'%block_partitions[0], 'Last %g%% trials'%block_partitions[1]]
+    
+    for pp, df_this_half in enumerate(df_run_length_Lau):
+        
+        df_this_half = df_this_half[~ df_this_half.isin([0, np.inf, -np.inf]).choice_ratio]
+        df_this_half = df_this_half[~ df_this_half.isin([0, np.inf, -np.inf]).p_base_ratio]
+        
+        # == Fig.5 Lau 2005 ==
+        ax = fig.add_subplot(gs[pp,0]) 
+        
+        plt.plot(df_this_half.choice_ratio, df_this_half.mean_runlength_rich, 'go', label = 'Rich', alpha = 0.7, markersize = 5)
+        plt.plot(df_this_half.choice_ratio, df_this_half.mean_runlength_lean, 'rx', label = 'Lean', alpha = 0.7, markersize = 8)
+        
+        ax.axhline(1, c = 'r', ls = '--', lw = 1)
+        plt.plot([1,16],[1,16], c ='g', ls = '--', lw = 1)
+        # ax.axvline(1, c = 'k', ls = '--', lw = 1)
+        
+        plt.plot(mean_runlength_Bernoulli[2,:], mean_runlength_Bernoulli[0,:], 'k--', lw = 1)
+        plt.plot(mean_runlength_Bernoulli[2,:], mean_runlength_Bernoulli[1,:], 'k-', lw = 1)
+        
+        ax.set_xscale('log')
+        ax.set_xticks([1,2,4,8,16])
+        ax.set_xticklabels([1,2,4,8,16])
+        ax.set_xlim([0.9,16])
+        ax.set_yscale('log')
+        ax.set_yticks([1,2,4,8,16])
+        ax.set_yticklabels([1,2,4,8,16])
+        ax.set_ylim([0.9,16])
+        
+        # ax.axis('equal')
+       
+        plt.xlabel('Choice ratio (#rich / #lean)')
+        plt.ylabel('Mean runlength')
+        plt.legend()
+        plt.title(annotations[pp])
+    
+        # == Mean rich runlength VS optimal rich runlength (m*) ==
+        ax = fig.add_subplot(gs[pp,1]) 
+        
+        x = df_this_half.m_star
+        y = df_this_half.mean_runlength_rich
+        
+        sns.regplot(x=x, y=y, ax = ax)
+        
+        try:
+            (r, p) = pearsonr(x, y)
+            plt.annotate( 'r = %.3g\np = %.3g'%(r,p), xy=(0, 0.8), xycoords=ax.transAxes, fontsize = 9)
+        except:
+            pass
+        
+        plt.plot([0, 15],[0, 15], 'b--', lw = 1)
+        plt.xlabel('Optimal rich runlength')
+        plt.ylabel('Mean rich runlength')
+        ax.set_xlim([0,15])
+        ax.set_ylim([0,15])
+    
+        # == Choice ratio VS optimal rich runlength (m*) ==
+        ax = fig.add_subplot(gs[pp,2]) 
+        x = df_this_half.m_star
+        y = df_this_half.choice_ratio
+        
+        try:
+            (r, p) = pearsonr(x, y)
+            plt.annotate( 'r = %.3g\np = %.3g'%(r,p), xy=(0, 0.8), xycoords=ax.transAxes, fontsize = 9)
+        except:
+            pass
+        
+        sns.regplot(x=x, y=y, ax = ax)
+        
+        plt.plot([0, 15],[0, 15], 'b--', lw = 1)
+        plt.xlabel('Optimal rich runlength')
+        plt.ylabel('Choice ratio (#rich / #lean)')
+        ax.set_xlim([0,15])
+        ax.set_ylim([0,15])
+
+    return fig
     
 def plot_foragingWebGUI_subject(wr_name_selected='HH07', session_selected=17, show_others=True, use_days_from_start=False):
     #%%

@@ -1,6 +1,6 @@
 import datajoint as dj
 import numpy as np
-from . import experiment, get_schema_name, foraging_analysis
+from . import experiment, ephys, get_schema_name, foraging_analysis
 from .model.bandit_model_comparison import BanditModelComparison
 
 schema = dj.schema(get_schema_name('foraging_model'))
@@ -15,10 +15,12 @@ class ModelClass(dj.Lookup):
     """
     contents = [
         ['LossCounting', 'Count the number of losses and switch when the number exceeds a threshold'],
-        ['RW1972', 'Rescorla–Wagner model (single learnig rate)'],
-        ['LNP', 'Linear-nonlinear-Possion (exponential recency-weighted average)'],
+        ['RW1972', 'Rescorla–Wagner model (single learning rate)'],
+        ['LNP', 'Linear-nonlinear-Poisson (exponential recency-weighted average)'],
         ['Bari2019', 'Bari et al 2019 (different learning rates for chosen/unchosen)'],
         ['Hattori2019', 'Hattori et al 2019 (different learning rates for rew/unrew/unchosen)'],
+        ['CANN', "Abstracted from Ulises' continuous attractor neural network"],
+        ['Synaptic', "Abstracted from Ulises' synaptic model"]
     ]
 
 
@@ -46,6 +48,9 @@ class ModelParam(dj.Lookup):
         ['biasR', r'$b_R$'],
         ['choice_step_size', r'$\alpha_c$'],
         ['choice_softmax_temperature', r'$\sigma_c$'],
+        ['tau_cann', r'$\tau_{CANN}$'],
+        ['I0', r'$I_0$'],
+        ['rho', r'$\rho$']
     ]
 
 
@@ -148,6 +153,23 @@ class Model(dj.Manual):
             ['Hattori2019_CK', ['learn_rate_rew', 'learn_rate_unrew', 'forget_rate', 'softmax_temperature', 'biasL', 'choice_step_size', 'choice_softmax_temperature'],
              [0, 0, 0, 1e-2, -5, 1, 1e-2], [1, 1, 1, 15, 5, 1, 20], 'choice_step_size fixed at 1 --> Bari 2019: only the last choice matters'],
 
+            ['CANN', ['learn_rate', 'tau_cann', 'softmax_temperature', 'biasL'],
+             [0, 0, 1e-2, -5], [1, 1000, 15, 5], "Ulises' CANN model, ITI decay, with bias"],
+            
+            ['Synaptic', ['learn_rate', 'forget_rate', 'I0', 'rho', 'softmax_temperature', 'biasL'],
+             [0, 0, 0, 0, 1e-2, -5], [1, 1, 10, 1, 15, 5], "Ulises' synaptic model"],
+            
+            ['Synaptic', ['learn_rate', 'forget_rate', 'I0', 'rho', 'softmax_temperature', 'biasL'],
+             [0, 0, 0, -100, 1e-2, -5], [1, 1, 10, 100, 15, 5], "Ulises' synaptic model (unconstrained \\rho)"],
+            
+            ['Synaptic', ['learn_rate', 'forget_rate', 'I0', 'rho', 'softmax_temperature', 'biasL'],
+             [0, 0, 0, -1e6, 1e-2, -5], [1, 1, 1e6, 1e6, 15, 5], "Ulises' synaptic model (really unconstrained I_0 and \\rho)"],
+            
+            # ['Synaptic_W>0', ['learn_rate', 'forget_rate', 'I0', 'rho', 'softmax_temperature', 'biasL'],
+            #  [0, 0, 0, -100, 1e-2, -5], [1, 1, 10, 100, 15, 5], "Ulises' synaptic model (W > 0, partially constrained I_0 and \\rho)"],
+            
+            # ['Synaptic_W>0', ['learn_rate', 'forget_rate', 'I0', 'rho', 'softmax_temperature', 'biasL'],
+            #  [0, 0, 0, -1e6, 1e-2, -5], [1, 1, 10, 1e6, 15, 5], "Ulises' synaptic model (W > 0, unconstrained I_0 and \\rho)"],
         ]
 
         # Parse and insert MODELS
@@ -190,13 +212,47 @@ class Model(dj.Manual):
 
 
 @schema
+class ModelComparison(dj.Lookup):
+    # Define model comparison groups
+    definition = """
+    model_comparison_idx:        smallint
+    ---
+    desc='':     varchar(200)
+    """
+
+    class Competitor(dj.Part):
+        definition = """
+        -> master
+        competitor_idx:          int
+        ---
+        -> Model
+        """
+
+    @classmethod
+    def load(cls):
+        model_comparisons = [
+            ['all_models', Model],
+            ['models_with_bias', Model & 'is_bias = 1'],
+            ['models_with_bias_and_choice_kernel', Model & 'is_bias = 1' & 'is_choice_kernel']
+        ]
+
+        # Parse and insert ModelComparisonGroup
+        for mc_idx, (desc, models) in enumerate(model_comparisons):
+            cls.insert1(dict(model_comparison_idx=mc_idx, desc=desc), skip_duplicates=True)
+            cls.Competitor.insert([
+                dict(model_comparison_idx=mc_idx, competitor_idx=idx, model_id=model_id)
+                for idx, model_id in enumerate(models.fetch('model_id', order_by='model_id'))
+            ], skip_duplicates=True)
+
+
+@schema
 class FittedSessionModel(dj.Computed):
     definition = """
     -> experiment.Session
     -> Model
     ---
     n_trials: int
-    n_params: int
+    n_params: int  # Number of effective params (return from the fitting function; should be the same as Model.n_params)
     log_likelihood: float  # raw log likelihood of the model
     aic: float   # AIC
     bic: float   # BIC
@@ -209,33 +265,52 @@ class FittedSessionModel(dj.Computed):
     cross_valid_accuracy_test_bias_only = NULL: float    # accuracy predicted only by bias (testing set)
     """
 
-    key_source = (foraging_analysis.SessionTaskProtocol() & 'session_task_protocol = 100' & 'session_real_foraging'
-                  ) * Model() #& (experiment.Session & 'session_date > "2021-01-01"')
+    key_source = ((foraging_analysis.SessionTaskProtocol() & 'session_task_protocol = 100' & 'session_real_foraging'
+                  ) * Model()) # * experiment.Session() & 'session_date > "2021-01-01"' # & 'model_id > 21' # & 'subject_id = 482350'
 
-    class FittedParam(dj.Part):
+    class Param(dj.Part):
         definition = """
         -> master
         -> Model.Param
         ---
         fitted_value: float
         """
-    
-    class PredictiveChoiceProb(dj.Part):
+
+    class TrialLatentVariable(dj.Part):
+        """
+        To save all fitted latent variables that will be correlated to ephys
+        Notes:
+        1. In the original definition (Sutton&Barto book), the updated value after choice of trial t is Q(t+1), not Q(t)!
+                behavior & ephys:   -->  ITI(t-1) --> |  --> choice (t), reward(t)         --> ITI (t) -->            |
+                model:           Q(t) --> choice prob(t) --> choice (t), reward(t)  | --> Q(t+1) --> choice prob (t+1)
+           Therefore: the ITI of trial t -> t+1 corresponds to Q(t+1)
+        2. To make it more intuitive, when they are inserted here, Q is offset by -1,
+           such that ephys and model are aligned:
+                behavior & ephys:   -->  ITI(t-1) --> |  --> choice (t), reward(t)         --> ITI (t) -->       |
+                model:    Q(t-1) --> choice prob(t-1) | --> choice (t), reward(t)  --> Q(t) --> choice prob (t)  |
+           This will eliminate the need of adding an offset=-1 whenever ephys and behavioral model are compared.
+        3. By doing this, I also save the update after the last trial (useless for fitting; useful for ephys) ,
+           whereas the first trial is discarded, which was randomly initialized anyway
+        """
         definition = """
-        # Could be used to compute latent value Q (for models that have Q). Ignored trial skipped.
         -> master
         -> experiment.SessionTrial
-        -> experiment.WaterPort
+        -> experiment.WaterPort 
         ---
-        choice_prob: float        
+        action_value=null:   float
+        choice_prob=null:    float    
+        choice_kernel=null:  float
         """
 
     def make(self, key):
-        choice_history, reward_history, p_reward, q_choice_outcome = get_session_history(key)
+        choice_history, reward_history, iti, p_reward, q_choice_outcome = get_session_history(key)
         model_str = (Model & key).fetch('fit_cmd')
 
         # --- Actual fitting ---
-        model_comparison_this = BanditModelComparison(choice_history, reward_history, model=model_str)
+        if (Model & key).fetch1('model_class') in ['CANN']:  # Only pass ITI if this is CANN model (to save some time?)
+            model_comparison_this = BanditModelComparison(choice_history, reward_history, iti=iti, model=model_str)
+        else:
+            model_comparison_this = BanditModelComparison(choice_history, reward_history, iti=None, model=model_str)
         model_comparison_this.fit(pool='', plot_predictive=None, if_verbose=False)  # Parallel on sessions, not on DE
         model_comparison_this.cross_validate(pool='', k_fold=2, if_verbose=False)
 
@@ -261,17 +336,89 @@ class FittedSessionModel(dj.Computed):
                      )
 
         # Insert fitted params (`order_by` is critical!)
-        self.FittedParam.insert([dict(**key, model_param=param, fitted_value=x) 
+        self.Param.insert([dict(**key, model_param=param, fitted_value=x) 
 	                         for param, x in zip((Model.Param & key).fetch('model_param', order_by='param_idx'), fit_result.x)])
         
-        # Insert predictive choice probability
+        # Insert latent variables (trial number offset -1 here!!)
+        choice_prob = fit_result.predictive_choice_prob[:, 1:]  # Model must have this
+        action_value = fit_result.action_value[:, 1:] if hasattr(fit_result, 'action_value') else np.full_like(choice_prob, np.nan)
+        choice_kernel = fit_result.choice_kernel[:, 1:] if hasattr(fit_result, 'choice_kernel') else np.full_like(choice_prob, np.nan)
+
         for water_port_idx, water_port in enumerate(['left', 'right']):
             key['water_port'] = water_port
-            self.PredictiveChoiceProb.insert(
-                [{**key, 'trial': trial_idx, 'choice_prob': this_prob} 
-                 for trial_idx, this_prob in zip(q_choice_outcome.fetch('trial'), fit_result.predictive_choice_prob[water_port_idx])]
-                )
-        
+
+            self.TrialLatentVariable.insert(
+                [{**key, 'trial': i, 'choice_prob': prob, 'action_value': value, 'choice_kernel': ck}
+                 for i, prob, value, ck in zip(q_choice_outcome.fetch('trial', order_by='trial'),
+                                               choice_prob[water_port_idx, :],
+                                               action_value[water_port_idx, :],
+                                               choice_kernel[water_port_idx, :])]
+            )                
+
+@schema
+class FittedSessionModelComparison(dj.Computed):
+    definition = """
+    -> experiment.Session
+    -> ModelComparison
+    """
+
+    key_source = (experiment.Session & FittedSessionModel) * ModelComparison  # Only include already-fitted sessions
+
+    class RelativeStat(dj.Part):
+        definition = """
+        -> master
+        -> Model
+        ---
+        relative_likelihood_aic:    float
+        relative_likelihood_bic:    float
+        model_weight_aic:           float
+        model_weight_bic:           float
+        log10_bf_aic:               float   # log_10 (Bayes factor)
+        log10_bf_bic:               float   # log_10 (Bayes factor)
+        """
+
+    class BestModel(dj.Part):
+        definition = """
+        -> master
+        ---
+        best_aic:      int   # model_id of the model with the smallest aic
+        best_bic:      int    # model_id of the model with the smallest bic
+        best_cross_validation_test:      int   # model_id of the model with the highest cross validation test accuracy
+        """
+
+    def make(self, key):
+        competing_models = ModelComparison.Competitor & key
+        results = (FittedSessionModel & key & competing_models).fetch(format='frame').reset_index()
+        if len(results) < len(competing_models):   # not all fitting results of competing models are ready
+            return
+
+        delta_aic = results.aic - np.min(results.aic)
+        delta_bic = results.bic - np.min(results.bic)
+
+        # Relative likelihood = Bayes factor = p_model/p_best = exp( - delta_aic / 2)
+        results['relative_likelihood_aic'] = np.exp(- delta_aic / 2)
+        results['relative_likelihood_bic'] = np.exp(- delta_bic / 2)
+
+        # Model weight = Relative likelihood / sum(Relative likelihood)
+        results['model_weight_aic'] = results['relative_likelihood_aic'] / np.sum(results['relative_likelihood_aic'])
+        results['model_weight_bic'] = results['relative_likelihood_bic'] / np.sum(results['relative_likelihood_bic'])
+
+        # log_10 (Bayes factor) = log_10 (exp( - delta_aic / 2)) = (-delta_aic / 2) / log(10)
+        results['log10_bf_aic'] = - delta_aic / 2 / np.log(10)  # Calculate log10(Bayes factor) (relative likelihood)
+        results['log10_bf_bic'] = - delta_bic / 2 / np.log(10)  # Calculate log10(Bayes factor) (relative likelihood)
+
+        best_aic = results.model_id[np.argmin(results.aic)]
+        best_bic = results.model_id[np.argmin(results.bic)]
+        best_cross_validation_test = results.model_id[np.argmax(results.cross_valid_accuracy_test)]
+
+        results['model_comparison_idx'] = key['model_comparison_idx']
+        self.insert1(key)
+        self.RelativeStat.insert(results, ignore_extra_fields=True, skip_duplicates=True)
+        self.BestModel.insert1({**key,
+                                'best_aic': best_aic,
+                                'best_bic': best_bic,
+                                'best_cross_validation_test': best_cross_validation_test})
+
 
 # ============= Helpers =============
 
@@ -279,23 +426,59 @@ def get_session_history(session_key, remove_ignored=True):
     # Fetch data
     q_choice_outcome = (experiment.WaterPortChoice.proj(choice='water_port')
                         * experiment.BehaviorTrial.proj('outcome', 'early_lick')
-                        * experiment.SessionBlock.BlockTrial) & session_key  # Remove ignored trials
+                        * experiment.SessionBlock.BlockTrial) & session_key
     if remove_ignored:
         q_choice_outcome &= 'outcome != "ignore"'
 
     # TODO: session QC (warm-up and decreased motivation etc.)
 
-    # Formatting
-    _choice = (q_choice_outcome.fetch('choice') == 'right').astype(int)    # 0: left, 1: right
-    _reward = q_choice_outcome.fetch('outcome') == 'hit'
+    # -- Choice and reward --
+    # 0: left, 1: right, np.nan: ignored
+    _choice = q_choice_outcome.fetch('choice', order_by='trial')
+    _choice[_choice == 'left'] = 0
+    _choice[_choice == 'right'] = 1
+
+    _reward = q_choice_outcome.fetch('outcome', order_by='trial') == 'hit'
     reward_history = np.zeros([2, len(_reward)])  # .shape = (2, N trials)
     for c in (0, 1):
         reward_history[c, _choice == c] = (_reward[_choice == c] == True).astype(int)
-    choice_history = np.array([_choice])  # .shape = (1, N trials)
-
-    # p_reward (optional)
+        
+    if remove_ignored:  # For model fitting, turn to integer
+        choice_history = np.array([_choice]).astype(int)  # .shape = (1, N trials)
+    else:  # Include np.NaNs, can't be integers
+        choice_history = np.array([_choice]).astype(float)  # .shape = (1, N trials)
+    
+    # -- ITI --
+    # All previous models has an effective ITI of constant 1.
+    # For Ulises RNN model, an important prediction is that values in line attractor decay over (actual) time with time constant tau_CANN.
+    # This will take into consideration (1) different ITI of each trial, and (2) long effective ITI after ignored trials.
+    # Thus for CANN model, the ignored trials are also removed, but they contribute to model fitting in increasing the ITI.
+    
+    if (len(ephys.TrialEvent & q_choice_outcome) 
+        and len(dj.U('trial') & (ephys.TrialEvent & q_choice_outcome)) == len(dj.U('trial') & (experiment.TrialEvent & q_choice_outcome))):
+        # Use NI times (trial start and trial end) if (1) ephys exists (2) len(ephys) == len(behavior)
+        trial_start = (ephys.TrialEvent & q_choice_outcome & 'trial_event_type = "bitcodestart"'
+                       ).fetch('trial_event_time', order_by='trial').astype(float)
+        trial_end = (ephys.TrialEvent & q_choice_outcome & 'trial_event_type = "trialend"'
+                     ).fetch('trial_event_time', order_by='trial').astype(float)
+        iti = trial_start[1:] - trial_end[:-1]  # ITI [t] --> ITI between trial t-1 and t
+    else:  # If not ephys session, we can only use PC time (should be fine because this fitting is not quite time-sensitive)
+        bpod_start_global = (experiment.SessionTrial & q_choice_outcome
+                             ).fetch('start_time', order_by='trial').astype(float)  # This is (global) PC time
+        bitcodestart_local = (experiment.TrialEvent & q_choice_outcome & 'trial_event_type = "bitcodestart"'
+                              ).fetch('trial_event_time', order_by='trial').astype(float)
+        trial_end_local = (experiment.TrialEvent & q_choice_outcome & 'trial_event_type = "trialend"'
+                           ).fetch('trial_event_time', order_by='trial').astype(float)
+        if len(bitcodestart_local) and len(trial_end_local):
+            iti = (bpod_start_global[1:] + bitcodestart_local[1:]) - (bpod_start_global[:-1] + trial_end_local[:-1])
+        else:
+            iti = bpod_start_global[1:] - bpod_start_global[:-1]
+        
+    iti = np.hstack([0, iti])  # First trial iti is irrelevant
+    
+    # -- p_reward --
     q_p_reward = q_choice_outcome.proj() * experiment.SessionBlock.WaterPortRewardProbability & session_key
-    p_reward = np.vstack([(q_p_reward & 'water_port="left"').fetch('reward_probability').astype(float),
-                          (q_p_reward & 'water_port="right"').fetch('reward_probability').astype(float)])
+    p_reward = np.vstack([(q_p_reward & 'water_port="left"').fetch('reward_probability', order_by='trial').astype(float),
+                          (q_p_reward & 'water_port="right"').fetch('reward_probability', order_by='trial').astype(float)])
 
-    return choice_history, reward_history, p_reward, q_choice_outcome
+    return choice_history, reward_history, iti, p_reward, q_choice_outcome

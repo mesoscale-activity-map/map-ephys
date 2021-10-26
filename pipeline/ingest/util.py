@@ -312,7 +312,7 @@ def compare_pc_and_bpod_times(q_sess=dj.AndList(['water_restriction_number = "HH
     ax[0].legend()
     
 
-def compare_ni_and_bpod_times(q_sess=dj.AndList(['subject_id = "473361"', 'session >= 57']), event_to_align='bitcodestart'):
+def compare_ni_and_bpod_times(q_sess=dj.AndList(['subject_id = "473361"', 'session >= 57']), event_to_align='bitcodestart', legend=False):
     '''
     Compare NI-TIME and BPOD-TIME
     This is a critical validation for ephys timing alignment
@@ -325,14 +325,14 @@ def compare_ni_and_bpod_times(q_sess=dj.AndList(['subject_id = "473361"', 'sessi
 
     '''
     
-    event_all = ['bitcodestart', 'go', 'choice', 'trialend']
+    event_all = ['bitcodestart', 'go', 'choice', 'trialend'] if not legend else ['go', 'choice', 'trialend']
     event_to_compare = [e for e in event_all if e != event_to_align]
     
     # 1. -- all events, Bpod vs NIXD --
     # Ephys time
     ephys_times = (ephys.TrialEvent & q_sess & f'trial_event_type IN {tuple(event_all)}').fetch(format='frame')
     ephys_times = ephys_times.reset_index().pivot(index = ['subject_id', 'session', 'trial'], columns='trial_event_type').trial_event_time.astype(float)
-    session_times = ephys_times.bitcodestart
+    session_times = ephys_times.bitcodestart if not legend else ephys_times.go
     ephys_times = ephys_times.sub(ephys_times[event_to_align], axis=0).drop(columns=event_to_align)  # To each bitcode start (bpodstart is sometimes problematic if a new bpod session is started)
 
     # Bpod time
@@ -340,8 +340,15 @@ def compare_ni_and_bpod_times(q_sess=dj.AndList(['subject_id = "473361"', 'sessi
     bpod_times = bpod_times.reset_index().pivot(index = ['subject_id', 'session', 'trial'], columns='trial_event_type').trial_event_time.astype(float)  # Already related to bpod start
     bpod_times = bpod_times.sub(bpod_times[event_to_align], axis=0).drop(columns=event_to_align)  # To each trial's bpod start
 
+    # Truncate bpod time, if len(bpod) > len(ephys), but assuming their first trial has been correctly aligned in ingest.ephys
+    # (this is actually a sanity check)
+    if len(bpod_times) > len(ephys_times):
+        print('Bpod length > ephys length!! Bpod truncated...')
+        bpod_times = bpod_times[:len(ephys_times)]
+
+
     # Plot: Bpod vs NIXD, distribution of differences
-    fig = plt.figure(figsize=(8,13))
+    fig = plt.figure(figsize=(8,len(event_all)*3))
     ax = fig.subplots(len(event_to_compare), 2)
     max_error = 0
     for n, event in enumerate(event_to_compare):
@@ -367,6 +374,9 @@ def compare_ni_and_bpod_times(q_sess=dj.AndList(['subject_id = "473361"', 'sessi
     nixa_first_lick = ephys_go_cue.proj().aggr(
         (ephys.ActionEvent * ephys_go_cue) & 'action_event_time >= ephys_go',
         nixa='min(action_event_time)')    # Session-time of first lick of each trial
+
+    if not len(nixa_first_lick):
+        return
 
     q_all = (nixa_first_lick.proj(..., tmp='trial_event_id')   # NIXA
             * (ephys.TrialEvent & 'trial_event_type = "choice"').proj(nixd='trial_event_time', tmp1='trial_event_id')   # NIXD
