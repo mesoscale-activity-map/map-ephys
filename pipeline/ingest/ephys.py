@@ -146,28 +146,41 @@ class EphysIngest(dj.Imported):
         #   when needed for different-length recordings
         # - otherwise, use trial number correction array (bf['trialNum'])
 
-        sync_behav_start = np.where(sync_behav == sync_ephys[0])[0][0]
-        sync_behav_range = sync_behav[sync_behav_start:][:len(sync_ephys)]
+        # First, find the first Ephys trial in behavior data (sometimes ephys is not started in time)
+        sync_behav_start = np.where(sync_behav == sync_ephys[0])[0][0]   
+       
+        # Ephys trial will never start BEFORE behavioral trial, so the above line is always correct.
+        # But due to pybpod bug, sometimes the last behavioral trial is invalid, making Ephys even LONGER than behavior. 
+        # Therefore, we must find out both sync_behav_range AND sync_ephys_range (otherwise the next `if not np.all` could fail)
+        sync_behav_range = sync_behav[sync_behav_start:][:len(sync_ephys)]   # Note that this will not generate error even if len(sync_ephys) > len(behavior)
+        shared_trial_num = len(sync_behav_range)
+        sync_ephys_range = sync_ephys[:shared_trial_num]   # Now they must have the same length
 
-        if not np.all(np.equal(sync_ephys, sync_behav_range)):
+        if not np.all(np.equal(sync_ephys_range, sync_behav_range)):
             if trial_fix is not None:
                 log.info('ephys/bitcode trial mismatch - fix using "trialNum"')
                 trials = trial_fix
             else:
                 raise Exception('Bitcode Mismatch - Fix with "trialNum" not available')
         else:
+            # TODO: recheck the logic here!
             if len(sync_behav) < len(sync_ephys):
-                start_behav = np.where(sync_behav[0] == sync_ephys)[0][0]
+                start_behav = np.where(sync_behav[0] == sync_ephys)[0][0]  # TODO: This is problematic because ephys never leads behavior, otherwise the logic above is wrong
             elif len(sync_behav) > len(sync_ephys):
                 start_behav = - np.where(sync_ephys[0] == sync_behav)[0][0]
             else:
                 start_behav = 0
-            trial_indices = np.arange(len(sync_behav_range)) - start_behav
+            trial_indices = np.arange(shared_trial_num) - start_behav
 
             # mapping to the behav-trial numbering
             # "trials" here is just the 0-based indices of the behavioral trials
             behav_trials = (experiment.SessionTrial & skey).fetch('trial', order_by='trial')
             trials = behav_trials[trial_indices]
+            
+            # TODO: this is a workaround to deal with the case where ephys stops later than behavior 
+            # but with the assumption that ephys will NEVER start earlier than behavior
+            trial_start = trial_start[:shared_trial_num]  # Truncate ephys 'trial_start' at the tail
+            # And also truncate the ingestion of digital markers (see immediate below)
 
         assert len(trial_start) == len(trials), 'Unequal number of bitcode "trial_start" ({}) and ingested behavior trials ({})'.format(len(trial_start), len(trials))
 
@@ -176,7 +189,7 @@ class EphysIngest(dj.Imported):
         # But this is critical for the foraging task, because we need global session-wise times to plot flexibly-aligned PSTHs (in particular, spikes during ITI).
         # However, we CANNOT get this from behavior pybpod .csv files (PC-TIME is inaccurate, whereas BPOD-TIME is trial-based)
         if probe == 1 and 'digMarkerPerTrial' in bitcode_raw:   # Only import once for one session
-            insert_ephys_events(skey, bitcode_raw)
+            insert_ephys_events(skey, bitcode_raw, shared_trial_num)
 
         # trialize the spikes & subtract go cue
         t, trial_spikes, trial_units = 0, [], []
@@ -188,7 +201,7 @@ class EphysIngest(dj.Imported):
             s0, s1 = trial_start[t], trial_start[t+1]
 
             trial_idx = np.where((spikes > s0) & (spikes < s1))
-            spike_trial_num[trial_idx] = trials[t]
+            spike_trial_num[trial_idx] = trials[t]   # Assign (behavioral) trial number to each spike
 
             trial_spikes.append(spikes[trial_idx] - trial_go[t])
             trial_units.append(units[trial_idx])
@@ -1086,7 +1099,7 @@ def read_bitcode(bitcode_dir, h2o, skey):
     return behavior_bitcodes, ephys_bitcodes, trial_numbers, ephys_trial_ref_times, ephys_trial_start_times, bf
 
 
-def insert_ephys_events(skey, bf):
+def insert_ephys_events(skey, bf, trial_trunc=None):
     '''
     all times are session-based
     '''
@@ -1100,8 +1113,10 @@ def insert_ephys_events(skey, bf):
     headings = bf['headings'][0]
     digMarkerPerTrial = bf['digMarkerPerTrial']
     
+    if trial_trunc is None: trial_trunc = digMarkerPerTrial.shape[0]
+    
     for col, event_type in enumerate(headings):
-        times = digMarkerPerTrial[:, col]
+        times = digMarkerPerTrial[:trial_trunc, col]
         not_nan = np.where(~np.isnan(times))[0]
         trials = not_nan + 1   # Trial all starts from 1
         df = df.append(pd.DataFrame({**skey,
@@ -1114,7 +1129,7 @@ def insert_ephys_events(skey, bf):
 
     # --- Zaber pulses (only available from ephys NIDQ) ---
     if 'zaberPerTrial' in bf:
-        for trial, pulses in enumerate(bf['zaberPerTrial'][0]):
+        for trial, pulses in enumerate(bf['zaberPerTrial'][0][:trial_trunc]):
             df = df.append(pd.DataFrame({**skey,
                                'trial': trial + 1,   # Trial all starts from 1
                                'trial_event_id': np.arange(len(pulses)) + len(headings),
@@ -1134,7 +1149,7 @@ def insert_ephys_events(skey, bf):
     if len(exist_lick):
         log.info(f'       loading licks from NIDQ ...')
         
-        for trial, *licks in enumerate(zip(*(bf[lick_wrapper[ltype]][0] for ltype in exist_lick))):
+        for trial, *licks in enumerate(zip(*(bf[lick_wrapper[ltype]][0][:trial_trunc] for ltype in exist_lick))):
             lick_times = {ltype: ltime for ltype, ltime in zip(exist_lick, *licks)}
             all_lick_types = np.concatenate(
                 [[ltype] * len(ltimes) for ltype, ltimes in lick_times.items()])
@@ -1160,7 +1175,7 @@ def insert_ephys_events(skey, bf):
         _idx = [_idx for _idx, field in enumerate(bf['chan'].dtype.descr) if 'cameraNameInDJ' in field][0]
         cameras = bf['chan'][0,0][_idx][0,:]
         for camera, all_frames in zip(cameras, bf['cameraPerTrial'][0]):
-            for trial, frames in enumerate(all_frames[0]):
+            for trial, frames in enumerate(all_frames[0][:trial_trunc]):
                 key = {**skey,
                        'trial': trial + 1,  # Trial all starts from 1
                        'tracking_device': camera[0]}
