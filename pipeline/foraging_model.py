@@ -168,8 +168,8 @@ class Model(dj.Manual):
             # ['Synaptic_W>0', ['learn_rate', 'forget_rate', 'I0', 'rho', 'softmax_temperature', 'biasL'],
             #  [0, 0, 0, -100, 1e-2, -5], [1, 1, 10, 100, 15, 5], "Ulises' synaptic model (W > 0, partially constrained I_0 and \\rho)"],
             
-            ['Synaptic_W>0', ['learn_rate', 'forget_rate', 'I0', 'rho', 'softmax_temperature', 'biasL'],
-             [0, 0, 0, -1e6, 1e-2, -5], [1, 1, 10, 1e6, 15, 5], "Ulises' synaptic model (W > 0, unconstrained I_0 and \\rho)"],
+            # ['Synaptic_W>0', ['learn_rate', 'forget_rate', 'I0', 'rho', 'softmax_temperature', 'biasL'],
+            #  [0, 0, 0, -1e6, 1e-2, -5], [1, 1, 10, 1e6, 15, 5], "Ulises' synaptic model (W > 0, unconstrained I_0 and \\rho)"],
         ]
 
         # Parse and insert MODELS

@@ -378,7 +378,7 @@ class AlignType(dj.Lookup):
         ['trial_start', 'zaberready', '', 0, 0, [-3, 2], [-2, 1]],
         ['go_cue', 'go', '', 0, 0, [-2, 5], [-1, 3]],
         ['first_lick_after_go_cue', 'choice', 'first non-early lick', 0, 0, [-2, 5], [-1, 3]],
-        ['iti_start', 'trialend', '', 0, 0, [-3, 10], [-2, 5]],
+        ['iti_start', 'trialend', '', 0, 0, [-3, 10], [-3, 5]],
         ['next_trial_start', 'zaberready', '', 1, 0, [-10, 3], [-8, 1]],
         ['next_two_trial_start', 'zaberready', '', 2, 0, [-10, 5], [-8, 3]],
 
