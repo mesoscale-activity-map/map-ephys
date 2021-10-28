@@ -782,6 +782,41 @@ class WhiskerSVD(dj.Computed):
         proc = process.run(video_files_l, proc=roi_data)
         
         self.insert1({**key, 'mot_svd': proc['motSVD'][1][:, :3]})
+        
+@schema
+class BottomSVD(dj.Computed):
+    definition = """
+    -> experiment.Session
+    ---
+    mot_svd_bot: longblob
+    """
+    
+    key_source = experiment.Session & 'rig = "RRig-MTL"' & (tracking.Tracking  & 'tracking_device = "Camera 4"')
+    
+    def make(self, key):
+        
+        from facemap import process
+        
+        #roi_path = 'H://videos//bottom//DL027//2021_07_01//DL027_2021_07_01_bottom_0_proc.npy'
+        roi_path = 'H://videos//bottom//DL017//2021_07_14//DL017_2021_07_14_bottom_0_proc.npy'
+        roi_data = np.load(roi_path, allow_pickle=True).item()
+        
+        video_root_dir = pathlib.Path('H:/videos')
+        
+        trial_path = (tracking_ingest.TrackingIngest.TrackingFile & 'tracking_device = "Camera 4"' & 'trial = 1' & key).fetch1('tracking_file')
+        
+        video_path = video_root_dir / trial_path
+        
+        video_path = video_path.parent
+        
+        video_files = list(video_path.glob('*.mp4'))
+        video_files_l = [[str(video_files[0])]]
+        for ind_trial, file in enumerate(video_files[1:]):
+            video_files_l.append([str(file)])
+            
+        proc = process.run(video_files_l, proc=roi_data)
+        
+        self.insert1({**key, 'mot_svd_bot': proc['motSVD'][1][:, :16]})
 
 @schema
 class ContactLick(dj.Computed):
