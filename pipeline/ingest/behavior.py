@@ -447,7 +447,9 @@ class BehaviorBpodIngest(dj.Imported):
 
     def populate(self, *args, **kwargs):
         # Load project info (just once)
+        log.info('------ Loading pybpod project -------')
         self.projects = self.get_bpod_projects()
+        log.info('------------   Done! ----------------')
 
         # 'populate' which won't require upstream tables
         # 'reserve_jobs' not parallel, overloaded to mean "don't exit on error"                          

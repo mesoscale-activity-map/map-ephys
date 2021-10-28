@@ -9,10 +9,11 @@ import seaborn as sns
 import itertools
 import pandas as pd
 
-from pipeline import experiment, ephys, psth, lab, histology, ccf
+from pipeline import experiment, ephys, psth, lab, histology, ccf, psth_foraging
 
 from pipeline.plot.util import (_plot_with_sem, _extract_one_stim_dur,
                                 _plot_stacked_psth_diff, _plot_avg_psth, _jointplot_w_hue)
+from pipeline.plot import unit_psth
 from pipeline.util import (_get_units_hemisphere, _get_trial_event_times,
                            _get_stim_onset_time, _get_clustering_method)
 
@@ -792,6 +793,154 @@ def plot_paired_coding_direction(unit_g1, unit_g2, labels=None, time_period=None
     return fig
 
 
+# ========== Foraging task ==========
+def plot_unit_period_fit(linear_model='Q_rel + Q_tot + rpe'):
+#%%
+    # linear_model='Q_c + Q_i + rpe'
+    q_unit = ((ephys.Unit * ephys.ClusterMetric * ephys.UnitStat * ephys.MAPClusterMetric.DriftMetric)
+              & 'presence_ratio > 0.95'
+              & 'amplitude_cutoff < 0.1'
+              & 'isi_violation < 0.5' 
+              & 'unit_amp > 70'
+              # & 'drift_metric < 0.1'
+              )
+
+    q_hist = (q_unit * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation
+    q_unit_n = dj.U('annotation').aggr(q_hist, area_num_units='count(*)')
+    q_hist *= q_unit_n
+
+    lvs = (psth_foraging.LinearModel.X & {'multi_linear_model': linear_model}).fetch('var_name')
+    q_all = ((psth_foraging.UnitPeriodLinearFit
+              * psth_foraging.UnitPeriodLinearFit.Param
+              * q_hist)
+              & {'multi_linear_model': linear_model})   
+
+#%%
+    # -- Heatmap ---
+    # for lv in zip(lvs):
+    #     fig, ax = plt.subplots(1, 1, figsize=(13, 15))
+
+    #     df = pd.DataFrame((q_all & {'var_name': lv}).proj('beta', 'p', 't', 'area_num_units').fetch())
+    #     df = df.pivot(index=['subject_id', 'session', 'insertion_number',
+    #                          'clustering_method', 'unit', 'annotation', 'area_num_units'], 
+    #                   columns='period', values='t')
+    #     df.sort_values(by=['area_num_units', 'iti_all'], ascending=False , inplace=True)
+    #     df = df.reset_index().drop(['subject_id', 'session', 'insertion_number', 
+    #                                'clustering_method', 'unit', 'area_num_units'], axis=1)
+    #     df = df.set_index('annotation')
+    #     sns.heatmap(df, ax=ax, cmap='coolwarm')
+    #     ax.set_position([0.5, 0.1, 0.2, 0.8])
+
+#%%
+    # -- t distribution --
+    epochs = ['delay', 'go_to_end', 'iti_first_2', 'iti_last_2']
+    fig, axs = plt.subplots(len(lvs), len(epochs), figsize=(4*len(epochs), 4*len(lvs)))
+    areas = q_unit_n.fetch(order_by='area_num_units desc', format='frame')
+
+    # Areas that have most number of neurons
+    areas = list(areas.index[:10])
+
+    for i, lv in enumerate(lvs):
+        for j, ep in enumerate(epochs):
+            ax = axs[i, j]
+            ax.axhline(y=0.95, color='k', linestyle=':')
+            ax.axvline(x=1.96, color='k', linestyle=':')
+
+            for area in areas:
+                this_ts = (q_all & {'var_name': lv, 'period': ep, 'annotation': area}).fetch('t')
+                values, bin = np.histogram(np.abs(this_ts), 100)
+                ax.plot(bin[:-1], np.cumsum(values)/len(this_ts), label=f'{area}, n = {len(this_ts)}')
+
+            ax.set(xlim=(0, 10))
+            ax.label_outer()
+
+            if i == 0:
+                ax.set_title(ep)
+            if j == 0:
+                ax.set_ylabel(lv)
+            if i == len(lvs) - 1 and j == 0:
+                ax.set_xlabel('|t value|')
+    
+    ax.legend(bbox_to_anchor=(-1,3), loc='upper left')
+
+#%%
+    # -- ipsi and contra action value weights --
+    fig, axs = plt.subplots(1,2, figsize=(8,4))
+    lvs = ['ipsi_action_value', 'contra_action_value'] if linear_model == 'Q_c + Q_i + rpe' \
+          else ['relative_action_value_ic', 'total_action_value']
+
+    for j, ep in enumerate(['go_to_end', 'iti_all']):
+        ax = axs[j]
+
+        for area in areas:
+            # if not 'thalamus' in area:
+            #     continue
+
+            ax.axhline(y=-2, color='k', ls='--', lw=.5)
+            ax.axhline(y=2, color='k', ls='--', lw=.5)
+            ax.axvline(x=-2, color='k', ls='--', lw=.5)
+            ax.axvline(x=2, color='k', ls='--', lw=.5)
+
+            df = pd.DataFrame((q_all
+                               & {'annotation': area}
+                               & {'period': ep}).proj('beta', 'p', 'area_num_units', 't').fetch())
+
+            betas = df.pivot(index=['subject_id', 'session', 'insertion_number',
+                                'clustering_method', 'unit', 'annotation', 'area_num_units'], 
+                                columns='var_name', values='t')
+            ps = df.pivot(index=['subject_id', 'session', 'insertion_number',
+                                'clustering_method', 'unit', 'annotation', 'area_num_units'], 
+                                columns='var_name', values='p')
+            sizes = 2 + 2 * np.sum(ps.values < 0.05, axis=1)
+            ax.scatter(x=betas[lvs[0]], y=betas[lvs[1]], s=sizes)
+            ax.set_xlim([-20, 20])
+            ax.set_ylim([-20, 20])
+            ax.set_xlabel(lvs[0])
+            ax.set_ylabel(lvs[1])
+            ax.set_title(ep)
+            ax.label_outer()
+
+            # sns.scatterplot(data=betas, x='ipsi_action_value', y='contra_action_value',
+            #                 hue='annotation', sizes=sizes, legend=False)
+
+
+#%%
+
+def plot_example_cells(sort_lv = 'relative_action_value_ic', 
+                       sort_ep = 'iti_all',
+                       best_n = 10, linear_model='Q_rel + Q_tot + rpe'):
+    
+#%%
+    q_unit = ((ephys.Unit * ephys.ClusterMetric * ephys.UnitStat * ephys.MAPClusterMetric.DriftMetric)
+              & 'presence_ratio > 0.95'
+              & 'amplitude_cutoff < 0.1'
+              & 'isi_violation < 0.5' 
+              & 'unit_amp > 100'
+              # & 'drift_metric < 0.1'
+              )
+
+    q_hist = (q_unit * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation
+    q_unit_n = dj.U('annotation').aggr(q_hist, area_num_units='count(*)')
+    q_hist *= q_unit_n
+
+    lvs = (psth_foraging.LinearModel.X & {'multi_linear_model': linear_model}).fetch('var_name')
+    q_all = ((psth_foraging.UnitPeriodLinearFit
+              * psth_foraging.UnitPeriodLinearFit.Param
+              * q_hist)
+              & {'multi_linear_model': linear_model})   
+
+    # Best n (absolute value)
+    best_models = (q_all & f'var_name = "{sort_lv}"' & f'period = "{sort_ep}"').proj(
+        'actual_behavior_model', abs_t='abs(t)').fetch(order_by='abs_t desc', limit=best_n, format='frame')
+
+    for unit_key in best_models.reset_index().to_dict('records'):
+        unit_psth.plot_unit_psth_choice_outcome(unit_key)
+        unit_psth.plot_unit_psth_latent_variable_quantile(unit_key, 
+            model_id=unit_key['actual_behavior_model'])
+        unit_psth.plot_unit_period_tuning(unit_key)
+
+
+#%%
 # =========== HELPER ==============
 
 def get_m_scale(shank_count):
