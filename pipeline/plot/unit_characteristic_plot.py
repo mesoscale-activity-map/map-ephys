@@ -866,8 +866,12 @@ def plot_unit_period_fit(linear_model='Q_rel + Q_tot + rpe'):
 #%%
     # -- ipsi and contra action value weights --
     fig, axs = plt.subplots(1,2, figsize=(8,4))
-    lvs = ['ipsi_action_value', 'contra_action_value'] if linear_model == 'Q_c + Q_i + rpe' \
-          else ['relative_action_value_ic', 'total_action_value']
+    if linear_model == 'Q_c + Q_i + rpe':
+        lvs = ['ipsi_action_value', 'contra_action_value'] 
+    elif linear_model == 'Q_l + Q_r + rpe':
+        lvs = ['left_action_value', 'right_action_value']
+    else:
+        lvs = ['relative_action_value_ic', 'total_action_value']
 
     for j, ep in enumerate(['go_to_end', 'iti_all']):
         ax = axs[j]
