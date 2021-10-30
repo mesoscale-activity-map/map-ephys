@@ -32,7 +32,7 @@ class TrialStats(dj.Computed):
                                     & 'action_event_time > {}'.format(gocue_time))
         q_reaction_time = experiment.BehaviorTrial.aggr(q_all_licks_after_go_cue,
                                                         reaction_time='min(action_event_time)')
-        if q_reaction_time:
+        if len(q_reaction_time):
             trial_stats['reaction_time'] = q_reaction_time.fetch1('reaction_time') - gocue_time
             
         # -- Double dipping --
