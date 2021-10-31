@@ -495,6 +495,7 @@ class UnitPeriodLinearFit(dj.Computed):
     model_p=Null:   float
     """
 
+    key_source = (ephys.Unit & foraging_sessions) * LinearModelPeriodToFit * LinearModelBehaviorModelToFit * LinearModel
     class Param(dj.Part):
         definition = """
         -> master
@@ -589,6 +590,7 @@ def compute_unit_psth_and_raster(unit_key, trial_keys, align_type='go_cue', bin_
     # -- Get global times for spike and event --
     q_spike = ephys.Unit & unit_key  # Using ephys.Unit, not ephys.Unit.TrialSpikes
     q_event = ephys.TrialEvent & trial_keys & q_align_type   # Using ephys.TrialEvent, not experiment.TrialEvent
+    
     if not q_spike or not q_event:
         return None
 
