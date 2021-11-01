@@ -775,11 +775,9 @@ class UnitLevelForagingEphysReport(dj.Computed):
     definition = """
     -> ephys.Unit
     ---
-    unit_foraging: filepath@report_store
+    unit_foraging_tuning: filepath@report_store  # unit tuning plot for a particular time period
+    unit_foraging_mlr: filepath@report_store  # multivariate linear regression result for a particular unit
     """
-
-    #Plot sessions that have independent variables: 
-    #contra_action_value, ipsi_action_value, rpe
 
     key_source = ephys.Unit & ephys.TrialEvent & foraging_model.FittedSessionModel
 
@@ -795,7 +793,7 @@ class UnitLevelForagingEphysReport(dj.Computed):
 
         # ---- Save fig and insert ----
         fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_u{key["unit"]:03}_'
-        fig_dict = save_figs((fig1,), ('unit_foraging',), units_dir, fn_prefix)
+        fig_dict = save_figs((fig1, fig2), ('unit_foraging_tuning', 'unit_foraging_mlr'), units_dir, fn_prefix)
  
         plt.close('all')
         self.insert1({**key, **fig_dict})
