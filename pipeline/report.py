@@ -779,7 +779,7 @@ class UnitLevelForagingEphysReport(dj.Computed):
     unit_foraging_mlr: filepath@report_store  # multivariate linear regression result for a particular unit
     """
 
-    key_source = ephys.Unit & ephys.TrialEvent & foraging_model.FittedSessionModel
+    key_source = ephys.Unit & foraging_model.FittedSessionModel
 
     def make(self, key):
         if not ephys.check_unit_criteria(key):
