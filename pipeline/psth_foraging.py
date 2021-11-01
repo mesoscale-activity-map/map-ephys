@@ -16,13 +16,6 @@ from pipeline.util import _get_unit_independent_variable
 schema = dj.schema(get_schema_name('psth_foraging'))
 log = logging.getLogger(__name__)
 
-# NOW:
-# - rework Condition to TrialCondition funtion+arguments based schema
-
-# The new psth_foraging schema is only for foraging sessions. 
-foraging_sessions = experiment.Session & (experiment.BehaviorTrial & 'task LIKE "foraging%"')
-
-
 @schema
 class TrialCondition(dj.Lookup):
     '''
@@ -495,6 +488,7 @@ class UnitPeriodLinearFit(dj.Computed):
     model_p=Null:   float
     """
 
+    key_source = (ephys.Unit & (experiment.BehaviorTrial & 'task LIKE "foraging%"')) * LinearModelPeriodToFit * LinearModelBehaviorModelToFit * LinearModel
     class Param(dj.Part):
         definition = """
         -> master
@@ -589,6 +583,7 @@ def compute_unit_psth_and_raster(unit_key, trial_keys, align_type='go_cue', bin_
     # -- Get global times for spike and event --
     q_spike = ephys.Unit & unit_key  # Using ephys.Unit, not ephys.Unit.TrialSpikes
     q_event = ephys.TrialEvent & trial_keys & q_align_type   # Using ephys.TrialEvent, not experiment.TrialEvent
+    
     if not q_spike or not q_event:
         return None
 
