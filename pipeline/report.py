@@ -18,7 +18,7 @@ import itertools
 
 from pipeline import get_schema_name, FailedUnitCriteriaError
 from pipeline import (experiment, ephys, psth, tracking, lab, histology, ccf,
-                      foraging_analysis, oralfacial_analysis)
+                      foraging_analysis, foraging_model, oralfacial_analysis)
 
 from pipeline.plot import behavior_plot, unit_characteristic_plot, unit_psth, histology_plot, PhotostimError, foraging_plot
 from pipeline.plot.util import _plot_with_sem, _jointplot_w_hue
@@ -769,6 +769,38 @@ class UnitMTLTrackingReport(dj.Computed):
         plt.close('all')
         self.insert1({**key, **fig_dict})
 
+
+@schema
+class UnitLevelForagingEphysReport(dj.Computed):
+    definition = """
+    -> ephys.Unit
+    ---
+    unit_foraging: filepath@report_store
+    """
+
+    #Plot sessions that have independent variables: 
+    #contra_action_value, ipsi_action_value, rpe
+
+    key_source = ephys.Unit & ephys.TrialEvent & foraging_model.FittedSessionModel
+
+    def make(self, key):
+        if not ephys.check_unit_criteria(key):
+            raise FailedUnitCriteriaError(f'Unit {key} did not meet selection criteria')
+
+        water_res_num, sess_date = get_wr_sessdate(key)
+        units_dir = store_stage / water_res_num / sess_date / str(key['insertion_number']) / 'units'
+        units_dir.mkdir(parents=True, exist_ok=True)
+
+        fig1, fig2 = unit_psth.plot_unit_period_tuning(unit_key=key)
+
+        # ---- Save fig and insert ----
+        fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_u{key["unit"]:03}_'
+        fig_dict = save_figs((fig1,), ('unit_foraging',), units_dir, fn_prefix)
+ 
+        plt.close('all')
+        self.insert1({**key, **fig_dict})
+
+        
 # ============================= PROJECT LEVEL ====================================
 
 
@@ -839,6 +871,7 @@ report_tables = [SessionLevelReport,
                  UnitLevelEphysReport,
                  UnitMTLTrackingReport,
                  UnitLevelTrackingReport,
+                 UnitLevelForagingEphysReport,
                  SessionLevelCDReport,
                  SessionLevelProbeTrack,
                  ProjectLevelProbeTrack,
