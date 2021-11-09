@@ -256,7 +256,16 @@ def plot_unit_psth_choice_outcome(unit_key={'subject_id': 473361, 'session': 47,
         fig = plt.figure(figsize=(len(align_types)/5 * 25, (1+if_raster)/2 * 9))
         axs = fig.subplots(1 + if_raster, len(align_types), sharey='row', sharex='col')
         axs = np.atleast_2d(axs).reshape((1+if_raster, -1))
-        plt.subplots_adjust(top=0.8)
+        plt.subplots_adjust(top=0.8)  
+
+        # Add unit info
+        unit_info = (f'{(lab.WaterRestriction & unit_key).fetch1("water_restriction_number")}, '
+                    f'{(experiment.Session & unit_key).fetch1("session_date")}, '
+                    f'imec {unit_key["insertion_number"]-1}\n'
+                    f'Unit #: {unit_key["unit"]}, '
+                    f'{(((ephys.Unit & unit_key) * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation).fetch1("annotation")}'
+                    )
+        fig.text(0.1, 0.9, unit_info)              
 
     xlims = []
 
@@ -313,15 +322,6 @@ def plot_unit_psth_choice_outcome(unit_key={'subject_id': 473361, 'session': 47,
                                            title='', xlim=xlim)
             ax_raster.invert_yaxis()
 
-    # Add unit info
-    unit_info = (f'{(lab.WaterRestriction & unit_key).fetch1("water_restriction_number")}, '
-                 f'{(experiment.Session & unit_key).fetch1("session_date")}, '
-                 f'imec {unit_key["insertion_number"]-1}\n'
-                 f'Unit #: {unit_key["unit"]}, '
-                 f'{(((ephys.Unit & unit_key) * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation).fetch1("annotation")}'
-                 )
-    fig.text(0.1, 0.9, unit_info)
-
     # Scale axis widths to keep the same horizontal aspect ratio (time) across axs
     _set_same_horizonal_aspect_ratio(axs[1 if if_raster else 0, :], xlims)
     if if_raster:
@@ -370,6 +370,20 @@ def plot_unit_psth_latent_variable_quantile(unit_key={'subject_id': 473361, 'ses
         axs = fig.subplots(1, len(align_types), sharey='row', sharex='col')
         axs = np.atleast_2d(axs).reshape((1, -1))
         plt.subplots_adjust(top=0.8)
+            # Add unit and model info
+        latent_var_desc = (psth_foraging.IndependentVariable & {'var_name': latent_variable}).fetch1('desc')
+        unit_info = (f'{(lab.WaterRestriction & unit_key).fetch1("water_restriction_number")}, '
+                    f'Session {(experiment.Session & unit_key).fetch1("session")}, {(experiment.Session & unit_key).fetch1("session_date")}, '
+                    f'imec {unit_key["insertion_number"]-1}\n'
+                    f'Unit #{unit_key["unit"]}, '
+                    f'{(((ephys.Unit & unit_key) * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation).fetch1("annotation")}\n'
+                    f'=== Grouped by: {latent_var_desc} ==='
+                    )
+        id, model_notation, desc, accuracy, n = (foraging_model.FittedSessionModel * foraging_model.Model.proj(..., '-n_params') & unit_key & {'model_id': model_id}).fetch1(
+            'model_id', 'model_notation', 'desc', 'cross_valid_accuracy_test', 'n_trials')
+        fig.text(0.1, 0.9, unit_info)
+        fig.text(0.5, 0.9, f'model <{id}> {model_notation}\n{desc}\n{n} trials, prediction accuracy (cross-valid) = {accuracy}')
+
     kargs = [{'color': 'b' if 'contra' in latent_variable else 'r' if 'ipsi' in latent_variable else 'k',
               'alpha': np.linspace(0.2, 1, n_quantile)[rank],
               'label': f'quantile {rank + 1}'} for rank in range(n_quantile)]
@@ -405,20 +419,6 @@ def plot_unit_psth_latent_variable_quantile(unit_key={'subject_id': 473361, 'ses
 
     _set_same_horizonal_aspect_ratio(axs[0, :], xlims)
     ax_psth.legend(fontsize=10, ncol=2)
-
-    # Add unit and model info
-    latent_var_desc = (psth_foraging.IndependentVariable & {'var_name': latent_variable}).fetch1('desc')
-    unit_info = (f'{(lab.WaterRestriction & unit_key).fetch1("water_restriction_number")}, '
-                 f'Session {(experiment.Session & unit_key).fetch1("session")}, {(experiment.Session & unit_key).fetch1("session_date")}, '
-                 f'imec {unit_key["insertion_number"]-1}\n'
-                 f'Unit #{unit_key["unit"]}, '
-                 f'{(((ephys.Unit & unit_key) * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation).fetch1("annotation")}\n'
-                 f'=== Grouped by: {latent_var_desc} ==='
-                 )
-    id, model_notation, desc, accuracy, n = (foraging_model.FittedSessionModel * foraging_model.Model.proj(..., '-n_params') & unit_key & {'model_id': model_id}).fetch1(
-        'model_id', 'model_notation', 'desc', 'cross_valid_accuracy_test', 'n_trials')
-    fig.text(0.1, 0.9, unit_info)
-    fig.text(0.5, 0.9, f'model <{id}> {model_notation}\n{desc}\n{n} trials, prediction accuracy (cross-valid) = {accuracy}')
 
     return fig
 
