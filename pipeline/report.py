@@ -794,10 +794,6 @@ class UnitLevelForagingEphysReport(dj.Computed):
 
         fig3 = plt.figure(constrained_layout=True, figsize=(25, 25))
 
-        unit_info = (f'{water_res_num}, {sess_date}, imec {key["insertion_number"] - 1}\n'
-                     f'Unit #: {key["unit"]}, '
-                     f'{(((ephys.Unit & key) * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation).fetch1("annotation")} \n'
-                     )
         best_model = (foraging_model.FittedSessionModelComparison.BestModel & key
                       & 'model_comparison_idx=1').fetch1('best_aic')
         align_types = ['trial_start', 'go_cue', 'first_lick_after_go_cue',
@@ -805,17 +801,22 @@ class UnitLevelForagingEphysReport(dj.Computed):
         latent_variables = ['contra_action_value', 'ipsi_action_value',
                             'relative_action_value_ic', 'total_action_value']
 
-        fig3.text(0.3, 1, unit_info, fontsize='xx-large')
         subfigs = fig3.subfigures(5, 1, hspace=0.005, wspace=0.5, height_ratios=[1.4, 1, 1, 1, 1])
 
-        unit_psth.plot_unit_psth_choice_outcome(axs=subfigs[0].subplots(2, 5))
+        unit_psth.plot_unit_psth_choice_outcome(axs=subfigs[0].subplots(2, 5),
+                                                align_types=align_types)
 
         for subfig, latent_variable in zip(subfigs[1:], latent_variables):
             subfig_ax = subfig.subplots(1, len(align_types))
-            subfig.suptitle(f'===Grouped by {latent_variable}===', fontsize='xx-large')
+            subfig.suptitle(f'===Grouped by {latent_variable}===')
             unit_psth.plot_unit_psth_latent_variable_quantile(
                 unit_key=key, axs=subfig_ax.reshape(1, 5), model_id=best_model,
-                align_types=align_types, latent_variable=latent_variables)
+                align_types=align_types, latent_variable=latent_variable)
+
+        unit_info = (f'{water_res_num}, {sess_date}, imec {key["insertion_number"] - 1}\n'
+                     f'Unit #: {key["unit"]}, '
+                     f'{(((ephys.Unit & key) * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation).fetch1("annotation")} \n')
+        fig3.text(0.3, 1, unit_info)
 
         # ---- Save fig and insert ----
         fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_u{key["unit"]:03}_'
