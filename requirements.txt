@@ -5,7 +5,7 @@ globus-sdk
 tifffile
 pandas
 seaborn==0.11.0		# build issue - see matplotlib
-matplotlib==3.4.3
+matplotlib
 pillow
 tqdm
 xlrd
