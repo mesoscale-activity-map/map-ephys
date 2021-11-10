@@ -807,11 +807,13 @@ class UnitLevelForagingEphysReport(dj.Computed):
             unit_key=key, axs=np.array([fig3.add_subplot(gs[row_idx, col_idx])
                                         for row_idx, col_idx in itertools.product(range(2), range(5))]).reshape(2, 5))
 
-        for idx, latent_variable in zip(range(2, 6), latent_variables):
+        for row_idx, latent_variable in zip(range(2, 6), latent_variables):
+            axes = np.array([fig3.add_subplot(gs[row_idx, col_idx])
+                             for row_idx, col_idx in itertools.product(range(row_idx, row_idx + 1), range(5))])
             unit_psth.plot_unit_psth_latent_variable_quantile(
-                unit_key=key, axs=np.array([fig3.add_subplot(gs[row_idx, col_idx])
-                                            for row_idx, col_idx in itertools.product(range(idx,idx+1), range(5))]).reshape(1,5),
+                unit_key=key, axs=axes.reshape(1, 5),
                 model_id=best_model, align_types=align_types, latent_variable=latent_variable)
+            axes[0].set_ylabel(f'Grouped by\n{latent_variable}')
 
         unit_info = (f'{water_res_num}, {sess_date}, imec {key["insertion_number"] - 1}\n'
                      f'Unit #: {key["unit"]}, '
