@@ -801,22 +801,23 @@ class UnitLevelForagingEphysReport(dj.Computed):
         latent_variables = ['contra_action_value', 'ipsi_action_value',
                             'relative_action_value_ic', 'total_action_value']
 
-        subfigs = fig3.subfigures(5, 1, hspace=0.005, wspace=0.5, height_ratios=[1.4, 1, 1, 1, 1])
+        gs = GridSpec(6,25, right=5, hspace=0.4)
 
-        unit_psth.plot_unit_psth_choice_outcome(axs=subfigs[0].subplots(2, 5),
-                                                align_types=align_types)
+        unit_psth.plot_unit_psth_choice_outcome(unit_key=key,axs=np.array([fig3.add_subplot(gs[row_idx,col_idx])
+                                                                           for row_idx, col_idx in itertools.product(range(2), range(5))]).reshape(2,5))
+        index_range = range(2,6)
 
-        for subfig, latent_variable in zip(subfigs[1:], latent_variables):
-            subfig_ax = subfig.subplots(1, len(align_types))
-            subfig.suptitle(f'===Grouped by {latent_variable}===')
-            unit_psth.plot_unit_psth_latent_variable_quantile(
-                unit_key=key, axs=subfig_ax.reshape(1, 5), model_id=best_model,
-                align_types=align_types, latent_variable=latent_variable)
+        for idx, latent_variable in zip(index_range, latent_variables):
+            unit_psth.plot_unit_psth_latent_variable_quantile(unit_key=key,axs=np.array([fig3.add_subplot(gs[row_idx,col_idx])
+                                                                                        for row_idx, col_idx in itertools.product(range(idx,idx+1), range(5))]).reshape(1,5),
+                                                                                            model_id=best_model,
+                                                                                            align_types=align_types,
+                                                                                            latent_variable=latent_variable)
 
         unit_info = (f'{water_res_num}, {sess_date}, imec {key["insertion_number"] - 1}\n'
                      f'Unit #: {key["unit"]}, '
                      f'{(((ephys.Unit & key) * histology.ElectrodeCCFPosition.ElectrodePosition) * ccf.CCFAnnotation).fetch1("annotation")} \n')
-        fig3.text(0.3, 1, unit_info)
+        fig3.text(0.5, 9, unit_info)
 
         # ---- Save fig and insert ----
         fn_prefix = f'{water_res_num}_{sess_date}_{key["insertion_number"]}_{key["clustering_method"]}_u{key["unit"]:03}_'
