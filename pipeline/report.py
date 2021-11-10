@@ -801,18 +801,17 @@ class UnitLevelForagingEphysReport(dj.Computed):
         latent_variables = ['contra_action_value', 'ipsi_action_value',
                             'relative_action_value_ic', 'total_action_value']
 
-        gs = GridSpec(6,25, right=5, hspace=0.4)
+        gs = GridSpec(6, 25, right=5, hspace=0.4)
 
-        unit_psth.plot_unit_psth_choice_outcome(unit_key=key,axs=np.array([fig3.add_subplot(gs[row_idx,col_idx])
-                                                                           for row_idx, col_idx in itertools.product(range(2), range(5))]).reshape(2,5))
-        index_range = range(2,6)
+        unit_psth.plot_unit_psth_choice_outcome(
+            unit_key=key, axs=np.array([fig3.add_subplot(gs[row_idx, col_idx])
+                                        for row_idx, col_idx in itertools.product(range(2), range(5))]).reshape(2, 5))
 
-        for idx, latent_variable in zip(index_range, latent_variables):
-            unit_psth.plot_unit_psth_latent_variable_quantile(unit_key=key,axs=np.array([fig3.add_subplot(gs[row_idx,col_idx])
-                                                                                        for row_idx, col_idx in itertools.product(range(idx,idx+1), range(5))]).reshape(1,5),
-                                                                                            model_id=best_model,
-                                                                                            align_types=align_types,
-                                                                                            latent_variable=latent_variable)
+        for idx, latent_variable in zip(range(2, 6), latent_variables):
+            unit_psth.plot_unit_psth_latent_variable_quantile(
+                unit_key=key, axs=np.array([fig3.add_subplot(gs[row_idx, col_idx])
+                                            for row_idx, col_idx in itertools.product(range(idx,idx+1), range(5))]).reshape(1,5),
+                model_id=best_model, align_types=align_types, latent_variable=latent_variable)
 
         unit_info = (f'{water_res_num}, {sess_date}, imec {key["insertion_number"] - 1}\n'
                      f'Unit #: {key["unit"]}, '
