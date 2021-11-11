@@ -335,8 +335,7 @@ def plot_unit_psth_latent_variable_quantile(unit_key={'subject_id': 473361, 'ses
                                             model_id=11, n_quantile=5,
                                             align_types=['trial_start', 'go_cue', 'first_lick_after_go_cue', 'iti_start', 'next_trial_start'],
                                             latent_variable='contra_action_value',
-                                            axs=None, title=''
-                                            ):
+                                            axs=None, title=''):
     """
     (for foraging task) Plot psth grouped by quantiles of latent variable from behavioral model fitting
 
