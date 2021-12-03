@@ -259,7 +259,7 @@ def plot_tracking(session_key, unit_key,
     for trial_tracks, ax, ax_name, spk_color in zip(
             (trial_trk_3,trial_trk_6,trial_trk_9,trial_trk_2,trial_trk_5,trial_trk_8,trial_trk_1,trial_trk_4,trial_trk_7),
             axs.flatten(),
-            ('top-left trials', 'top-mid trials','top-right trials','mid-left trials','mid trials','mid-right trials','bot-left trials','bot-mid trials','bot-right trials'),
+            ('top-left trials','top-mid trials','top-right trials','mid-left trials','mid trials','mid-right trials','bot-left trials','bot-mid trials','bot-right trials'),
             ('k','k','k','k','k','k','k','k','k')):
         if not len(trial_tracks):
             ax.set_xticks([])
@@ -472,11 +472,15 @@ def plot_whisker_tuning(unit_key, axs=None):
 def water2subject(water,date):
     subject_id = (lab.WaterRestriction & {'water_restriction_number': water}).fetch('subject_id')
     session_num = (experiment.Session() * lab.WaterRestriction & {'water_restriction_number': water, 'session_date': date}).fetch('session')
+    print(subject_id)
+    print(session_num)
     return subject_id, session_num
 
 def subject2water(subject,session_num):
     water = (lab.WaterRestriction & {'subject_id': subject}).fetch('water_restriction_number')
     date = (experiment.Session() * lab.WaterRestriction & {'subject_id': subject, 'session': session_num}).fetch('session_date')
+    #print(water)
+    #print(date)
     return water, date
 
 def rose_plot(ax, angles, bins=16, density=None, offset=0, lab_unit="degrees", start_zero=False, **param_dict):
@@ -629,24 +633,36 @@ def volcano_plot_licking(session_key):
     inspir_onset_l=np.array(inspir_onset_l)
     inspir_onset_l=np.hstack(inspir_onset_l)
     
-    licks = []
+    licks = [] # lick times
+    n_licks = [] # number of licks in btw breaths
     
-    ibi = np.zeros(len(inspir_onset_l)-3)
-    ibi2 = np.zeros(len(inspir_onset_l)-4)
+    #ibi = np.zeros(len(inspir_onset_l)-3)
+    #ibi2 = np.zeros(len(inspir_onset_l)-4)
+    ibi = []
+    ibi2 = []
     
     max_ibi=np.max(np.diff(inspir_onset))
     
     for i,_ in enumerate(inspir_onset_l[2:-2]):
         
         lick=ton_onset[(ton_onset > inspir_onset_l[i-2]) & (ton_onset<inspir_onset_l[i+2])]
+        
+        lick_in=lick[(lick > inspir_onset_l[i]) & (lick<inspir_onset_l[i+1])]
+        if lick_in.size != 0:  # only include trials with a lick in between the breaths
+            licks.append(lick - inspir_onset_l[i])
+            n_licks.append(lick_in.size)
+            
+            #ibi[i] = inspir_onset_l[i+1] - inspir_onset_l[i]
+            #ibi2[i] = inspir_onset_l[i+2] - inspir_onset_l[i]
+            ibi.append(inspir_onset_l[i+1] - inspir_onset_l[i])
+            ibi2.append(inspir_onset_l[i+2] - inspir_onset_l[i])
     
-        licks.append(lick - inspir_onset_l[i])
-    
-        ibi[i] = inspir_onset_l[i+1] - inspir_onset_l[i]
-        ibi2[i] = inspir_onset_l[i+2] - inspir_onset_l[i]
-    
-    ibi = ibi[:-1]
+    #ibi = ibi[:-1]
+    ibi=np.array(ibi)
+    ibi2=np.array(ibi2)
+    n_licks=np.array(n_licks)
     licks[:] = [ele for i, ele in enumerate(licks) if ibi[i]<max_ibi]
+    n_licks=n_licks[ibi<max_ibi]
     ibi2=ibi2[ibi<max_ibi]
     ibi=ibi[ibi<max_ibi]
     
@@ -656,13 +672,21 @@ def volcano_plot_licking(session_key):
     fig, ax = plt.subplots(1, 1, figsize=(12, 12))
     
     for i,_ in enumerate(licks):
-        ax.plot(licks[sorted_indexes[i]],i*np.ones(len(licks[sorted_indexes[i]])),'.b',markersize=4)
+        if n_licks[sorted_indexes[i]]==1:
+            ax.plot(licks[sorted_indexes[i]],i*np.ones(len(licks[sorted_indexes[i]])),'.b',markersize=4)
+        elif n_licks[sorted_indexes[i]]==2:
+            ax.plot(licks[sorted_indexes[i]],i*np.ones(len(licks[sorted_indexes[i]])),'.r',markersize=4)
+        elif n_licks[sorted_indexes[i]]==3:
+            ax.plot(licks[sorted_indexes[i]],i*np.ones(len(licks[sorted_indexes[i]])),'.k',markersize=4)
+        elif n_licks[sorted_indexes[i]]==4:
+            ax.plot(licks[sorted_indexes[i]],i*np.ones(len(licks[sorted_indexes[i]])),'.m',markersize=4)
         ax.plot(0,i,'.r',markersize=4)
         ax.plot(ibi[sorted_indexes[i]],i,'.r',markersize=4)
         ax.plot(ibi2[sorted_indexes[i]],i,'.r',markersize=4)
     ax.set_xlim([-0.5,1])
     ax.set_xlabel('Time from measured inspiration onset (s)')
     ax.set_ylabel('Breath number')
+    ax.set_title(session_key)
     
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
@@ -729,21 +753,28 @@ def volcano_plot_breathing(session_key):
     
     breaths = []
     
-    ili = np.zeros(len(ton_onset_l)-3)
-    ili2 = np.zeros(len(ton_onset_l)-4)
+    #ili = np.zeros(len(ton_onset_l)-3)
+    #ili2 = np.zeros(len(ton_onset_l)-4)
+    ili = []
+    ili2 = []
     
     max_ili=np.max(np.diff(inspir_onset))
     
     for i,_ in enumerate(ton_onset_l[2:-2]):
         
         breath=inspir_onset[(inspir_onset > ton_onset_l[i-2]) & (inspir_onset<ton_onset_l[i+2])]
+        
+        breath_in=breath[(breath > ton_onset_l[i]) & (breath<ton_onset_l[i+1])]
+        if breath_in.size != 0:  # only include trials with a breath in between the licks
+            breaths.append(breath - ton_onset_l[i])
+            #ili[i] = ton_onset_l[i+1] - ton_onset_l[i]
+            #ili2[i] = ton_onset_l[i+2] - ton_onset_l[i]
+            ili.append(ton_onset_l[i+1] - ton_onset_l[i])
+            ili2.append(ton_onset_l[i+2] - ton_onset_l[i])
     
-        breaths.append(breath - ton_onset_l[i])
-    
-        ili[i] = ton_onset_l[i+1] - ton_onset_l[i]
-        ili2[i] = ton_onset_l[i+2] - ton_onset_l[i]
-    
-    ili = ili[:-1]
+    #ili = ili[:-1]
+    ili=np.array(ili)
+    ili2=np.array(ili2)
     breaths[:] = [ele for i, ele in enumerate(breaths) if ili[i]<max_ili]
     ili2=ili2[ili<max_ili]
     ili=ili[ili<max_ili]
@@ -758,7 +789,8 @@ def volcano_plot_breathing(session_key):
         ax.plot(0,i,'.r',markersize=4)
         ax.plot(ili[sorted_indexes[i]],i,'.r',markersize=4)
         ax.plot(ili2[sorted_indexes[i]],i,'.r',markersize=4)
-    ax.set_xlim([-0.5,1])
+    #ax.set_xlim([-0.5,1])
+    ax.set_xlim([-0.4,0.5])
     ax.set_xlabel('Time from measured tongue onset (s)')
     ax.set_ylabel('Lick number')
     
