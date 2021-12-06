@@ -310,6 +310,9 @@ def plot_unit_bilateral_photostim_effect(probe_insertion, clustering_method=None
 
 
 def plot_pseudocoronal_slice(probe_insertion, shank_no=1):
+    if isinstance(probe_insertion, dj.expression.QueryExpression):
+        probe_insertion = probe_insertion.proj()
+        
     # ---- Electrode sites ----
     annotated_electrodes = (lab.ElectrodeConfig.Electrode * lab.ProbeType.Electrode
                             * ephys.ProbeInsertion
