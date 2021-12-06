@@ -453,8 +453,8 @@ def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': T
     psth.UnitSelectivity.populate(**populate_settings)
 
     # Foraging task
-    log.info('psth_foraging.UnitPsth.populate()')
-    psth_foraging.UnitPsth.populate(**populate_settings)
+    log.info('psth_foraging.UnitPeriodLinearFit.populate()')
+    psth_foraging.UnitPeriodLinearFit.populate(**populate_settings)
 
 
 def populate_foraging_analysis(populate_settings={'reserve_jobs': True, 'display_progress': True}):
