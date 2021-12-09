@@ -16,3 +16,4 @@ openpyxl
 statsmodels
 astropy
 statannot
+pynwb==1.4.0

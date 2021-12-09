@@ -256,7 +256,9 @@ class UnitPsth(dj.Computed):
     -> ephys.Unit
     ---
     unit_psth=NULL: longblob
+    trial_count=NULL: int  # number of trials used to computed the PSTH
     """
+
     psth_params = {'xmin': -3, 'xmax': 3, 'binsize': 0.04}
 
     @property
@@ -276,30 +278,19 @@ class UnitPsth(dj.Computed):
 
         # expand TrialCondition to trials,
         trials = TrialCondition.get_trials(key['trial_condition_name'])
+        if ephys.ProbeInsertionQuality & key:
+            trials &= ephys.ProbeInsertionQuality.GoodTrial
 
-        # fetch related spike times
-        q = (ephys.Unit.TrialSpikes & key & trials.proj())
-        spikes = q.fetch('spike_times')
+        psth, edges = compute_unit_psth(key, trials)
 
-        if len(spikes) == 0:
+        if psth is None:
             log.warning('no spikes found for key {} - null psth'.format(key))
             self.insert1(key)
             return
 
-        # compute psth & store
-        unit_psth = self.compute_psth(spikes)
-
-        self.insert1({**key, 'unit_psth': unit_psth})
-
-    @staticmethod
-    def compute_psth(session_unit_spikes):
-        spikes = np.concatenate(session_unit_spikes)
-
-        xmin, xmax, bins = UnitPsth.psth_params.values()
-        psth, edges = np.histogram(spikes, bins=np.arange(xmin, xmax, bins))
-        psth = psth / len(session_unit_spikes) / bins
-
-        return np.array([psth, edges[1:]])
+        self.insert1({**key,
+                      'unit_psth': np.array([psth, edges]),
+                      'trial_count': len(trials)})
 
     @classmethod
     def get_plotting_data(cls, unit_key, condition_key):
@@ -314,14 +305,12 @@ class UnitPsth(dj.Computed):
              'raster': Spike * Trial raster [np.array, np.array]
           }
         """
-        # from sys import exit as sys_exit  # NOQA
-        # from code import interact
-        # from collections import ChainMap
-        # interact('unitpsth make', local=dict(ChainMap(locals(), globals())))
-
         trials = TrialCondition.get_func(condition_key)()
 
-        unit_psth = (UnitPsth & {**condition_key, **unit_key}).fetch1('unit_psth')
+        if ephys.ProbeInsertionQuality & unit_key:
+            trials &= ephys.ProbeInsertionQuality.GoodTrial
+
+        unit_psth = (cls & {**condition_key, **unit_key}).fetch1('unit_psth')
         if unit_psth is None:
             raise Exception('No spikes found for this unit and trial-condition')
 
@@ -489,9 +478,14 @@ def compute_unit_psth(unit_key, trial_keys, per_trial=False):
     :param unit_key: key of a single unit to compute the PSTH for
     :param trial_keys: list of all the trial keys to compute the PSTH over
     """
-    q = (ephys.Unit.TrialSpikes & unit_key & trial_keys)
+    trials = experiment.BehaviorTrial & trial_keys
+
+    if ephys.ProbeInsertionQuality & unit_key:
+        trials &= ephys.ProbeInsertionQuality.GoodTrial
+
+    q = (ephys.Unit.TrialSpikes & unit_key & trials)
     if not q:
-        return None
+        return None, None
 
     xmin, xmax, bin_size = UnitPsth.psth_params.values()
     binning = np.arange(xmin, xmax, bin_size)

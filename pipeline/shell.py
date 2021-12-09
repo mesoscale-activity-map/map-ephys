@@ -144,8 +144,9 @@ def load_animal(excel_fp, sheet_name='Sheet1'):
             subjects.append(subject)
             water_restrictions.append(wr)
 
-    lab.Subject.insert(subjects)
-    lab.WaterRestriction.insert(water_restrictions)
+    with lab.Subject.connection.transaction:
+        lab.Subject.insert(subjects)
+        lab.WaterRestriction.insert(water_restrictions)
 
     log.info('Inserted {} subjects'.format(len(subjects)))
     log.info('Water restriction number: {}'.format([s['water_restriction_number'] for s in water_restrictions]))
@@ -290,16 +291,24 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     log.debug('InsertionLocation: {}'.format(insertion_locations))
     log.debug('RecordableBrainRegion: {}'.format(recordable_brain_regions))
 
-    ephys.ProbeInsertion.InsertionLocation.insert(insertion_locations)
-    ephys.ProbeInsertion.RecordableBrainRegion.insert(recordable_brain_regions)
+    with ephys.ProbeInsertion.connection.transaction:
+        ephys.ProbeInsertion.InsertionLocation.insert(insertion_locations)
+        ephys.ProbeInsertion.RecordableBrainRegion.insert(recordable_brain_regions)
 
     log.info('load_insertion_location - Number of insertions: {}'.format(len(insertion_locations)))
 
     log.debug('ProbeInsertionQuality: {}'.format(insertions_quality))
-
-    ephys.ProbeInsertionQuality.insert(insertions_quality)
-    ephys.ProbeInsertionQuality.GoodPeriod.insert(insertions_good_periods)
-    ephys.ProbeInsertionQuality.GoodTrial.insert(insertions_good_trials)
+    with ephys.ProbeInsertionQuality.connection.transaction:
+        ephys.ProbeInsertionQuality.insert(insertions_quality)
+        ephys.ProbeInsertionQuality.GoodPeriod.insert(insertions_good_periods)
+        ephys.ProbeInsertionQuality.GoodTrial.insert(insertions_good_trials)
+        # delete outdated computed results
+        outdated_insertions = (ephys.ProbeInsertion
+                               & (ephys.ProbeInsertionQuality.GoodTrial
+                                  & insertions_good_periods))
+        with dj.config(safemode=False):
+            (psth.UnitPsth & outdated_insertions).delete()
+            (report.UnitLevelEphysReport & outdated_insertions).delete()
 
     log.info('load_insertion_location - Number of insertions quality: {}'.format(len(insertions_quality)))
 
@@ -432,7 +441,7 @@ def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': 
     ephys.MAPClusterMetric.populate(**populate_settings)
 
     log.info('ephys.UnitPassingCriteria.populate()')
-    ephys.UnitPassingCriteria.populate(**populate_settings)
+    ephys.UnitPassingCriteria.populate(**dict(populate_settings, max_calls=500))
 
     log.info('histology.InterpolatedShankTrack.populate()')
     histology.InterpolatedShankTrack.populate(**dict(populate_settings, max_calls=1))
