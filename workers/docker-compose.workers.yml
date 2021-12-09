@@ -9,7 +9,7 @@ services:
     volumes:
       - $report_store_stage:/data/report
     command: 
-       -/bin/sh
+      - /bin/sh
       - -c
       - |
         cd /dj_map

@@ -434,7 +434,7 @@ def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': 
     log.info('ephys.UnitPassingCriteria.populate()')
     ephys.UnitPassingCriteria.populate(**populate_settings)
 
-    log.info('ephys.InterpolatedShankTrack.populate()')
+    log.info('histology.InterpolatedShankTrack.populate()')
     histology.InterpolatedShankTrack.populate(**dict(populate_settings, max_calls=1))
 
     log.info('tracking.TrackingQC.populate()')
