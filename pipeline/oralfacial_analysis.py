@@ -9,9 +9,9 @@ from pipeline.ingest import tracking as tracking_ingest
 
 from pipeline.mtl_analysis import helper_functions
 from pipeline.plot import behavior_plot
-from . import get_schema_name
+from pipeline import get_schema_name
 
-schema = dj.schema(get_schema_name('oralfacial_analysis'))
+schema = dj.schema('map_v2_oralfacial_analysis')
 
 v_oralfacial_analysis = dj.create_virtual_module('oralfacial_analysis', get_schema_name('oralfacial_analysis'))
 v_tracking = dj.create_virtual_module('tracking', get_schema_name('tracking'))
