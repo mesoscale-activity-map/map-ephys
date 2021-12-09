@@ -1,10 +1,11 @@
 import datajoint as dj
+import pathlib
 import numpy as np
 import json
 from datetime import datetime
 from dateutil.tz import tzlocal
 import pynwb
-from pynwb import NWBFile
+from pynwb import NWBFile, NWBHDF5IO
 
 from pipeline import lab, experiment, tracking, ephys, histology, psth, ccf
 from pipeline.util import _get_clustering_method
@@ -129,3 +130,21 @@ def datajoint_to_nwb(session_key):
             pass
 
     return nwbfile
+
+
+def export_recording(session_keys, output_dir='./', overwrite=False):
+    if not isinstance(session_keys, list):
+        session_keys = [session_keys]
+
+    output_dir = pathlib.Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for session_key in session_keys:
+        nwbfile = datajoint_to_nwb(session_key)
+        # Write to .nwb
+        save_file_name = ''.join([nwbfile.identifier, '.nwb'])
+        output_fp = (output_dir / save_file_name).absolute()
+        if overwrite or not output_fp.exists():
+            with NWBHDF5IO(output_fp.as_posix(), mode='w') as io:
+                io.write(nwbfile)
+                print(f'\tWrite NWB 2.0 file: {save_file_name}')
