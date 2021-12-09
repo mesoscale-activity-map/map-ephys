@@ -1308,3 +1308,19 @@ class CAEEmbeddingAll(dj.Computed):
     embedding_bot_all=null: mediumblob
     embedding_body_all=null: mediumblob
     """
+    
+@schema
+class CAEEmbedding32(dj.Imported):
+    definition = """
+    -> experiment.SessionTrial
+    ---
+    
+    """
+    class EmbeddingPart(dj.Part):
+        definition = """
+        -> master
+        part_name: varchar(16) # e.g. side, bot, body
+        ---
+        embedding_32: longblob
+        """
+    
