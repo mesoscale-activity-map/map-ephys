@@ -1310,7 +1310,7 @@ class CAEEmbeddingAll(dj.Computed):
     """
     
 @schema
-class CAEEmbedding32(dj.Imported):
+class CaeEmbedding32(dj.Imported):
     definition = """
     -> experiment.SessionTrial
     ---
