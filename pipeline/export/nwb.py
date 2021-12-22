@@ -142,6 +142,26 @@ def datajoint_to_nwb(session_key):
 
             nwbfile.add_unit(**unit)
             pass
+        
+    # =============================== PHOTO-STIMULATION ===============================
+    stim_sites = {}
+    for photostim_key in (experiment.Photostim & (experiment.PhotostimTrial & session_key)).fetch('KEY'):
+        photostim = ((experiment.Photostim * lab.PhotostimDevice.proj('excitation_wavelength')) & photostim_key).fetch1()
+        stim_device = (nwbfile.get_device(photostim['photostim_device'])
+                       if photostim['photostim_device'] in nwbfile.devices
+                       else nwbfile.create_device(name=photostim['photostim_device']))
+
+        stim_site = pynwb.ogen.OptogeneticStimulusSite(
+            name=f'{photostim["photostim_device"]}_{photostim["photo_stim"]}',
+            device=stim_device,
+            excitation_lambda=float(photostim['excitation_wavelength']),
+            location=json.dumps([{k: v for k, v in stim_locs.items()
+                                  if k not in experiment.Photostim.primary_key}
+                                 for stim_locs in (experiment.PhotostimLocation
+                                                   & photostim_key).fetch(as_dict=True)], default=str),
+            description=f'excitation_duration: {photostim["duration"]}')
+        nwbfile.add_ogen_site(stim_site)
+        stim_sites[photostim['photo_stim']] = stim_site 
 
     return nwbfile
 
