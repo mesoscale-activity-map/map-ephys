@@ -6,8 +6,6 @@ from datetime import datetime
 from dateutil.tz import tzlocal
 import pynwb
 from pynwb import NWBFile, NWBHDF5IO
-from pynwb.file import Subject
-from pynwb.behavior import SpatialSeries, Position
 
 from pipeline import lab, experiment, tracking, ephys, histology, psth, ccf
 from pipeline.util import _get_clustering_method
