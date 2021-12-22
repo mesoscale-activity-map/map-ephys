@@ -6,11 +6,15 @@ from datetime import datetime
 from dateutil.tz import tzlocal
 import pynwb
 from pynwb import NWBFile, NWBHDF5IO
+from pynwb.file import Subject
+from pynwb.behavior import SpatialSeries, Position
 
 from pipeline import lab, experiment, tracking, ephys, histology, psth, ccf
 from pipeline.util import _get_clustering_method
 from pipeline.report import get_wr_sessdate
 
+# Some constants to work with
+zero_time = datetime.strptime('00:00:00', '%H:%M:%S').time()  # no precise time available
 
 def datajoint_to_nwb(session_key):
     """
@@ -30,6 +34,11 @@ def datajoint_to_nwb(session_key):
                               & (experiment.BehaviorTrial & session_key)).fetch1(
         'task_protocol_description')
 
+    try:
+        session_descr = (experiment.SessionComment & session_key).fetch1('session_comment')
+    except:
+        session_descr = ' '
+
     nwbfile = NWBFile(identifier=session_identifier,
                       session_description=(experiment.SessionComment & session_key).fetch1(
                           'session_comment'),
@@ -41,6 +50,13 @@ def datajoint_to_nwb(session_key):
                       experiment_description=experiment_description,
                       related_publications='',
                       keywords=[])
+
+     # ---- Subject ----
+    subject = (lab.Subject & session_key).fetch1()
+    nwbfile.subject = pynwb.file.Subject(
+        subject_id=str(subject['subject_id']),
+        date_of_birth=datetime.combine(subject['date_of_birth'], zero_time) if subject['date_of_birth'] else None,
+        sex=subject['sex'])
 
     # add additional columns to the electrodes table
     electrodes_query = lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode
