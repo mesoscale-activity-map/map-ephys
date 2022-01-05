@@ -38,8 +38,7 @@ def datajoint_to_nwb(session_key):
         session_descr = ' '
 
     nwbfile = NWBFile(identifier=session_identifier,
-                      session_description=(experiment.SessionComment & session_key).fetch1(
-                          'session_comment'),
+                      session_description=(session_descr),
                       session_start_time=session_key['session_datetime'],
                       file_create_date=datetime.now(tzlocal()),
                       experimenter=list((experiment.Session & session_key).fetch('username')),
@@ -162,6 +161,52 @@ def datajoint_to_nwb(session_key):
             description=f'excitation_duration: {photostim["duration"]}')
         nwbfile.add_ogen_site(stim_site)
         stim_sites[photostim['photo_stim']] = stim_site 
+
+    # =============================== TRACKING =============================== 
+    # add tracking device 
+    tables = [(tracking.Tracking.NoseTracking,'nose'),(tracking.Tracking.TongueTracking,'tongue'),
+            (tracking.Tracking.JawTracking,'jaw'),(tracking.Tracking.LeftPawTracking,'left_paw'),
+            (tracking.Tracking.RightPawTracking,'right_paw'),(tracking.Tracking.LickPortTracking,'lickport'),
+            (tracking.Tracking.WhiskerTracking,'whisker')]
+    
+    if tracking.Tracking & session_key:
+        for table in tables:
+            if table[0] & session_key:
+                time_stamps,x_vals, y_vals, likelihood_vals = [], [], [], []
+                for tracking_device in (tracking.TrackingDevice & (table[0] & session_key)).fetch('KEY'):
+                    trials, trial_event_times, x, y, likelihood, tracking_samples = ((tracking.Tracking 
+                                                                                    * table[0]
+                                                                                    * experiment.TrialEvent)
+                                                                                    & tracking_device
+                                                                                    & session_key).fetch(
+                                                                                        'trial', 'trial_event_time',f'{table[1]}_x', 
+                                                                                        f'{table[1]}_y',f'{table[1]}_likelihood', 'tracking_samples') 
+                    for trial in trial_event_times:
+                        trial_time = float(trial)
+                        tracking_sample = tracking_samples[int(trial)]
+                        time_stamp = np.linspace(0,trial_time,tracking_sample)
+                        time_stamps.append(time_stamp)
+
+                    x_vals.append(x)
+                    y_vals.append(y)
+                    likelihood_vals.append(likelihood)
+                    x_data = [d.flatten() for d in x_vals]
+                    y_data = [d.flatten() for d in y_vals]
+                    likelihood_data = [d.flatten() for d in likelihood_vals]
+
+                    behav_acq = pynwb.behavior.SpatialSeries(name='BehavioralTimeSeries', 
+                    data=np.vstack([np.hstack(x_data), np.hstack(y_data), np.hstack(likelihood_data)]).T,
+                    timestamps=np.hstack(time_stamps),
+                    description='video description',
+                    unit='a.u.', 
+                    conversion=1.0,
+                    reference_frame='unknown')
+
+                    pos_obj = pynwb.behavior.Position(spatial_series=behav_acq)
+                    behavior_module = nwbfile.create_processing_module(
+                        name=f'data_for_{tracking_device["tracking_device"]}_{table[0]}',
+                        description='processed behavioral data')
+                    behavior_module.add(pos_obj)
 
     return nwbfile
 
