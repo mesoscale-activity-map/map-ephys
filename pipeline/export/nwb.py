@@ -112,14 +112,14 @@ def datajoint_to_nwb(session_key):
 
         electrode_query = (lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode
                            & electrode_config)
-        # for electrode in electrode_query.fetch(as_dict=True):
-        #     nwbfile.add_electrode(
-        #         id=electrode['electrode'], group=electrode_group,
-        #         filtering='', imp=-1.,
-        #         x=np.nan, y=np.nan, z=np.nan,
-        #         rel_x=electrode['x_coord'], rel_y=electrode['y_coord'], rel_z=np.nan,
-        #         shank=electrode['shank'], shank_col=electrode['shank_col'], shank_row=electrode['shank_row'],
-        #         location=electrode_group.location)
+        for electrode in electrode_query.fetch(as_dict=True):
+            nwbfile.add_electrode(
+                id=electrode['electrode'], group=electrode_group,
+                filtering='', imp=-1.,
+                x=np.nan, y=np.nan, z=np.nan,
+                rel_x=electrode['x_coord'], rel_y=electrode['y_coord'], rel_z=np.nan,
+                shank=electrode['shank'], shank_col=electrode['shank_col'], shank_row=electrode['shank_row'],
+                location=electrode_group.location)
 
         electrode_df = nwbfile.electrodes.to_dataframe()
         electrode_ind = electrode_df.index[electrode_df.group_name == electrode_group.name]
@@ -211,10 +211,6 @@ def datajoint_to_nwb(session_key):
     # =============================== BEHAVIOR TRIALS ===============================
 
     # =============== TrialSet ====================
-    # NWB 'trial' (of type dynamic table) by default comes with three mandatory attributes: 'start_time' and 'stop_time'
-    # Other trial-related information needs to be added in to the trial-table as additional columns (with column name
-    # and column description)
-
 
     q_photostim = ((experiment.TrialEvent & 'trial_event_type="go"').proj('trial_event_time') 
                     * experiment.PhotostimEvent.proj(photostim_event_time='photostim_event_time',power='power') 
@@ -237,15 +233,16 @@ def datajoint_to_nwb(session_key):
                             for tag in q_trial_aggr.heading.names
                             if tag not in skip_adding_columns + ['start_time','stop_time']}
 
-        # Add new table columns to nwb trial-table for trial-label
+        # Add new table columns to nwb trial-table
         for c in trial_columns.values():
             nwbfile.add_trial_column(**c)
 
-        # Add entry to the trial-table
+        # Add entries to the trial-table
         for trial in q_trial_aggr.fetch(as_dict=True):
             trial['start_time'], trial['stop_time'] = float(trial['start_time']), float(trial['stop_time'])
             [trial.pop(k) for k in skip_adding_columns]
             nwbfile.add_trial(**trial)
+            
     return nwbfile
 
 
