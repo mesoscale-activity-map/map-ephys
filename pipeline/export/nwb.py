@@ -4,6 +4,7 @@ import numpy as np
 import json
 from datetime import datetime
 from dateutil.tz import tzlocal
+from decimal import Decimal
 import pynwb
 from pynwb import NWBFile, NWBHDF5IO
 
@@ -19,7 +20,6 @@ def datajoint_to_nwb(session_key):
     Generate one NWBFile object representing all data
      coming from the specified "session_key" (representing one session)
     """
-
     session_key = (experiment.Session.proj(
         session_datetime="cast(concat(session_date, ' ', session_time) as datetime)")
                    & session_key).fetch1()
@@ -62,6 +62,9 @@ def datajoint_to_nwb(session_key):
             name=electrodes_query.heading.attributes[additional_attribute].name,
             description=electrodes_query.heading.attributes[additional_attribute].comment)
 
+    nwbfile.add_electrode_column(
+        name="id_in_probe", description="electrode id within the probe",
+    )
     # add additional columns to the units table
     units_query = (ephys.ProbeInsertion.RecordingSystemSetup
                    * ephys.Unit * ephys.UnitStat
@@ -114,7 +117,7 @@ def datajoint_to_nwb(session_key):
                            & electrode_config)
         for electrode in electrode_query.fetch(as_dict=True):
             nwbfile.add_electrode(
-                id=electrode['electrode'], group=electrode_group,
+                id_in_probe=electrode['electrode'], group=electrode_group,
                 filtering='', imp=-1.,
                 x=np.nan, y=np.nan, z=np.nan,
                 rel_x=electrode['x_coord'], rel_y=electrode['y_coord'], rel_z=np.nan,
