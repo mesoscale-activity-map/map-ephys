@@ -242,7 +242,49 @@ def datajoint_to_nwb(session_key):
             trial['start_time'], trial['stop_time'] = float(trial['start_time']), float(trial['stop_time'])
             [trial.pop(k) for k in skip_adding_columns]
             nwbfile.add_trial(**trial)
+
+# =============================== TRIAL EVENTS ==========================
             
+    behav_event = pynwb.behavior.BehavioralEvents(name='BehavioralEvents')
+    nwbfile.add_acquisition(behav_event)
+
+
+    # ---- photostim events ----
+
+    q_photostim_event = (experiment.TrialEvent * experiment.PhotostimEvent & session_key).proj(
+        event_start='trial_event_time', event_stop = '(trial_event_time+duration)', 
+        power= 'power', photostim='photo_stim')
+
+    trials, event_starts, event_stops, powers, photo_stim = q_photostim_event.fetch(
+        'trial','event_start', 'event_stop', 'power', 'photostim', order_by='trial')
+    
+    all_session_times = experiment.TrialEvent * experiment.SessionTrial  & session_key
+    all_times = [event_starts[0]]
+
+    for time in all_session_times.fetch('duration'):
+        all_times.append(time)
+        all_times_arr = np.cumsum(all_times)
+
+    all_times_arr = np.delete(all_times_arr, -1)
+    trial_start_times = []
+
+    for idx, times in enumerate(all_times):
+        for trial in trials:
+            if int(trial) == idx:
+                trial_start_times.append(times)
+
+                
+    behav_event.create_timeseries(name='photostim_start_times', unit='mW', conversion=1.0,
+                                  description='Timestamps of the photo-stimulation and the corresponding powers (in mW) being applied',
+                                  data=powers.astype(float),
+                                  timestamps=event_starts.astype(Decimal) + trial_start_times,
+                                  control=photo_stim.astype('uint8'), control_description=stim_sites)
+    behav_event.create_timeseries(name='photostim_stop_times', unit='mW', conversion=1.0,
+                                  description = 'Timestamps of the photo-stimulation being switched off',
+                                  data=np.full_like(event_starts.astype(float), 0),
+                                  timestamps=event_stops.astype(Decimal) + trial_start_times,
+                                  control=photo_stim.astype('uint8'), control_description=stim_sites)
+
     return nwbfile
 
 
