@@ -147,23 +147,25 @@ def datajoint_to_nwb(session_key):
         
     # =============================== PHOTO-STIMULATION ===============================
     stim_sites = {}
-    for photostim_key in (experiment.Photostim & (experiment.PhotostimTrial & session_key)).fetch('KEY'):
-        photostim = ((experiment.Photostim * lab.PhotostimDevice.proj('excitation_wavelength')) & photostim_key).fetch1()
-        stim_device = (nwbfile.get_device(photostim['photostim_device'])
-                       if photostim['photostim_device'] in nwbfile.devices
-                       else nwbfile.create_device(name=photostim['photostim_device']))
+    photostim_query = (experiment.Photostim & (experiment.PhotostimTrial & session_key))
+    if photostim_query:
+        for photostim_key in photostim_query.fetch('KEY'):
+            photostim = ((experiment.Photostim * lab.PhotostimDevice.proj('excitation_wavelength')) & photostim_key).fetch1()
+            stim_device = (nwbfile.get_device(photostim['photostim_device'])
+                        if photostim['photostim_device'] in nwbfile.devices
+                        else nwbfile.create_device(name=photostim['photostim_device']))
 
-        stim_site = pynwb.ogen.OptogeneticStimulusSite(
-            name=f'{photostim["photostim_device"]}_{photostim["photo_stim"]}',
-            device=stim_device,
-            excitation_lambda=float(photostim['excitation_wavelength']),
-            location=json.dumps([{k: v for k, v in stim_locs.items()
-                                  if k not in experiment.Photostim.primary_key}
-                                 for stim_locs in (experiment.Photostim.PhotostimLocation
-                                                   & photostim_key).fetch(as_dict=True)], default=str),
-            description=f'excitation_duration: {photostim["duration"]}')
-        nwbfile.add_ogen_site(stim_site)
-        stim_sites[photostim['photo_stim']] = stim_site 
+            stim_site = pynwb.ogen.OptogeneticStimulusSite(
+                name=f'{photostim["photostim_device"]}_{photostim["photo_stim"]}',
+                device=stim_device,
+                excitation_lambda=float(photostim['excitation_wavelength']),
+                location=json.dumps([{k: v for k, v in stim_locs.items()
+                                    if k not in experiment.Photostim.primary_key}
+                                    for stim_locs in (experiment.Photostim.PhotostimLocation
+                                                    & photostim_key).fetch(as_dict=True)], default=str),
+                description=f'excitation_duration: {photostim["duration"]}')
+            nwbfile.add_ogen_site(stim_site)
+            stim_sites[photostim['photo_stim']] = stim_site 
 
     # =============================== TRACKING =============================== 
     # add tracking device 
@@ -258,35 +260,36 @@ def datajoint_to_nwb(session_key):
         event_start='trial_event_time', event_stop = '(trial_event_time+duration)', 
         power= 'power', photostim='photo_stim')
 
-    trials, event_starts, event_stops, powers, photo_stim = q_photostim_event.fetch(
-        'trial','event_start', 'event_stop', 'power', 'photostim', order_by='trial')
-    
-    all_session_times = experiment.TrialEvent * experiment.SessionTrial  & session_key
-    all_times = [event_starts[0]]
+    if q_photostim_event:
+        trials, event_starts, event_stops, powers, photo_stim = q_photostim_event.fetch(
+            'trial','event_start', 'event_stop', 'power', 'photostim', order_by='trial')
+        
+        all_session_times = experiment.TrialEvent * experiment.SessionTrial  & session_key
+        all_times = [event_starts[0]]
 
-    for time in all_session_times.fetch('duration'):
-        all_times.append(time)
-        all_times_arr = np.cumsum(all_times)
+        for time in all_session_times.fetch('duration'):
+            all_times.append(time)
+            all_times_arr = np.cumsum(all_times)
 
-    all_times_arr = np.delete(all_times_arr, -1)
-    trial_start_times = []
+        all_times_arr = np.delete(all_times_arr, -1)
+        trial_start_times = []
 
-    for idx, times in enumerate(all_times):
-        for trial in trials:
-            if int(trial) == idx:
-                trial_start_times.append(times)
+        for idx, times in enumerate(all_times):
+            for trial in trials:
+                if int(trial) == idx:
+                    trial_start_times.append(times)
 
                 
-    behav_event.create_timeseries(name='photostim_start_times', unit='mW', conversion=1.0,
-                                  description='Timestamps of the photo-stimulation and the corresponding powers (in mW) being applied',
-                                  data=powers.astype(float),
-                                  timestamps=event_starts.astype(Decimal) + trial_start_times,
-                                  control=photo_stim.astype('uint8'), control_description=stim_sites)
-    behav_event.create_timeseries(name='photostim_stop_times', unit='mW', conversion=1.0,
-                                  description = 'Timestamps of the photo-stimulation being switched off',
-                                  data=np.full_like(event_starts.astype(float), 0),
-                                  timestamps=event_stops.astype(Decimal) + trial_start_times,
-                                  control=photo_stim.astype('uint8'), control_description=stim_sites)
+        behav_event.create_timeseries(name='photostim_start_times', unit='mW', conversion=1.0,
+                                    description='Timestamps of the photo-stimulation and the corresponding powers (in mW) being applied',
+                                    data=powers.astype(float),
+                                    timestamps=event_starts.astype(Decimal) + trial_start_times,
+                                    control=photo_stim.astype('uint8'), control_description=stim_sites)
+        behav_event.create_timeseries(name='photostim_stop_times', unit='mW', conversion=1.0,
+                                    description = 'Timestamps of the photo-stimulation being switched off',
+                                    data=np.full_like(event_starts.astype(float), 0),
+                                    timestamps=event_stops.astype(Decimal) + trial_start_times,
+                                    control=photo_stim.astype('uint8'), control_description=stim_sites)
 
     return nwbfile
 
