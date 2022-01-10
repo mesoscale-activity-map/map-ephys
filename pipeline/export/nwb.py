@@ -290,26 +290,6 @@ def datajoint_to_nwb(session_key):
                                     timestamps=event_stops.astype(Decimal) + trial_start_times,
                                     control=photo_stim.astype('uint8'), control_description=stim_sites)
 
-
-
-    # ---- behavior events ----
-    q_behavior_trials = ((experiment.TrialEvent * experiment.BehaviorTrial) - experiment.PhotostimEvent 
-                        & session_key).proj(event_start='trial_event_time', event_stop = '(trial_event_time+duration)',
-                            outcome='outcome',trial_instruction='trial_instruction')
-
-    trials, event_starts, event_stops, outcome, trial_instruction = q_behavior_trials.fetch(
-        'trial','event_start', 'event_stop', 'outcome', 'trial_instruction', order_by='trial')
-
-    all_times = [event_starts[0]]
-
-#    all_times_arr = np.delete(all_times_arr, -1)
-
-    trial_start_times = []
-
-
-#TODO 1. create time series 2. create list with start times 
-
-
     return nwbfile
 
 
