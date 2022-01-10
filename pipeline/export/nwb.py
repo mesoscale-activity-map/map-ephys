@@ -253,18 +253,17 @@ def datajoint_to_nwb(session_key):
     behav_event = pynwb.behavior.BehavioralEvents(name='BehavioralEvents')
     nwbfile.add_acquisition(behav_event)
 
+    all_session_times = experiment.TrialEvent * experiment.SessionTrial  & session_key  
 
     # ---- photostim events ----
-
     q_photostim_event = (experiment.TrialEvent * experiment.PhotostimEvent & session_key).proj(
         event_start='trial_event_time', event_stop = '(trial_event_time+duration)', 
         power= 'power', photostim='photo_stim')
 
     if q_photostim_event:
-        trials, event_starts, event_stops, powers, photo_stim = q_photostim_event.fetch(
-            'trial','event_start', 'event_stop', 'power', 'photostim', order_by='trial')
+        trial_event_id, event_starts, event_stops, powers, photo_stim = q_photostim_event.fetch(
+            'trial_event_id','event_start', 'event_stop', 'power', 'photostim', order_by='trial')
         
-        all_session_times = experiment.TrialEvent * experiment.SessionTrial  & session_key
         all_times = [event_starts[0]]
 
         for time in all_session_times.fetch('duration'):
@@ -274,9 +273,9 @@ def datajoint_to_nwb(session_key):
         all_times_arr = np.delete(all_times_arr, -1)
         trial_start_times = []
 
-        for idx, times in enumerate(all_times):
-            for trial in trials:
-                if int(trial) == idx:
+        for idx, times in enumerate(all_times_arr):
+            for trial in trial_event_id:
+                if trial == idx:
                     trial_start_times.append(times)
 
                 
@@ -290,6 +289,26 @@ def datajoint_to_nwb(session_key):
                                     data=np.full_like(event_starts.astype(float), 0),
                                     timestamps=event_stops.astype(Decimal) + trial_start_times,
                                     control=photo_stim.astype('uint8'), control_description=stim_sites)
+
+
+
+    # ---- behavior events ----
+    q_behavior_trials = ((experiment.TrialEvent * experiment.BehaviorTrial) - experiment.PhotostimEvent 
+                        & session_key).proj(event_start='trial_event_time', event_stop = '(trial_event_time+duration)',
+                            outcome='outcome',trial_instruction='trial_instruction')
+
+    trials, event_starts, event_stops, outcome, trial_instruction = q_behavior_trials.fetch(
+        'trial','event_start', 'event_stop', 'outcome', 'trial_instruction', order_by='trial')
+
+    all_times = [event_starts[0]]
+
+#    all_times_arr = np.delete(all_times_arr, -1)
+
+    trial_start_times = []
+
+
+#TODO 1. create time series 2. create list with start times 
+
 
     return nwbfile
 
