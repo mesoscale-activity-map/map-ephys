@@ -56,94 +56,94 @@ def datajoint_to_nwb(session_key):
         sex=subject['sex'])
 
     # add additional columns to the electrodes table
-    electrodes_query = lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode
-    for additional_attribute in ['shank', 'shank_col', 'shank_row']:
-        nwbfile.add_electrode_column(
-            name=electrodes_query.heading.attributes[additional_attribute].name,
-            description=electrodes_query.heading.attributes[additional_attribute].comment)
+    # electrodes_query = lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode
+    # for additional_attribute in ['shank', 'shank_col', 'shank_row']:
+    #     nwbfile.add_electrode_column(
+    #         name=electrodes_query.heading.attributes[additional_attribute].name,
+    #         description=electrodes_query.heading.attributes[additional_attribute].comment)
 
-    nwbfile.add_electrode_column(
-        name="id_in_probe", description="electrode id within the probe",
-    )
-    # add additional columns to the units table
-    units_query = (ephys.ProbeInsertion.RecordingSystemSetup
-                   * ephys.Unit * ephys.UnitStat
-                   * ephys.ClusterMetric * ephys.WaveformMetric
-                   & session_key)
+    # nwbfile.add_electrode_column(
+    #     name="id_in_probe", description="electrode id within the probe",
+    # )
+    # # add additional columns to the units table
+    # units_query = (ephys.ProbeInsertion.RecordingSystemSetup
+    #                * ephys.Unit * ephys.UnitStat
+    #                * ephys.ClusterMetric * ephys.WaveformMetric
+    #                & session_key)
 
-    units_omitted_attributes = ['subject_id', 'session', 'insertion_number',
-                                'clustering_method', 'unit', 'unit_uid', 'probe_type',
-                                'epoch_name_quality_metrics', 'epoch_name_waveform_metrics',
-                                'electrode_config_name', 'electrode_group',
-                                'electrode', 'waveform']
+    # units_omitted_attributes = ['subject_id', 'session', 'insertion_number',
+    #                             'clustering_method', 'unit', 'unit_uid', 'probe_type',
+    #                             'epoch_name_quality_metrics', 'epoch_name_waveform_metrics',
+    #                             'electrode_config_name', 'electrode_group',
+    #                             'electrode', 'waveform']
 
-    for attr in units_query.heading.names:
-        if attr in units_omitted_attributes:
-            continue
-        nwbfile.add_unit_column(
-            name=units_query.heading.attributes[attr].name,
-            description=units_query.heading.attributes[attr].comment)
+    # for attr in units_query.heading.names:
+    #     if attr in units_omitted_attributes:
+    #         continue
+    #     nwbfile.add_unit_column(
+    #         name=units_query.heading.attributes[attr].name,
+    #         description=units_query.heading.attributes[attr].comment)
 
-    # iterate through curated clusterings and export units data
-    for insert_key in (ephys.ProbeInsertion & session_key).fetch('KEY'):
-        # ---- Probe Insertion Location ----
-        if ephys.ProbeInsertion.InsertionLocation & insert_key:
-            insert_location = {
-                k: str(v) for k, v in (ephys.ProbeInsertion.InsertionLocation
-                                       & insert_key).aggr(
-                    ephys.ProbeInsertion.RecordableBrainRegion.proj(
-                        ..., brain_region='CONCAT(hemisphere, " ", brain_area)'),
-                    ..., brain_regions='GROUP_CONCAT(brain_region SEPARATOR ", ")').fetch1().items()
-                if k not in ephys.ProbeInsertion.primary_key}
-            insert_location = json.dumps(insert_location)
-        else:
-            insert_location = 'N/A'
+    # # iterate through curated clusterings and export units data
+    # for insert_key in (ephys.ProbeInsertion & session_key).fetch('KEY'):
+    #     # ---- Probe Insertion Location ----
+    #     if ephys.ProbeInsertion.InsertionLocation & insert_key:
+    #         insert_location = {
+    #             k: str(v) for k, v in (ephys.ProbeInsertion.InsertionLocation
+    #                                    & insert_key).aggr(
+    #                 ephys.ProbeInsertion.RecordableBrainRegion.proj(
+    #                     ..., brain_region='CONCAT(hemisphere, " ", brain_area)'),
+    #                 ..., brain_regions='GROUP_CONCAT(brain_region SEPARATOR ", ")').fetch1().items()
+    #             if k not in ephys.ProbeInsertion.primary_key}
+    #         insert_location = json.dumps(insert_location)
+    #     else:
+    #         insert_location = 'N/A'
 
-        # ---- Electrode Configuration ----
-        electrode_config = (lab.Probe * lab.ProbeType * lab.ElectrodeConfig
-                            * ephys.ProbeInsertion & insert_key).fetch1()
-        ephys_device_name = f'{electrode_config["probe"]} ({electrode_config["probe_type"]})'
-        ephys_device = (nwbfile.get_device(ephys_device_name)
-                        if ephys_device_name in nwbfile.devices
-                        else nwbfile.create_device(name=ephys_device_name))
+    #     # ---- Electrode Configuration ----
+    #     electrode_config = (lab.Probe * lab.ProbeType * lab.ElectrodeConfig
+    #                         * ephys.ProbeInsertion & insert_key).fetch1()
+    #     ephys_device_name = f'{electrode_config["probe"]} ({electrode_config["probe_type"]})'
+    #     ephys_device = (nwbfile.get_device(ephys_device_name)
+    #                     if ephys_device_name in nwbfile.devices
+    #                     else nwbfile.create_device(name=ephys_device_name))
 
-        electrode_group = nwbfile.create_electrode_group(
-            name=f'{electrode_config["probe"]} {electrode_config["electrode_config_name"]}',
-            description=json.dumps(electrode_config, default=str),
-            device=ephys_device,
-            location=insert_location)
+    #     electrode_group = nwbfile.create_electrode_group(
+    #         name=f'{electrode_config["probe"]} {electrode_config["electrode_config_name"]}',
+    #         description=json.dumps(electrode_config, default=str),
+    #         device=ephys_device,
+    #         location=insert_location)
 
-        electrode_query = (lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode
-                           & electrode_config)
-        for electrode in electrode_query.fetch(as_dict=True):
-            nwbfile.add_electrode(
-                id_in_probe=electrode['electrode'], group=electrode_group,
-                filtering='', imp=-1.,
-                x=np.nan, y=np.nan, z=np.nan,
-                rel_x=electrode['x_coord'], rel_y=electrode['y_coord'], rel_z=np.nan,
-                shank=electrode['shank'], shank_col=electrode['shank_col'], shank_row=electrode['shank_row'],
-                location=electrode_group.location)
+    #     electrode_query = (lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode
+    #                        & electrode_config)
+    #     for electrode in electrode_query.fetch(as_dict=True):
+    #         nwbfile.add_electrode(
+    #             id_in_probe=electrode['electrode'], group=electrode_group,
+    #             filtering='', imp=-1.,
+    #             x=np.nan, y=np.nan, z=np.nan,
+    #             rel_x=electrode['x_coord'], rel_y=electrode['y_coord'], rel_z=np.nan,
+    #             shank=electrode['shank'], shank_col=electrode['shank_col'], shank_row=electrode['shank_row'],
+    #             location=electrode_group.location)
 
-        electrode_df = nwbfile.electrodes.to_dataframe()
-        electrode_ind = electrode_df.index[electrode_df.group_name == electrode_group.name]
-        # ---- Units ----
-        unit_query = units_query & insert_key
-        for unit in unit_query.fetch(as_dict=True):
-            # make an electrode table region (which electrode(s) is this unit coming from)
-            unit['id'] = unit.pop('unit')
-            unit['electrodes'] = np.where(electrode_ind == unit.pop('electrode'))[0]
-            unit['electrode_group'] = electrode_group
-            unit['waveform_mean'] = unit.pop('waveform')
-            unit['waveform_sd'] = np.full(1, np.nan)
+    #     electrode_df = nwbfile.electrodes.to_dataframe()
+    #     electrode_ind = electrode_df.index[electrode_df.group_name == electrode_group.name]
+    #     # ---- Units ----
+    #     unit_query = units_query & insert_key
+    #     for unit in unit_query.fetch(as_dict=True):
+    #         # make an electrode table region (which electrode(s) is this unit coming from)
+    #         unit['id'] = unit.pop('unit')
+    #         unit['electrodes'] = np.where(electrode_ind == unit.pop('electrode'))[0]
+    #         unit['electrode_group'] = electrode_group
+    #         unit['waveform_mean'] = unit.pop('waveform')
+    #         unit['waveform_sd'] = np.full(1, np.nan)
 
-            for attr in list(unit.keys()):
-                if attr in units_omitted_attributes:
-                    unit.pop(attr)
-                elif unit[attr] is None:
-                    unit[attr] = np.nan
+    #         for attr in list(unit.keys()):
+    #             if attr in units_omitted_attributes:
+    #                 unit.pop(attr)
+    #             elif unit[attr] is None:
+    #                 unit[attr] = np.nan
 
-            nwbfile.add_unit(**unit)
-            pass
+    #         nwbfile.add_unit(**unit)
+    #         pass
         
     # =============================== PHOTO-STIMULATION ===============================
     stim_sites = {}
@@ -174,44 +174,55 @@ def datajoint_to_nwb(session_key):
             (tracking.Tracking.RightPawTracking,'right_paw'),(tracking.Tracking.LickPortTracking,'lickport'),
             (tracking.Tracking.WhiskerTracking,'whisker')]
     
+    time_stamps, event_start_times = [], []
+
     if tracking.Tracking & session_key:
+        behav_acq = pynwb.behavior.BehavioralTimeSeries(name='BehavioralTimeSeries')
+        nwbfile.add_acquisition(behav_acq)
         for table in tables:
             if table[0] & session_key:
-                time_stamps,x_vals, y_vals, likelihood_vals = [], [], [], []
                 for tracking_device in (tracking.TrackingDevice & (table[0] & session_key)).fetch('KEY'):
-                    trials, trial_event_times, x, y, likelihood, tracking_samples = ((tracking.Tracking 
-                                                                                    * table[0]
-                                                                                    * experiment.TrialEvent)
-                                                                                    & tracking_device
-                                                                                    & session_key).fetch(
-                                                                                        'trial', 'trial_event_time',f'{table[1]}_x', 
-                                                                                        f'{table[1]}_y',f'{table[1]}_likelihood', 'tracking_samples') 
-                    for trial in trial_event_times:
-                        trial_time = float(trial)
-                        tracking_sample = tracking_samples[int(trial)]
-                        time_stamp = np.linspace(0,trial_time,tracking_sample)
-                        time_stamps.append(time_stamp)
+                    trial_event_id, trial_event_times, x, y,likelihood, tracking_samples = ((tracking.Tracking 
+                                                                                            * table[0]
+                                                                                            * experiment.TrialEvent)
+                                                                                            & tracking_device
+                                                                                            & session_key).fetch(
+                                                                                                                'trial_event_id', 'trial_event_time',f'{table[1]}_x', 
+                                                                                                                f'{table[1]}_y',f'{table[1]}_likelihood', 'tracking_samples',
+                                                                                                                'duration') 
+                    # calculating start time for each trial_event_id relative to session
+                    all_start_times = (experiment.TrialEvent & session_key).fetch('duration')
+                    time_1 = (experiment.TrialEvent & session_key).fetch('trial_event_time', limit=1)
+                    all_start_times = np.insert(all_start_times, 0, time_1[0])
+                    all_start_times = np.cumsum(all_start_times)
+                    all_start_times = np.delete(all_start_times,-1)
+                    all_start_times = all_start_times.astype(float)
 
-                    x_vals.append(x)
-                    y_vals.append(y)
-                    likelihood_vals.append(likelihood)
-                    x_data = [d.flatten() for d in x_vals]
-                    y_data = [d.flatten() for d in y_vals]
-                    likelihood_data = [d.flatten() for d in likelihood_vals]
+                    # getting the tracking time start times from all_durations
+                    for idx, time in enumerate(all_start_times):
+                        for trial in trial_event_id:
+                            if trial == idx:
+                                event_start_times = np.append(event_start_times, time)
 
-                    behav_acq = pynwb.behavior.SpatialSeries(name='BehavioralTimeSeries', 
-                    data=np.vstack([np.hstack(x_data), np.hstack(y_data), np.hstack(likelihood_data)]).T,
-                    timestamps=np.hstack(time_stamps),
-                    description='video description',
-                    unit='a.u.', 
-                    conversion=1.0,
-                    reference_frame='unknown')
+                    # time stamps for each trial_event
+                    for idx, time in enumerate(event_start_times):
+                       while idx+1 <= len(event_start_times):
+                            time_stamp = np.linspace(time, event_start_times[idx+1], tracking_samples[idx])
+                            time_stamps = np.append(time_stamps, time_stamp)
 
-                    pos_obj = pynwb.behavior.Position(spatial_series=behav_acq)
-                    behavior_module = nwbfile.create_processing_module(
-                        name=f'data_for_{tracking_device["tracking_device"]}_{table[0]}',
-                        description='processed behavioral data')
-                    behavior_module.add(pos_obj)
+                    behav_acq.create_timeseries(name=f'BehavioralTimeSeries_{table[0]}_x_y_data', 
+                                                data=np.c_[x, y],
+                                                timestamps=np.hstack(time_stamps),
+                                                description='video description',
+                                                unit='a.u.', 
+                                                conversion=1.0)
+                    behav_acq.create_timeseries(name=f'BehavioralTimeSeries_{table[0]}_likelihood', 
+                            data=likelihood,
+                            timestamps=np.hstack(time_stamps),
+                            description='video description',
+                            unit='a.u.', 
+                            conversion=1.0)
+
 
     # =============================== BEHAVIOR TRIALS ===============================
 
@@ -248,7 +259,7 @@ def datajoint_to_nwb(session_key):
             [trial.pop(k) for k in skip_adding_columns]
             nwbfile.add_trial(**trial)
 
-# =============================== TRIAL EVENTS ==========================
+# # # =============================== TRIAL EVENTS ==========================
             
     behav_event = pynwb.behavior.BehavioralEvents(name='BehavioralEvents')
     nwbfile.add_acquisition(behav_event)
@@ -282,7 +293,7 @@ def datajoint_to_nwb(session_key):
         behav_event.create_timeseries(name='photostim_start_times', unit='mW', conversion=1.0,
                                     description='Timestamps of the photo-stimulation and the corresponding powers (in mW) being applied',
                                     data=powers.astype(float),
-                                    timestamps=event_starts.astype(Decimal) + trial_start_times,
+                                    timestamps=trial_start_times,
                                     control=photo_stim.astype('uint8'), control_description=stim_sites)
         behav_event.create_timeseries(name='photostim_stop_times', unit='mW', conversion=1.0,
                                     description = 'Timestamps of the photo-stimulation being switched off',
@@ -290,6 +301,40 @@ def datajoint_to_nwb(session_key):
                                     timestamps=event_stops.astype(Decimal) + trial_start_times,
                                     control=photo_stim.astype('uint8'), control_description=stim_sites)
 
+    # ---- behavior events ----
+
+    q_behavior_trials = ((experiment.TrialEvent * experiment.BehaviorTrial) - experiment.PhotostimEvent 
+                        & session_key).proj(event_start='trial_event_time', event_stop = '(trial_event_time+duration)',
+                            outcome='outcome',trial_instruction='trial_instruction')
+
+    if q_behavior_trials:
+        trial_event_id, event_starts, event_stops, powers, photo_stim = q_behavior_trials.fetch(
+            'trial_event_id','event_start', 'event_stop', 'outcome', 'trial_instruction', order_by='trial')
+ 
+        all_times = [event_starts[0]]
+
+        for time in all_session_times.fetch('duration'):
+            all_times.append(time)
+            all_times_arr = np.cumsum(all_times)
+
+        all_times_arr = np.delete(all_times_arr, -1)
+
+        trial_start_times = []
+
+        for idx, times in enumerate(all_times_arr):
+            for trial in trial_event_id:
+                if trial == idx:
+                    trial_start_times.append(times)
+
+        behav_event.create_timeseries(name='behavior_event_start_times', unit='a.u', conversion=1.0,
+                                    description='Behavior event start times',
+                                    data=np.full_like(event_starts.astype(float), 0),
+                                    timestamps=trial_start_times)
+        behav_event.create_timeseries(name='behavior_event_stop_times', unit='a.u', conversion=1.0,
+                                    description = 'Behavior event stop times',
+                                    data=np.full_like(event_stops.astype(float), 0),
+                                    timestamps=event_stops.astype(Decimal) + trial_start_times)
+        
     return nwbfile
 
 
