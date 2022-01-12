@@ -150,7 +150,7 @@ def datajoint_to_nwb(session_key):
     photostim_query = (experiment.Photostim & (experiment.PhotostimTrial & session_key))
     if photostim_query:
         for photostim_key in photostim_query.fetch('KEY'):
-            photostim = ((experiment.Photostim * lab.PhotostimDevice.proj('excitation_wavelength')) & photostim_key).fetch1()
+            photostim = (experiment.Photostim * lab.PhotostimDevice.proj('excitation_wavelength') & photostim_key).fetch1()
             stim_device = (nwbfile.get_device(photostim['photostim_device'])
                         if photostim['photostim_device'] in nwbfile.devices
                         else nwbfile.create_device(name=photostim['photostim_device']))
