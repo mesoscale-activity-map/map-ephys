@@ -275,11 +275,8 @@ def datajoint_to_nwb(session_key):
         trial_event_id, event_starts, event_stops, powers, photo_stim = q_photostim_event.fetch(
             'trial_event_id','event_start', 'event_stop', 'power', 'photostim', order_by='trial')
         
-        all_times = [event_starts[0]]
-
-        for time in all_session_times.fetch('duration'):
-            all_times.append(time)
-            all_times_arr = np.cumsum(all_times)
+        all_times = [event_starts[0]] + all_session_times.fetch('duration', order_by='trial_idx').to_list()
+        all_time_arr = np.cumsum(all_times)
 
         all_times_arr = np.delete(all_times_arr, -1)
         trial_start_times = []
