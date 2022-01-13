@@ -4,7 +4,7 @@ import datajoint as dj
 import pathlib
 from scipy import stats
 from astropy.stats import kuiper_two
-from pipeline import ephys, experiment, tracking
+from pipeline import ephys, experiment, tracking, InsertBuffer
 from pipeline.ingest import tracking as tracking_ingest
 
 from pipeline.mtl_analysis import helper_functions
@@ -703,46 +703,156 @@ class GLMFitNoLick(dj.Computed):
 
         taus = np.arange(-5,6)
 
-        units_glm = []
-
-        for unit_key in unit_keys: # loop for each neuron
-
-            all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in trial_key]).fetch('spike_times', order_by='trial')
+        #units_glm = []
+        
+        with InsertBuffer(self, 10, skip_duplicates=True, ignore_extra_fields=True, allow_direct_insert=True) as ib:
             
-            good_spikes =all_spikes # get good spikes
-            for i, d in enumerate(good_spikes):
-                good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
-            good_spikes = np.hstack(good_spikes)    
-            y, bin_edges = np.histogram(good_spikes, np.arange(0, traces_len*3.4/1000*num_trial, bin_width))
-            y=y[good_period_idx]    
-            
-            r2s=np.zeros(len(taus))
-            weights_t=np.zeros((len(taus),9))
-            predict_ys=np.zeros((len(taus),len(y)))
-            for i, tau in enumerate(taus):
-                y_roll=np.roll(y,tau)
-                glm_poiss = sm.GLM(y_roll, sm.add_constant(V_design_matrix), family=sm.families.Poisson(link=sm_log_Link))
+            for unit_key in unit_keys: # loop for each neuron
+    
+                all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in trial_key]).fetch('spike_times', order_by='trial')
                 
-                try:
-                    glm_result = glm_poiss.fit()
+                good_spikes =all_spikes # get good spikes
+                for i, d in enumerate(good_spikes):
+                    good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
+                good_spikes = np.hstack(good_spikes)    
+                y, bin_edges = np.histogram(good_spikes, np.arange(0, traces_len*3.4/1000*num_trial, bin_width))
+                y=y[good_period_idx]    
+                
+                r2s=np.zeros(len(taus))
+                weights_t=np.zeros((len(taus),9))
+                predict_ys=np.zeros((len(taus),len(y)))
+                for i, tau in enumerate(taus):
+                    y_roll=np.roll(y,tau)
+                    glm_poiss = sm.GLM(y_roll, sm.add_constant(V_design_matrix), family=sm.families.Poisson(link=sm_log_Link))
                     
-                    sst_val = sum(map(lambda x: np.power(x,2),y_roll-np.mean(y_roll))) 
-                    sse_val = sum(map(lambda x: np.power(x,2),glm_result.resid_response)) 
-                    r2 = 1.0 - sse_val/sst_val
+                    try:
+                        glm_result = glm_poiss.fit()
+                        
+                        sst_val = sum(map(lambda x: np.power(x,2),y_roll-np.mean(y_roll))) 
+                        sse_val = sum(map(lambda x: np.power(x,2),glm_result.resid_response)) 
+                        r2 = 1.0 - sse_val/sst_val
+                        
+                        r2s[i] = r2
+                        
+                        y_roll_t_p=glm_result.predict(sm.add_constant(V_design_matrix))
+                        predict_ys[i,:]=y_roll_t_p
+                        weights_t[i,:] = glm_result.params
+                        
+                    except:
+                        pass
                     
-                    r2s[i] = r2
-                    
-                    y_roll_t_p=glm_result.predict(sm.add_constant(V_design_matrix))
-                    predict_ys[i,:]=y_roll_t_p
-                    weights_t[i,:] = glm_result.params
-                    
-                except:
+                #units_glm.append({**unit_key, 'r2_nolick': r2s, 'weights_nolick': weights_t, 'y_nolick': y, 'predict_y_nolick': predict_ys, 'x_nolick': V_design_matrix})
+                print(unit_key)
+                ib.insert1({**unit_key, 'r2_nolick': r2s, 'weights_nolick': weights_t, 'y_nolick': y, 'predict_y_nolick': predict_ys, 'x_nolick': V_design_matrix})
+                if ib.flush():
                     pass
-                
-            units_glm.append({**unit_key, 'r2_nolick': r2s, 'weights_nolick': weights_t, 'y_nolick': y, 'predict_y_nolick': predict_ys, 'x_nolick': V_design_matrix})
-            print(unit_key)
+                        
+        #self.insert(units_glm, ignore_extra_fields=True)
+
+@schema
+class GLMFitCAE(dj.Computed):
+    definition = """
+    -> ephys.Unit
+    ---
+    r2_cae: mediumblob
+    r2_t_cae: mediumblob
+    weights_cae: mediumblob
+    predict_y_cae: longblob
+    test_y_cae: longblob
+    test_x_cae: longblob
+    """
+    # mtl sessions only
+    key_source = experiment.Session & v_tracking.TongueTracking3DBot & experiment.Breathing & v_oralfacial_analysis.CaeEmbeddingOcc & ephys.Unit & 'rig = "RRig-MTL"'
+    
+    def make(self, key):
+        good_units=ephys.Unit * ephys.ClusterMetric * ephys.UnitStat & key & 'presence_ratio > 0.9' & 'amplitude_cutoff < 0.15' & 'avg_firing_rate > 0.2' & 'isi_violation < 10' & 'unit_amp > 150'
+        unit_keys=good_units.fetch('KEY')
+        #bin_width = 0.017
+        bin_width = 1471/295*3.4/1000
+        traces_len=1471
+
+        # from the cameras
+        traces_s = tracking.Tracking.TongueTracking & key & {'tracking_device': 'Camera 3'} 
+        traces_b = tracking.Tracking.TongueTracking & key & {'tracking_device': 'Camera 4'}
+        
+        if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & key)) != len(traces_s):
+            print(f'Mismatch in tracking trial and ephys trial number: {key}')
+            return
+        if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & key)) != len(traces_b):
+            print(f'Mismatch in tracking trial and ephys trial number: {key}')
+            return
+        
+        # from the cameras
+        trial_key_o=(v_tracking.TongueTracking3DBot & key).fetch('trial', order_by='trial')
+        test_t = trial_key_o[::5] # test trials
+        trial_key=np.setdiff1d(trial_key_o,test_t)
+        num_trial_t=len(test_t)
+        num_trial=len(trial_key)
+        
+        embedding_side=(v_oralfacial_analysis.CaeEmbeddingOcc.EmbeddingPart & 'part_name="side"' & [{'trial': tr} for tr in trial_key] & key).fetch('embedding_occ', order_by='trial')
+        V_design_matrix=np.vstack(embedding_side)
+        
+        embedding_side_t=(v_oralfacial_analysis.CaeEmbeddingOcc.EmbeddingPart & 'part_name="side"' & [{'trial': tr} for tr in test_t] & key).fetch('embedding_occ', order_by='trial')
+        V_design_matrix_t=np.vstack(embedding_side_t)
+        
+        #set up GLM
+        sm_log_Link = sm.genmod.families.links.log
+
+        taus = np.arange(-5,6)
+
+        #units_glm = []
+        
+        with InsertBuffer(self, 10, skip_duplicates=True, ignore_extra_fields=True, allow_direct_insert=True) as ib:
             
-        self.insert(units_glm, ignore_extra_fields=True)
+            for unit_key in unit_keys: # loop for each neuron
+    
+                all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in trial_key]).fetch('spike_times', order_by='trial')                
+                good_spikes =all_spikes # get good spikes
+                for i, d in enumerate(good_spikes):
+                    good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
+                good_spikes = np.hstack(good_spikes)    
+                y, bin_edges = np.histogram(good_spikes, np.arange(0, traces_len*3.4/1000*num_trial+bin_width, bin_width))
+                
+                all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in test_t]).fetch('spike_times', order_by='trial')                
+                good_spikes=all_spikes # get good spikes
+                for i, d in enumerate(good_spikes):
+                    good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
+                good_spikes = np.hstack(good_spikes)    
+                y_t, bin_edges = np.histogram(good_spikes, np.arange(0, traces_len*3.4/1000*num_trial_t+bin_width, bin_width))
+                                   
+                r2s=np.zeros(len(taus))
+                r2s_t=r2s
+                weights_t=np.zeros((len(taus),V_design_matrix.shape[1]+1))
+                predict_ys=np.zeros((len(taus),len(y_t)))
+                for i, tau in enumerate(taus):
+                    y_roll=np.roll(y,tau)
+                    y_roll_t=np.roll(y_t,tau)
+                    glm_poiss = sm.GLM(y_roll, sm.add_constant(V_design_matrix), family=sm.families.Poisson(link=sm_log_Link))
+                    
+                    try:
+                        glm_result = glm_poiss.fit()
+                        
+                        sst_val = sum(map(lambda x: np.power(x,2),y_roll-np.mean(y_roll))) 
+                        sse_val = sum(map(lambda x: np.power(x,2),glm_result.resid_response)) 
+                        r2 = 1.0 - sse_val/sst_val
+                        
+                        r2s[i] = r2
+                        
+                        y_roll_t_p=glm_result.predict(sm.add_constant(V_design_matrix_t))
+                        sst_val = sum(map(lambda x: np.power(x,2),y_roll_t-np.mean(y_roll_t))) 
+                        sse_val = sum(map(lambda x: np.power(x,2),y_roll_t-y_roll_t_p)) 
+                        r2s_t[i] = 1.0 - sse_val/sst_val
+                        predict_ys[i,:]=y_roll_t_p
+                        weights_t[i,:] = glm_result.params
+                                                
+                    except:
+                        pass
+                    
+                #units_glm.append({**unit_key, 'r2_nolick': r2s, 'weights_nolick': weights_t, 'y_nolick': y, 'predict_y_nolick': predict_ys, 'x_nolick': V_design_matrix})
+                print(unit_key)
+                ib.insert1({**unit_key, 'r2_cae': r2s, 'r2_t_cae': r2s_t, 'weights_cae': weights_t, 'test_y_cae': y_t, 'predict_y_cae': predict_ys, 'test_x_cae': V_design_matrix_t})
+                if ib.flush():
+                    pass
 
 @schema
 class WhiskerSVD(dj.Computed):
@@ -777,6 +887,76 @@ class WhiskerSVD(dj.Computed):
         proc = process.run(video_files_l, proc=roi_data)
         
         self.insert1({**key, 'mot_svd': proc['motSVD'][1][:, :3]})
+        
+@schema
+class BottomSVD(dj.Computed):
+    definition = """
+    -> experiment.Session
+    ---
+    mot_svd_bot: longblob
+    """
+    
+    key_source = experiment.Session & 'rig = "RRig-MTL"' & (tracking.Tracking  & 'tracking_device = "Camera 4"')
+    
+    def make(self, key):
+        
+        from facemap import process
+        
+        #roi_path = 'H://videos//bottom//DL027//2021_07_01//DL027_2021_07_01_bottom_0_proc.npy'
+        roi_path = 'H://videos//bottom//DL017//2021_07_14//DL017_2021_07_14_bottom_0_proc.npy'
+        roi_data = np.load(roi_path, allow_pickle=True).item()
+        
+        video_root_dir = pathlib.Path('H:/videos')
+        
+        trial_path = (tracking_ingest.TrackingIngest.TrackingFile & 'tracking_device = "Camera 4"' & 'trial = 1' & key).fetch1('tracking_file')
+        
+        video_path = video_root_dir / trial_path
+        
+        video_path = video_path.parent
+        
+        video_files = list(video_path.glob('*.mp4'))
+        video_files_l = [[str(video_files[0])]]
+        for ind_trial, file in enumerate(video_files[1:]):
+            video_files_l.append([str(file)])
+            
+        proc = process.run(video_files_l, proc=roi_data)
+        
+        self.insert1({**key, 'mot_svd_bot': proc['motSVD'][1][:, :16]})
+        
+@schema
+class SideSVD(dj.Computed):
+    definition = """
+    -> experiment.Session
+    ---
+    mot_svd_side: longblob
+    svd_mask_side: longblob
+    """
+    
+    key_source = experiment.Session & 'rig = "RRig-MTL"' & (tracking.Tracking  & 'tracking_device = "Camera 3"')
+    
+    def make(self, key):
+        
+        from facemap import process
+        
+        roi_path = 'H://videos//side//DL027//2021_07_01//DL027_2021_07_01_side_0_proc.npy'
+        roi_data = np.load(roi_path, allow_pickle=True).item()
+        
+        video_root_dir = pathlib.Path('H:/videos')
+        
+        trial_path = (tracking_ingest.TrackingIngest.TrackingFile & 'tracking_device = "Camera 3"' & 'trial = 1' & key).fetch1('tracking_file')
+        
+        video_path = video_root_dir / trial_path
+        
+        video_path = video_path.parent
+        
+        video_files = list(video_path.glob('*.mp4'))
+        video_files_l = [[str(video_files[0])]]
+        for ind_trial, file in enumerate(video_files[1:]):
+            video_files_l.append([str(file)])
+            
+        proc = process.run(video_files_l, proc=roi_data)
+        
+        self.insert1({**key, 'mot_svd_side': proc['motSVD'][1][:, :16], 'svd_mask_side': proc['motMask_reshape'][1][:,:,:16]})
 
 @schema
 class ContactLick(dj.Computed):
@@ -1022,9 +1202,17 @@ class MovementTiming(dj.Computed):
         amp_b, phase_b=behavior_plot.compute_insta_phase_amp(good_breathing, 1/bin_width, freq_band=(1, 15)) # breathing
         phase_b = phase_b + np.pi
 
-        threshold = 1
+        threshold = np.pi
         cond = (phase_b < threshold) & (np.roll(phase_b,-1) >= threshold)
         inspir_onset=np.argwhere(cond)[:,0]*bin_width # get onset of breath
+        a_threshold = -0.5 # amplitude threshold
+        a_cond = (good_breathing > a_threshold) & (np.roll(good_breathing,-1) <= a_threshold)
+        inspir_amp=np.argwhere(a_cond)[:,0]*bin_width # amp threshold
+        inspir_onset_a = [] # only take inspir with a amp crossing
+        for i, inspir_value in enumerate(inspir_onset[:-1]):
+            if any((inspir_amp>inspir_value) & (inspir_amp<inspir_onset[i+1])):
+                inspir_onset_a.append(inspir_value)
+        inspir_onset=np.array(inspir_onset_a)
 
         # licking epochs
         threshold = 0.5 # tongue detection
@@ -1090,3 +1278,85 @@ class MovementTiming(dj.Computed):
         whi_offset_time=whi_onset[whi_onset_idx[whi_bout_offset]+2]
         
         self.insert1({**key, 'inspiration_onset': inspir_onset, 'lick_onset': lick_onset_time, 'lick_offset': lick_offset_time, 'whisk_onset': whi_onset_time, 'whisk_offset': whi_offset_time, 'tongue_onset': ton_onset, 'whisker_onset': whi_onset})
+
+@schema
+class BadVideo(dj.Computed):
+    definition = """
+    -> experiment.Session
+    ---
+    bad_trial_side=null: mediumblob
+    bad_trial_bot=null: mediumblob
+    miss_trial_side=null: mediumblob
+    miss_trial_bot=null: mediumblob
+    
+    """
+    
+    key_source = experiment.Session & ephys.Unit & tracking.Tracking & 'rig="RRig-MTL"'
+    
+    def make(self, key):  
+        jaw_y_sid,side_cam_trials=(tracking.Tracking.JawTracking & key & 'tracking_device="Camera 3"').fetch('jaw_y','trial',order_by='trial') #side
+        jaw_y_bot,bot_cam_trials=(tracking.Tracking.JawTracking & key & 'tracking_device="Camera 4"').fetch('jaw_y','trial',order_by='trial') #bot
+        exp_trials=(experiment.SessionTrial & key).fetch('trial') #exp
+        jaw_sid_len = [len(d) for d in jaw_y_sid]
+        bad_sid_ind = np.where(np.array(jaw_sid_len) != 1471)[0]
+
+        jaw_bot_len = [len(d) for d in jaw_y_bot]
+        bad_bot_ind = np.where(np.array(jaw_bot_len) != 1471)[0]
+        miss_tr_sid=None
+        if len(side_cam_trials) != len(exp_trials):
+            miss_tr_sid=np.setdiff1d(exp_trials,side_cam_trials)
+        miss_tr_bot=None    
+        if len(bot_cam_trials) != len(exp_trials):
+            miss_tr_bot=np.setdiff1d(exp_trials,bot_cam_trials)
+        
+        self.insert1({**key, 'bad_trial_side': side_cam_trials[bad_sid_ind], 'bad_trial_bot': bot_cam_trials[bad_bot_ind], 'miss_trial_side': miss_tr_sid, 'miss_trial_bot': miss_tr_bot})
+        
+@schema
+class CAEEmbedding(dj.Computed):
+    definition = """
+    -> experiment.SessionTrial
+    ---
+    embedding_side=null: mediumblob
+    embedding_bot=null: mediumblob
+    embedding_body=null: mediumblob
+    """
+    
+@schema
+class CAEEmbeddingAll(dj.Computed):
+    definition = """
+    -> experiment.SessionTrial
+    ---
+    embedding_side_all=null: mediumblob
+    embedding_bot_all=null: mediumblob
+    embedding_body_all=null: mediumblob
+    """
+    
+@schema
+class CaeEmbedding32(dj.Imported):
+    definition = """
+    -> experiment.SessionTrial
+    ---
+    
+    """
+    class EmbeddingPart(dj.Part):
+        definition = """
+        -> master
+        part_name: varchar(16) # e.g. side, bot, body
+        ---
+        embedding_32: longblob
+        """
+
+@schema
+class CaeEmbeddingOcc(dj.Imported):
+    definition = """
+    -> experiment.SessionTrial
+    ---
+    
+    """
+    class EmbeddingPart(dj.Part):
+        definition = """
+        -> master
+        part_name: varchar(16) # e.g. side, bot, body
+        ---
+        embedding_occ: longblob
+        """    
