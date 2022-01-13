@@ -762,7 +762,7 @@ class GLMFitCAE(dj.Computed):
     test_x_cae: longblob
     """
     # mtl sessions only
-    key_source = experiment.Session & v_tracking.TongueTracking3DBot & experiment.Breathing & v_oralfacial_analysis.CAEEmbedding & ephys.Unit & 'rig = "RRig-MTL"'
+    key_source = experiment.Session & v_tracking.TongueTracking3DBot & experiment.Breathing & v_oralfacial_analysis.CaeEmbeddingOcc & ephys.Unit & 'rig = "RRig-MTL"'
     
     def make(self, key):
         good_units=ephys.Unit * ephys.ClusterMetric * ephys.UnitStat & key & 'presence_ratio > 0.9' & 'amplitude_cutoff < 0.15' & 'avg_firing_rate > 0.2' & 'isi_violation < 10' & 'unit_amp > 150'
