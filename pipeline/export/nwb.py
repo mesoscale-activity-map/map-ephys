@@ -183,14 +183,14 @@ def datajoint_to_nwb(session_key):
         behav_acq = pynwb.behavior.BehavioralTimeSeries(name='BehavioralTimeSeries')
         nwbfile.add_acquisition(behav_acq)
 
-        for table in tables:
-            if table[0] & session_key:
+        for table, name in tables:
+            if table & session_key:
                 x, y, likelihood, samples, start_time, sampling_rate= (experiment.SessionTrial 
                                                                     * tracking.Tracking 
-                                                                    * table[0] 
+                                                                    * table 
                                                                     * tracking.TrackingDevice.proj('sampling_rate') 
-                                                                    & session_key).fetch(f'{table[1]}_x',f'{table[1]}_y', 
-                                                                                            f'{table[1]}_likelihood', 
+                                                                    & session_key).fetch(f'{name}_x',f'{name}_y', 
+                                                                                            f'{name}_likelihood', 
                                                                                             'tracking_samples','start_time',
                                                                                             'sampling_rate',order_by='trial')
                 x_data_list = np.append(x_data_list, x)   
@@ -204,7 +204,7 @@ def datajoint_to_nwb(session_key):
                 filled_start_times = [np.full(len(unshifted_time_stamps[idx]),x) for idx, x in enumerate(start_time_list)]
                 shifted_time_stamps = [np.add(filled_start_times[x].astype(float),unshifted_time_stamps[x]) for x in range(len(filled_start_times))]
 
-                behav_acq.create_timeseries(name=f'BehavioralTimeSeries_{table[1]}_x_y_data', 
+                behav_acq.create_timeseries(name=f'BehavioralTimeSeries_{name}_x_y_data', 
                                             data=np.vstack([np.hstack(x_data_list),np.hstack(y_data_list), np.hstack(likelihood_data_list)]),
                                             timestamps=np.hstack(shifted_time_stamps),
                                             description='video description',
