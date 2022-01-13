@@ -755,10 +755,11 @@ class GLMFitCAE(dj.Computed):
     -> ephys.Unit
     ---
     r2_cae: mediumblob
+    r2_t_cae: mediumblob
     weights_cae: mediumblob
-    y_cae: longblob
     predict_y_cae: longblob
-    x_cae: longblob
+    test_y_cae: longblob
+    test_x_cae: longblob
     """
     # mtl sessions only
     key_source = experiment.Session & v_tracking.TongueTracking3DBot & experiment.Breathing & v_oralfacial_analysis.CAEEmbedding & ephys.Unit & 'rig = "RRig-MTL"'
@@ -782,15 +783,17 @@ class GLMFitCAE(dj.Computed):
             return
         
         # from the cameras
-        trial_key=(v_tracking.TongueTracking3DBot & key).fetch('trial', order_by='trial')
+        trial_key_o=(v_tracking.TongueTracking3DBot & key).fetch('trial', order_by='trial')
+        test_t = trial_key_o[::5] # test trials
+        trial_key=np.setdiff1d(trial_key_o,test_t)
+        num_trial_t=len(test_t)
         num_trial=len(trial_key)
         
-        embedding_side=(v_oralfacial_analysis.CAEEmbedding & key & [{'trial': tr} for tr in trial_key]).fetch('embedding_side', order_by='trial')
-        embed_session=np.vstack(embedding_side)
-
-        V_design_matrix = embed_session
+        embedding_side=(v_oralfacial_analysis.CaeEmbeddingOcc.EmbeddingPart & 'part_name="side"' & [{'trial': tr} for tr in trial_key] & key).fetch('embedding_occ', order_by='trial')
+        V_design_matrix=np.vstack(embedding_side)
         
-        #V_design_matrix = np.concatenate((embedding_side), axis=1)
+        embedding_side_t=(v_oralfacial_analysis.CaeEmbeddingOcc.EmbeddingPart & 'part_name="side"' & [{'trial': tr} for tr in test_t] & key).fetch('embedding_occ', order_by='trial')
+        V_design_matrix_t=np.vstack(embedding_side_t)
         
         #set up GLM
         sm_log_Link = sm.genmod.families.links.log
@@ -803,19 +806,27 @@ class GLMFitCAE(dj.Computed):
             
             for unit_key in unit_keys: # loop for each neuron
     
-                all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in trial_key]).fetch('spike_times', order_by='trial')
-                
+                all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in trial_key]).fetch('spike_times', order_by='trial')                
                 good_spikes =all_spikes # get good spikes
                 for i, d in enumerate(good_spikes):
                     good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
                 good_spikes = np.hstack(good_spikes)    
                 y, bin_edges = np.histogram(good_spikes, np.arange(0, traces_len*3.4/1000*num_trial+bin_width, bin_width))
+                
+                all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in test_t]).fetch('spike_times', order_by='trial')                
+                good_spikes=all_spikes # get good spikes
+                for i, d in enumerate(good_spikes):
+                    good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
+                good_spikes = np.hstack(good_spikes)    
+                y_t, bin_edges = np.histogram(good_spikes, np.arange(0, traces_len*3.4/1000*num_trial_t+bin_width, bin_width))
                                    
                 r2s=np.zeros(len(taus))
-                weights_t=np.zeros((len(taus),17))
-                predict_ys=np.zeros((len(taus),len(y)))
+                r2s_t=r2s
+                weights_t=np.zeros((len(taus),V_design_matrix.shape[1]+1))
+                predict_ys=np.zeros((len(taus),len(y_t)))
                 for i, tau in enumerate(taus):
                     y_roll=np.roll(y,tau)
+                    y_roll_t=np.roll(y_t,tau)
                     glm_poiss = sm.GLM(y_roll, sm.add_constant(V_design_matrix), family=sm.families.Poisson(link=sm_log_Link))
                     
                     try:
@@ -827,16 +838,19 @@ class GLMFitCAE(dj.Computed):
                         
                         r2s[i] = r2
                         
-                        y_roll_t_p=glm_result.predict(sm.add_constant(V_design_matrix))
+                        y_roll_t_p=glm_result.predict(sm.add_constant(V_design_matrix_t))
+                        sst_val = sum(map(lambda x: np.power(x,2),y_roll_t-np.mean(y_roll_t))) 
+                        sse_val = sum(map(lambda x: np.power(x,2),y_roll_t-y_roll_t_p)) 
+                        r2s_t[i] = 1.0 - sse_val/sst_val
                         predict_ys[i,:]=y_roll_t_p
                         weights_t[i,:] = glm_result.params
-                        
+                                                
                     except:
                         pass
                     
                 #units_glm.append({**unit_key, 'r2_nolick': r2s, 'weights_nolick': weights_t, 'y_nolick': y, 'predict_y_nolick': predict_ys, 'x_nolick': V_design_matrix})
                 print(unit_key)
-                ib.insert1({**unit_key, 'r2_cae': r2s, 'weights_cae': weights_t, 'y_cae': y, 'predict_y_cae': predict_ys, 'x_cae': V_design_matrix})
+                ib.insert1({**unit_key, 'r2_cae': r2s, 'r2_t_cae': r2s_t, 'weights_cae': weights_t, 'test_y_cae': y_t, 'predict_y_cae': predict_ys, 'test_x_cae': V_design_matrix_t})
                 if ib.flush():
                     pass
 
@@ -1191,6 +1205,14 @@ class MovementTiming(dj.Computed):
         threshold = np.pi
         cond = (phase_b < threshold) & (np.roll(phase_b,-1) >= threshold)
         inspir_onset=np.argwhere(cond)[:,0]*bin_width # get onset of breath
+        a_threshold = -0.5 # amplitude threshold
+        a_cond = (good_breathing > a_threshold) & (np.roll(good_breathing,-1) <= a_threshold)
+        inspir_amp=np.argwhere(a_cond)[:,0]*bin_width # amp threshold
+        inspir_onset_a = [] # only take inspir with a amp crossing
+        for i, inspir_value in enumerate(inspir_onset[:-1]):
+            if any((inspir_amp>inspir_value) & (inspir_amp<inspir_onset[i+1])):
+                inspir_onset_a.append(inspir_value)
+        inspir_onset=np.array(inspir_onset_a)
 
         # licking epochs
         threshold = 0.5 # tongue detection
@@ -1323,4 +1345,18 @@ class CaeEmbedding32(dj.Imported):
         ---
         embedding_32: longblob
         """
+
+@schema
+class CaeEmbeddingOcc(dj.Imported):
+    definition = """
+    -> experiment.SessionTrial
+    ---
     
+    """
+    class EmbeddingPart(dj.Part):
+        definition = """
+        -> master
+        part_name: varchar(16) # e.g. side, bot, body
+        ---
+        embedding_occ: longblob
+        """    
