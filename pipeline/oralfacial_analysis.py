@@ -767,10 +767,10 @@ class GLMFitCAE(dj.Computed):
     def make(self, key):
         good_units=ephys.Unit * ephys.ClusterMetric * ephys.UnitStat & key & 'presence_ratio > 0.9' & 'amplitude_cutoff < 0.15' & 'avg_firing_rate > 0.2' & 'isi_violation < 10' & 'unit_amp > 150'
         unit_keys=good_units.fetch('KEY')
-        #bin_width = 0.017
-        bin_width = 1471/295*3.4/1000
         traces_len=1471
-
+        traces_len_c=295
+        bin_width=traces_len/traces_len_c*3.4/1000
+        
         # from the cameras
         traces_s = tracking.Tracking.TongueTracking & key & {'tracking_device': 'Camera 3'} 
         traces_b = tracking.Tracking.TongueTracking & key & {'tracking_device': 'Camera 4'}
@@ -811,14 +811,14 @@ class GLMFitCAE(dj.Computed):
                 for i, d in enumerate(good_spikes):
                     good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
                 good_spikes = np.hstack(good_spikes)    
-                y, bin_edges = np.histogram(good_spikes, np.arange(0, traces_len*3.4/1000*num_trial+bin_width, bin_width))
+                y, bin_edges = np.histogram(good_spikes, np.arange(0, (traces_len_c*num_trial+1)*bin_width, bin_width))
                 
                 all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in test_t]).fetch('spike_times', order_by='trial')                
                 good_spikes=all_spikes # get good spikes
                 for i, d in enumerate(good_spikes):
                     good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
                 good_spikes = np.hstack(good_spikes)    
-                y_t, bin_edges = np.histogram(good_spikes, np.arange(0, traces_len*3.4/1000*num_trial_t+bin_width, bin_width))
+                y_t, bin_edges = np.histogram(good_spikes, np.arange(0, (traces_len_c*num_trial_t+1)*bin_width, bin_width))
                                    
                 r2s=np.zeros(len(taus))
                 r2s_t=r2s
