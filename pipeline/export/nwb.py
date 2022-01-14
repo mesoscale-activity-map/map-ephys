@@ -247,8 +247,6 @@ def datajoint_to_nwb(session_key):
     behavioral_event = pynwb.behavior.BehavioralEvents(name='BehavioralEvents')
     nwbfile.add_acquisition(behavioral_event)
 
-    all_session_times = experiment.TrialEvent * experiment.SessionTrial  & session_key  
-
     # ---- behavior events
 
     q_trial_event = (experiment.TrialEvent & session_key).proj('trial_event_type','trial_event_time',event_stop='trial_event_time + duration')
@@ -267,40 +265,22 @@ def datajoint_to_nwb(session_key):
                             data=np.full_like(event_stops.astype(float), 1),
                             timestamps=event_stops.astype(float) + trial_start_times.astype(float))
 
-    # # ---- photostim events ----
-    # q_photostim_event = (experiment.TrialEvent * experiment.PhotostimEvent & session_key).proj(
-    #     event_start='trial_event_time', event_stop = '(trial_event_time+duration)', 
-    #     power= 'power', photostim='photo_stim')
+    # ---- photostim events ----
 
-    # if q_photostim_event:
-    #     trial_event_id, event_starts, event_stops, powers, photo_stim = q_photostim_event.fetch(
-    #         'trial_event_id','event_start', 'event_stop', 'power', 'photostim', order_by='trial')
-        
-    #     all_times = [event_starts[0]]
-
-    #     for time in all_session_times.fetch('duration'):
-    #         all_times.append(time)
-    #         all_times_arr = np.cumsum(all_times)
-
-    #     all_times_arr = np.delete(all_times_arr, -1)
-    #     trial_start_times = []
-
-    #     for idx, times in enumerate(all_times_arr):
-    #         for trial in trial_event_id:
-    #             if trial == idx:
-    #                 trial_start_times.append(times)
-
-                
-    #     behavioral_event.create_timeseries(name='photostim_start_times', unit='mW', conversion=1.0,
-    #                                 description='Timestamps of the photo-stimulation and the corresponding powers (in mW) being applied',
-    #                                 data=powers.astype(float),
-    #                                 timestamps=trial_start_times,
-    #                                 control=photo_stim.astype('uint8'), control_description=stim_sites)
-    #     behavioral_event.create_timeseries(name='photostim_stop_times', unit='mW', conversion=1.0,
-    #                                 description = 'Timestamps of the photo-stimulation being switched off',
-    #                                 data=np.full_like(event_starts.astype(float), 0),
-    #                                 timestamps=event_stops.astype(Decimal) + trial_start_times,
-    #                                 control=photo_stim.astype('uint8'), control_description=stim_sites)
+    q_photostim_event = (experiment.PhotostimEvent * experiment.Photostim.proj('duration') & session_key).proj('trial','power','photostim_event_time', event_stop='photostim_event_time+duration',)
+    trials, event_starts, event_stops, powers, photo_stim = q_photostim_event.fetch(
+        'trial', 'photostim_event_time', 'event_stop', 'power', 'photo_stim', order_by='trial')
+    trial_starts = (experiment.SessionTrial() & q_photostim_event).fetch('start_time')
+    behavioral_event.create_timeseries(name='photostim_start_times', unit='mW', conversion=1.0,
+                                description='Timestamps of the photo-stimulation and the corresponding powers (in mW) being applied',
+                                data=powers.astype(float),
+                                timestamps=event_starts.astype(float) + trial_starts.astype(float),
+                                control=photo_stim.astype('uint8'), control_description=stim_sites)
+    behavioral_event.create_timeseries(name='photostim_stop_times', unit='mW', conversion=1.0,
+                                description = 'Timestamps of the photo-stimulation being switched off',
+                                data=np.full_like(event_starts.astype(float), 0),
+                                timestamps=event_stops.astype(float) + trial_starts.astype(float),
+                                control=photo_stim.astype('uint8'), control_description=stim_sites)
 
     return nwbfile
 
