@@ -215,113 +215,93 @@ def datajoint_to_nwb(session_key):
 
         # =============== TrialSet ====================
 
-#         q_photostim = ((experiment.TrialEvent & 'trial_event_type="go"').proj('trial_event_time') 
-#                         * experiment.PhotostimEvent.proj(photostim_event_time='photostim_event_time',power='power') 
-#                         * experiment.Photostim.proj(stim_dur='duration') 
-#                         & session_key).proj(
-#                             'power','photostim_event_time','stim_dur',
-#                             stim_time='ROUND(trial_event_time - photostim_event_time, 2)')
+    q_photostim = (experiment.PhotostimEvent 
+                * experiment.Photostim  & session_key).proj('photostim_event_time', 'power','duration')
+    q_trial = experiment.SessionTrial * experiment.BehaviorTrial * experiment.TrialNote & session_key
+    q_trial = q_trial.aggr(q_photostim, ..., photostim_onset='IFNULL(GROUP_CONCAT(photostim_event_time SEPARATOR ", "), "N/A")',
+                            photostim_power='IFNULL(GROUP_CONCAT(power SEPARATOR ", "), "N/A")',
+                            photostim_duration='IFNULL(GROUP_CONCAT(duration SEPARATOR ", "), "N/A")', keep_all_rows=True)
+    q_trial
+    
+    skip_adding_columns = experiment.Session.primary_key 
 
-#         q_trial = experiment.SessionTrial * experiment.BehaviorTrial * experiment.TrialNote & session_key
-#         q_trial_aggr = q_trial.aggr(q_photostim, ..., photostim_onset='IFNULL(GROUP_CONCAT(stim_time SEPARATOR ", "), "N/A")',
-#                                 photostim_power='IFNULL(GROUP_CONCAT(power SEPARATOR ", "), "N/A")',
-#                                 photostim_duration='IFNULL(GROUP_CONCAT(stim_dur SEPARATOR ", "), "N/A")', keep_all_rows=True)
+    if q_trial:
+            # Get trial descriptors from TrialSet.Trial and TrialStimInfo
+        trial_columns = {tag: {'name': tag,
+                                'description': q_trial.heading.attributes[tag].comment}
+                            for tag in q_trial.heading.names
+                            if tag not in skip_adding_columns + ['start_time','stop_time']}
 
-#         skip_adding_columns = experiment.Session.primary_key 
+        # Add new table columns to nwb trial-table
+        for column in trial_columns.values():
+            nwbfile.add_trial_column(**column)
 
-#         if q_trial_aggr:
-#                 # Get trial descriptors from TrialSet.Trial and TrialStimInfo
-#             trial_columns = {tag: {'name': tag,
-#                                     'description': q_trial_aggr.heading.attributes[tag].comment}
-#                                 for tag in q_trial_aggr.heading.names
-#                                 if tag not in skip_adding_columns + ['start_time','stop_time']}
-
-#             # Add new table columns to nwb trial-table
-#             for c in trial_columns.values():
-#                 nwbfile.add_trial_column(**c)
-
-#             # Add entries to the trial-table
-#             for trial in q_trial_aggr.fetch(as_dict=True):
-#                 trial['start_time'], trial['stop_time'] = float(trial['start_time']), float(trial['stop_time'])
-#                 [trial.pop(k) for k in skip_adding_columns]
-#                 nwbfile.add_trial(**trial)
+        # Add entries to the trial-table
+        for trial in q_trial.fetch(as_dict=True):
+            trial['start_time'], trial['stop_time'] = float(trial['start_time']), float(trial['stop_time'])
+            [trial.pop(k) for k in skip_adding_columns]
+            nwbfile.add_trial(**trial)
 
 # # # # =============================== TRIAL EVENTS ==========================
             
-#     behav_event = pynwb.behavior.BehavioralEvents(name='BehavioralEvents')
-#     nwbfile.add_acquisition(behav_event)
+    behavioral_event = pynwb.behavior.BehavioralEvents(name='BehavioralEvents')
+    nwbfile.add_acquisition(behavioral_event)
 
-#     all_session_times = experiment.TrialEvent * experiment.SessionTrial  & session_key  
+    all_session_times = experiment.TrialEvent * experiment.SessionTrial  & session_key  
 
-#     # ---- photostim events ----
-#     q_photostim_event = (experiment.TrialEvent * experiment.PhotostimEvent & session_key).proj(
-#         event_start='trial_event_time', event_stop = '(trial_event_time+duration)', 
-#         power= 'power', photostim='photo_stim')
+    # ---- behavior events
 
-#     if q_photostim_event:
-#         trial_event_id, event_starts, event_stops, powers, photo_stim = q_photostim_event.fetch(
-#             'trial_event_id','event_start', 'event_stop', 'power', 'photostim', order_by='trial')
+    q_trial_event = (experiment.TrialEvent & session_key).proj('trial_event_type','trial_event_time',event_stop='trial_event_time + duration')
+
+    for trial_event_type in (experiment.TrialEventType & q_trial_event).fetch('trial_event_type'):
+        trial, event_starts, event_stops = (q_trial_event & {'trial_event_type':trial_event_type}).fetch('trial',
+                                                                                                        'trial_event_time','event_stop')
+
+        trial_start_times = (experiment.SessionTrial * q_trial_event & {'trial_event_type':trial_event_type}).fetch('start_time')
+
+        behavioral_event.create_timeseries(name=trial_event_type + '_start_times', unit='a.u.', conversion=1.0,
+                                data=np.full_like(event_starts.astype(float), 1),
+                                timestamps=event_starts.astype(float) + trial_start_times.astype(float))
+
+        behavioral_event.create_timeseries(name=trial_event_type + '_stop_times', unit='a.u.', conversion=1.0,
+                            data=np.full_like(event_stops.astype(float), 1),
+                            timestamps=event_stops.astype(float) + trial_start_times.astype(float))
+
+    # # ---- photostim events ----
+    # q_photostim_event = (experiment.TrialEvent * experiment.PhotostimEvent & session_key).proj(
+    #     event_start='trial_event_time', event_stop = '(trial_event_time+duration)', 
+    #     power= 'power', photostim='photo_stim')
+
+    # if q_photostim_event:
+    #     trial_event_id, event_starts, event_stops, powers, photo_stim = q_photostim_event.fetch(
+    #         'trial_event_id','event_start', 'event_stop', 'power', 'photostim', order_by='trial')
         
-#         all_times = [event_starts[0]]
+    #     all_times = [event_starts[0]]
 
-#         for time in all_session_times.fetch('duration'):
-#             all_times.append(time)
-#             all_times_arr = np.cumsum(all_times)
+    #     for time in all_session_times.fetch('duration'):
+    #         all_times.append(time)
+    #         all_times_arr = np.cumsum(all_times)
 
-#         all_times_arr = np.delete(all_times_arr, -1)
-#         trial_start_times = []
+    #     all_times_arr = np.delete(all_times_arr, -1)
+    #     trial_start_times = []
 
-#         for idx, times in enumerate(all_times_arr):
-#             for trial in trial_event_id:
-#                 if trial == idx:
-#                     trial_start_times.append(times)
+    #     for idx, times in enumerate(all_times_arr):
+    #         for trial in trial_event_id:
+    #             if trial == idx:
+    #                 trial_start_times.append(times)
 
                 
-#         behav_event.create_timeseries(name='photostim_start_times', unit='mW', conversion=1.0,
-#                                     description='Timestamps of the photo-stimulation and the corresponding powers (in mW) being applied',
-#                                     data=powers.astype(float),
-#                                     timestamps=trial_start_times,
-#                                     control=photo_stim.astype('uint8'), control_description=stim_sites)
-#         behav_event.create_timeseries(name='photostim_stop_times', unit='mW', conversion=1.0,
-#                                     description = 'Timestamps of the photo-stimulation being switched off',
-#                                     data=np.full_like(event_starts.astype(float), 0),
-#                                     timestamps=event_stops.astype(Decimal) + trial_start_times,
-#                                     control=photo_stim.astype('uint8'), control_description=stim_sites)
+    #     behavioral_event.create_timeseries(name='photostim_start_times', unit='mW', conversion=1.0,
+    #                                 description='Timestamps of the photo-stimulation and the corresponding powers (in mW) being applied',
+    #                                 data=powers.astype(float),
+    #                                 timestamps=trial_start_times,
+    #                                 control=photo_stim.astype('uint8'), control_description=stim_sites)
+    #     behavioral_event.create_timeseries(name='photostim_stop_times', unit='mW', conversion=1.0,
+    #                                 description = 'Timestamps of the photo-stimulation being switched off',
+    #                                 data=np.full_like(event_starts.astype(float), 0),
+    #                                 timestamps=event_stops.astype(Decimal) + trial_start_times,
+    #                                 control=photo_stim.astype('uint8'), control_description=stim_sites)
 
-#     # ---- behavior events ----
-
-#     q_behavior_trials = ((experiment.TrialEvent * experiment.BehaviorTrial) - experiment.PhotostimEvent 
-#                         & session_key).proj(event_start='trial_event_time', event_stop = '(trial_event_time+duration)',
-#                             outcome='outcome',trial_instruction='trial_instruction')
-
-#     if q_behavior_trials:
-#         trial_event_id, event_starts, event_stops, powers, photo_stim = q_behavior_trials.fetch(
-#             'trial_event_id','event_start', 'event_stop', 'outcome', 'trial_instruction', order_by='trial')
- 
-#         all_times = [event_starts[0]]
-
-#         for time in all_session_times.fetch('duration'):
-#             all_times.append(time)
-#             all_times_arr = np.cumsum(all_times)
-
-#         all_times_arr = np.delete(all_times_arr, -1)
-
-#         trial_start_times = []
-
-#         for idx, times in enumerate(all_times_arr):
-#             for trial in trial_event_id:
-#                 if trial == idx:
-#                     trial_start_times.append(times)
-
-#         behav_event.create_timeseries(name='behavior_event_start_times', unit='a.u', conversion=1.0,
-#                                     description='Behavior event start times',
-#                                     data=np.full_like(event_starts.astype(float), 0),
-#                                     timestamps=trial_start_times)
-#         behav_event.create_timeseries(name='behavior_event_stop_times', unit='a.u', conversion=1.0,
-#                                     description = 'Behavior event stop times',
-#                                     data=np.full_like(event_stops.astype(float), 0),
-#                                     timestamps=event_stops.astype(Decimal) + trial_start_times)
-        
     return nwbfile
 
 
