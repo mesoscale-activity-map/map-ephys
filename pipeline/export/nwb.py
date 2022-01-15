@@ -176,9 +176,6 @@ def datajoint_to_nwb(session_key):
         (tracking.Tracking.RightPawTracking,'right_paw'),(tracking.Tracking.LickPortTracking,'lickport'),
         (tracking.Tracking.WhiskerTracking,'whisker')]
 
-    x_data_list, y_data_list, likelihood_data_list = np.array([]),np.array([]),np.array([])
-    samples_list, start_time_list, sampling_rate_list = np.array([]),np.array([]),np.array([])
-
     if tracking.Tracking & session_key:
         behav_acq = pynwb.behavior.BehavioralTimeSeries(name='BehavioralTimeSeries')
         nwbfile.add_acquisition(behav_acq)
@@ -193,19 +190,14 @@ def datajoint_to_nwb(session_key):
                                                                                             f'{name}_likelihood', 
                                                                                             'tracking_samples','start_time',
                                                                                             'sampling_rate',order_by='trial')
-                x_data_list = np.append(x_data_list, x)   
-                y_data_list = np.append(y_data_list, y)
-                likelihood_data_list = np.append(likelihood_data_list, likelihood)
-                samples_list = np.append(samples_list, samples)
-                start_time_list = np.append(start_time_list, start_time)
-                sampling_rate_list = np.append(sampling_rate_list, sampling_rate)
-                recording_times_length = samples_list/sampling_rate_list.astype(float)
-                unshifted_time_stamps = [np.linspace(0,x, samples_list[idx].astype(int)) for idx, x in enumerate(recording_times_length)]
-                filled_start_times = [np.full(len(unshifted_time_stamps[idx]),x) for idx, x in enumerate(start_time_list)]
+
+                recording_times_length = samples/sampling_rate.astype(float)
+                unshifted_time_stamps = [np.linspace(0,x, samples[idx].astype(int)) for idx, x in enumerate(recording_times_length)]
+                filled_start_times = [np.full(len(unshifted_time_stamps[idx]),x) for idx, x in enumerate(start_time)]
                 shifted_time_stamps = [np.add(filled_start_times[x].astype(float),unshifted_time_stamps[x]) for x in range(len(filled_start_times))]
 
                 behav_acq.create_timeseries(name=f'BehavioralTimeSeries_{name}_x_y_data', 
-                                            data=np.vstack([np.hstack(x_data_list),np.hstack(y_data_list), np.hstack(likelihood_data_list)]),
+                                            data=np.vstack([np.hstack(x),np.hstack(y), np.hstack(likelihood)]),
                                             timestamps=np.hstack(shifted_time_stamps),
                                             description='video description',
                                             unit='a.u.', 
