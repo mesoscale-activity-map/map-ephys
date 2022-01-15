@@ -811,14 +811,14 @@ class GLMFitCAE(dj.Computed):
                 for i, d in enumerate(good_spikes):
                     good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
                 good_spikes = np.hstack(good_spikes)    
-                y, bin_edges = np.histogram(good_spikes, np.arange(0, (traces_len_c*num_trial+1)*bin_width, bin_width))
+                y, bin_edges = np.histogram(good_spikes, np.arange(0, (traces_len_c*num_trial+0.5)*bin_width, bin_width))
                 
                 all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in test_t]).fetch('spike_times', order_by='trial')                
                 good_spikes=all_spikes # get good spikes
                 for i, d in enumerate(good_spikes):
                     good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
                 good_spikes = np.hstack(good_spikes)    
-                y_t, bin_edges = np.histogram(good_spikes, np.arange(0, (traces_len_c*num_trial_t+1)*bin_width, bin_width))
+                y_t, bin_edges = np.histogram(good_spikes, np.arange(0, (traces_len_c*num_trial_t+0.5)*bin_width, bin_width))
                                    
                 r2s=np.zeros(len(taus))
                 r2s_t=r2s
