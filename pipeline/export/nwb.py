@@ -191,10 +191,7 @@ def datajoint_to_nwb(session_key):
                                                                                             'tracking_samples','start_time',
                                                                                             'sampling_rate',order_by='trial')
 
-                recording_times_length = samples/sampling_rate.astype(float)
-                unshifted_time_stamps = [np.linspace(0,x, samples[idx].astype(int)) for idx, x in enumerate(recording_times_length)]
-                filled_start_times = [np.full(len(unshifted_time_stamps[idx]),x) for idx, x in enumerate(start_time)]
-                shifted_time_stamps = [np.add(filled_start_times[x].astype(float),unshifted_time_stamps[x]) for x in range(len(filled_start_times))]
+                shifted_time_stamps = [np.arange(sample) / fs + trial_start_time for sample, fs, trial_start_time in zip(samples, sampling_rate, start_time)]
 
                 behav_acq.create_timeseries(name=f'BehavioralTimeSeries_{name}', 
                                             data=np.vstack([np.hstack(x),np.hstack(y), np.hstack(likelihood)]),
