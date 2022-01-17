@@ -196,7 +196,7 @@ def datajoint_to_nwb(session_key):
                 filled_start_times = [np.full(len(unshifted_time_stamps[idx]),x) for idx, x in enumerate(start_time)]
                 shifted_time_stamps = [np.add(filled_start_times[x].astype(float),unshifted_time_stamps[x]) for x in range(len(filled_start_times))]
 
-                behav_acq.create_timeseries(name=f'BehavioralTimeSeries_{name}_x_y_data', 
+                behav_acq.create_timeseries(name=f'BehavioralTimeSeries_{name}', 
                                             data=np.vstack([np.hstack(x),np.hstack(y), np.hstack(likelihood)]),
                                             timestamps=np.hstack(shifted_time_stamps),
                                             description='video description',
