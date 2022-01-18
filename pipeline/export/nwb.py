@@ -196,7 +196,7 @@ def datajoint_to_nwb(session_key):
                 behav_acq.create_timeseries(name=f'BehavioralTimeSeries_{name}', 
                                             data=np.vstack([np.hstack(x),np.hstack(y), np.hstack(likelihood)]),
                                             timestamps=np.hstack(shifted_time_stamps),
-                                            description='video description',
+                                            description=f'Time series for {name} position: x, y, likelihood',
                                             unit='a.u.', 
                                             conversion=1.0)
 
@@ -242,7 +242,7 @@ def datajoint_to_nwb(session_key):
 
     for trial_event_type in (experiment.TrialEventType & q_trial_event).fetch('trial_event_type'):
         trial, event_starts, event_stops = (q_trial_event & {'trial_event_type':trial_event_type}).fetch('trial',
-                                                                                                        'trial_event_time','event_stop')
+                                                                                                        'trial_event_time','event_stop', order_by='trial')
 
         trial_start_times = (experiment.SessionTrial * q_trial_event & {'trial_event_type':trial_event_type}).fetch('start_time')
 
@@ -259,7 +259,7 @@ def datajoint_to_nwb(session_key):
     q_photostim_event = (experiment.PhotostimEvent * experiment.Photostim.proj('duration') & session_key).proj('trial','power','photostim_event_time', event_stop='photostim_event_time+duration',)
     trials, event_starts, event_stops, powers, photo_stim = q_photostim_event.fetch(
         'trial', 'photostim_event_time', 'event_stop', 'power', 'photo_stim', order_by='trial')
-    trial_starts = (experiment.SessionTrial() & q_photostim_event).fetch('start_time')
+    trial_starts = (experiment.SessionTrial() & q_photostim_event).fetch('start_time', order_by=trial)
     behavioral_event.create_timeseries(name='photostim_start_times', unit='mW', conversion=1.0,
                                 description='Timestamps of the photo-stimulation and the corresponding powers (in mW) being applied',
                                 data=powers.astype(float),
