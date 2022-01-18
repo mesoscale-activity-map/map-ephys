@@ -259,7 +259,7 @@ def datajoint_to_nwb(session_key):
     q_photostim_event = (experiment.PhotostimEvent * experiment.Photostim.proj('duration') & session_key).proj('trial','power','photostim_event_time', event_stop='photostim_event_time+duration',)
     trials, event_starts, event_stops, powers, photo_stim = q_photostim_event.fetch(
         'trial', 'photostim_event_time', 'event_stop', 'power', 'photo_stim', order_by='trial')
-    trial_starts = (experiment.SessionTrial() & q_photostim_event).fetch('start_time', order_by=trial)
+    trial_starts = (experiment.SessionTrial() & q_photostim_event).fetch('start_time')
     behavioral_event.create_timeseries(name='photostim_start_times', unit='mW', conversion=1.0,
                                 description='Timestamps of the photo-stimulation and the corresponding powers (in mW) being applied',
                                 data=powers.astype(float),
