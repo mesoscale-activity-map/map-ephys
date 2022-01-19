@@ -139,8 +139,7 @@ def datajoint_to_nwb(session_key):
         # Add entries to the trial-table
         for trial in q_trial.fetch(as_dict=True):
             trial['start_time'], trial['stop_time'] = float(trial['start_time']), float(trial['stop_time'])
-            [trial.pop(k) for k in skip_adding_columns]
-            nwbfile.add_trial(**trial)
+            nwbfile.add_trial(**{k:v for k,v in trial.items() if k not in skip_adding_columns})
 
 # # # # =============================== TRIAL EVENTS ==========================
             
