@@ -155,7 +155,7 @@ def datajoint_to_nwb(session_key):
         trial, event_starts, event_stops = (q_trial_event & {'trial_event_type':trial_event_type}).fetch('trial',
                                                                                                         'trial_event_time','event_stop', order_by='trial')
 
-        trial_start_times = (experiment.SessionTrial * q_trial_event & {'trial_event_type':trial_event_type}).fetch('start_time')
+        trial_start_times = (experiment.SessionTrial * q_trial_event & {'trial_event_type':trial_event_type}).fetch('start_time', order_by='trial')
 
         behavioral_event.create_timeseries(name=trial_event_type + '_start_times', unit='a.u.', conversion=1.0,
                                 data=np.full_like(event_starts.astype(float), 1),
