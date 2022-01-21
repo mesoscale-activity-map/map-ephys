@@ -481,9 +481,9 @@ def populate_foraging_analysis(populate_settings={'reserve_jobs': True, 'display
 
 
 def populate_oralfacial_analysis(populate_settings={'reserve_jobs': True, 'display_progress': True}):
-    log.info('oralfacial_analysis.GLMFitCAE.populate()')
+    log.info('oralfacial_analysis.LickLatency.populate()')
     #log.info('oralfacial_analysis.GLMFit.populate()')
-    oralfacial_analysis.GLMFitCAE.populate(**dict(populate_settings, max_calls=100))
+    oralfacial_analysis.LickLatency.populate(**dict(populate_settings, max_calls=100))
     #oralfacial_analysis.GLMFit.populate(**dict(populate_settings, max_calls=100))
 
 

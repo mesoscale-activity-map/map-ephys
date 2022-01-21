@@ -811,14 +811,14 @@ class GLMFitCAE(dj.Computed):
                 for i, d in enumerate(good_spikes):
                     good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
                 good_spikes = np.hstack(good_spikes)    
-                y, bin_edges = np.histogram(good_spikes, np.arange(0, (traces_len_c*num_trial+1)*bin_width, bin_width))
+                y, bin_edges = np.histogram(good_spikes, np.arange(0, (traces_len_c*num_trial+0.5)*bin_width, bin_width))
                 
                 all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in test_t]).fetch('spike_times', order_by='trial')                
                 good_spikes=all_spikes # get good spikes
                 for i, d in enumerate(good_spikes):
                     good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
                 good_spikes = np.hstack(good_spikes)    
-                y_t, bin_edges = np.histogram(good_spikes, np.arange(0, (traces_len_c*num_trial_t+1)*bin_width, bin_width))
+                y_t, bin_edges = np.histogram(good_spikes, np.arange(0, (traces_len_c*num_trial_t+0.5)*bin_width, bin_width))
                                    
                 r2s=np.zeros(len(taus))
                 r2s_t=r2s
@@ -1062,6 +1062,61 @@ class DirectionTuning(dj.Computed):
             unit_dir.append({**unit_key, 'direction_tuning': direction_tun, 'preferred_phase': pref_phase, 'direction_index': dir_idx})
             
         self.insert(unit_dir, ignore_extra_fields=True)
+        
+@schema
+class LickLatency(dj.Computed):
+    definition = """
+    -> ephys.Unit
+    ---    
+    latency: float
+    
+    """
+
+    key_source = experiment.Session & v_oralfacial_analysis.MovementTiming & ephys.Unit & 'rig = "RRig-MTL"'
+    
+    def make(self, key):
+        traces_len=1471
+
+        good_units=ephys.Unit & key & (ephys.UnitPassingCriteria  & 'criteria_passed=1')
+
+        unit_keys=good_units.fetch('KEY')
+
+        trial_key=(v_tracking.TongueTracking3DBot & key).fetch('trial', order_by='trial')
+        lick_onset=(v_oralfacial_analysis.MovementTiming & key).fetch('lick_onset')
+
+        t_before=1
+        t_after=0.5
+        bin_width=0.001
+        
+        units_lat = []
+        
+        for unit_key in unit_keys: # loop for each neuron
+            all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in trial_key]).fetch('spike_times', order_by='trial')   
+            good_spikes=all_spikes # get good spikes
+            for i, d in enumerate(good_spikes):
+                good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
+            good_spikes = np.hstack(good_spikes)    
+            
+            psth=[]
+            
+            for lick_t in lick_onset[0]:
+                psth.append(good_spikes[(good_spikes>lick_t-t_before) & (good_spikes<lick_t+t_after)]-lick_t)
+            
+            psth=np.hstack(psth)
+            y, bin_edges = np.histogram(psth, np.arange(-t_before, t_after, bin_width))
+            
+            fr_mean=np.mean(y[0:int((t_before/bin_width)-1)])
+            
+            thr_cross=np.where(y[int((t_before/bin_width)):]>stats.poisson.ppf(0.95,fr_mean))[0]
+            
+            latency=0
+            for i, thr in enumerate(thr_cross[:-1]):
+                if thr_cross[i+1]==thr+1:
+                    latency=thr*bin_width
+                    break
+            units_lat.append({**unit_key, 'latency': latency})
+            
+        self.insert(units_lat, ignore_extra_fields=True)
         
 @schema
 class MovementTiming(dj.Computed):
