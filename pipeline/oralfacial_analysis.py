@@ -1435,22 +1435,22 @@ class LickReset(dj.Computed):
         psth_s=-0.4
         psth_e=1
         psth_bin=np.arange(psth_s,psth_e,0.02)
-        
+
         inspir_onset,lick_onset_time,lick_offset_time,ton_onset=(v_oralfacial_analysis.MovementTiming & key).fetch1('inspiration_onset','lick_onset','lick_offset','tongue_onset')
-        
+
         inspir_onset_l=[] # restrict by licking bouts
         for i,val in enumerate(lick_onset_time):
             inspir_onset_l.append(inspir_onset[(inspir_onset>(lick_onset_time[i]+0.2)) & (inspir_onset<(lick_offset_time[i]-0.2))])
         inspir_onset_l=np.array(inspir_onset_l)
         inspir_onset_l=np.hstack(inspir_onset_l)
-        
+
         licks = [] # lick times
         n_licks = [] # number of licks in btw breaths
         ibi = []
         lick_bef_time=[]
-        
+
         max_ibi=np.max(np.diff(inspir_onset))
-        
+
         for i,_ in enumerate(inspir_onset_l[2:-2]):
             
             lick=ton_onset[(ton_onset > inspir_onset_l[i-2]) & (ton_onset<inspir_onset_l[i+2])]
@@ -1465,38 +1465,38 @@ class LickReset(dj.Computed):
                     lick_bef_time.append(lick_bef - inspir_onset_l[i])
                     n_licks.append(lick_in.size)                
                     ibi.append(inspir_onset_l[i+1] - inspir_onset_l[i])
-        
+
         ibi=np.array(ibi)
         n_licks=np.array(n_licks)
         lick_bef_time=np.array(lick_bef_time)
-        
+
         licks[:] = [ele for i, ele in enumerate(licks) if ibi[i]<max_ibi]
         n_licks=n_licks[ibi<max_ibi]
         lick_bef_time=lick_bef_time[ibi<max_ibi]
         ibi=ibi[ibi<max_ibi]
-        
+
         sorted_indexes=np.argsort(ibi)
         sorted_indexes=sorted_indexes[::-1]
-        
+
         licks = [licks[i] for i in sorted_indexes]
         n_licks=n_licks[sorted_indexes]
         lick_bef_time=lick_bef_time[sorted_indexes]
         ibi=ibi[sorted_indexes]
-        
+
         d_bound=(np.mean(ibi[n_licks==2]) + np.mean(ibi[n_licks==1]))/2
-        
+
         psth_1_i= np.where((ibi<d_bound) & (n_licks==1))[0]
         psth_2_i= np.where((ibi>d_bound) & (n_licks==2))[0]
         if len(psth_1_i)>n_trial:
             psth_1_i=psth_1_i[:n_trial]
         if len(psth_2_i)>n_trial:
             psth_2_i=psth_2_i[-n_trial:]
-        
-        good_units=ephys.Unit & key & {'insertion_number': 2} & (ephys.UnitPassingCriteria  & 'criteria_passed=1')
-        
+
+        good_units=ephys.Unit & key & (ephys.UnitPassingCriteria  & 'criteria_passed=1')
+
         unit_keys=good_units.fetch('KEY')
         units_lick=[]
-        
+
         for unit_key in unit_keys:          
             spikes = [] # where the spikes occur
             ibi = []
@@ -1522,28 +1522,27 @@ class LickReset(dj.Computed):
                         spike_breath=spike_breath[spike_breath<psth_e]
                         spikes.append(spike_breath)
                         ibi.append(inspir_onset_l[i+1] - inspir_onset_l[i])
-        
+
             ibi=np.array(ibi)
                     
             spikes[:] = [ele for i, ele in enumerate(spikes) if ibi[i]<max_ibi]
             ibi=ibi[ibi<max_ibi]
-        
+
             sorted_indexes=np.argsort(ibi)
             sorted_indexes=sorted_indexes[::-1]
             
-            spikes=[spikes[i]-lick_bef_time[i] for i in sorted_indexes]
+            spikes=[spikes[i] for i in sorted_indexes]
+            spikes=[spikes[i]-lbt for i,lbt in enumerate(lick_bef_time)]
             
             psth_lick_1=[spikes[i] for i in psth_1_i]
             psth_lick_1=np.hstack(psth_lick_1)
-            psth_lick_1=np.histogram(psth_lick_1,psth_bin)[0]
+            psth_lick_1=np.histogram(psth_lick_1,psth_bin)[0]/len(psth_1_i)
             psth_lick_2=[spikes[i] for i in psth_2_i]
             psth_lick_2=np.hstack(psth_lick_2)
             psth_lick_2=np.histogram(psth_lick_2,psth_bin)
             half_bin=(psth_lick_2[1][1]-psth_lick_2[1][0])/2
             psth_bins=psth_lick_2[1][1:]+half_bin
-            psth_lick_2=psth_lick_2[0]
-            
-            np.histogram(psth_lick_2,psth_bin)[1]
+            psth_lick_2=psth_lick_2[0]/len(psth_2_i)
             
             units_lick.append({**unit_key, 'psth_lick_1': psth_lick_1, 'psth_lick_2': psth_lick_2, 'psth_bins': psth_bins})
 
