@@ -1423,6 +1423,7 @@ class LickReset(dj.Computed):
     ---
     psth_lick_1: mediumblob
     psth_lick_2: mediumblob
+    psth_bins: mediumblob
     
     """
     # mtl sessions only
@@ -1534,11 +1535,16 @@ class LickReset(dj.Computed):
             
             psth_lick_1=[spikes[i] for i in psth_1_i]
             psth_lick_1=np.hstack(psth_lick_1)
-            psth_lick_1=np.histogram(psth_lick_1,psth_bin)
+            psth_lick_1=np.histogram(psth_lick_1,psth_bin)[0]
             psth_lick_2=[spikes[i] for i in psth_2_i]
             psth_lick_2=np.hstack(psth_lick_2)
             psth_lick_2=np.histogram(psth_lick_2,psth_bin)
+            half_bin=(psth_lick_2[1][1]-psth_lick_2[1][0])/2
+            psth_bins=psth_lick_2[1][1:]+half_bin
+            psth_lick_2=psth_lick_2[0]
             
-            units_lick.append({**unit_key, 'psth_lick_1': psth_lick_1, 'psth_lick_2': psth_lick_2})
+            np.histogram(psth_lick_2,psth_bin)[1]
+            
+            units_lick.append({**unit_key, 'psth_lick_1': psth_lick_1, 'psth_lick_2': psth_lick_2, 'psth_bins': psth_bins})
 
         self.insert(units_lick, ignore_extra_fields=True)
