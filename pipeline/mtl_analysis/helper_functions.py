@@ -671,8 +671,10 @@ def volcano_plot_licking(session_key):
     sorted_indexes=np.argsort(ibi)
     sorted_indexes=sorted_indexes[::-1]
     
-    fig, ax = plt.subplots(1, 1, figsize=(12, 12))
+    d_bound=(np.mean(ibi[n_licks==2]) + np.mean(ibi[n_licks==1]))/2
     
+    fig, ax = plt.subplots(1, 1, figsize=(12, 12))
+    plot_db=True
     for i,_ in enumerate(licks):
         if n_licks[sorted_indexes[i]]==1:
             ax.plot(licks[sorted_indexes[i]],i*np.ones(len(licks[sorted_indexes[i]])),'.b',markersize=4)
@@ -682,8 +684,14 @@ def volcano_plot_licking(session_key):
             ax.plot(licks[sorted_indexes[i]],i*np.ones(len(licks[sorted_indexes[i]])),'.k',markersize=4)
         elif n_licks[sorted_indexes[i]]==4:
             ax.plot(licks[sorted_indexes[i]],i*np.ones(len(licks[sorted_indexes[i]])),'.m',markersize=4)
+        else:
+            ax.plot(licks[sorted_indexes[i]],i*np.ones(len(licks[sorted_indexes[i]])),'.c',markersize=4)
         ax.plot(0,i,'.r',markersize=4)
         ax.plot(ibi[sorted_indexes[i]],i,'.r',markersize=4)
+        if (ibi[sorted_indexes[i]]<d_bound) & plot_db:
+            ax.plot([-0.5,1],[i,i],'k')
+            plot_db=False
+            
         ax.plot(ibi2[sorted_indexes[i]],i,'.r',markersize=4)
     ax.set_xlim([-0.5,1])
     ax.set_xlabel('Time from measured inspiration onset (s)')
