@@ -1547,3 +1547,51 @@ class LickReset(dj.Computed):
             units_lick.append({**unit_key, 'psth_lick_1': psth_lick_1, 'psth_lick_2': psth_lick_2, 'psth_bins': psth_bins})
 
         self.insert(units_lick, ignore_extra_fields=True)
+        
+@schema
+class UnitPsth(dj.Computed):
+    definition = """
+    -> ephys.Unit
+    ---    
+    psth: mediumblob
+    psth_bins: mediumblob
+    
+    """
+
+    key_source = experiment.Session & v_oralfacial_analysis.MovementTiming & ephys.Unit & 'rig = "RRig-MTL"'
+    
+    def make(self, key):
+        traces_len=1471
+
+        good_units=ephys.Unit & key & (ephys.UnitPassingCriteria  & 'criteria_passed=1')
+
+        unit_keys=good_units.fetch('KEY')
+
+        trial_key=(v_tracking.TongueTracking3DBot & key).fetch('trial', order_by='trial')
+        lick_onset=(v_oralfacial_analysis.MovementTiming & key).fetch('lick_onset')
+
+        t_before=0.5
+        t_after=0.5
+        bin_width=0.001
+        
+        units_psths=[]
+        
+        for unit_key in unit_keys: # loop for each neuron
+            all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in trial_key]).fetch('spike_times', order_by='trial')   
+            good_spikes=all_spikes # get good spikes
+            for i, d in enumerate(good_spikes):
+                good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
+            good_spikes = np.hstack(good_spikes)    
+            
+            psth=[]
+            
+            for lick_t in lick_onset[0]:
+                psth.append(good_spikes[(good_spikes>lick_t-t_before) & (good_spikes<lick_t+t_after)]-lick_t)
+            
+            psth=np.hstack(psth)
+            y, bin_edges = np.histogram(psth, np.arange(-t_before, t_after, bin_width))
+            half_bin=(bin_edges[1]-bin_edges[0])/2
+            y=y/len(lick_onset[0])/(bin_edges[1]-bin_edges[0])
+            units_psths.append({**unit_key, 'psth': y, 'psth_bins': bin_edges[1:]-half_bin})
+            
+        self.insert(units_psths, ignore_extra_fields=True)
