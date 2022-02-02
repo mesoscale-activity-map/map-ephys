@@ -689,7 +689,7 @@ def volcano_plot_licking(session_key):
         ax.plot(0,i,'.r',markersize=4)
         ax.plot(ibi[sorted_indexes[i]],i,'.r',markersize=4)
         if (ibi[sorted_indexes[i]]<d_bound) & plot_db:
-            ax.plot([-0.5,1],[i,i],'k')
+            #ax.plot([-0.5,1],[i,i],'k')
             plot_db=False
             
         #ax.plot(ibi2[sorted_indexes[i]],i,'.r',markersize=4)
@@ -798,7 +798,7 @@ def volcano_plot_breathing(session_key):
         ax.plot(breaths[sorted_indexes[i]],i*np.ones(len(breaths[sorted_indexes[i]])),'.b',markersize=4)
         ax.plot(0,i,'.r',markersize=4)
         ax.plot(ili[sorted_indexes[i]],i,'.r',markersize=4)
-        ax.plot(ili2[sorted_indexes[i]],i,'.r',markersize=4)
+        #ax.plot(ili2[sorted_indexes[i]],i,'.r',markersize=4)
     #ax.set_xlim([-0.5,1])
     ax.set_xlim([-0.4,0.5])
     ax.set_xlabel('Time from measured tongue onset (s)')
