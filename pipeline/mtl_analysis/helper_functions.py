@@ -692,7 +692,7 @@ def volcano_plot_licking(session_key):
             ax.plot([-0.5,1],[i,i],'k')
             plot_db=False
             
-        ax.plot(ibi2[sorted_indexes[i]],i,'.r',markersize=4)
+        #ax.plot(ibi2[sorted_indexes[i]],i,'.r',markersize=4)
     ax.set_xlim([-0.5,1])
     ax.set_xlabel('Time from measured inspiration onset (s)')
     ax.set_ylabel('Breath number')
@@ -969,8 +969,8 @@ def volcano_plot_unit_lick(unit_key):
             ax.plot(spikes[sorted_indexes[i]]-lick_bef_time[sorted_indexes[i]],i*np.ones(len(spikes[sorted_indexes[i]])),'.k',markersize=4)
         elif n_licks[sorted_indexes[i]]==4:
             ax.plot(spikes[sorted_indexes[i]]-lick_bef_time[sorted_indexes[i]],i*np.ones(len(spikes[sorted_indexes[i]])),'.m',markersize=4)
-        ax.plot(0-lick_bef_time[sorted_indexes[i]],i,'.r',markersize=4)
-        ax.plot(ibi[sorted_indexes[i]]-lick_bef_time[sorted_indexes[i]],i,'.r',markersize=4)
+        #ax.plot(0-lick_bef_time[sorted_indexes[i]],i,'.r',markersize=4)
+        #ax.plot(ibi[sorted_indexes[i]]-lick_bef_time[sorted_indexes[i]],i,'.r',markersize=4)
         # ax.plot(ibi2[sorted_indexes[i]],i,'.r',markersize=4)
     ax.set_xlim([-0.5,1])
     ax.set_xlabel('Time from previous lick onset (s)')
