@@ -638,24 +638,25 @@ def volcano_plot_licking(session_key):
     licks = [] # lick times
     n_licks = [] # number of licks in btw breaths
     
-    #ibi = np.zeros(len(inspir_onset_l)-3)
-    #ibi2 = np.zeros(len(inspir_onset_l)-4)
     ibi = []
     ibi2 = []
+    lick2_time=[]
+    lick_bef_time=[]
     
     max_ibi=np.max(np.diff(inspir_onset))
     
-    for i,_ in enumerate(inspir_onset_l[2:-2]):
+    for i,_ in enumerate(inspir_onset_l[2:-2],2):
         
         lick=ton_onset[(ton_onset > inspir_onset_l[i-2]) & (ton_onset<inspir_onset_l[i+2])]
         
         lick_in=lick[(lick > inspir_onset_l[i]) & (lick<inspir_onset_l[i+1])]
         if lick_in.size != 0:  # only include trials with a lick in between the breaths
+            lick_bef=lick[(lick < inspir_onset_l[i])] # find the timing of lick before inspiration onset
+            lick_bef=lick_bef[-1]
             licks.append(lick - inspir_onset_l[i])
+            lick_bef_time.append(lick_bef - inspir_onset_l[i])
             n_licks.append(lick_in.size)
-            
-            #ibi[i] = inspir_onset_l[i+1] - inspir_onset_l[i]
-            #ibi2[i] = inspir_onset_l[i+2] - inspir_onset_l[i]
+            lick2_time.append(lick_in[-1] - inspir_onset_l[i])
             ibi.append(inspir_onset_l[i+1] - inspir_onset_l[i])
             ibi2.append(inspir_onset_l[i+2] - inspir_onset_l[i])
     
@@ -663,10 +664,26 @@ def volcano_plot_licking(session_key):
     ibi=np.array(ibi)
     ibi2=np.array(ibi2)
     n_licks=np.array(n_licks)
+    lick2_time=np.array(lick2_time)
+    lick_bef_time=np.array(lick_bef_time)
     licks[:] = [ele for i, ele in enumerate(licks) if ibi[i]<max_ibi]
     n_licks=n_licks[ibi<max_ibi]
     ibi2=ibi2[ibi<max_ibi]
+    lick_bef_time=lick_bef_time[ibi<max_ibi]
+    lick2_time=lick2_time[ibi<max_ibi]
     ibi=ibi[ibi<max_ibi]
+    
+    idx_all=np.arange(0,len(ibi))
+    lick1_rem=np.where((n_licks==1) & (lick_bef_time>-0.05) & (lick_bef_time<0))
+    lick2_rem=np.where((n_licks==2) & (lick2_time>(ibi-0.05)) & (lick2_time<ibi))
+    idx_keep=np.setdiff1d(idx_all,np.concatenate((lick1_rem[0],lick2_rem[0])))
+
+    licks = [licks[i] for i in idx_keep]
+    n_licks=n_licks[idx_keep]
+    ibi2=ibi2[idx_keep]
+    lick_bef_time=lick_bef_time[idx_keep]
+    lick2_time=lick2_time[idx_keep]
+    ibi=ibi[idx_keep]
     
     sorted_indexes=np.argsort(ibi)
     sorted_indexes=sorted_indexes[::-1]
@@ -689,7 +706,7 @@ def volcano_plot_licking(session_key):
         ax.plot(0,i,'.r',markersize=4)
         ax.plot(ibi[sorted_indexes[i]],i,'.r',markersize=4)
         if (ibi[sorted_indexes[i]]<d_bound) & plot_db:
-            #ax.plot([-0.5,1],[i,i],'k')
+            ax.plot([-0.5,1],[i,i],'k')
             plot_db=False
             
         #ax.plot(ibi2[sorted_indexes[i]],i,'.r',markersize=4)
@@ -719,7 +736,7 @@ def volcano_plot_whisking(session_key):
     
     max_ibi=np.max(np.diff(inspir_onset))
     
-    for i,_ in enumerate(inspir_onset_l[2:-2]):
+    for i,_ in enumerate(inspir_onset_l[2:-2],2):
         
         whisk=whisker_onset[(whisker_onset > inspir_onset_l[i-2]) & (whisker_onset<inspir_onset_l[i+2])]
     
@@ -770,7 +787,7 @@ def volcano_plot_breathing(session_key):
     
     max_ili=np.max(np.diff(inspir_onset))
     
-    for i,_ in enumerate(ton_onset_l[2:-2]):
+    for i,_ in enumerate(ton_onset_l[2:-2],2):
         
         breath=inspir_onset[(inspir_onset > ton_onset_l[i-2]) & (inspir_onset<ton_onset_l[i+2])]
         
@@ -831,14 +848,14 @@ def volcano_plot_unit(unit_key):
     n_licks = [] # number of licks in btw breaths
     
     spikes = [] # where the spikes occur
-    
+    lick2_time=[]
     ibi = []
     ibi2 = []
     lick_bef_time=[]
     
     max_ibi=np.max(np.diff(inspir_onset))
     
-    for i,_ in enumerate(inspir_onset_l[2:-2]):
+    for i,_ in enumerate(inspir_onset_l[2:-2],2):
         
         lick=ton_onset[(ton_onset > inspir_onset_l[i-2]) & (ton_onset<inspir_onset_l[i+2])]
         
@@ -854,19 +871,35 @@ def volcano_plot_unit(unit_key):
             spike_breath=spike_breath[spike_breath>-0.5]
             spike_breath=spike_breath[spike_breath<1]
             spikes.append(spike_breath)
+            lick2_time.append(lick_in[-1] - inspir_onset_l[i])
             ibi.append(inspir_onset_l[i+1] - inspir_onset_l[i])
             ibi2.append(inspir_onset_l[i+2] - inspir_onset_l[i])
     
     ibi=np.array(ibi)
     ibi2=np.array(ibi2)
     n_licks=np.array(n_licks)
+    lick2_time=np.array(lick2_time)
     lick_bef_time=np.array(lick_bef_time)
     licks[:] = [ele for i, ele in enumerate(licks) if ibi[i]<max_ibi]
     spikes[:] = [ele for i, ele in enumerate(spikes) if ibi[i]<max_ibi]
     n_licks=n_licks[ibi<max_ibi]
     ibi2=ibi2[ibi<max_ibi]
     lick_bef_time=lick_bef_time[ibi<max_ibi]
+    lick2_time=lick2_time[ibi<max_ibi]
     ibi=ibi[ibi<max_ibi]
+    
+    idx_all=np.arange(0,len(ibi))
+    lick1_rem=np.where((n_licks==1) & (lick_bef_time>-0.05) & (lick_bef_time<0))
+    lick2_rem=np.where((n_licks==2) & (lick2_time>(ibi-0.05)) & (lick2_time<ibi))
+    idx_keep=np.setdiff1d(idx_all,np.concatenate((lick1_rem[0],lick2_rem[0])))
+
+    licks = [licks[i] for i in idx_keep]
+    spikes = [spikes[i] for i in idx_keep]
+    n_licks=n_licks[idx_keep]
+    ibi2=ibi2[idx_keep]
+    lick_bef_time=lick_bef_time[idx_keep]
+    lick2_time=lick2_time[idx_keep]
+    ibi=ibi[idx_keep]
     
     sorted_indexes=np.argsort(ibi)
     sorted_indexes=sorted_indexes[::-1]
@@ -915,7 +948,7 @@ def volcano_plot_unit_lick(unit_key):
     
     licks = [] # lick times
     n_licks = [] # number of licks in btw breaths
-    
+    lick2_time=[]
     spikes = [] # where the spikes occur
     
     ibi = []
@@ -924,7 +957,7 @@ def volcano_plot_unit_lick(unit_key):
     
     max_ibi=np.max(np.diff(inspir_onset))
     
-    for i,_ in enumerate(inspir_onset_l[2:-2]):
+    for i,_ in enumerate(inspir_onset_l[2:-2],2):
         
         lick=ton_onset[(ton_onset > inspir_onset_l[i-2]) & (ton_onset<inspir_onset_l[i+2])]
         
@@ -935,6 +968,7 @@ def volcano_plot_unit_lick(unit_key):
             lick_bef=lick_bef[-1]
             licks.append(lick - inspir_onset_l[i])
             lick_bef_time.append(lick_bef - inspir_onset_l[i])
+            lick2_time.append(lick_in[-1] - inspir_onset_l[i])
             n_licks.append(lick_in.size)
             spike_breath=good_spikes-inspir_onset_l[i]
             spike_breath=spike_breath[spike_breath>-0.5]
@@ -946,20 +980,37 @@ def volcano_plot_unit_lick(unit_key):
     ibi=np.array(ibi)
     ibi2=np.array(ibi2)
     n_licks=np.array(n_licks)
+    lick2_time=np.array(lick2_time)
     lick_bef_time=np.array(lick_bef_time)
     licks[:] = [ele for i, ele in enumerate(licks) if ibi[i]<max_ibi]
     spikes[:] = [ele for i, ele in enumerate(spikes) if ibi[i]<max_ibi]
     n_licks=n_licks[ibi<max_ibi]
     ibi2=ibi2[ibi<max_ibi]
+    lick2_time=lick2_time[ibi<max_ibi]
     lick_bef_time=lick_bef_time[ibi<max_ibi]
     ibi=ibi[ibi<max_ibi]
+    
+    idx_all=np.arange(0,len(ibi))
+    lick1_rem=np.where((n_licks==1) & (lick_bef_time>-0.05) & (lick_bef_time<0))
+    lick2_rem=np.where((n_licks==2) & (lick2_time>(ibi-0.05)) & (lick2_time<ibi))
+    idx_keep=np.setdiff1d(idx_all,np.concatenate((lick1_rem[0],lick2_rem[0])))
+
+    licks = [licks[i] for i in idx_keep]
+    spikes = [spikes[i] for i in idx_keep]
+    n_licks=n_licks[idx_keep]
+    ibi2=ibi2[idx_keep]
+    lick_bef_time=lick_bef_time[idx_keep]
+    lick2_time=lick2_time[idx_keep]
+    ibi=ibi[idx_keep]
     
     sorted_indexes=np.argsort(ibi)
     sorted_indexes=sorted_indexes[::-1]
     
+    d_bound=(np.mean(ibi[n_licks==2]) + np.mean(ibi[n_licks==1]))/2
+    
     # another alignment
     fig, ax = plt.subplots(1, 1, figsize=(12, 12))
-    
+    plot_db=True
     for i,_ in enumerate(licks):    
         if n_licks[sorted_indexes[i]]==1:
             ax.plot(spikes[sorted_indexes[i]]-lick_bef_time[sorted_indexes[i]],i*np.ones(len(spikes[sorted_indexes[i]])),'.b',markersize=4)
@@ -972,6 +1023,9 @@ def volcano_plot_unit_lick(unit_key):
         #ax.plot(0-lick_bef_time[sorted_indexes[i]],i,'.r',markersize=4)
         #ax.plot(ibi[sorted_indexes[i]]-lick_bef_time[sorted_indexes[i]],i,'.r',markersize=4)
         # ax.plot(ibi2[sorted_indexes[i]],i,'.r',markersize=4)
+        if (ibi[sorted_indexes[i]]<d_bound) & plot_db:
+            ax.plot([-0.5,1],[i,i],'k')
+            plot_db=False
     ax.set_xlim([-0.5,1])
     ax.set_xlabel('Time from previous lick onset (s)')
     ax.set_ylabel('Breath number')

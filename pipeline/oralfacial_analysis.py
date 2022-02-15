@@ -3,6 +3,7 @@ import statsmodels.api as sm
 import datajoint as dj
 import pathlib
 from scipy import stats
+from scipy import signal
 from astropy.stats import kuiper_two
 from pipeline import ephys, experiment, tracking, InsertBuffer
 from pipeline.ingest import tracking as tracking_ingest
@@ -1424,6 +1425,8 @@ class LickReset(dj.Computed):
     psth_lick_1: mediumblob
     psth_lick_2: mediumblob
     psth_bins: mediumblob
+    peaks_lick_1: mediumblob
+    peaks_lick_2: mediumblob
     
     """
     # mtl sessions only
@@ -1435,23 +1438,24 @@ class LickReset(dj.Computed):
         psth_s=-0.4
         psth_e=1
         psth_bin=np.arange(psth_s,psth_e,0.02)
-
+        
         inspir_onset,lick_onset_time,lick_offset_time,ton_onset=(v_oralfacial_analysis.MovementTiming & key).fetch1('inspiration_onset','lick_onset','lick_offset','tongue_onset')
-
+        
         inspir_onset_l=[] # restrict by licking bouts
         for i,val in enumerate(lick_onset_time):
             inspir_onset_l.append(inspir_onset[(inspir_onset>(lick_onset_time[i]+0.2)) & (inspir_onset<(lick_offset_time[i]-0.2))])
         inspir_onset_l=np.array(inspir_onset_l)
         inspir_onset_l=np.hstack(inspir_onset_l)
-
+        
         licks = [] # lick times
         n_licks = [] # number of licks in btw breaths
         ibi = []
         lick_bef_time=[]
-
+        lick2_time = []
+        
         max_ibi=np.max(np.diff(inspir_onset))
-
-        for i,_ in enumerate(inspir_onset_l[2:-2]):
+        
+        for i,_ in enumerate(inspir_onset_l[2:-2],2):
             
             lick=ton_onset[(ton_onset > inspir_onset_l[i-2]) & (ton_onset<inspir_onset_l[i+2])]
             
@@ -1462,44 +1466,61 @@ class LickReset(dj.Computed):
                 if len(lick_bef)>0:
                     lick_bef=lick_bef[-1]
                     licks.append(lick - inspir_onset_l[i])
+                    lick2_time.append(lick_in[-1] - inspir_onset_l[i])
                     lick_bef_time.append(lick_bef - inspir_onset_l[i])
                     n_licks.append(lick_in.size)                
                     ibi.append(inspir_onset_l[i+1] - inspir_onset_l[i])
-
+        
         ibi=np.array(ibi)
         n_licks=np.array(n_licks)
         lick_bef_time=np.array(lick_bef_time)
-
+        lick2_time=np.array(lick2_time)
+        
         licks[:] = [ele for i, ele in enumerate(licks) if ibi[i]<max_ibi]
         n_licks=n_licks[ibi<max_ibi]
         lick_bef_time=lick_bef_time[ibi<max_ibi]
+        lick2_time=lick2_time[ibi<max_ibi]
         ibi=ibi[ibi<max_ibi]
-
+        
+        idx_all=np.arange(0,len(ibi))
+        lick1_rem=np.where((n_licks==1) & (lick_bef_time>-0.05) & (lick_bef_time<0))
+        lick2_rem=np.where((n_licks==2) & (lick2_time>(ibi-0.05)) & (lick2_time<ibi))
+        idx_keep=np.setdiff1d(idx_all,np.concatenate((lick1_rem[0],lick2_rem[0])))
+        
+        licks = [licks[i] for i in idx_keep]
+        n_licks=n_licks[idx_keep]
+        lick_bef_time=lick_bef_time[idx_keep]
+        ibi=ibi[idx_keep]
+        
         sorted_indexes=np.argsort(ibi)
         sorted_indexes=sorted_indexes[::-1]
-
+        
         licks = [licks[i] for i in sorted_indexes]
         n_licks=n_licks[sorted_indexes]
         lick_bef_time=lick_bef_time[sorted_indexes]
         ibi=ibi[sorted_indexes]
-
+        
         d_bound=(np.mean(ibi[n_licks==2]) + np.mean(ibi[n_licks==1]))/2
-
+        
         psth_1_i= np.where((ibi<d_bound) & (n_licks==1))[0]
-        psth_2_i= np.where((ibi>d_bound) & (n_licks==2))[0]
+        # psth_2_i= np.where((ibi>d_bound) & (n_licks==2))[0]
+        psth_2_i= np.where(n_licks==2)[0]
         if len(psth_1_i)>n_trial:
             psth_1_i=psth_1_i[:n_trial]
         if len(psth_2_i)>n_trial:
             psth_2_i=psth_2_i[-n_trial:]
-
+        
         good_units=ephys.Unit & key & (ephys.UnitPassingCriteria  & 'criteria_passed=1')
-
+        
         unit_keys=good_units.fetch('KEY')
         units_lick=[]
-
+        
         for unit_key in unit_keys:          
             spikes = [] # where the spikes occur
             ibi = []
+            lick2_time = []
+            n_licks = [] # number of licks in btw breaths
+            lick_bef_time=[]
             
             good_trial=(v_tracking.JawTracking3DSid & unit_key).fetch('trial', order_by='trial')
             all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in good_trial]).fetch('spike_times')
@@ -1508,7 +1529,7 @@ class LickReset(dj.Computed):
                 good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
             good_spikes = np.hstack(good_spikes)
             
-            for i,_ in enumerate(inspir_onset_l[2:-2]):
+            for i,_ in enumerate(inspir_onset_l[2:-2],2):
                 
                 lick=ton_onset[(ton_onset > inspir_onset_l[i-2]) & (ton_onset<inspir_onset_l[i+2])]
                 
@@ -1517,20 +1538,43 @@ class LickReset(dj.Computed):
                 if lick_in.size != 0:  # only include trials with a lick in between the breaths
                     lick_bef=lick[(lick < inspir_onset_l[i])] # find the timing of lick before inspiration onset
                     if len(lick_bef)>0:
+                        lick_bef=lick_bef[-1]
+                        lick2_time.append(lick_in[-1] - inspir_onset_l[i])
+                        lick_bef_time.append(lick_bef - inspir_onset_l[i])
+                        n_licks.append(lick_in.size)
                         spike_breath=good_spikes-inspir_onset_l[i]
                         spike_breath=spike_breath[spike_breath>psth_s]
                         spike_breath=spike_breath[spike_breath<psth_e]
                         spikes.append(spike_breath)
                         ibi.append(inspir_onset_l[i+1] - inspir_onset_l[i])
-
+        
+            lick2_time=np.array(lick2_time)    
             ibi=np.array(ibi)
+            lick_bef_time=np.array(lick_bef_time)
+            n_licks=np.array(n_licks)
                     
             spikes[:] = [ele for i, ele in enumerate(spikes) if ibi[i]<max_ibi]
+            lick2_time=lick2_time[ibi<max_ibi]
+            n_licks=n_licks[ibi<max_ibi]
+            lick_bef_time=lick_bef_time[ibi<max_ibi]
             ibi=ibi[ibi<max_ibi]
-
+            
+            idx_all=np.arange(0,len(ibi))
+            lick1_rem=np.where((n_licks==1) & (lick_bef_time>-0.05) & (lick_bef_time<0))
+            lick2_rem=np.where((n_licks==2) & (lick2_time>(ibi-0.05)) & (lick2_time<ibi))
+            idx_keep=np.setdiff1d(idx_all,np.concatenate((lick1_rem[0],lick2_rem[0])))
+        
+            spikes = [spikes[i] for i in idx_keep]    
+            n_licks=n_licks[idx_keep]
+            lick_bef_time=lick_bef_time[idx_keep]
+            ibi=ibi[idx_keep]
+            
             sorted_indexes=np.argsort(ibi)
             sorted_indexes=sorted_indexes[::-1]
             
+            n_licks=n_licks[sorted_indexes]
+            lick_bef_time=lick_bef_time[sorted_indexes]
+            ibi=ibi[sorted_indexes]
             spikes=[spikes[i] for i in sorted_indexes]
             spikes=[spikes[i]-lbt for i,lbt in enumerate(lick_bef_time)]
             
@@ -1541,10 +1585,20 @@ class LickReset(dj.Computed):
             psth_lick_2=np.hstack(psth_lick_2)
             psth_lick_2=np.histogram(psth_lick_2,psth_bin)
             half_bin=(psth_lick_2[1][1]-psth_lick_2[1][0])/2
-            psth_bins=psth_lick_2[1][1:]+half_bin
-            psth_lick_2=psth_lick_2[0]/len(psth_2_i)
+            psth_bins=psth_lick_2[1][1:]-half_bin
+            psth_lick_2=psth_lick_2[0]/len(psth_2_i)/(half_bin*2)
+            psth_lick_1=psth_lick_1/(half_bin*2)
             
-            units_lick.append({**unit_key, 'psth_lick_1': psth_lick_1, 'psth_lick_2': psth_lick_2, 'psth_bins': psth_bins})
+            psth_1_thr=50#np.mean(psth_lick_1)#+np.std(psth_lick_1)
+            peaks_1=signal.find_peaks(psth_lick_1, height=psth_1_thr, distance=0.14/(half_bin*2))[0]
+            peaks_lick_1=psth_bins[peaks_1]
+            peaks_lick_1=peaks_lick_1[(peaks_lick_1>0.12) & (peaks_lick_1<0.35)]
+            psth_2_thr=50#np.mean(psth_lick_2)#+np.std(psth_lick_1)
+            peaks_2=signal.find_peaks(psth_lick_2, height=psth_2_thr, distance=0.1/(half_bin*2))[0]
+            peaks_lick_2=psth_bins[peaks_2]
+            peaks_lick_2=peaks_lick_2[(peaks_lick_2>0.08) & (peaks_lick_2<0.35)]
+            
+            units_lick.append({**unit_key, 'psth_lick_1': psth_lick_1, 'psth_lick_2': psth_lick_2, 'psth_bins': psth_bins,'peaks_lick_1': peaks_lick_1,'peaks_lick_2': peaks_lick_2})
 
         self.insert(units_lick, ignore_extra_fields=True)
         
@@ -1595,3 +1649,55 @@ class UnitPsth(dj.Computed):
             units_psths.append({**unit_key, 'psth': y, 'psth_bins': bin_edges[1:]-half_bin})
             
         self.insert(units_psths, ignore_extra_fields=True)
+        
+@schema
+class LickRate(dj.Computed):
+    definition = """
+    -> ephys.Unit
+    ---
+    freq_bin: mediumblob
+    spike_rate: mediumblob
+    fr_slope: float
+    fr_intercept: float
+    
+    """
+    # mtl sessions only
+    key_source = experiment.Session & v_tracking.TongueTracking3DBot & experiment.Breathing & v_oralfacial_analysis.MovementTiming & ephys.Unit & 'rig = "RRig-MTL"'
+    
+    def make(self, key):
+        traces_len=1471
+        inspir_onset,lick_onset_time,lick_offset_time,ton_onset=(v_oralfacial_analysis.MovementTiming & key).fetch1('inspiration_onset','lick_onset','lick_offset','tongue_onset')
+
+        good_units=ephys.Unit & key & (ephys.UnitPassingCriteria  & 'criteria_passed=1')
+
+        unit_keys=good_units.fetch('KEY')
+        units_lick_freq=[]
+
+        for unit_key in unit_keys:          
+            good_trial=(v_tracking.JawTracking3DSid & unit_key).fetch('trial', order_by='trial')
+            all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in good_trial]).fetch('spike_times')
+            good_spikes = all_spikes # get good spikes
+            for i, d in enumerate(good_spikes):
+                good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
+            good_spikes = np.hstack(good_spikes)
+            
+            fr_lick=[] # fr per lick
+            ifi = []
+            for i,val in enumerate(lick_onset_time):
+                bout_ton_onset=ton_onset[(ton_onset>(lick_onset_time[i]+0.2)) & (ton_onset<(lick_offset_time[i]-0.2))]
+
+                for i,_ in enumerate(bout_ton_onset[1:],1):
+                    fr_lick.append(len(good_spikes[(good_spikes>(bout_ton_onset[i]-0.025)) & (good_spikes<(bout_ton_onset[i]+0.075))])/0.1)
+                    ifi.append(1/(bout_ton_onset[i] - bout_ton_onset[i-1]))
+
+            fr_lick=np.array(fr_lick)
+            ifi=np.array(ifi)
+            ifi_bins=np.linspace(np.min(ifi),np.max(ifi),10)
+            half_bin=(ifi_bins[1]-ifi_bins[0])/2
+            freq_bin=ifi_bins[:-1]+half_bin
+            
+            spike_rate = [np.mean(fr_lick[np.where((ifi > low) & (ifi <= high))]) for low, high in zip(ifi_bins[:-1], ifi_bins[1:])]
+            m,b=np.polyfit(freq_bin,spike_rate,1)
+            units_lick_freq.append({**unit_key, 'freq_bin': freq_bin, 'spike_rate': spike_rate,'fr_slope': m, 'fr_intercept':b})
+        
+        self.insert(units_lick_freq, ignore_extra_fields=True)
