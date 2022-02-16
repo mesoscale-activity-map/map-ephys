@@ -907,7 +907,8 @@ class BottomSVD(dj.Computed):
         roi_path = 'H://videos//bottom//DL017//2021_07_14//DL017_2021_07_14_bottom_0_proc.npy'
         roi_data = np.load(roi_path, allow_pickle=True).item()
         
-        video_root_dir = pathlib.Path('H:/videos')
+        # video_root_dir = pathlib.Path('H:/videos')
+        video_root_dir = pathlib.Path('I:/videos')
         
         trial_path = (tracking_ingest.TrackingIngest.TrackingFile & 'tracking_device = "Camera 4"' & 'trial = 1' & key).fetch1('tracking_file')
         
