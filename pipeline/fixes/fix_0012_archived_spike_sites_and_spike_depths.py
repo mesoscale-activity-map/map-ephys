@@ -12,7 +12,7 @@ from pipeline import lab, experiment, ephys
 
 from pipeline.ingest import ProbeInsertionError, ClusterMetricError
 from pipeline.ingest.ephys import (get_ephys_paths, cluster_loader_map,
-                                   _get_sess_dir, _match_probe_to_ephys, _gen_probe_insert)
+                                   get_sess_dir, match_probe_to_ephys, gen_probe_insert)
 from pipeline.fixes import schema, FixHistory
 
 
@@ -77,7 +77,7 @@ def _update_one_session(key):
     sess_datetime = datetime.combine(key['session_date'], sess_time)
 
     for rigpath in rigpaths:
-        dpath, dglob = _get_sess_dir(rigpath, h2o, sess_datetime)
+        dpath, dglob = get_sess_dir(rigpath, h2o, sess_datetime)
         if dpath is not None:
             break
 
@@ -88,7 +88,7 @@ def _update_one_session(key):
         return False
 
     try:
-        clustering_files = _match_probe_to_ephys(h2o, dpath, dglob)
+        clustering_files = match_probe_to_ephys(h2o, dpath, dglob)
     except FileNotFoundError as e:
         log.warning(str(e) + '. Skipping...')
         return False
@@ -131,7 +131,7 @@ def _add_spike_sites_and_depths(data, probe, npx_meta, rigpath):
                                                                                             clustering_label))
 
     # probe insertion key
-    insertion_key, e_config_key = _gen_probe_insert(sinfo, probe, npx_meta, probe_insertion_exists=True)
+    insertion_key, e_config_key = gen_probe_insert(sinfo, probe, npx_meta, probe_insertion_exists=True)
 
     # remove noise clusters
     if method in ['jrclust_v3', 'jrclust_v4']:

@@ -4,13 +4,18 @@ import pathlib
 from scipy.interpolate import CubicSpline
 from scipy import signal
 from scipy.stats import poisson
+import logging
 
 from . import lab, experiment, ccf
 from . import get_schema_name
+from pipeline.ingest.utils.paths import get_sess_dir, gen_probe_insert, match_probe_to_ephys
+from pipeline.ingest.utils.spike_sorter_loader import cluster_loader_map
+
 
 schema = dj.schema(get_schema_name('ephys'))
 [lab, experiment, ccf]  # NOQA flake8
 
+log = logging.getLogger(__name__)
 
 DEFAULT_ARCHIVE_STORE = {
     "protocol": "s3",
@@ -76,6 +81,34 @@ class ProbeInsertion(dj.Manual):
         ---
         sampling_rate: int  # (Hz)
         """
+
+    @classmethod
+    def generate_entries(cls, session_key):
+        log.info('------ ProbeInsertion generation for: {} ------'.format(session_key))
+
+        sinfo = ((lab.WaterRestriction
+                  * lab.Subject.proj()
+                  * experiment.Session.proj(..., '-session_time')) & session_key).fetch1()
+        h2o = sinfo['water_restriction_number']
+
+        dpath, dglob, rigpath = get_sess_dir(session_key)
+
+        if dpath is None:
+            return
+
+        try:
+            clustering_files = match_probe_to_ephys(h2o, dpath, dglob)
+        except FileNotFoundError as e:
+            log.warning(str(e) + '. Skipping...')
+            return
+
+        for probe_no, (f, cluster_method, npx_meta) in clustering_files.items():
+            insertion_key = {'subject_id': sinfo['subject_id'],
+                             'session': sinfo['session'],
+                             'insertion_number': probe_no}
+            if cls & insertion_key:
+                continue
+            gen_probe_insert(sinfo, probe_no, npx_meta)
 
 
 @schema
@@ -212,6 +245,43 @@ class Unit(dj.Imported):
         ---
         spike_times : longblob # (s) per-trial spike times relative to go-cue
         """
+
+    key_source = ProbeInsertion()
+
+    def make(self, key):
+        from .ingest.ephys import ingest_units
+
+        log.info('------ Units ingestion for: {} ------'.format(key))
+        session_key = (experiment.Session & key).fetch1('KEY')
+        sinfo = ((lab.WaterRestriction
+                  * lab.Subject.proj()
+                  * experiment.Session.proj(..., '-session_time')) & session_key).fetch1()
+        h2o = sinfo['water_restriction_number']
+
+        dpath, dglob, rigpath = get_sess_dir(session_key)
+
+        if dpath is None:
+            return
+
+        try:
+            clustering_files = match_probe_to_ephys(h2o, dpath, dglob)
+        except FileNotFoundError as e:
+            log.warning(str(e) + '. Skipping...')
+            return
+
+        probe_no = key['insertion_number']
+        f, cluster_method, npx_meta = clustering_files[probe_no]
+
+        data = cluster_loader_map[cluster_method](sinfo, *f)
+        ingest_units(key, data, npx_meta)
+
+        log.info('.. inserting file load information')
+
+        self.EphysFile.insert1(
+            {**skey, 'probe_insertion_number': probe,
+             'ephys_file': ef_path.relative_to(rigpath).as_posix()}, allow_direct_insert=True)
+
+        log.info('-- ephys ingest for {} - probe {} complete'.format(skey, probe))
 
 
 @schema
@@ -477,6 +547,36 @@ class ClusterMetric(dj.Imported):
     max_drift=null: float  # Maximum change in spike depth throughout recording
     cumulative_drift=null: float  # Cumulative change in spike depth throughout recording 
     """
+
+    key_source = ProbeInsertion & Unit
+
+    def make(self, key):
+        from .ingest.ephys import ingest_metrics
+
+        log.info('------ Cluster metrics ingestion for {} ------'.format(key))
+
+        session_key = (experiment.Session & key).fetch1('KEY')
+        sinfo = ((lab.WaterRestriction
+                  * lab.Subject.proj()
+                  * experiment.Session.proj(..., '-session_time')) & session_key).fetch1()
+        h2o = sinfo['water_restriction_number']
+
+        dpath, dglob, rigpath = get_sess_dir(session_key)
+
+        if dpath is None:
+            return
+
+        try:
+            clustering_files = match_probe_to_ephys(h2o, dpath, dglob)
+        except FileNotFoundError as e:
+            log.warning(str(e) + '. Skipping...')
+            return
+
+        probe_no = key['insertion_number']
+        f, cluster_method, npx_meta = clustering_files[probe_no]
+
+        data = cluster_loader_map[cluster_method](sinfo, *f)
+        ingest_metrics(key, data)
 
 
 @schema
