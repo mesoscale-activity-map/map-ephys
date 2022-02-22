@@ -92,7 +92,7 @@ def ingest_foraging_behavior(*args):
 
 def ingest_ephys(*args):
     from pipeline.ingest import ephys as ephys_ingest
-    ephys_ingest.EphysIngest().populate(display_progress=True)
+    ephys_ingest.EphysIngest().populate(display_progress=True, suppress_errors=True)
     experiment.Breathing().populate(display_progress=True)
     experiment.Piezoelectric().populate(display_progress=True)
 

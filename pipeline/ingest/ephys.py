@@ -50,11 +50,13 @@ class EphysIngest(dj.Imported):
         log.info('\n======================================================')
         log.info('EphysIngest().make(): key: {k}'.format(k=key))
 
-        ephys.ProbeInsertion.generate_entries(key)
-        ephys.Unit.populate(key, suppress_errors=True)
-        ephys.ClusterMetric.populate(key, suppress_errors=True)
-
         self.insert1(key)
+
+        ephys.ProbeInsertion.generate_entries(key)
+
+        for insertion_key in (ephys.ProbeInsertion & key).fetch('KEY'):
+            ephys.Unit().make(insertion_key)
+            ephys.ClusterMetric().make(insertion_key)
 
     def _load(self, data, probe, npx_meta, rigpath, probe_insertion_exists=False, into_archive=False):
         sinfo = data['sinfo']

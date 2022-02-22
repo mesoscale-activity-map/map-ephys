@@ -278,10 +278,8 @@ class Unit(dj.Imported):
         log.info('.. inserting file load information')
 
         self.EphysFile.insert1(
-            {**skey, 'probe_insertion_number': probe,
-             'ephys_file': ef_path.relative_to(rigpath).as_posix()}, allow_direct_insert=True)
-
-        log.info('-- ephys ingest for {} - probe {} complete'.format(skey, probe))
+            {**session_key, 'probe_insertion_number': probe_no,
+             'ephys_file': data['ef_path'].relative_to(rigpath).as_posix()}, allow_direct_insert=True)
 
 
 @schema
