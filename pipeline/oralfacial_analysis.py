@@ -39,9 +39,13 @@ class JawTuning(dj.Computed):
         
         unit_keys=good_units.fetch('KEY')
         
-        traces = tracking.Tracking.JawTracking & key & {'tracking_device': 'Camera 3'}
+        miss_trial_side=(v_oralfacial_analysis.BadVideo & key).fetch('miss_trial_side')
+        if (miss_trial_side[0] is None):
+            miss_trial_side[0]=np.array([0])
         
-        if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & key)) != len(traces):
+        traces = tracking.Tracking.JawTracking - [{'trial': tr} for tr in miss_trial_side[0]] & key & {'tracking_device': 'Camera 3'}
+        
+        if len(ephys.Unit.TrialSpikes - [{'trial': tr} for tr in miss_trial_side[0]] & unit_keys[0]) != len(traces):
             print(f'Mismatch in tracking trial and ephys trial number: {key}')
             return
         
@@ -61,7 +65,7 @@ class JawTuning(dj.Computed):
         # compute phase and MI
         units_jaw_tunings = []
         for unit_key in unit_keys:
-            all_spikes=(ephys.Unit.TrialSpikes & unit_key).fetch('spike_times', order_by='trial')
+            all_spikes=(ephys.Unit.TrialSpikes - [{'trial': tr} for tr in miss_trial_side[0]] & unit_key).fetch('spike_times', order_by='trial')
             good_spikes = np.array(all_spikes[good_trial_ind]*float(fs)) # get good spikes and convert to indices
             good_spikes = [d.astype(int) for d in good_spikes] # convert to intergers
         
