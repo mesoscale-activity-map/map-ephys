@@ -36,6 +36,9 @@ class JawTuning(dj.Computed):
         num_frame = 1470
         # get traces and phase
         good_units=ephys.Unit * ephys.ClusterMetric * ephys.UnitStat & key & 'presence_ratio > 0.9' & 'amplitude_cutoff < 0.15' & 'avg_firing_rate > 0.2' & 'isi_violation < 10' & 'unit_amp > 150'
+        if len(good_units)==0:
+            print(f'No units: {key}')
+            return
         
         unit_keys=good_units.fetch('KEY')
         
@@ -264,32 +267,43 @@ class GLMFit(dj.Computed):
         unit_keys=good_units.fetch('KEY')
         bin_width = 0.017
 
+        bad_trial_side,bad_trial_bot,miss_trial_side,miss_trial_bot=(v_oralfacial_analysis.BadVideo & key).fetch('bad_trial_side','bad_trial_bot','miss_trial_side','miss_trial_bot')
+        if (bad_trial_side[0] is None):
+            bad_trial_side[0]=np.array([0])
+        if (miss_trial_side[0] is None):
+            miss_trial_side[0]=np.array([0])
+        if (bad_trial_bot[0] is None):
+            bad_trial_bot[0]=np.array([0])
+        if (miss_trial_bot[0] is None):
+            miss_trial_bot[0]=np.array([0])    
+
+        bad_trials=np.concatenate((bad_trial_side[0],bad_trial_bot[0],miss_trial_side[0],miss_trial_bot[0]))
         # from the cameras
         tongue_thr = 0.95
-        traces_s = tracking.Tracking.TongueTracking & key & {'tracking_device': 'Camera 3'} 
-        traces_b = tracking.Tracking.TongueTracking & key & {'tracking_device': 'Camera 4'}
-        
-        if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & key)) != len(traces_s):
+        traces_s = tracking.Tracking.TongueTracking - [{'trial': tr} for tr in bad_trials] & key & {'tracking_device': 'Camera 3'} 
+        traces_b = tracking.Tracking.TongueTracking - [{'trial': tr} for tr in bad_trials] & key & {'tracking_device': 'Camera 4'}
+
+        if len(ephys.Unit.TrialSpikes - [{'trial': tr} for tr in bad_trials] & unit_keys[0]) != len(traces_s):
             print(f'Mismatch in tracking trial and ephys trial number: {key}')
-            return
-        if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & key)) != len(traces_b):
+            # return
+        if len(ephys.Unit.TrialSpikes - [{'trial': tr} for tr in bad_trials] & unit_keys[0]) != len(traces_b):
             print(f'Mismatch in tracking trial and ephys trial number: {key}')
-            return
-        
-        trial_key_o=(v_tracking.TongueTracking3DBot & key).fetch('trial', order_by='trial')
-        traces_s = tracking.Tracking.TongueTracking & key & {'tracking_device': 'Camera 3'} & [{'trial': tr} for tr in trial_key_o]
-        traces_b = tracking.Tracking.TongueTracking & key & {'tracking_device': 'Camera 4'} & [{'trial': tr} for tr in trial_key_o]
-        
+            # return
+
+        trial_key_o=(v_tracking.TongueTracking3DBot - [{'trial': tr} for tr in bad_trials] & key).fetch('trial', order_by='trial')
+        traces_s = tracking.Tracking.TongueTracking - [{'trial': tr} for tr in bad_trials] & key & {'tracking_device': 'Camera 3'} & [{'trial': tr} for tr in trial_key_o]
+        traces_b = tracking.Tracking.TongueTracking - [{'trial': tr} for tr in bad_trials] & key & {'tracking_device': 'Camera 4'} & [{'trial': tr} for tr in trial_key_o]
+
         session_traces_s_l_o = traces_s.fetch('tongue_likelihood', order_by='trial')
         session_traces_b_l_o = traces_b.fetch('tongue_likelihood', order_by='trial')
-        
+
         test_t_o = trial_key_o[::5] # test trials
         _,_,test_t=np.intersect1d(test_t_o,trial_key_o,return_indices=True)
         test_t=test_t+1
         trial_key=np.setdiff1d(trial_key_o,test_t_o)
         _,_,trial_key=np.intersect1d(trial_key,trial_key_o,return_indices=True)
         trial_key=trial_key+1
-        
+
         session_traces_s_l = session_traces_s_l_o[trial_key-1]
         session_traces_b_l = session_traces_b_l_o[trial_key-1]
         session_traces_s_l = np.vstack(session_traces_s_l)
@@ -298,7 +312,7 @@ class GLMFit(dj.Computed):
         session_traces_t_l[np.where((session_traces_s_l > tongue_thr) & (session_traces_b_l > tongue_thr))] = 1
         session_traces_t_l[np.where((session_traces_s_l <= tongue_thr) | (session_traces_b_l <= tongue_thr))] = 0
         session_traces_t_l = np.hstack(session_traces_t_l)
-        
+
         session_traces_s_l_t = session_traces_s_l_o[test_t-1]
         session_traces_b_l_t = session_traces_b_l_o[test_t-1]
         session_traces_s_l_t = np.vstack(session_traces_s_l_t)
@@ -307,7 +321,7 @@ class GLMFit(dj.Computed):
         session_traces_t_l_t[np.where((session_traces_s_l_t > tongue_thr) & (session_traces_b_l_t > tongue_thr))] = 1
         session_traces_t_l_t[np.where((session_traces_s_l_t <= tongue_thr) | (session_traces_b_l_t <= tongue_thr))] = 0
         session_traces_t_l_t = np.hstack(session_traces_t_l_t)
-        
+
         session_traces_s_l_f = np.vstack(session_traces_s_l_o)
         session_traces_b_l_f = np.vstack(session_traces_b_l_o)
         session_traces_t_l_f = session_traces_b_l_f
@@ -334,7 +348,7 @@ class GLMFit(dj.Computed):
         traces_z_mean=np.mean(session_traces_b_z_o[np.where(session_traces_t_l_f == 1)])
         traces_z_std=np.std(session_traces_b_z_o[np.where(session_traces_t_l_f == 1)])
         session_traces_b_z_o = (session_traces_b_z_o - traces_z_mean)/traces_z_std
-        
+
         session_traces_s_y = session_traces_s_y_o[trial_key-1]
         session_traces_s_x = session_traces_s_x_o[trial_key-1]
         session_traces_s_z = session_traces_s_z_o[trial_key-1]
@@ -375,7 +389,7 @@ class GLMFit(dj.Computed):
         session_traces_b_x = np.reshape(session_traces_b_x * session_traces_t_l, (-1,1))
         session_traces_b_y = np.reshape(session_traces_b_y * session_traces_t_l, (-1,1))
         session_traces_b_z = np.reshape(session_traces_b_z * session_traces_t_l, (-1,1))
-        
+
         # test trials
         session_traces_s_y_t = session_traces_s_y_o[test_t-1]
         session_traces_s_x_t = session_traces_s_x_o[test_t-1]
@@ -416,12 +430,12 @@ class GLMFit(dj.Computed):
         session_traces_b_z_t = np.reshape(session_traces_b_z_t * session_traces_t_l_t, (-1,1))
 
         # get breathing
-        breathing, breathing_ts = (experiment.Breathing & key & [{'trial': tr} for tr in trial_key_o]).fetch('breathing', 'breathing_timestamps', order_by='trial')
+        breathing, breathing_ts = (experiment.Breathing - [{'trial': tr} for tr in bad_trials] & key & [{'trial': tr} for tr in trial_key_o]).fetch('breathing', 'breathing_timestamps', order_by='trial')
         good_breathing = breathing
         for i, d in enumerate(breathing):
             good_breathing[i] = d[breathing_ts[i] < traces_len*3.4/1000]
         good_breathing_o = stats.zscore(np.vstack(good_breathing),axis=None)
-        
+
         good_breathing = np.hstack(good_breathing_o[trial_key-1])
         # -- moving-average
         window_size = int(round(bin_width/(breathing_ts[0][1]-breathing_ts[0][0]),0))  # sample
@@ -430,7 +444,7 @@ class GLMFit(dj.Computed):
         # -- down-sample
         good_breathing = good_breathing[window_size::window_size]
         good_breathing = np.reshape(good_breathing,(-1,1))
-        
+
         # test trials
         good_breathing_t = np.hstack(good_breathing_o[test_t-1])
         # -- moving-average
@@ -438,12 +452,12 @@ class GLMFit(dj.Computed):
         # -- down-sample
         good_breathing_t = good_breathing_t[window_size::window_size]
         good_breathing_t = np.reshape(good_breathing_t,(-1,1))
-        
+
         # get whisker
         session_traces_w = (v_oralfacial_analysis.WhiskerSVD & key).fetch('mot_svd')
         if len(session_traces_w[0][:,0]) % num_frame != 0:
             print('Bad videos in bottom view')
-            return
+            # return
         else:
             num_trial_w = int(len(session_traces_w[0][:,0])/num_frame)
             session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, num_frame))
@@ -454,7 +468,7 @@ class GLMFit(dj.Computed):
         session_traces_w = session_traces_w[trial_idx_nat,:]
         session_traces_w_o = stats.zscore(session_traces_w,axis=None)
         session_traces_w_o = session_traces_w_o[trial_key_o-1]
-        
+
         session_traces_w = session_traces_w_o[trial_key-1,:]
         session_traces_w = np.hstack(session_traces_w)
         window_size = int(bin_width/0.0034)  # sample
@@ -462,7 +476,7 @@ class GLMFit(dj.Computed):
         session_traces_w = np.convolve(session_traces_w, kernel, 'same')
         session_traces_w = session_traces_w[window_size::window_size]
         session_traces_w = np.reshape(session_traces_w,(-1,1))
-        
+
         session_traces_w_t = session_traces_w_o[test_t-1,:]
         session_traces_w_t = np.hstack(session_traces_w_t)
         session_traces_w_t = np.convolve(session_traces_w_t, kernel, 'same')
@@ -472,16 +486,16 @@ class GLMFit(dj.Computed):
         # stimulus
         V_design_matrix = np.concatenate((session_traces_s_x, session_traces_s_y, session_traces_s_z, session_traces_b_x, session_traces_b_y, session_traces_b_z, good_breathing, session_traces_w), axis=1)
         V_design_matrix_t = np.concatenate((session_traces_s_x_t, session_traces_s_y_t, session_traces_s_z_t, session_traces_b_x_t, session_traces_b_y_t, session_traces_b_z_t, good_breathing_t, session_traces_w_t), axis=1)
-        
+
         #set up GLM
         sm_log_Link = sm.genmod.families.links.log
 
         taus = np.arange(-5,6)
-        
+
         units_glm = []
 
         for unit_key in unit_keys: # loop for each neuron
-            all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in trial_key_o]).fetch('spike_times', order_by='trial')
+            all_spikes=(ephys.Unit.TrialSpikes - [{'trial': tr} for tr in bad_trials] & unit_key & [{'trial': tr} for tr in trial_key_o]).fetch('spike_times', order_by='trial')
             
             good_spikes = np.array(all_spikes[trial_key-1]) # get good spikes
             for i, d in enumerate(good_spikes):
@@ -877,17 +891,20 @@ class WhiskerSVD(dj.Computed):
         roi_data = np.load(roi_path, allow_pickle=True).item()
         
         video_root_dir = pathlib.Path('H:/videos')
+        #video_root_dir = pathlib.Path('I:/videos')
         
-        trial_path = (tracking_ingest.TrackingIngest.TrackingFile & 'tracking_device = "Camera 4"' & 'trial = 1' & key).fetch1('tracking_file')
+        trials=(tracking_ingest.TrackingIngest.TrackingFile & 'tracking_device = "Camera 4"' & key).fetch('trial')
+        
+        trial_path = (tracking_ingest.TrackingIngest.TrackingFile & 'tracking_device = "Camera 4"' & {'trial': trials[-1]} & key).fetch1('tracking_file')
         
         video_path = video_root_dir / trial_path
         
         video_path = video_path.parent
         
         video_files = list(video_path.glob('*.mp4'))
-        video_files_l = [[video_files[0]]]
+        video_files_l = [[str(video_files[0])]]
         for ind_trial, file in enumerate(video_files[1:]):
-            video_files_l.append([file])
+            video_files_l.append([str(file)])
             
         proc = process.run(video_files_l, proc=roi_data)
         
