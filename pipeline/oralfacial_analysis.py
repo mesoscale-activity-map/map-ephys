@@ -457,7 +457,7 @@ class GLMFit(dj.Computed):
         session_traces_w = (v_oralfacial_analysis.WhiskerSVD & key).fetch('mot_svd')
         if len(session_traces_w[0][:,0]) % num_frame != 0:
             print('Bad videos in bottom view')
-            # return
+            return
         else:
             num_trial_w = int(len(session_traces_w[0][:,0])/num_frame)
             session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, num_frame))
@@ -557,24 +557,35 @@ class GLMFitNoLick(dj.Computed):
         good_units=ephys.Unit * ephys.ClusterMetric * ephys.UnitStat & key & 'presence_ratio > 0.9' & 'amplitude_cutoff < 0.15' & 'avg_firing_rate > 0.2' & 'isi_violation < 10' & 'unit_amp > 150'
         unit_keys=good_units.fetch('KEY')
         bin_width = 0.017
+        
+        bad_trial_side,bad_trial_bot,miss_trial_side,miss_trial_bot=(v_oralfacial_analysis.BadVideo & key).fetch('bad_trial_side','bad_trial_bot','miss_trial_side','miss_trial_bot')
+        if (bad_trial_side[0] is None):
+            bad_trial_side[0]=np.array([0])
+        if (miss_trial_side[0] is None):
+            miss_trial_side[0]=np.array([0])
+        if (bad_trial_bot[0] is None):
+            bad_trial_bot[0]=np.array([0])
+        if (miss_trial_bot[0] is None):
+            miss_trial_bot[0]=np.array([0])    
+        bad_trials=np.concatenate((bad_trial_side[0],bad_trial_bot[0],miss_trial_side[0],miss_trial_bot[0]))
 
         # from the cameras
         tongue_thr = 0.95
-        traces_s = tracking.Tracking.TongueTracking & key & {'tracking_device': 'Camera 3'} 
-        traces_b = tracking.Tracking.TongueTracking & key & {'tracking_device': 'Camera 4'}
+        traces_s = tracking.Tracking.TongueTracking - [{'trial': tr} for tr in bad_trials] & key & {'tracking_device': 'Camera 3'} 
+        traces_b = tracking.Tracking.TongueTracking - [{'trial': tr} for tr in bad_trials] & key & {'tracking_device': 'Camera 4'}
         
-        if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & key)) != len(traces_s):
+        if len(ephys.Unit.TrialSpikes - [{'trial': tr} for tr in bad_trials] & unit_keys[0]) != len(traces_s):
             print(f'Mismatch in tracking trial and ephys trial number: {key}')
             return
-        if len(experiment.SessionTrial & (ephys.Unit.TrialSpikes & key)) != len(traces_b):
+        if len(ephys.Unit.TrialSpikes - [{'trial': tr} for tr in bad_trials] & unit_keys[0]) != len(traces_b):
             print(f'Mismatch in tracking trial and ephys trial number: {key}')
             return
         
         # from the cameras
         tongue_thr = 0.95
-        trial_key=(v_tracking.TongueTracking3DBot & key).fetch('trial', order_by='trial')
-        traces_s = tracking.Tracking.TongueTracking & key & {'tracking_device': 'Camera 3'} & [{'trial': tr} for tr in trial_key]
-        traces_b = tracking.Tracking.TongueTracking & key & {'tracking_device': 'Camera 4'} & [{'trial': tr} for tr in trial_key]
+        trial_key=(v_tracking.TongueTracking3DBot - [{'trial': tr} for tr in bad_trials] & key).fetch('trial', order_by='trial')
+        traces_s = tracking.Tracking.TongueTracking - [{'trial': tr} for tr in bad_trials] & key & {'tracking_device': 'Camera 3'} & [{'trial': tr} for tr in trial_key]
+        traces_b = tracking.Tracking.TongueTracking - [{'trial': tr} for tr in bad_trials] & key & {'tracking_device': 'Camera 4'} & [{'trial': tr} for tr in trial_key]
         session_traces_s_l = traces_s.fetch('tongue_likelihood', order_by='trial')
         session_traces_b_l = traces_b.fetch('tongue_likelihood', order_by='trial')
 
@@ -648,7 +659,7 @@ class GLMFitNoLick(dj.Computed):
         session_traces_b_z = np.reshape(session_traces_b_z * session_traces_t_l, (-1,1))
 
         # get breathing
-        breathing, breathing_ts = (experiment.Breathing & key & [{'trial': tr} for tr in trial_key]).fetch('breathing', 'breathing_timestamps', order_by='trial')
+        breathing, breathing_ts = (experiment.Breathing - [{'trial': tr} for tr in bad_trials] & key & [{'trial': tr} for tr in trial_key]).fetch('breathing', 'breathing_timestamps', order_by='trial')
         good_breathing = breathing
         for i, d in enumerate(breathing):
             good_breathing[i] = d[breathing_ts[i] < traces_len*3.4/1000]
@@ -667,7 +678,7 @@ class GLMFitNoLick(dj.Computed):
         session_traces_w = (v_oralfacial_analysis.WhiskerSVD & key).fetch('mot_svd')
         if len(session_traces_w[0][:,0]) % 1471 != 0:
             print('Bad videos in bottom view')
-            #return
+            return
         else:
             num_trial_w = int(len(session_traces_w[0][:,0])/1471)
             session_traces_w = np.reshape(session_traces_w[0][:,0], (num_trial_w, 1471))
@@ -728,7 +739,7 @@ class GLMFitNoLick(dj.Computed):
             
             for unit_key in unit_keys: # loop for each neuron
     
-                all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in trial_key]).fetch('spike_times', order_by='trial')
+                all_spikes=(ephys.Unit.TrialSpikes - [{'trial': tr} for tr in bad_trials] & unit_key & [{'trial': tr} for tr in trial_key]).fetch('spike_times', order_by='trial')
                 
                 good_spikes =all_spikes # get good spikes
                 for i, d in enumerate(good_spikes):
