@@ -713,9 +713,48 @@ def sync_and_external_cleanup():
             log.info('Delete filepath-exists error jobs')
             # This happens when workers attempt to regenerate the plots when the corresponding external files has not yet been deleted
             (report.schema.jobs & 'error_message LIKE "DataJointError: A different version of%"').delete()
+
+            _clean_up([experiment, ephys, psth, psth_foraging, foraging_analysis, oralfacial_analysis, report])
+
             time.sleep(1800)  # once every 30 minutes
     else:
         print("allow_external_cleanup disabled, set dj.config['custom']['allow_external_cleanup'] = True to enable")
+
+
+def _clean_up(pipeline_modules, additional_error_patterns=[]):
+    """
+    Routine to clear entries from the jobs table that are:
+    + generic-type error jobs
+    + stale "reserved" jobs
+    """
+    _generic_errors = [
+        "%Deadlock%",
+        "%DuplicateError%",
+        "%Lock wait timeout%",
+        "%MaxRetryError%",
+        "%KeyboardInterrupt%",
+        "InternalError: (1205%",
+        "%SIGTERM%",
+        "LostConnectionError",
+    ]
+
+    for pipeline_module in pipeline_modules:
+        # clear generic error jobs
+        (
+            pipeline_module.schema.jobs
+            & 'status = "error"'
+            & [
+                f'error_message LIKE "{e}"'
+                for e in _generic_errors + additional_error_patterns
+            ]
+        ).delete()
+        # clear stale "reserved" jobs
+        current_connections = [v[0] for v in dj.conn().query(
+            'SELECT id FROM information_schema.processlist WHERE id <> CONNECTION_ID() ORDER BY id')]
+        stale_jobs = (pipeline_module.schema.jobs
+                      & 'status = "reserved"'
+                      & f'connection_id NOT IN {tuple(current_connections)}')
+        (pipeline_module.schema.jobs & stale_jobs).delete()
 
 
 def loop(*args):
