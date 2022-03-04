@@ -1,10 +1,12 @@
 from pipeline import lab, experiment, ephys, tracking, oralfacial_analysis
-
 from scipy import optimize
 
+import datajoint as dj
 import matplotlib.pyplot as plt
 plt.rcParams['font.size'] = 48
 import numpy as np
+
+v_tracking = dj.create_virtual_module('tracking', 'map_v2_tracking')
 
 # ======== Define some useful variables ==============
 
@@ -259,7 +261,7 @@ def plot_tracking(session_key, unit_key,
     for trial_tracks, ax, ax_name, spk_color in zip(
             (trial_trk_3,trial_trk_6,trial_trk_9,trial_trk_2,trial_trk_5,trial_trk_8,trial_trk_1,trial_trk_4,trial_trk_7),
             axs.flatten(),
-            ('top-left trials', 'top-mid trials','top-right trials','mid-left trials','mid trials','mid-right trials','bot-left trials','bot-mid trials','bot-right trials'),
+            ('top-left trials','top-mid trials','top-right trials','mid-left trials','mid trials','mid-right trials','bot-left trials','bot-mid trials','bot-right trials'),
             ('k','k','k','k','k','k','k','k','k')):
         if not len(trial_tracks):
             ax.set_xticks([])
@@ -472,11 +474,15 @@ def plot_whisker_tuning(unit_key, axs=None):
 def water2subject(water,date):
     subject_id = (lab.WaterRestriction & {'water_restriction_number': water}).fetch('subject_id')
     session_num = (experiment.Session() * lab.WaterRestriction & {'water_restriction_number': water, 'session_date': date}).fetch('session')
+    print(subject_id)
+    print(session_num)
     return subject_id, session_num
 
 def subject2water(subject,session_num):
     water = (lab.WaterRestriction & {'subject_id': subject}).fetch('water_restriction_number')
     date = (experiment.Session() * lab.WaterRestriction & {'subject_id': subject, 'session': session_num}).fetch('session_date')
+    #print(water)
+    #print(date)
     return water, date
 
 def rose_plot(ax, angles, bins=16, density=None, offset=0, lab_unit="degrees", start_zero=False, **param_dict):
@@ -557,6 +563,36 @@ def plot_glmfit(unit_key, num_time=2000):
     
     return fig
 
+def plot_glmfit_nolick(unit_key, num_time=2000):
+
+    taus = np.arange(-5,6)
+    t_vec=np.arange(num_time)*0.017
+    test_y, predict_y, test_x, r2_t, weights = (oralfacial_analysis.GLMFitNoLick() & unit_key).fetch('y_nolick','predict_y_nolick','x_nolick','r2_nolick','weights_nolick')
+    max_r2_idx=np.where(r2_t[0]==np.max(r2_t[0]))
+    weights_r=np.round(weights[0],decimals=2)
+    
+    fig, ax = plt.subplots(1, 1, figsize=(24, 16))
+    
+    ax.plot(t_vec, test_x[0][:num_time, 1]+6,color='k',label='jaw DV'+str(weights_r[max_r2_idx[0][0],2])+' ML'+str(weights_r[max_r2_idx[0][0],3])+' AP'+str(weights_r[max_r2_idx[0][0],1])) # jaw y (DV)
+    ax.plot(t_vec, test_x[0][:num_time, 3]+6,color='g',label='tongue DV'+str(weights_r[max_r2_idx[0][0],6])+' ML'+str(weights_r[max_r2_idx[0][0],4])+' AP'+str(weights_r[max_r2_idx[0][0],5])) # tongue x (ML)
+    ax.plot(t_vec, test_x[0][:num_time, 6]+12,color='b',label='breathing ' +str(weights_r[max_r2_idx[0][0],7]))
+    ax.plot(t_vec, test_x[0][:num_time, 7]+16,color='r',label='whisking '+str(weights_r[max_r2_idx[0][0],8]))
+    test_y_roll=np.roll(test_y[0],taus[max_r2_idx[0][0]])
+    ax.plot(t_vec,test_y_roll[:num_time],color='k',label='test')
+    ax.plot(t_vec,predict_y[0][max_r2_idx[0][0]][:num_time],color='r',label='prediction')
+    ax.legend(loc='upper left')
+    ax.set_xlabel('s')
+    ax.set_title('r2 = '+ str(np.round(r2_t[0][max_r2_idx[0][0]],decimals=3)))
+    
+    # cosmetic
+    ax.set_xlim((t_vec[0],t_vec[-1]))
+    ax.set_yticks([])
+    ax.spines['left'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    
+    return fig
+
 def plot_dir_tuning(unit_key):
 
     dir_tuning, dir_idx=(oralfacial_analysis.DirectionTuning() & unit_key).fetch('direction_tuning','direction_index')
@@ -593,30 +629,124 @@ def plot_breathing_hist(session_key):
 def volcano_plot_licking(session_key):
     inspir_onset,lick_onset_time,lick_offset_time,ton_onset=(oralfacial_analysis.MovementTiming & session_key).fetch1('inspiration_onset','lick_onset','lick_offset','tongue_onset')
     
-    inspir_onset_l=[] # restrict by whisking bouts
+    inspir_onset_l=[] # restrict by licking bouts
     for i,val in enumerate(lick_onset_time):
         inspir_onset_l.append(inspir_onset[(inspir_onset>(lick_onset_time[i]+0.2)) & (inspir_onset<(lick_offset_time[i]-0.2))])
     inspir_onset_l=np.array(inspir_onset_l)
     inspir_onset_l=np.hstack(inspir_onset_l)
     
-    licks = []
+    licks = [] # lick times
+    n_licks = [] # number of licks in btw breaths
+    
+    ibi = []
+    ibi2 = []
+    lick2_time=[]
+    lick_bef_time=[]
+    
+    max_ibi=np.max(np.diff(inspir_onset))
+    
+    for i,_ in enumerate(inspir_onset_l[2:-2],2):
+        
+        lick=ton_onset[(ton_onset > inspir_onset_l[i-2]) & (ton_onset<inspir_onset_l[i+2])]
+        
+        lick_in=lick[(lick > inspir_onset_l[i]) & (lick<inspir_onset_l[i+1])]
+        if lick_in.size != 0:  # only include trials with a lick in between the breaths
+            lick_bef=lick[(lick < inspir_onset_l[i])] # find the timing of lick before inspiration onset
+            lick_bef=lick_bef[-1]
+            licks.append(lick - inspir_onset_l[i])
+            lick_bef_time.append(lick_bef - inspir_onset_l[i])
+            n_licks.append(lick_in.size)
+            lick2_time.append(lick_in[-1] - inspir_onset_l[i])
+            ibi.append(inspir_onset_l[i+1] - inspir_onset_l[i])
+            ibi2.append(inspir_onset_l[i+2] - inspir_onset_l[i])
+    
+    #ibi = ibi[:-1]
+    ibi=np.array(ibi)
+    ibi2=np.array(ibi2)
+    n_licks=np.array(n_licks)
+    lick2_time=np.array(lick2_time)
+    lick_bef_time=np.array(lick_bef_time)
+    licks[:] = [ele for i, ele in enumerate(licks) if ibi[i]<max_ibi]
+    n_licks=n_licks[ibi<max_ibi]
+    ibi2=ibi2[ibi<max_ibi]
+    lick_bef_time=lick_bef_time[ibi<max_ibi]
+    lick2_time=lick2_time[ibi<max_ibi]
+    ibi=ibi[ibi<max_ibi]
+    
+    idx_all=np.arange(0,len(ibi))
+    lick1_rem=np.where((n_licks==1) & (lick_bef_time>-0.05) & (lick_bef_time<0))
+    lick2_rem=np.where((n_licks==2) & (lick2_time>(ibi-0.05)) & (lick2_time<ibi))
+    idx_keep=np.setdiff1d(idx_all,np.concatenate((lick1_rem[0],lick2_rem[0])))
+
+    licks = [licks[i] for i in idx_keep]
+    n_licks=n_licks[idx_keep]
+    ibi2=ibi2[idx_keep]
+    lick_bef_time=lick_bef_time[idx_keep]
+    lick2_time=lick2_time[idx_keep]
+    ibi=ibi[idx_keep]
+    
+    sorted_indexes=np.argsort(ibi)
+    sorted_indexes=sorted_indexes[::-1]
+    
+    d_bound=(np.mean(ibi[n_licks==2]) + np.mean(ibi[n_licks==1]))/2
+    
+    fig, ax = plt.subplots(1, 1, figsize=(12, 12))
+    plot_db=True
+    for i,_ in enumerate(licks):
+        if n_licks[sorted_indexes[i]]==1:
+            ax.plot(licks[sorted_indexes[i]],i*np.ones(len(licks[sorted_indexes[i]])),'.b',markersize=4)
+        elif n_licks[sorted_indexes[i]]==2:
+            ax.plot(licks[sorted_indexes[i]],i*np.ones(len(licks[sorted_indexes[i]])),'.r',markersize=4)
+        elif n_licks[sorted_indexes[i]]==3:
+            ax.plot(licks[sorted_indexes[i]],i*np.ones(len(licks[sorted_indexes[i]])),'.k',markersize=4)
+        elif n_licks[sorted_indexes[i]]==4:
+            ax.plot(licks[sorted_indexes[i]],i*np.ones(len(licks[sorted_indexes[i]])),'.m',markersize=4)
+        else:
+            ax.plot(licks[sorted_indexes[i]],i*np.ones(len(licks[sorted_indexes[i]])),'.c',markersize=4)
+        ax.plot(0,i,'.r',markersize=4)
+        ax.plot(ibi[sorted_indexes[i]],i,'.r',markersize=4)
+        if (ibi[sorted_indexes[i]]<d_bound) & plot_db:
+            ax.plot([-0.5,1],[i,i],'k')
+            plot_db=False
+            
+        #ax.plot(ibi2[sorted_indexes[i]],i,'.r',markersize=4)
+    ax.set_xlim([-0.5,1])
+    ax.set_xlabel('Time from measured inspiration onset (s)')
+    ax.set_ylabel('Breath number')
+    ax.set_title(session_key)
+    
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    
+    return fig
+
+def volcano_plot_whisking(session_key):
+    inspir_onset,whisk_onset_time,whisk_offset_time,whisker_onset=(oralfacial_analysis.MovementTiming & session_key).fetch1('inspiration_onset','whisk_onset','whisk_offset','whisker_onset')
+    
+    inspir_onset_l=[] # restrict by licking bouts
+    for i,val in enumerate(whisk_onset_time):
+        inspir_onset_l.append(inspir_onset[(inspir_onset>(whisk_onset_time[i]+0.2)) & (inspir_onset<(whisk_offset_time[i]-0.2))])
+    inspir_onset_l=np.array(inspir_onset_l)
+    inspir_onset_l=np.hstack(inspir_onset_l)
+    
+    whisks = []
     
     ibi = np.zeros(len(inspir_onset_l)-3)
     ibi2 = np.zeros(len(inspir_onset_l)-4)
     
     max_ibi=np.max(np.diff(inspir_onset))
     
-    for i,_ in enumerate(inspir_onset_l[2:-2]):
+    for i,_ in enumerate(inspir_onset_l[2:-2],2):
         
-        lick=ton_onset[(ton_onset > inspir_onset_l[i]) & (ton_onset<inspir_onset_l[i+2])]
+        whisk=whisker_onset[(whisker_onset > inspir_onset_l[i-2]) & (whisker_onset<inspir_onset_l[i+2])]
     
-        licks.append(lick - inspir_onset_l[i])
+        whisks.append(whisk - inspir_onset_l[i])
     
         ibi[i] = inspir_onset_l[i+1] - inspir_onset_l[i]
         ibi2[i] = inspir_onset_l[i+2] - inspir_onset_l[i]
     
     ibi = ibi[:-1]
-    licks[:] = [ele for i, ele in enumerate(licks) if ibi[i]<max_ibi]
+    whisks[:] = [ele for i, ele in enumerate(whisks) if ibi[i]<max_ibi]
     ibi2=ibi2[ibi<max_ibi]
     ibi=ibi[ibi<max_ibi]
     
@@ -625,14 +755,281 @@ def volcano_plot_licking(session_key):
     
     fig, ax = plt.subplots(1, 1, figsize=(12, 12))
     
-    for i,_ in enumerate(licks):
-        ax.plot(licks[sorted_indexes[i]],i*np.ones(len(licks[sorted_indexes[i]])),'.b',markersize=4)
+    for i,_ in enumerate(whisks):
+        ax.plot(whisks[sorted_indexes[i]],i*np.ones(len(whisks[sorted_indexes[i]])),'.b',markersize=4)
         ax.plot(0,i,'.r',markersize=4)
         ax.plot(ibi[sorted_indexes[i]],i,'.r',markersize=4)
         ax.plot(ibi2[sorted_indexes[i]],i,'.r',markersize=4)
     ax.set_xlim([-0.5,1])
     ax.set_xlabel('Time from measured inspiration onset (s)')
     ax.set_ylabel('Breath number')
+    
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    
+    return fig
+
+def volcano_plot_breathing(session_key):
+    inspir_onset,lick_onset_time,lick_offset_time,ton_onset=(oralfacial_analysis.MovementTiming & session_key).fetch1('inspiration_onset','lick_onset','lick_offset','tongue_onset')
+    
+    ton_onset_l=[] # restrict by licking bouts
+    for i,val in enumerate(lick_onset_time):
+        ton_onset_l.append(ton_onset[(ton_onset>(lick_onset_time[i]+0.2)) & (ton_onset<(lick_offset_time[i]-0.2))])
+    ton_onset_l=np.array(ton_onset_l)
+    ton_onset_l=np.hstack(ton_onset_l)
+    
+    breaths = []
+    
+    #ili = np.zeros(len(ton_onset_l)-3)
+    #ili2 = np.zeros(len(ton_onset_l)-4)
+    ili = []
+    ili2 = []
+    
+    max_ili=np.max(np.diff(inspir_onset))
+    
+    for i,_ in enumerate(ton_onset_l[2:-2],2):
+        
+        breath=inspir_onset[(inspir_onset > ton_onset_l[i-2]) & (inspir_onset<ton_onset_l[i+2])]
+        
+        breath_in=breath[(breath > ton_onset_l[i]) & (breath<ton_onset_l[i+1])]
+        if breath_in.size != 0:  # only include trials with a breath in between the licks
+            breaths.append(breath - ton_onset_l[i])
+            #ili[i] = ton_onset_l[i+1] - ton_onset_l[i]
+            #ili2[i] = ton_onset_l[i+2] - ton_onset_l[i]
+            ili.append(ton_onset_l[i+1] - ton_onset_l[i])
+            ili2.append(ton_onset_l[i+2] - ton_onset_l[i])
+    
+    #ili = ili[:-1]
+    ili=np.array(ili)
+    ili2=np.array(ili2)
+    breaths[:] = [ele for i, ele in enumerate(breaths) if ili[i]<max_ili]
+    ili2=ili2[ili<max_ili]
+    ili=ili[ili<max_ili]
+    
+    sorted_indexes=np.argsort(ili)
+    sorted_indexes=sorted_indexes[::-1]
+    
+    fig, ax = plt.subplots(1, 1, figsize=(12, 12))
+    
+    for i,_ in enumerate(breaths):
+        ax.plot(breaths[sorted_indexes[i]],i*np.ones(len(breaths[sorted_indexes[i]])),'.b',markersize=4)
+        ax.plot(0,i,'.r',markersize=4)
+        ax.plot(ili[sorted_indexes[i]],i,'.r',markersize=4)
+        #ax.plot(ili2[sorted_indexes[i]],i,'.r',markersize=4)
+    #ax.set_xlim([-0.5,1])
+    ax.set_xlim([-0.4,0.5])
+    ax.set_xlabel('Time from measured tongue onset (s)')
+    ax.set_ylabel('Lick number')
+    
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    
+    return fig
+
+def volcano_plot_unit(unit_key):
+    traces_len=1471
+    
+    good_trial,jaw_y=(v_tracking.JawTracking3DSid & unit_key).fetch('trial','jaw_y', order_by='trial')
+    all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in good_trial]).fetch('spike_times')
+    good_spikes =all_spikes # get good spikes
+    for i, d in enumerate(good_spikes):
+        good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
+    good_spikes = np.hstack(good_spikes)
+    
+    inspir_onset,lick_onset_time,lick_offset_time,ton_onset=(oralfacial_analysis.MovementTiming & unit_key).fetch1('inspiration_onset','lick_onset','lick_offset','tongue_onset')
+    
+    inspir_onset_l=[] # restrict by licking bouts
+    for i,val in enumerate(lick_onset_time):
+        inspir_onset_l.append(inspir_onset[(inspir_onset>(lick_onset_time[i]+0.2)) & (inspir_onset<(lick_offset_time[i]-0.2))])
+    inspir_onset_l=np.array(inspir_onset_l)
+    inspir_onset_l=np.hstack(inspir_onset_l)
+    
+    licks = [] # lick times
+    n_licks = [] # number of licks in btw breaths
+    
+    spikes = [] # where the spikes occur
+    lick2_time=[]
+    ibi = []
+    ibi2 = []
+    lick_bef_time=[]
+    
+    max_ibi=np.max(np.diff(inspir_onset))
+    
+    for i,_ in enumerate(inspir_onset_l[2:-2],2):
+        
+        lick=ton_onset[(ton_onset > inspir_onset_l[i-2]) & (ton_onset<inspir_onset_l[i+2])]
+        
+        lick_in=lick[(lick > inspir_onset_l[i]) & (lick<inspir_onset_l[i+1])]
+        
+        if lick_in.size != 0:  # only include trials with a lick in between the breaths
+            lick_bef=lick[(lick < inspir_onset_l[i])] # find the timing of lick before inspiration onset
+            lick_bef=lick_bef[-1]
+            licks.append(lick - inspir_onset_l[i])
+            lick_bef_time.append(lick_bef - inspir_onset_l[i])
+            n_licks.append(lick_in.size)
+            spike_breath=good_spikes-inspir_onset_l[i]
+            spike_breath=spike_breath[spike_breath>-0.5]
+            spike_breath=spike_breath[spike_breath<1]
+            spikes.append(spike_breath)
+            lick2_time.append(lick_in[-1] - inspir_onset_l[i])
+            ibi.append(inspir_onset_l[i+1] - inspir_onset_l[i])
+            ibi2.append(inspir_onset_l[i+2] - inspir_onset_l[i])
+    
+    ibi=np.array(ibi)
+    ibi2=np.array(ibi2)
+    n_licks=np.array(n_licks)
+    lick2_time=np.array(lick2_time)
+    lick_bef_time=np.array(lick_bef_time)
+    licks[:] = [ele for i, ele in enumerate(licks) if ibi[i]<max_ibi]
+    spikes[:] = [ele for i, ele in enumerate(spikes) if ibi[i]<max_ibi]
+    n_licks=n_licks[ibi<max_ibi]
+    ibi2=ibi2[ibi<max_ibi]
+    lick_bef_time=lick_bef_time[ibi<max_ibi]
+    lick2_time=lick2_time[ibi<max_ibi]
+    ibi=ibi[ibi<max_ibi]
+    
+    idx_all=np.arange(0,len(ibi))
+    lick1_rem=np.where((n_licks==1) & (lick_bef_time>-0.05) & (lick_bef_time<0))
+    lick2_rem=np.where((n_licks==2) & (lick2_time>(ibi-0.05)) & (lick2_time<ibi))
+    idx_keep=np.setdiff1d(idx_all,np.concatenate((lick1_rem[0],lick2_rem[0])))
+
+    licks = [licks[i] for i in idx_keep]
+    spikes = [spikes[i] for i in idx_keep]
+    n_licks=n_licks[idx_keep]
+    ibi2=ibi2[idx_keep]
+    lick_bef_time=lick_bef_time[idx_keep]
+    lick2_time=lick2_time[idx_keep]
+    ibi=ibi[idx_keep]
+    
+    sorted_indexes=np.argsort(ibi)
+    sorted_indexes=sorted_indexes[::-1]
+    
+    fig, ax = plt.subplots(1, 1, figsize=(12, 12))
+
+    for i,_ in enumerate(licks):    
+        if n_licks[sorted_indexes[i]]==1:
+            ax.plot(spikes[sorted_indexes[i]],i*np.ones(len(spikes[sorted_indexes[i]])),'.b',markersize=4)
+        elif n_licks[sorted_indexes[i]]==2:
+            ax.plot(spikes[sorted_indexes[i]],i*np.ones(len(spikes[sorted_indexes[i]])),'.r',markersize=4)
+        elif n_licks[sorted_indexes[i]]==3:
+            ax.plot(spikes[sorted_indexes[i]],i*np.ones(len(spikes[sorted_indexes[i]])),'.k',markersize=4)
+        elif n_licks[sorted_indexes[i]]==4:
+            ax.plot(spikes[sorted_indexes[i]],i*np.ones(len(spikes[sorted_indexes[i]])),'.m',markersize=4)
+        ax.plot(0,i,'.r',markersize=4)
+        ax.plot(ibi[sorted_indexes[i]],i,'.r',markersize=4)
+        # ax.plot(ibi2[sorted_indexes[i]],i,'.r',markersize=4)
+    ax.set_xlim([-0.5,1])
+    ax.set_xlabel('Time from measured inspiration onset (s)')
+    ax.set_ylabel('Breath number')
+    ax.set_title([unit_key['subject_id'], unit_key['session'], unit_key['insertion_number'],unit_key['unit']])
+
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    
+    return fig
+
+def volcano_plot_unit_lick(unit_key):
+    traces_len=1471
+    
+    good_trial,jaw_y=(v_tracking.JawTracking3DSid & unit_key).fetch('trial','jaw_y', order_by='trial')
+    all_spikes=(ephys.Unit.TrialSpikes & unit_key & [{'trial': tr} for tr in good_trial]).fetch('spike_times')
+    good_spikes =all_spikes # get good spikes
+    for i, d in enumerate(good_spikes):
+        good_spikes[i] = d[d < traces_len*3.4/1000]+traces_len*3.4/1000*i
+    good_spikes = np.hstack(good_spikes)
+    
+    inspir_onset,lick_onset_time,lick_offset_time,ton_onset=(oralfacial_analysis.MovementTiming & unit_key).fetch1('inspiration_onset','lick_onset','lick_offset','tongue_onset')
+    
+    inspir_onset_l=[] # restrict by licking bouts
+    for i,val in enumerate(lick_onset_time):
+        inspir_onset_l.append(inspir_onset[(inspir_onset>(lick_onset_time[i]+0.2)) & (inspir_onset<(lick_offset_time[i]-0.2))])
+    inspir_onset_l=np.array(inspir_onset_l)
+    inspir_onset_l=np.hstack(inspir_onset_l)
+    
+    licks = [] # lick times
+    n_licks = [] # number of licks in btw breaths
+    lick2_time=[]
+    spikes = [] # where the spikes occur
+    
+    ibi = []
+    ibi2 = []
+    lick_bef_time=[]
+    
+    max_ibi=np.max(np.diff(inspir_onset))
+    
+    for i,_ in enumerate(inspir_onset_l[2:-2],2):
+        
+        lick=ton_onset[(ton_onset > inspir_onset_l[i-2]) & (ton_onset<inspir_onset_l[i+2])]
+        
+        lick_in=lick[(lick > inspir_onset_l[i]) & (lick<inspir_onset_l[i+1])]
+        
+        if lick_in.size != 0:  # only include trials with a lick in between the breaths
+            lick_bef=lick[(lick < inspir_onset_l[i])] # find the timing of lick before inspiration onset
+            lick_bef=lick_bef[-1]
+            licks.append(lick - inspir_onset_l[i])
+            lick_bef_time.append(lick_bef - inspir_onset_l[i])
+            lick2_time.append(lick_in[-1] - inspir_onset_l[i])
+            n_licks.append(lick_in.size)
+            spike_breath=good_spikes-inspir_onset_l[i]
+            spike_breath=spike_breath[spike_breath>-0.5]
+            spike_breath=spike_breath[spike_breath<1]
+            spikes.append(spike_breath)
+            ibi.append(inspir_onset_l[i+1] - inspir_onset_l[i])
+            ibi2.append(inspir_onset_l[i+2] - inspir_onset_l[i])
+    
+    ibi=np.array(ibi)
+    ibi2=np.array(ibi2)
+    n_licks=np.array(n_licks)
+    lick2_time=np.array(lick2_time)
+    lick_bef_time=np.array(lick_bef_time)
+    licks[:] = [ele for i, ele in enumerate(licks) if ibi[i]<max_ibi]
+    spikes[:] = [ele for i, ele in enumerate(spikes) if ibi[i]<max_ibi]
+    n_licks=n_licks[ibi<max_ibi]
+    ibi2=ibi2[ibi<max_ibi]
+    lick2_time=lick2_time[ibi<max_ibi]
+    lick_bef_time=lick_bef_time[ibi<max_ibi]
+    ibi=ibi[ibi<max_ibi]
+    
+    idx_all=np.arange(0,len(ibi))
+    lick1_rem=np.where((n_licks==1) & (lick_bef_time>-0.05) & (lick_bef_time<0))
+    lick2_rem=np.where((n_licks==2) & (lick2_time>(ibi-0.05)) & (lick2_time<ibi))
+    idx_keep=np.setdiff1d(idx_all,np.concatenate((lick1_rem[0],lick2_rem[0])))
+
+    licks = [licks[i] for i in idx_keep]
+    spikes = [spikes[i] for i in idx_keep]
+    n_licks=n_licks[idx_keep]
+    ibi2=ibi2[idx_keep]
+    lick_bef_time=lick_bef_time[idx_keep]
+    lick2_time=lick2_time[idx_keep]
+    ibi=ibi[idx_keep]
+    
+    sorted_indexes=np.argsort(ibi)
+    sorted_indexes=sorted_indexes[::-1]
+    
+    d_bound=(np.mean(ibi[n_licks==2]) + np.mean(ibi[n_licks==1]))/2
+    
+    # another alignment
+    fig, ax = plt.subplots(1, 1, figsize=(12, 12))
+    plot_db=True
+    for i,_ in enumerate(licks):    
+        if n_licks[sorted_indexes[i]]==1:
+            ax.plot(spikes[sorted_indexes[i]]-lick_bef_time[sorted_indexes[i]],i*np.ones(len(spikes[sorted_indexes[i]])),'.b',markersize=4)
+        elif n_licks[sorted_indexes[i]]==2:
+            ax.plot(spikes[sorted_indexes[i]]-lick_bef_time[sorted_indexes[i]],i*np.ones(len(spikes[sorted_indexes[i]])),'.r',markersize=4)
+        elif n_licks[sorted_indexes[i]]==3:
+            ax.plot(spikes[sorted_indexes[i]]-lick_bef_time[sorted_indexes[i]],i*np.ones(len(spikes[sorted_indexes[i]])),'.k',markersize=4)
+        elif n_licks[sorted_indexes[i]]==4:
+            ax.plot(spikes[sorted_indexes[i]]-lick_bef_time[sorted_indexes[i]],i*np.ones(len(spikes[sorted_indexes[i]])),'.m',markersize=4)
+        #ax.plot(0-lick_bef_time[sorted_indexes[i]],i,'.r',markersize=4)
+        #ax.plot(ibi[sorted_indexes[i]]-lick_bef_time[sorted_indexes[i]],i,'.r',markersize=4)
+        # ax.plot(ibi2[sorted_indexes[i]],i,'.r',markersize=4)
+        if (ibi[sorted_indexes[i]]<d_bound) & plot_db:
+            ax.plot([-0.5,1],[i,i],'k')
+            plot_db=False
+    ax.set_xlim([-0.5,1])
+    ax.set_xlabel('Time from previous lick onset (s)')
+    ax.set_ylabel('Breath number')
+    ax.set_title([unit_key['subject_id'], unit_key['session'], unit_key['insertion_number'],unit_key['unit']])
     
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)

@@ -11,12 +11,20 @@ classdef TongueTracking3DBot < dj.Computed
     properties
         keySource = (experiment.getSchema().v.Session & 'rig = "RRig-MTL"')...
             & (tracking.getSchema().v.Tracking & 'tracking_device = "Camera 3"')...
-            & (tracking.getSchema().v.Tracking & 'tracking_device = "Camera 4"');
+            & (tracking.getSchema().v.Tracking & 'tracking_device = "Camera 4"')...
+            & ephys.getSchema().v.Unit;
     end
     methods(Access=protected)        
-        function makeTuples(self, key)            
-            [bot_tongue_x, bot_tongue_y] = fetchn(tracking.getSchema().v.TrackingTongueTracking & 'tracking_device = "Camera 4"' & key, 'tongue_x', 'tongue_y', 'ORDER BY trial');
-            [sid_tongue_x, sid_tongue_y] = fetchn(tracking.getSchema().v.TrackingTongueTracking & 'tracking_device = "Camera 3"' & key, 'tongue_x', 'tongue_y', 'ORDER BY trial');
+        function makeTuples(self, key)
+            miss_trial_side = fetchn(oralfacial_analysis.getSchema().v.BadVideo & key, 'miss_trial_side');
+            cond_struct=struct('trial',0);
+            if ~isempty(miss_trial_side)
+                for i =1:length(miss_trial_side{1})
+                    cond_struct(i)=struct('trial', miss_trial_side{1}(i));
+                end
+            end
+            [bot_tongue_x, bot_tongue_y, trial] = fetchn(tracking.getSchema().v.TrackingTongueTracking - cond_struct & 'tracking_device = "Camera 4"' & key, 'tongue_x', 'tongue_y', 'trial', 'ORDER BY trial');
+            [sid_tongue_x, sid_tongue_y] = fetchn(tracking.getSchema().v.TrackingTongueTracking - cond_struct & 'tracking_device = "Camera 3"' & key, 'tongue_x', 'tongue_y', 'ORDER BY trial');
             
             if length(bot_tongue_x) ~= length(sid_tongue_x)
                 disp('Mismatch in tracking bottom and side trials')
@@ -36,7 +44,7 @@ classdef TongueTracking3DBot < dj.Computed
                     key_insert(i-counter).tongue_x = Xc_1_left(1,:);
                     key_insert(i-counter).tongue_y = Xc_1_left(2,:);
                     key_insert(i-counter).tongue_z = Xc_1_left(3,:);
-                    key_insert(i-counter).trial=i;
+                    key_insert(i-counter).trial=trial(i);
                 else
                     key_insert=key_insert([1:i-counter-1 i-counter+1:end]);
                     counter=counter+1;
