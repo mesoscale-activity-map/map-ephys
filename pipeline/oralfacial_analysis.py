@@ -1198,7 +1198,11 @@ class BodySVD(dj.Computed):
         
         from facemap import process
         
-        roi_path = 'H://videos//body//DL027//2021_07_01//DL027_2021_07_01_body_0_proc.npy'
+        if key['subject_id']==2897:
+            roi_path = 'H://videos//body//DL004//2021_03_08//DL004_2021_03_08_body_0_proc.npy'
+        else:
+            roi_path = 'H://videos//body//DL027//2021_07_01//DL027_2021_07_01_body_0_proc.npy'
+        
         roi_data = np.load(roi_path, allow_pickle=True).item()
         
         # video_root_dir = pathlib.Path('H:/videos')
@@ -1239,8 +1243,8 @@ class BottomSVD(dj.Computed):
         roi_path = 'H://videos//bottom//DL017//2021_07_14//DL017_2021_07_14_bottom_0_proc.npy'
         roi_data = np.load(roi_path, allow_pickle=True).item()
         
-        # video_root_dir = pathlib.Path('H:/videos')
-        video_root_dir = pathlib.Path('I:/videos')
+        video_root_dir = pathlib.Path('H:/videos')
+        # video_root_dir = pathlib.Path('I:/videos')
         
         trial_path = (tracking_ingest.TrackingIngest.TrackingFile & 'tracking_device = "Camera 4"' & 'trial = 1' & key).fetch1('tracking_file')
         
