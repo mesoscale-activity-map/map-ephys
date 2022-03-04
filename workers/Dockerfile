@@ -1,18 +1,25 @@
-FROM datajoint/pydev:python3.6
+FROM datajoint/djbase:latest
 
-RUN apt update && apt -y install mysql-client-5.7 netcat
+USER root
+RUN apt update && \
+    apt-get install -y ssh git
 
-#RUN pip install globus_sdk
+# RUN apt update && apt -y install mysql-client-5.7 netcat
 
-RUN mkdir /dj_map
-WORKDIR /dj_map
+USER anaconda:anaconda
 
-RUN git clone https://github.com/mesoscale-activity-map/map-ephys /dj_map
+# RUN pip install globus_sdk
 
-RUN pip install --upgrade pip && pip install . && pip install --upgrade scipy matplotlib==3.1.3
+RUN git clone https://github.com/mesoscale-activity-map/map-ephys ./dj_map
+
+WORKDIR ./dj_map
+
+RUN pip install --upgrade pip && pip install .
+
+#RUN pip install --upgrade scipy matplotlib==3.1.3
 
 RUN pip install datajoint==0.12.*
 
-COPY ./dj_local_conf.json /dj_map/dj_local_conf.json
+COPY ./dj_local_conf.json ./dj_local_conf.json
 
 ENV DJ_SUPPORT_FILEPATH_MANAGEMENT TRUE
