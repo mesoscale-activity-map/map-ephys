@@ -44,15 +44,3 @@ class FixedElectrodePosition(dj.Manual):
         mri_y=null: float  # (mm)
         mri_z=null: float  # (mm)
         """
-
-def fix_hist_key(key):
-    """
-    This fix applies to sessions ingested with the BehaviorIngest's make() only,
-    as opposed to BehaviorBpodIngest (for Foraging Task)
-    """
-    
-    key = (histology.Session & key).fetch1()
-    FixedElectrodePosition.insert()
-    
-if __name__ == '__main__':
-    fix_photostim_trial()
