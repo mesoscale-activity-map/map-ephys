@@ -1637,7 +1637,7 @@ class MovementTiming(dj.Computed):
         lick_offset_time=ton_onset[lick_onset_idx[lick_bout_offset]+2]
 
         # whisking epochs
-        if (np.median(session_traces_w) > (np.mean(session_traces_w)+0.1)):
+        if (np.median(session_traces_w) > (np.mean(session_traces_w)+0.1)): # flip the negative svd
             session_traces_w=session_traces_w*-1
         amp_w, phase_w=behavior_plot.compute_insta_phase_amp(session_traces_w, 1/bin_width, freq_band=(3, 25))
         phase_w = phase_w + np.pi
