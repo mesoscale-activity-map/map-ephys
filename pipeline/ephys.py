@@ -273,13 +273,9 @@ class Unit(dj.Imported):
         f, cluster_method, npx_meta = clustering_files[probe_no]
 
         data = cluster_loader_map[cluster_method](sinfo, *f)
+
+        data['rigpath'] = rigpath
         ingest_units(key, data, npx_meta)
-
-        log.info('.. inserting file load information')
-
-        self.EphysFile.insert1(
-            {**session_key, 'probe_insertion_number': probe_no,
-             'ephys_file': data['ef_path'].relative_to(rigpath).as_posix()}, allow_direct_insert=True)
 
 
 @schema

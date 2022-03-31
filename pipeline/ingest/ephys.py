@@ -29,7 +29,7 @@ log = logging.getLogger(__name__)
 @schema
 class EphysIngest(dj.Imported):
     definition = """
-        -> experiment.Session
+    -> experiment.Session
     """
 
     class EphysFile(dj.Part):
@@ -629,7 +629,7 @@ def ingest_units(insertion_key, data, npx_meta):
                 if ib.flush():
                     log.debug('.... (u: {}, t: {})'.format(u, t))
 
-    if cluster_noise_label is not None:
+    if cluster_noise_label is not None and cluster_noise_label:
         dj.conn().ping()
         log.info('.. inserting unit noise label')
         ephys.UnitNoiseLabel.insert((
@@ -649,6 +649,13 @@ def ingest_units(insertion_key, data, npx_meta):
                                    'manual_curation': bool('curated' in clustering_label)}
                                   for u in unit_set],
                                  allow_direct_insert=True)
+
+    log.info('.. inserting file load information')
+
+    EphysIngest.EphysFile.insert1(
+        {**insertion_key, 'probe_insertion_number': insertion_key['insertion_number'],
+         'ephys_file': data['ef_path'].relative_to(data['rigpath']).as_posix()},
+        allow_direct_insert=True, ignore_extra_fields=True)
 
 
 def ingest_metrics(insertion_key, data):

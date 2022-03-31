@@ -69,7 +69,7 @@ def _load_jrclust_v3(sinfo, fpath):
 
     # -- trial-info from bitcode --
     try:
-        sync_behav, sync_ephys, trial_fix, trial_go, trial_start, _ = read_bitcode(fpath.parent, h2o, skey)
+        sync_behav, sync_ephys, trial_fix, trial_go, trial_start, bitcode_raw = read_bitcode(fpath.parent, h2o, skey)
     except FileNotFoundError as e:
         raise e
 
@@ -124,7 +124,8 @@ def _load_jrclust_v3(sinfo, fpath):
         'trial_fix': trial_fix,
         'metrics': metrics,
         'creation_time': creation_time,
-        'clustering_label': clustering_label
+        'clustering_label': clustering_label,
+        'bitcode_raw': bitcode_raw
     }
 
     return data
@@ -155,7 +156,7 @@ def _load_jrclust_v4(sinfo, fpath):
 
     # -- trial-info from bitcode --
     try:
-        sync_behav, sync_ephys, trial_fix, trial_go, trial_start, _ = read_bitcode(fpath.parent, h2o, skey)
+        sync_behav, sync_ephys, trial_fix, trial_go, trial_start, bitcode_raw = read_bitcode(fpath.parent, h2o, skey)
     except FileNotFoundError as e:
         raise e
 
@@ -209,7 +210,8 @@ def _load_jrclust_v4(sinfo, fpath):
         'trial_fix': trial_fix,
         'metrics': metrics,
         'creation_time': creation_time,
-        'clustering_label': clustering_label
+        'clustering_label': clustering_label,
+        'bitcode_raw': bitcode_raw
     }
 
     return data
