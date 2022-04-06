@@ -12,7 +12,7 @@ from tqdm import tqdm
 from datetime import datetime
 from pipeline import lab, experiment, tracking, ephys, histology, psth, ccf
 from pipeline.util import _get_clustering_method
-from pipeline.report import get_wr_sessdate
+from pipeline.report import get_wr_sessdatetime
 
 '''
 
@@ -485,7 +485,7 @@ def write_to_activity_viewer(insert_keys, output_dir='./'):
         insert_keys = [insert_keys]
 
     for key in insert_keys:
-        water_res_num, sess_datetime = get_wr_sessdate(key)
+        water_res_num, sess_datetime = get_wr_sessdatetime(key)
 
         uid = f'{water_res_num}_{sess_datetime}_{key["insertion_number"]}'
 
