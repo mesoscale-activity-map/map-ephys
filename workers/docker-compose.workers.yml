@@ -12,7 +12,6 @@ services:
       - /bin/sh
       - -c
       - |
-        cd /dj_map
         python scripts/mapshell.py automate-computation &
         tail -f /dev/null
 
@@ -28,6 +27,5 @@ services:
       - /bin/sh
       - -c
       - |
-        cd /dj_map
         python scripts/mapshell.py automate-sync-and-cleanup &
         tail -f /dev/null

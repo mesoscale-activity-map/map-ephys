@@ -78,7 +78,7 @@ class SessionLevelReport(dj.Computed):
     key_source = experiment.Session & experiment.BehaviorTrial & experiment.PhotostimBrainRegion
 
     def make(self, key):
-        water_res_num, sess_date = get_wr_sessdate(key)
+        water_res_num, sess_date = get_wr_sessdatetime(key)
         sess_dir = store_stage / water_res_num / sess_date
         sess_dir.mkdir(parents=True, exist_ok=True)
 
@@ -135,7 +135,7 @@ class SessionLevelCDReport(dj.Computed):
         return unit * sel_unit & 'unit_count = sel_unit_count'
 
     def make(self, key):
-        water_res_num, sess_date = get_wr_sessdate(key)
+        water_res_num, sess_date = get_wr_sessdatetime(key)
         sess_dir = store_stage / water_res_num / sess_date
         sess_dir.mkdir(parents=True, exist_ok=True)
 
@@ -266,7 +266,7 @@ class SessionLevelProbeTrack(dj.Computed):
     key_source = experiment.Session & histology.LabeledProbeTrack
 
     def make(self, key):
-        water_res_num, sess_date = get_wr_sessdate(key)
+        water_res_num, sess_date = get_wr_sessdatetime(key)
         sess_dir = store_stage / water_res_num / sess_date
         sess_dir.mkdir(parents=True, exist_ok=True)
 
@@ -310,7 +310,7 @@ class SessionLevelForagingSummary(dj.Computed):
                       'efficiency_type': 'ideal'}
     
     def make(self, key):
-        water_res_num, sess_date = get_wr_sessdate(key)
+        water_res_num, sess_date = get_wr_sessdatetime(key)
         sess_dir = store_stage / water_res_num / sess_date
         sess_dir.mkdir(parents=True, exist_ok=True)
         
@@ -375,7 +375,7 @@ class SessionLevelForagingLickingPSTH(dj.Computed):
     key_source = experiment.Session & (experiment.BehaviorTrial & 'task = "foraging"')
         
     def make(self, key):
-        water_res_num, sess_date = get_wr_sessdate(key)
+        water_res_num, sess_date = get_wr_sessdatetime(key)
         sess_dir = store_stage / water_res_num / sess_date
         sess_dir.mkdir(parents=True, exist_ok=True)
 
@@ -470,7 +470,7 @@ class ProbeLevelReport(dj.Computed):
         return unit * sel_unit & 'unit_count = sel_unit_count'
 
     def make(self, key):
-        water_res_num, sess_date = get_wr_sessdate(key)
+        water_res_num, sess_date = get_wr_sessdatetime(key)
         probe_dir = store_stage / water_res_num / sess_date / str(key['insertion_number'])
         probe_dir.mkdir(parents=True, exist_ok=True)
 
@@ -540,7 +540,7 @@ class ProbeLevelPhotostimEffectReport(dj.Computed):
         return probe_current_psth * probe_full_psth & 'present_u_psth_count = full_u_psth_count'
 
     def make(self, key):
-        water_res_num, sess_date = get_wr_sessdate(key)
+        water_res_num, sess_date = get_wr_sessdatetime(key)
         probe_dir = store_stage / water_res_num / sess_date / str(key['insertion_number'])
         probe_dir.mkdir(parents=True, exist_ok=True)
 
@@ -589,7 +589,7 @@ class ProbeLevelDriftMap(dj.Computed):
     key_source = (ephys.ProbeInsertion * ephys.ClusteringMethod & ephys.Unit.proj()) & histology.InterpolatedShankTrack
 
     def make(self, key):
-        water_res_num, sess_date = get_wr_sessdate(key)
+        water_res_num, sess_date = get_wr_sessdatetime(key)
         probe_dir = store_stage / water_res_num / sess_date / str(key['insertion_number'])
         probe_dir.mkdir(parents=True, exist_ok=True)
 
@@ -621,7 +621,7 @@ class ProbeLevelCoronalSlice(dj.Computed):
     key_source = ephys.ProbeInsertion & histology.ElectrodeCCFPosition
 
     def make(self, key):
-        water_res_num, sess_date = get_wr_sessdate(key)
+        water_res_num, sess_date = get_wr_sessdatetime(key)
         probe_dir = store_stage / water_res_num / sess_date / str(key['insertion_number'])
         probe_dir.mkdir(parents=True, exist_ok=True)
 
@@ -659,7 +659,7 @@ class UnitLevelEphysReport(dj.Computed):
         if not ephys.check_unit_criteria(key):
             raise FailedUnitCriteriaError(f'Unit {key} did not meet selection criteria')
 
-        water_res_num, sess_date = get_wr_sessdate(key)
+        water_res_num, sess_date = get_wr_sessdatetime(key)
         units_dir = store_stage / water_res_num / sess_date / str(key['insertion_number']) / 'units'
         units_dir.mkdir(parents=True, exist_ok=True)
 
@@ -690,7 +690,7 @@ class UnitLevelTrackingReport(dj.Computed):
         if not ephys.check_unit_criteria(key):
             raise FailedUnitCriteriaError(f'Unit {key} did not meet selection criteria')
 
-        water_res_num, sess_date = get_wr_sessdate(key)
+        water_res_num, sess_date = get_wr_sessdatetime(key)
         units_dir = store_stage / water_res_num / sess_date / str(key['insertion_number']) / 'units'
         units_dir.mkdir(parents=True, exist_ok=True)
 
@@ -737,7 +737,7 @@ class UnitMTLTrackingReport(dj.Computed):
         if not ephys.check_unit_criteria(key):
             raise FailedUnitCriteriaError(f'Unit {key} did not meet selection criteria')
 
-        water_res_num, sess_date = get_wr_sessdate(key)
+        water_res_num, sess_date = get_wr_sessdatetime(key)
         units_dir = store_stage / water_res_num / sess_date / str(key['insertion_number']) / 'units'
         units_dir.mkdir(parents=True, exist_ok=True)
 
@@ -786,7 +786,7 @@ class UnitLevelForagingEphysReport(dj.Computed):
         if not ephys.check_unit_criteria(key):
             raise FailedUnitCriteriaError(f'Unit {key} did not meet selection criteria')
 
-        water_res_num, sess_date = get_wr_sessdate(key)
+        water_res_num, sess_date = get_wr_sessdatetime(key)
         units_dir = store_stage / water_res_num / sess_date / str(key['insertion_number']) / 'units'
         units_dir.mkdir(parents=True, exist_ok=True)
 
@@ -912,7 +912,7 @@ report_tables = [SessionLevelReport,
                  ProbeLevelCoronalSlice]
 
 
-def get_wr_sessdate(key):
+def get_wr_sessdatetime(key):
     water_res_num, session_datetime = (lab.WaterRestriction * experiment.Session.proj(
         session_datetime="cast(concat(session_date, ' ', session_time) as datetime)") & key).fetch1(
         'water_restriction_number', 'session_datetime')

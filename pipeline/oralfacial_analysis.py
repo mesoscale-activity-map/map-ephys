@@ -877,20 +877,27 @@ class GLMFitNoLickBody(dj.Computed):
         session_traces_b_z = np.hstack(session_traces_b_z)
         # -- moving-average and down-sample
         window_size = int(bin_width/0.0034)  # sample
-        kernel = np.ones(window_size) / window_size
-        session_traces_s_x = np.convolve(session_traces_s_x, kernel, 'same')
+        # kernel = np.ones(window_size) / window_size
+        # session_traces_s_x = np.convolve(session_traces_s_x, kernel, 'same')
+        session_traces_s_x = signal.medfilt(session_traces_s_x, window_size)
         session_traces_s_x = session_traces_s_x[window_size::window_size]
-        session_traces_s_y = np.convolve(session_traces_s_y, kernel, 'same')
+        # session_traces_s_y = np.convolve(session_traces_s_y, kernel, 'same')
+        session_traces_s_y = signal.medfilt(session_traces_s_y, window_size)
         session_traces_s_y = session_traces_s_y[window_size::window_size]
-        session_traces_s_z = np.convolve(session_traces_s_z, kernel, 'same')
+        # session_traces_s_z = np.convolve(session_traces_s_z, kernel, 'same')
+        session_traces_s_z = signal.medfilt(session_traces_s_z, window_size)
         session_traces_s_z = session_traces_s_z[window_size::window_size]
-        session_traces_b_x = np.convolve(session_traces_b_x, kernel, 'same')
+        # session_traces_b_x = np.convolve(session_traces_b_x, kernel, 'same')
+        session_traces_b_x = signal.medfilt(session_traces_b_x, window_size)
         session_traces_b_x = session_traces_b_x[window_size::window_size]
-        session_traces_b_y = np.convolve(session_traces_b_y, kernel, 'same')
+        # session_traces_b_y = np.convolve(session_traces_b_y, kernel, 'same')
+        session_traces_b_y = signal.medfilt(session_traces_b_y, window_size)
         session_traces_b_y = session_traces_b_y[window_size::window_size]
-        session_traces_b_z = np.convolve(session_traces_b_z, kernel, 'same')
+        # session_traces_b_z = np.convolve(session_traces_b_z, kernel, 'same')
+        session_traces_b_z = signal.medfilt(session_traces_b_z, window_size)
         session_traces_b_z = session_traces_b_z[window_size::window_size]
-        session_traces_t_l = np.convolve(session_traces_t_l, kernel, 'same')
+        # session_traces_t_l = np.convolve(session_traces_t_l, kernel, 'same')
+        session_traces_t_l = signal.medfilt(session_traces_t_l, window_size)
         session_traces_t_l = session_traces_t_l[window_size::window_size]
         session_traces_t_l[np.where(session_traces_t_l < 1)] = 0
         session_traces_s_x = np.reshape(session_traces_s_x,(-1,1))
@@ -930,6 +937,8 @@ class GLMFitNoLickBody(dj.Computed):
         trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
         session_traces_w = session_traces_w[trial_idx_nat,:]
         session_traces_w_o = stats.zscore(session_traces_w,axis=None)
+        if (np.median(session_traces_w_o) > (np.mean(session_traces_w_o)+0.1)): # flip the negative svd
+            session_traces_w_o=session_traces_w_o*-1
         session_traces_w = session_traces_w_o[trial_key-1]
            
         session_traces_w = np.hstack(session_traces_w)
@@ -953,6 +962,8 @@ class GLMFitNoLickBody(dj.Computed):
         trial_idx_nat = sorted(range(len(trial_idx_nat)), key=lambda k: trial_idx_nat[k])
         session_traces_b = session_traces_b[trial_idx_nat,:]
         session_traces_b_o = stats.zscore(session_traces_b,axis=None)
+        if (np.median(session_traces_b_o) > (np.mean(session_traces_b_o)+0.1)): # flip the negative svd
+            session_traces_b_o=session_traces_b_o*-1
         session_traces_b = session_traces_b_o[trial_key-1]
            
         session_traces_b = np.hstack(session_traces_b)
@@ -1198,7 +1209,11 @@ class BodySVD(dj.Computed):
         
         from facemap import process
         
-        roi_path = 'H://videos//body//DL027//2021_07_01//DL027_2021_07_01_body_0_proc.npy'
+        if key['subject_id']==2897:
+            roi_path = 'H://videos//body//DL004//2021_03_08//DL004_2021_03_08_body_0_proc.npy'
+        else:
+            roi_path = 'H://videos//body//DL027//2021_07_01//DL027_2021_07_01_body_0_proc.npy'
+        
         roi_data = np.load(roi_path, allow_pickle=True).item()
         
         # video_root_dir = pathlib.Path('H:/videos')
@@ -1239,8 +1254,8 @@ class BottomSVD(dj.Computed):
         roi_path = 'H://videos//bottom//DL017//2021_07_14//DL017_2021_07_14_bottom_0_proc.npy'
         roi_data = np.load(roi_path, allow_pickle=True).item()
         
-        # video_root_dir = pathlib.Path('H:/videos')
-        video_root_dir = pathlib.Path('I:/videos')
+        video_root_dir = pathlib.Path('H:/videos')
+        # video_root_dir = pathlib.Path('I:/videos')
         
         trial_path = (tracking_ingest.TrackingIngest.TrackingFile & 'tracking_device = "Camera 4"' & 'trial = 1' & key).fetch1('tracking_file')
         
@@ -1633,7 +1648,7 @@ class MovementTiming(dj.Computed):
         lick_offset_time=ton_onset[lick_onset_idx[lick_bout_offset]+2]
 
         # whisking epochs
-        if (np.median(session_traces_w) > (np.mean(session_traces_w)+0.1)):
+        if (np.median(session_traces_w) > (np.mean(session_traces_w)+0.1)): # flip the negative svd
             session_traces_w=session_traces_w*-1
         amp_w, phase_w=behavior_plot.compute_insta_phase_amp(session_traces_w, 1/bin_width, freq_band=(3, 25))
         phase_w = phase_w + np.pi

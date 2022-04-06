@@ -7,7 +7,6 @@ import pathlib
 
 from datetime import date, datetime
 from collections import namedtuple
-import time as timer
 
 import scipy.io as spio
 import numpy as np
@@ -17,7 +16,7 @@ import warnings
 import datajoint as dj
 
 from pybpodgui_api.models.project import Project as BPodProject
-from . import util, InvalidBehaviorTrialError
+from . import InvalidBehaviorTrialError
 
 from pipeline import lab, experiment
 from pipeline import get_schema_name, dict_to_hash
