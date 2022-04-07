@@ -299,10 +299,10 @@ def plot_unit_psth_choice_outcome(unit_key={'subject_id': 473361, 'session': 47,
         #                                                   ipsi_miss_trials.proj() + contra_miss_trials.proj(), align_event=align_event_type)
 
         _plot_psth_foraging(ipsi_hit_unit_psth, contra_hit_unit_psth,
-                   vlines=period_starts_hit, ax=ax_psth, xlim=xlim, label='rew', linestyle='-')
+                            vlines=period_starts_hit, ax=ax_psth, xlim=xlim, label='rew', linestyle='-')
 
         _plot_psth_foraging(ipsi_miss_unit_psth, contra_miss_unit_psth,
-                   vlines=[], ax=ax_psth, xlim=xlim, label='norew', linestyle = '--')
+                            vlines=[], ax=ax_psth, xlim=xlim, label='norew', linestyle='--')
 
         ax_psth.set(title=f'{align_type}')
         if ax_i > 0:
@@ -313,13 +313,11 @@ def plot_unit_psth_choice_outcome(unit_key={'subject_id': 473361, 'session': 47,
         if if_raster:
             ax_raster = axs[0, ax_i]
             _plot_spike_raster_foraging(ipsi_hit_unit_psth, contra_hit_unit_psth, ax=ax_raster,
-                                           offset=0,
-                                           vlines=period_starts_hit,
-                                           title='', xlim=xlim)
+                                        offset=0, vlines=period_starts_hit,
+                                        title='', xlim=xlim)
             _plot_spike_raster_foraging(ipsi_miss_unit_psth, contra_miss_unit_psth, ax=ax_raster,
-                                           offset=len(ipsi_hit_unit_psth['trials']) + len(contra_hit_unit_psth['trials']),
-                                           vlines=[],
-                                           title='', xlim=xlim)
+                                        offset=len(ipsi_hit_unit_psth['trials']) + len(contra_hit_unit_psth['trials']),
+                                        vlines=[], title='', xlim=xlim)
             ax_raster.invert_yaxis()
 
     # Scale axis widths to keep the same horizontal aspect ratio (time) across axs

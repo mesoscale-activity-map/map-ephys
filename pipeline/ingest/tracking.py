@@ -66,6 +66,8 @@ class TrackingIngest(dj.Imported):
     def make(self, key, tracking_exists=False):
         '''
         TrackingIngest .make() function
+        To rerun the tracking ingestion for an existing session to add new tracking data for new devices:
+            TrackingIngest().make(session_key, tracking_exists=True)
         '''
         log.info('\n==================================================================')
         log.info('TrackingIngest().make(): key: {k}'.format(k=key))

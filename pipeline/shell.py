@@ -92,7 +92,7 @@ def ingest_foraging_behavior(*args):
 
 def ingest_ephys(*args):
     from pipeline.ingest import ephys as ephys_ingest
-    ephys_ingest.EphysIngest().populate(display_progress=True)
+    ephys_ingest.EphysIngest().populate(display_progress=True, suppress_errors=True)
     experiment.Breathing().populate(display_progress=True)
     experiment.Piezoelectric().populate(display_progress=True)
 
@@ -144,8 +144,9 @@ def load_animal(excel_fp, sheet_name='Sheet1'):
             subjects.append(subject)
             water_restrictions.append(wr)
 
-    lab.Subject.insert(subjects)
-    lab.WaterRestriction.insert(water_restrictions)
+    with lab.Subject.connection.transaction:
+        lab.Subject.insert(subjects)
+        lab.WaterRestriction.insert(water_restrictions)
 
     log.info('Inserted {} subjects'.format(len(subjects)))
     log.info('Water restriction number: {}'.format([s['water_restriction_number'] for s in water_restrictions]))
@@ -290,16 +291,24 @@ def load_insertion_location(excel_fp, sheet_name='Sheet1'):
     log.debug('InsertionLocation: {}'.format(insertion_locations))
     log.debug('RecordableBrainRegion: {}'.format(recordable_brain_regions))
 
-    ephys.ProbeInsertion.InsertionLocation.insert(insertion_locations)
-    ephys.ProbeInsertion.RecordableBrainRegion.insert(recordable_brain_regions)
+    with ephys.ProbeInsertion.connection.transaction:
+        ephys.ProbeInsertion.InsertionLocation.insert(insertion_locations)
+        ephys.ProbeInsertion.RecordableBrainRegion.insert(recordable_brain_regions)
 
     log.info('load_insertion_location - Number of insertions: {}'.format(len(insertion_locations)))
 
     log.debug('ProbeInsertionQuality: {}'.format(insertions_quality))
-
-    ephys.ProbeInsertionQuality.insert(insertions_quality)
-    ephys.ProbeInsertionQuality.GoodPeriod.insert(insertions_good_periods)
-    ephys.ProbeInsertionQuality.GoodTrial.insert(insertions_good_trials)
+    with ephys.ProbeInsertionQuality.connection.transaction:
+        ephys.ProbeInsertionQuality.insert(insertions_quality)
+        ephys.ProbeInsertionQuality.GoodPeriod.insert(insertions_good_periods)
+        ephys.ProbeInsertionQuality.GoodTrial.insert(insertions_good_trials)
+        # delete outdated computed results
+        outdated_insertions = (ephys.ProbeInsertion
+                               & (ephys.ProbeInsertionQuality.GoodTrial
+                                  & insertions_good_periods))
+        with dj.config(safemode=False):
+            (psth.UnitPsth & outdated_insertions).delete()
+            (report.UnitLevelEphysReport & outdated_insertions).delete()
 
     log.info('load_insertion_location - Number of insertions quality: {}'.format(len(insertions_quality)))
 
@@ -432,9 +441,9 @@ def populate_ephys(populate_settings={'reserve_jobs': True, 'display_progress': 
     ephys.MAPClusterMetric.populate(**populate_settings)
 
     log.info('ephys.UnitPassingCriteria.populate()')
-    ephys.UnitPassingCriteria.populate(**populate_settings)
+    ephys.UnitPassingCriteria.populate(**dict(populate_settings, max_calls=500))
 
-    log.info('ephys.InterpolatedShankTrack.populate()')
+    log.info('histology.InterpolatedShankTrack.populate()')
     histology.InterpolatedShankTrack.populate(**dict(populate_settings, max_calls=1))
 
     log.info('tracking.TrackingQC.populate()')
@@ -453,8 +462,8 @@ def populate_psth(populate_settings={'reserve_jobs': True, 'display_progress': T
     psth.UnitSelectivity.populate(**populate_settings)
 
     # Foraging task
-    log.info('psth_foraging.UnitPsth.populate()')
-    psth_foraging.UnitPsth.populate(**populate_settings)
+    log.info('psth_foraging.UnitPeriodLinearFit.populate()')
+    psth_foraging.UnitPeriodLinearFit.populate(**populate_settings)
 
 
 def populate_foraging_analysis(populate_settings={'reserve_jobs': True, 'display_progress': True}):
@@ -704,9 +713,48 @@ def sync_and_external_cleanup():
             log.info('Delete filepath-exists error jobs')
             # This happens when workers attempt to regenerate the plots when the corresponding external files has not yet been deleted
             (report.schema.jobs & 'error_message LIKE "DataJointError: A different version of%"').delete()
+
+            _clean_up([experiment, ephys, psth, psth_foraging, foraging_analysis, oralfacial_analysis, report])
+
             time.sleep(1800)  # once every 30 minutes
     else:
         print("allow_external_cleanup disabled, set dj.config['custom']['allow_external_cleanup'] = True to enable")
+
+
+def _clean_up(pipeline_modules, additional_error_patterns=[]):
+    """
+    Routine to clear entries from the jobs table that are:
+    + generic-type error jobs
+    + stale "reserved" jobs
+    """
+    _generic_errors = [
+        "%Deadlock%",
+        "%DuplicateError%",
+        "%Lock wait timeout%",
+        "%MaxRetryError%",
+        "%KeyboardInterrupt%",
+        "InternalError: (1205%",
+        "%SIGTERM%",
+        "LostConnectionError",
+    ]
+
+    for pipeline_module in pipeline_modules:
+        # clear generic error jobs
+        (
+            pipeline_module.schema.jobs
+            & 'status = "error"'
+            & [
+                f'error_message LIKE "{e}"'
+                for e in _generic_errors + additional_error_patterns
+            ]
+        ).delete()
+        # clear stale "reserved" jobs
+        current_connections = [v[0] for v in dj.conn().query(
+            'SELECT id FROM information_schema.processlist WHERE id <> CONNECTION_ID() ORDER BY id')]
+        stale_jobs = (pipeline_module.schema.jobs
+                      & 'status = "reserved"'
+                      & f'connection_id NOT IN {tuple(current_connections)}')
+        (pipeline_module.schema.jobs & stale_jobs).delete()
 
 
 def loop(*args):

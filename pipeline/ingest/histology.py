@@ -403,7 +403,7 @@ class HistologyIngest(dj.Imported):
                 if len(channel_location['origin']) > 1:
                     log.error('More than one origin region found ({}). skipping.'.format(
                         channel_location['origin']))
-                    return
+                    return False
 
                 pos_origin = next(iter(channel_location['origin'].values()))
                 xyz_pick = np.array(xyz_pick['xyz_picks'])

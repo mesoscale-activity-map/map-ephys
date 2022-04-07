@@ -16,3 +16,4 @@ openpyxl
 statsmodels==0.12.2	# oralfacial_analysis.GLMFit error
 astropy
 statannot
+pynwb==1.4.0

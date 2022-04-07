@@ -571,7 +571,7 @@ def get_session_ephys_data_directory(session_key):
 
     rigpaths = ephys_ingest.get_ephys_paths()
     for rigpath in rigpaths:
-        session_ephys_dir, dglob = ephys_ingest._get_sess_dir(rigpath, h2o, sess_datetime)
+        session_ephys_dir, dglob = ephys_ingest.get_sess_dir(rigpath, h2o, sess_datetime)
         if session_ephys_dir is not None:
             break
     else:

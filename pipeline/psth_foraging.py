@@ -16,6 +16,7 @@ from pipeline.util import _get_unit_independent_variable
 schema = dj.schema(get_schema_name('psth_foraging'))
 log = logging.getLogger(__name__)
 
+
 @schema
 class TrialCondition(dj.Lookup):
     '''
@@ -489,6 +490,7 @@ class UnitPeriodLinearFit(dj.Computed):
     """
 
     key_source = (ephys.Unit & (experiment.BehaviorTrial & 'task LIKE "foraging%"')) * LinearModelPeriodToFit * LinearModelBehaviorModelToFit * LinearModel
+
     class Param(dj.Part):
         definition = """
         -> master
