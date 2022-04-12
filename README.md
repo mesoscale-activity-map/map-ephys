@@ -18,7 +18,7 @@ A website dedicated for data browsing and results visualization for MAP project 
 A MAP-dedicated Jupyter Hub can be accessed at
  [https://jupyter.mesoscale-activity-map.org/](https://jupyter.mesoscale-activity-map.org/)
 
-Users can sign in using their GitHub account. Please contact chris@vathes.com for database credential if you don't already have one.
+Users can sign in using their GitHub account. Please contact support@datajoint.com for database credential if you don't already have one.
 
 Once signed in, the foler `/work` is dedicated for each user to freely experiment with the pipeline. 
 Guidelines, tutorial materials, example notebooks can be found under `/workshop` or `/map-ephys/notebook`
