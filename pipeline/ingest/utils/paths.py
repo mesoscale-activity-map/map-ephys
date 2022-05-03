@@ -6,7 +6,7 @@ import numpy as np
 import datajoint as dj
 
 from ... import get_schema_name, dict_value_to_hash
-from .spike_sorter_loader import NeuropixelsMeta
+from .spike_sorter_loader import SpikeGLXMeta
 
 
 log = logging.getLogger(__name__)
@@ -142,7 +142,7 @@ def get_sess_dir(session_key):
                 sess_dirs = list(pathlib.Path(rigpath, h2o).glob('*{}*{}_*'.format(h2o, date_string)))
                 for sess_dir in sess_dirs:
                     try:
-                        npx_meta = NeuropixelsMeta(next(sess_dir.rglob('{}_*.ap.meta'.format(h2o))))
+                        npx_meta = SpikeGLXMeta(next(sess_dir.rglob('{}_*.ap.meta'.format(h2o))))
                     except StopIteration:
                         continue
                     # ensuring time difference between behavior-start and ephys-start is no more than 2 minutes - this is to handle multiple sessions in a day
@@ -212,6 +212,6 @@ def match_probe_to_ephys(h2o, dpath, dglob):
                         ' Prioritize JRC4 > JRC3 > KS2'.format(probe_dir))
 
         fp, loader = clustering_results[0]
-        clustered_probes[probe_number] = (fp, loader, NeuropixelsMeta(meta_file))
+        clustered_probes[probe_number] = (fp, loader, SpikeGLXMeta(meta_file))
 
     return clustered_probes

@@ -158,6 +158,60 @@ class LFP(dj.Imported):
         lfp: longblob           # recorded lfp at this electrode
         """
 
+    def make(self, key):
+        from .ingest.utils.spike_sorter_loader import SpikeGLX
+
+        log.info('------ LFP ingestion for {} ------'.format(key))
+
+        session_key, h2o = (experiment.Session * lab.WaterRestriction & key).fetch1(
+            'KEY', 'water_restriction_number')
+
+        dpath, dglob, rigpath = get_sess_dir(session_key)
+
+        if dpath is None:
+            return
+
+        try:
+            clustering_files = match_probe_to_ephys(h2o, dpath, dglob)
+        except FileNotFoundError as e:
+            log.warning(str(e) + '. Skipping...')
+            return
+
+        probe_no = key['insertion_number']
+        f, cluster_method, npx_meta = clustering_files[probe_no]
+        spikeglx_recording = SpikeGLX(pathlib.Path(npx_meta.fname).parent)
+
+        electrode_keys, lfp = [], []
+
+        lfp_channel_ind = spikeglx_recording.lfmeta.recording_channels
+
+        # Extract LFP data at specified channels and convert to uV
+        lfp = spikeglx_recording.lf_timeseries[:, lfp_channel_ind]  # (sample x channel)
+        lfp = (lfp * spikeglx_recording.get_channel_bit_volts('lf')[lfp_channel_ind]).T  # (channel x sample)
+
+        self.insert1(dict(key,
+                          lfp_sample_rate=spikeglx_recording.lfmeta.meta['imSampRate'],
+                          lfp_time_stamps=(np.arange(lfp.shape[1])
+                                           / spikeglx_recording.lfmeta.meta['imSampRate']),
+                          lfp_mean=lfp.mean(axis=0)))
+
+        electrode_query = (lab.ProbeType.Electrode
+                           * lab.ElectrodeConfig.Electrode
+                           * ProbeInsertion & key)
+        probe_electrodes = {
+            (shank, shank_col, shank_row): key
+            for key, shank, shank_col, shank_row in zip(*electrode_query.fetch(
+                'KEY', 'shank', 'shank_col', 'shank_row'))}
+
+        for recorded_site in lfp_channel_ind:
+            shank, shank_col, shank_row, _ = spikeglx_recording.apmeta.shankmap['data'][recorded_site]
+            electrode_keys.append(probe_electrodes[(shank, shank_col, shank_row)])
+
+        # single insert in loop to mitigate potential memory issue
+        for electrode_key, lfp_trace in zip(electrode_keys, lfp):
+            self.Channel.insert1({**key, **electrode_key, 'lfp': lfp_trace})
+
+
 # ---- Clusters/Units/Spiketimes ----
 
 
