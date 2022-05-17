@@ -10,12 +10,13 @@ from pipeline.ingest import tracking as tracking_ingest
 
 from pipeline.mtl_analysis import helper_functions
 from pipeline.plot import behavior_plot
-from . import get_schema_name
+from . import get_schema_name, create_schema_settings
 
-schema = dj.schema(get_schema_name('oralfacial_analysis'))
+schema = dj.schema(get_schema_name('oralfacial_analysis'), **create_schema_settings)
 
 v_oralfacial_analysis = dj.create_virtual_module('oralfacial_analysis', get_schema_name('oralfacial_analysis'))
 v_tracking = dj.create_virtual_module('tracking', get_schema_name('tracking'))
+
 
 @schema
 class JawTuning(dj.Computed):

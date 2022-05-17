@@ -13,13 +13,13 @@ import datajoint as dj
 
 from pipeline import InsertBuffer
 
-from .. import get_schema_name
+from .. import get_schema_name, create_schema_settings
 from .. import lab, experiment, ephys, tracking, report
 from . import ProbeInsertionError, ClusterMetricError, IdenticalClusterResultError
 from .utils.spike_sorter_loader import cluster_loader_map, npx_bit_volts, extract_clustering_info
 from .utils.paths import get_sess_dir, gen_probe_insert, match_probe_to_ephys
 
-schema = dj.schema(get_schema_name('ingest_ephys'))
+schema = dj.schema(get_schema_name('ingest_ephys'), **create_schema_settings)
 
 os.environ['DJ_SUPPORT_FILEPATH_MANAGEMENT'] = "TRUE"
 

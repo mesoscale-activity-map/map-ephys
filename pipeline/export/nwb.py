@@ -30,11 +30,11 @@ def datajoint_to_nwb(session_key):
     try:
         session_descr = (experiment.SessionComment & session_key).fetch1('session_comment')
     except DataJointError:
-        session_descr = ' '
+        session_descr = ''
 
     nwbfile = NWBFile(identifier=session_identifier,
                       session_description=session_descr,
-                      session_start_time=session_key['session_datetime'],
+                      session_start_time=datetime.strptime(sess_datetime, '%Y%m%d_%H%M%S'),
                       file_create_date=datetime.now(tzlocal()),
                       experimenter=list((experiment.Session & session_key).fetch('username')),
                       data_collection='',
@@ -263,6 +263,23 @@ def datajoint_to_nwb(session_key):
             unit='a.u.', conversion=1.0,
             data=np.full_like(event_stops.astype(float), 1),
             timestamps=event_stops.astype(float))
+
+    # ---- action events
+
+    q_action_event = (experiment.ActionEvent * experiment.SessionTrial & session_key).proj(
+        'action_event_type',
+        event_time='action_event_time + start_time')
+
+    for action_event_type in (experiment.ActionEventType & q_action_event).fetch('action_event_type'):
+        trial, event_starts = (q_action_event
+                               & {'action_event_type': action_event_type}).fetch(
+            'trial', 'event_time', order_by='trial')
+
+        behavioral_event.create_timeseries(
+            name=action_event_type.replace(' ', '_') + '_times',
+            unit='a.u.', conversion=1.0,
+            data=np.full_like(event_starts.astype(float), 1),
+            timestamps=event_starts.astype(float))
 
     # ---- photostim events ----
 

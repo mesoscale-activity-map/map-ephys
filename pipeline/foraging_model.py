@@ -1,9 +1,10 @@
 import datajoint as dj
 import numpy as np
-from . import experiment, ephys, get_schema_name, foraging_analysis
+from . import experiment, ephys, foraging_analysis
+from . import get_schema_name, create_schema_settings
 from .model.bandit_model_comparison import BanditModelComparison
 
-schema = dj.schema(get_schema_name('foraging_model'))
+schema = dj.schema(get_schema_name('foraging_model'), **create_schema_settings)
 
 
 @schema

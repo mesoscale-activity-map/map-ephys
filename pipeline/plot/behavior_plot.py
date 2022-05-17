@@ -182,15 +182,15 @@ def plot_tracking(session_key, unit_key,
             ax.plot(tvec[tongue_out_bool], trk_feat[tongue_out_bool] + tr_id * h_spacing, '.', color='lime', markersize=2)
             ax.plot(spike_times, np.full_like(spike_times, trk_feat[tongue_out_bool].mean() + h_spacing/10) + tr_id * h_spacing,
                     '|', color=spk_color, markersize=4)
-            ax.set_title(ax_name)
-            ax.axvline(x=0, linestyle='--', color='k')
+        ax.set_title(ax_name)
+        ax.axvline(x=0, linestyle='--', color='k')
 
-            # cosmetic
-            ax.set_xlim(xlim)
-            ax.set_yticks([])
-            ax.spines['left'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            ax.spines['top'].set_visible(False)
+        # cosmetic
+        ax.set_xlim(xlim)
+        ax.set_yticks([])
+        ax.spines['left'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
 
     return fig
 

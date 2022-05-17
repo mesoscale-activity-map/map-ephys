@@ -7,12 +7,12 @@ from scipy.stats import poisson
 import logging
 
 from . import lab, experiment, ccf
-from . import get_schema_name
+from . import get_schema_name, create_schema_settings
 from pipeline.ingest.utils.paths import get_sess_dir, gen_probe_insert, match_probe_to_ephys
 from pipeline.ingest.utils.spike_sorter_loader import cluster_loader_map
 
 
-schema = dj.schema(get_schema_name('ephys'))
+schema = dj.schema(get_schema_name('ephys'), **create_schema_settings)
 [lab, experiment, ccf]  # NOQA flake8
 
 log = logging.getLogger(__name__)

@@ -7,9 +7,9 @@ import datajoint as dj
 import numpy as np
 
 from . import experiment, lab
-from . import get_schema_name
+from . import get_schema_name, create_schema_settings
 
-schema = dj.schema(get_schema_name('tracking'))
+schema = dj.schema(get_schema_name('tracking'), **create_schema_settings)
 [experiment]  # NOQA flake8
 
 

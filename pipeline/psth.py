@@ -11,10 +11,10 @@ import scipy.stats as sc_stats
 from . import (lab, experiment, ephys)
 [lab, experiment, ephys]  # NOQA
 
-from . import get_schema_name, dict_to_hash
+from . import get_schema_name, dict_to_hash, create_schema_settings
 from .util import _get_units_hemisphere
 
-schema = dj.schema(get_schema_name('psth'))
+schema = dj.schema(get_schema_name('psth'), **create_schema_settings)
 log = logging.getLogger(__name__)
 
 # NOW:

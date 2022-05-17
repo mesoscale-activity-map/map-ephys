@@ -12,10 +12,10 @@ from . import experiment
 from . import ephys
 
 from pipeline.globus import GlobusStorageManager
-from . import get_schema_name
+from . import get_schema_name, create_schema_settings
 
 PUBLICATION_TRANSFER_TIMEOUT = 10000
-schema = dj.schema(get_schema_name('publication'))
+schema = dj.schema(get_schema_name('publication'), **create_schema_settings)
 
 log = logging.getLogger(__name__)
 __all__ = [experiment, ephys]

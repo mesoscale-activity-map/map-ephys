@@ -9,11 +9,11 @@ import statsmodels.api as sm
 from . import (lab, experiment, ephys)
 [lab, experiment, ephys]  # NOQA
 
-from . import get_schema_name, dict_to_hash
+from . import get_schema_name, dict_to_hash, create_schema_settings
 from pipeline import foraging_model
 from pipeline.util import _get_unit_independent_variable
 
-schema = dj.schema(get_schema_name('psth_foraging'))
+schema = dj.schema(get_schema_name('psth_foraging'), **create_schema_settings)
 log = logging.getLogger(__name__)
 
 
