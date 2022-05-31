@@ -4,9 +4,9 @@ import numpy as np
 import pathlib
 
 from . import lab, ccf
-from . import get_schema_name
+from . import get_schema_name, create_schema_settings
 
-schema = dj.schema(get_schema_name('experiment'))
+schema = dj.schema(get_schema_name('experiment'), **create_schema_settings)
 
 ephys = dj.create_virtual_module('ephys', get_schema_name('ephys'))  # avoid circular dependency
 

@@ -9,9 +9,9 @@ import scipy.io as scio
 import nrrd
 
 from . import InsertBuffer
-from . import get_schema_name
+from . import get_schema_name, create_schema_settings
 
-schema = dj.schema(get_schema_name('ccf'))
+schema = dj.schema(get_schema_name('ccf'), **create_schema_settings)
 
 log = logging.getLogger(__name__)
 

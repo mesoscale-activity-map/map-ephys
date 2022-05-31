@@ -14,9 +14,9 @@ from pipeline import tracking
 from pipeline import experiment
 from pipeline.ingest import behavior as behavior_ingest
 from collections import defaultdict
-from .. import get_schema_name
+from .. import get_schema_name, create_schema_settings
 
-schema = dj.schema(get_schema_name('ingest_tracking'))
+schema = dj.schema(get_schema_name('ingest_tracking'), **create_schema_settings)
 
 log = logging.getLogger(__name__)
 

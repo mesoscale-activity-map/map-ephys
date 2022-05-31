@@ -1,8 +1,8 @@
 import datajoint as dj
 import numpy as np
-from . import get_schema_name
+from . import get_schema_name, create_schema_settings
 
-schema = dj.schema(get_schema_name('lab'))
+schema = dj.schema(get_schema_name('lab'), **create_schema_settings)
 
 
 @schema

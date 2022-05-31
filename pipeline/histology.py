@@ -1,12 +1,12 @@
 import datajoint as dj
 import numpy as np
 
-from . import lab, experiment, ccf, ephys, get_schema_name
+from . import lab, experiment, ccf, ephys, get_schema_name, create_schema_settings
 from pipeline.plot import unit_characteristic_plot
 
 [lab, experiment, ccf, ephys]  # schema imports only
 
-schema = dj.schema(get_schema_name('histology'))
+schema = dj.schema(get_schema_name('histology'), **create_schema_settings)
 
 
 @schema

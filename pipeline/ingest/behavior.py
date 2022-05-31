@@ -19,9 +19,9 @@ from pybpodgui_api.models.project import Project as BPodProject
 from . import InvalidBehaviorTrialError
 
 from pipeline import lab, experiment
-from pipeline import get_schema_name, dict_to_hash
+from pipeline import get_schema_name, dict_to_hash, create_schema_settings
 
-schema = dj.schema(get_schema_name('ingest_behavior'))
+schema = dj.schema(get_schema_name('ingest_behavior'), **create_schema_settings)
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
