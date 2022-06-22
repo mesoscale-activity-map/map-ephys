@@ -1,9 +1,13 @@
 import datajoint as dj
-from pipeline import (experiment, get_schema_name)
-schema = dj.schema(get_schema_name('foraging_analysis'),locals())
+from pipeline import experiment, get_schema_name, create_schema_settings
+
 import numpy as np
 import pandas as pd
 import math
+
+
+schema = dj.schema(get_schema_name('foraging_analysis'), **create_schema_settings)
+
 dj.config["enable_python_native_blobs"] = True
 #%%
 bootstrapnum = 100

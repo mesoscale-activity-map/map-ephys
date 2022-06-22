@@ -16,7 +16,7 @@ import io
 from PIL import Image
 import itertools
 
-from pipeline import get_schema_name, FailedUnitCriteriaError
+from pipeline import get_schema_name, create_schema_settings, FailedUnitCriteriaError
 from pipeline import (experiment, ephys, psth, tracking, lab, histology, ccf,
                       foraging_analysis, foraging_model, oralfacial_analysis)
 
@@ -29,7 +29,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-schema = dj.schema(get_schema_name('report'))
+schema = dj.schema(get_schema_name('report'), **create_schema_settings)
 
 os.environ['DJ_SUPPORT_FILEPATH_MANAGEMENT'] = "TRUE"
 

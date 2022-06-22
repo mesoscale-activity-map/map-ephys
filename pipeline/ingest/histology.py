@@ -11,12 +11,12 @@ import datajoint as dj
 from datetime import datetime
 
 from pipeline import lab, ephys, experiment, ccf, histology, report
-from pipeline import get_schema_name, dict_to_hash
+from pipeline import get_schema_name, dict_to_hash, create_schema_settings
 
 from pipeline.ingest import behavior as behavior_ingest
 from pipeline.ingest import ephys as ephys_ingest
 
-schema = dj.schema(get_schema_name('ingest_histology'))
+schema = dj.schema(get_schema_name('ingest_histology'), **create_schema_settings)
 
 log = logging.getLogger(__name__)
 
