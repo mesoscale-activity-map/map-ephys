@@ -261,7 +261,7 @@ def retrieve_pseudocoronal_slice(probe_insertion, shank_no=1):
     probe_track_coords = np.array(list(zip(*(LabeledProbeTrack.Point
                                              & probe_insertion & {'shank': shank_no}).fetch(
         'ccf_z', 'ccf_y', 'ccf_x', order_by='ccf_y'))))
-    if probe_track_coords:
+    if len(probe_track_coords):
         coords = np.vstack([electrode_coords, probe_track_coords])
     else:
         coords = electrode_coords
