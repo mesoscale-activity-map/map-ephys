@@ -596,7 +596,7 @@ class ClusterMetric(dj.Imported):
     cumulative_drift=null: float  # Cumulative change in spike depth throughout recording 
     """
 
-    key_source = ProbeInsertion & Unit
+    key_source = ProbeInsertion & Unit.proj()
 
     def make(self, key):
         from .ingest.ephys import ingest_metrics
