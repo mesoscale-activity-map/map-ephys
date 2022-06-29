@@ -16,4 +16,4 @@ statsmodels==0.12.2	# oralfacial_analysis.GLMFit error
 astropy
 statannot
 h5py==3.3.0
-pynwb==2.1.0
+pynwb==2.0.1
