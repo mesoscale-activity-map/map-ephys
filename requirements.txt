@@ -1,6 +1,5 @@
 datajoint==0.12.9
 scipy==1.7.1	# build issue - see statsmodels
-h5py
 globus-sdk
 tifffile
 pandas
@@ -16,4 +15,5 @@ openpyxl
 statsmodels==0.12.2	# oralfacial_analysis.GLMFit error
 astropy
 statannot
-pynwb==1.4.0
+h5py==3.3.0
+pynwb==2.1.0
