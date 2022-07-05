@@ -748,13 +748,16 @@ def _clean_up(pipeline_modules, additional_error_patterns=[]):
                 for e in _generic_errors + additional_error_patterns
             ]
         ).delete()
+
         # clear stale "reserved" jobs
         current_connections = [v[0] for v in dj.conn().query(
             'SELECT id FROM information_schema.processlist WHERE id <> CONNECTION_ID() ORDER BY id')]
-        stale_jobs = (pipeline_module.schema.jobs
-                      & 'status = "reserved"'
-                      & f'connection_id NOT IN {tuple(current_connections)}')
-        (pipeline_module.schema.jobs & stale_jobs.fetch('KEY')).delete()
+        if current_connections:
+            current_connections = f'({", ".join([str(c) for c in current_connections])})'
+            stale_jobs = (pipeline_module.schema.jobs
+                          & 'status = "reserved"'
+                          & f'connection_id NOT IN {current_connections}')
+            (pipeline_module.schema.jobs & stale_jobs.fetch('KEY')).delete()
 
 
 def loop(*args):
