@@ -349,10 +349,13 @@ def plot_pseudocoronal_slice(probe_insertion, shank_no=1):
         coronal_slice[dv_ind, lr_ind, :] = np.full((len(matched_ind), 3), c_rgb)
 
     # ---- paint the interpolated track of this probe/shank in gray ----
-    in_probe_range = np.logical_and(shank_ccfs[:, 1] >= probe_track_coords[:, 1].min(),
-                                    shank_ccfs[:, 1] <= probe_track_coords[:, 1].max())
     in_electrode_range = np.logical_and(shank_ccfs[:, 1] >= electrode_coords[:, 1].min(),
                                         shank_ccfs[:, 1] <= electrode_coords[:, 1].max())
+    if len(probe_track_coords):
+        in_probe_range = np.logical_and(shank_ccfs[:, 1] >= probe_track_coords[:, 1].min(),
+                                        shank_ccfs[:, 1] <= probe_track_coords[:, 1].max())
+    else:
+        in_probe_range = np.full_like(in_electrode_range, True)
 
     tracks_coords = shank_ccfs[np.logical_and(in_probe_range, ~in_electrode_range), :]
     coronal_slice[tracks_coords[:, 1], tracks_coords[:, 0], :] = np.full(
