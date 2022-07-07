@@ -178,7 +178,7 @@ def match_probe_to_ephys(h2o, dpath, dglob):
     }
     """
     # npx ap.meta: '{}_*.imec.ap.meta'.format(h2o)
-    npx_meta_files = list(dpath.glob(dglob.format('*.ap.meta')))
+    npx_meta_files = list(dpath.glob(dglob.format('*tcat*.ap.meta')))  # search for "tcat" ap.meta files only
     if not npx_meta_files:
         raise FileNotFoundError('Error - no ap.meta files at {}'.format(dpath))
 
