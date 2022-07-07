@@ -126,7 +126,7 @@ def get_sess_dir(session_key):
 
     for rigpath in rigpaths:
         rigpath = pathlib.Path(rigpath)
-        subject_dir = rigpath / h2o
+        subject_dir = rigpath / f'{h2o}_out' / 'results'
         dpath = None  # session directory
         dglob = None  # probe directory pattern
         if (subject_dir / sess_datetime.date().strftime('%Y%m%d')).exists():
