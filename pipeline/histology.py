@@ -130,7 +130,7 @@ class InterpolatedShankTrack(dj.Computed):
         -> ccf.CCF  
         """
 
-    key_source= ElectrodeCCFPosition & LabeledProbeTrack.Point
+    key_source = ElectrodeCCFPosition & LabeledProbeTrack
     
     def make(self, key):
         probe_insertion = ephys.ProbeInsertion & key
