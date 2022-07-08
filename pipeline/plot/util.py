@@ -29,11 +29,11 @@ def _plot_avg_psth(ipsi_psth, contra_psth, vlines={}, ax=None, title=''):
 
     avg_contra_psth = np.vstack(
         np.array([i[0] for i in contra_psth])).mean(axis=0)
-    contra_edges = contra_psth[0][1][:-1]
+    contra_edges = contra_psth[0][1]
 
     avg_ipsi_psth = np.vstack(
         np.array([i[0] for i in ipsi_psth])).mean(axis=0)
-    ipsi_edges = ipsi_psth[0][1][:-1]
+    ipsi_edges = ipsi_psth[0][1]
 
     ax.plot(contra_edges, avg_contra_psth, 'b', label='contra')
     ax.plot(ipsi_edges, avg_ipsi_psth, 'r', label='ipsi')
