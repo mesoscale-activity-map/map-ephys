@@ -937,14 +937,14 @@ class Kilosort:
         # labeling based on the noiseTemplate module - output to "cluster_group.tsv" file
         # (https://github.com/jenniferColonell/ecephys_spike_sorting/tree/master/ecephys_spike_sorting/modules/noise_templates)
         """
+        noise_labels = {}
         cluster_group_tsv = pathlib.Path(self._kilosort_dir) / 'cluster_group.tsv'
         if cluster_group_tsv.exists():
             df = pd.read_csv(cluster_group_tsv, sep="\t", header=0)
-            colname = next(n for n in df.columns if n != 'cluster_id')
-            return dict(cluster_ids=np.array(df['cluster_id'].values),
-                        cluster_notes=np.array(df[colname].values))
-        else:
-            return {}
+            if set(df.columns) == {'cluster_id', 'group'}:
+                return dict(cluster_ids=np.array(df['cluster_id'].values),
+                            cluster_notes=np.array(df['group'].values))
+        return noise_labels
 
     def extract_spike_depths(self):
         """ Reimplemented from https://github.com/cortex-lab/spikes/blob/master/analysis/ksDriftmap.m """
