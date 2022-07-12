@@ -940,8 +940,9 @@ class Kilosort:
         cluster_group_tsv = pathlib.Path(self._kilosort_dir) / 'cluster_group.tsv'
         if cluster_group_tsv.exists():
             df = pd.read_csv(cluster_group_tsv, sep="\t", header=0)
+            colname = next(n for n in df.columns if n != 'cluster_id')
             return dict(cluster_ids=np.array(df['cluster_id'].values),
-                        cluster_notes=np.array(df['group'].values))
+                        cluster_notes=np.array(df[colname].values))
         else:
             return {}
 
