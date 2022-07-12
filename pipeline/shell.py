@@ -97,6 +97,12 @@ def ingest_ephys(*args):
     experiment.Piezoelectric().populate(display_progress=True)
 
 
+def ingest_units(*args):
+    from pipeline import ephys
+    ephys.Unit.populate(reserve_jobs=True, display_progress=True, suppress_errors=True)
+    ephys.ClusterMetric.populate(reserve_jobs=True, display_progress=True, suppress_errors=True)
+
+
 def ingest_tracking(*args):
     from pipeline.ingest import tracking as tracking_ingest
     tracking_ingest.TrackingIngest().populate(display_progress=True)
@@ -790,6 +796,7 @@ actions = {
     'ingest-behavior': (ingest_behavior, 'ingest behavior data'),
     'ingest-foraging': (ingest_behavior, 'ingest foraging behavior data'),
     'ingest-ephys': (ingest_ephys, 'ingest ephys data'),
+    'ingest-units': (ingest_units, 'ingest spike sorting results and QC data'),
     'ingest-tracking': (ingest_tracking, 'ingest tracking data'),
     'ingest-histology': (ingest_histology, 'ingest histology data'),
     'ingest-all': (ingest_all, 'run auto ingest job (load all types)'),
