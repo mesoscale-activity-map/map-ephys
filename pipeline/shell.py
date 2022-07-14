@@ -66,6 +66,11 @@ def logsetup(*args):
     logging.basicConfig(format=msgfmt, datefmt=datefmt, level=logging.ERROR,
                         handlers=handlers)
 
+    try:
+        dj.logger.setLevel(level)
+    except Exception:
+        pass
+
     log.setLevel(level)
 
     logging.getLogger('pipeline').setLevel(level)
