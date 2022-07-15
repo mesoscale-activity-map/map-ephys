@@ -126,23 +126,25 @@ def get_sess_dir(session_key):
 
     for rigpath in rigpaths:
         rigpath = pathlib.Path(rigpath)
-        dpath, dglob = None, None
-        if (rigpath / h2o / sess_datetime.date().strftime('%Y%m%d')).exists():
-            dpath = rigpath / h2o / sess_datetime.date().strftime('%Y%m%d')
-            dglob = '[0-9]/{}'  # probe directory pattern
-        elif (rigpath / h2o / 'catgt_{}_g0'.format(
+        subject_dir = rigpath / f'{h2o}_out' / 'results'
+        dpath = None  # session directory
+        dglob = None  # probe directory pattern
+        if (subject_dir / sess_datetime.date().strftime('%Y%m%d')).exists():
+            dpath = subject_dir / sess_datetime.date().strftime('%Y%m%d')
+            dglob = '[0-9]/{}'
+        elif (subject_dir / 'catgt_{}_g0'.format(
                 sess_datetime.date().strftime('%Y%m%d'))).exists():
-            dpath = rigpath / h2o / 'catgt_{}_g0'.format(
+            dpath = subject_dir / 'catgt_{}_g0'.format(
                 sess_datetime.date().strftime('%Y%m%d'))
             dglob = '{}_*_imec[0-9]'.format(
                 sess_datetime.date().strftime('%Y%m%d')) + '/{}'
         else:
             date_strings = [sess_datetime.date().strftime('%m%d%y'), sess_datetime.date().strftime('%Y%m%d')]
             for date_string in date_strings:
-                sess_dirs = list(pathlib.Path(rigpath, h2o).glob('*{}*{}_*'.format(h2o, date_string)))
+                sess_dirs = list(subject_dir.glob('*{}*{}_*'.format(h2o, date_string)))
                 for sess_dir in sess_dirs:
                     try:
-                        npx_meta = SpikeGLXMeta(next(sess_dir.rglob('{}_*.ap.meta'.format(h2o))))
+                        npx_meta = SpikeGLXMeta(next(sess_dir.rglob('{}_*tcat*.ap.meta'.format(h2o))))
                     except StopIteration:
                         continue
                     # ensuring time difference between behavior-start and ephys-start is no more than 2 minutes - this is to handle multiple sessions in a day
@@ -178,7 +180,7 @@ def match_probe_to_ephys(h2o, dpath, dglob):
     }
     """
     # npx ap.meta: '{}_*.imec.ap.meta'.format(h2o)
-    npx_meta_files = list(dpath.glob(dglob.format('*.ap.meta')))
+    npx_meta_files = list(dpath.glob(dglob.format('*tcat*.ap.meta')))  # search for "tcat" ap.meta files only
     if not npx_meta_files:
         raise FileNotFoundError('Error - no ap.meta files at {}'.format(dpath))
 
