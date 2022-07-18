@@ -68,7 +68,7 @@ def logsetup(*args):
 
     try:
         dj.logger.setLevel(level)
-    except Exception:
+    except AttributeError:
         pass
 
     log.setLevel(level)
