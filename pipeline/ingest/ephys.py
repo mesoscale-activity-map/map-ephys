@@ -23,7 +23,10 @@ schema = dj.schema(get_schema_name('ingest_ephys'), **create_schema_settings)
 
 os.environ['DJ_SUPPORT_FILEPATH_MANAGEMENT'] = "TRUE"
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
+stream_handler = logging.StreamHandler()
+logger.setLevel('INFO')
+logger.addHandler(stream_handler)
 
 
 @schema
@@ -47,8 +50,8 @@ class EphysIngest(dj.Imported):
         Ephys .make() function
         '''
 
-        log.info('\n======================================================')
-        log.info('EphysIngest().make(): key: {k}'.format(k=key))
+        logger.info('\n======================================================')
+        logger.info('EphysIngest().make(): key: {k}'.format(k=key))
 
         self.insert1(key)
 
@@ -86,7 +89,7 @@ class EphysIngest(dj.Imported):
         cluster_noise_label = data.get('cluster_noise_label')
         bitcode_raw = data['bitcode_raw']
 
-        log.info('-- Start insertions for probe: {} - Clustering method: {} - Label: {}'.format(probe, method, clustering_label))
+        logger.info('-- Start insertions for probe: {} - Clustering method: {} - Label: {}'.format(probe, method, clustering_label))
 
         assert len(trial_start) == len(trial_go), 'Unequal number of bitcode "trial_start" ({}) and "trial_go" ({})'.format(len(trial_start), len(trial_go))
 
@@ -137,7 +140,7 @@ class EphysIngest(dj.Imported):
 
         if not np.all(np.equal(sync_ephys_range, sync_behav_range)):
             if trial_fix is not None:
-                log.info('ephys/bitcode trial mismatch - fix using "trialNum"')
+                logger.info('ephys/bitcode trial mismatch - fix using "trialNum"')
                 trials = trial_fix
             else:
                 raise Exception('Bitcode Mismatch - Fix with "trialNum" not available')
@@ -223,7 +226,7 @@ class EphysIngest(dj.Imported):
         unit_spike_depths = np.array([spike_depths[np.where(units == u)] for u in unit_set])
 
         if into_archive:
-            log.info('.. inserting clustering timestamp and label')
+            logger.info('.. inserting clustering timestamp and label')
             archival_time = datetime.now()
 
             archive_key = {**skey, 'insertion_number': probe,
@@ -261,7 +264,7 @@ class EphysIngest(dj.Imported):
                                 'trial_spike': unit_spike_trial_num[i],
                                 'waveform': unit_wav[i][wf_chn_idx]})
                     if ib.flush():
-                        log.debug('.... {}'.format(u))
+                        logger.debug('.... {}'.format(u))
 
             if metrics is not None:
                 metrics.columns = [c.lower() for c in metrics.columns]  # lower-case col names
@@ -275,7 +278,7 @@ class EphysIngest(dj.Imported):
 
                 metrics = dict(metrics.T)
 
-                log.info('.. inserting cluster metrics and waveform metrics')
+                logger.info('.. inserting cluster metrics and waveform metrics')
                 dj.conn().ping()
                 ephys.ArchivedClustering.ClusterMetric.insert(
                     [{**archive_key, 'unit': u, **metrics[u]}
@@ -289,7 +292,7 @@ class EphysIngest(dj.Imported):
                      for i, u in enumerate(unit_set)], allow_direct_insert=True)
         else:
             # insert Unit
-            log.info('.. ephys.Unit')
+            logger.info('.. ephys.Unit')
 
             with InsertBuffer(ephys.Unit, 10, skip_duplicates=True,
                               allow_direct_insert=True) as ib:
@@ -316,10 +319,10 @@ class EphysIngest(dj.Imported):
                                 'waveform': unit_wav[i][wf_chn_idx]})
 
                     if ib.flush():
-                        log.debug('.... {}'.format(u))
+                        logger.debug('.... {}'.format(u))
 
             # insert Unit.UnitTrial
-            log.info('.. ephys.Unit.UnitTrial')
+            logger.info('.. ephys.Unit.UnitTrial')
             dj.conn().ping()
             with InsertBuffer(ephys.Unit.UnitTrial, 10000, skip_duplicates=True,
                               allow_direct_insert=True) as ib:
@@ -333,10 +336,10 @@ class EphysIngest(dj.Imported):
                                         'unit': u,
                                         'trial': trials[t]})
                             if ib.flush():
-                                log.debug('.... (u: {}, t: {})'.format(u, t))
+                                logger.debug('.... (u: {}, t: {})'.format(u, t))
 
             # insert TrialSpikes
-            log.info('.. ephys.Unit.TrialSpikes')
+            logger.info('.. ephys.Unit.TrialSpikes')
             dj.conn().ping()
             with InsertBuffer(ephys.Unit.TrialSpikes, 10000, skip_duplicates=True,
                               allow_direct_insert=True) as ib:
@@ -349,7 +352,7 @@ class EphysIngest(dj.Imported):
                                     'trial': trials[t],
                                     'spike_times': unit_trial_spikes[i][t]})
                         if ib.flush():
-                            log.debug('.... (u: {}, t: {})'.format(u, t))
+                            logger.debug('.... (u: {}, t: {})'.format(u, t))
 
             if metrics is not None:
                 metrics.columns = [c.lower() for c in metrics.columns]  # lower-case col names
@@ -363,7 +366,7 @@ class EphysIngest(dj.Imported):
 
                 metrics = dict(metrics.T)
 
-                log.info('.. inserting cluster metrics and waveform metrics')
+                logger.info('.. inserting cluster metrics and waveform metrics')
                 dj.conn().ping()
                 ephys.ClusterMetric.insert([{**skey, 'insertion_number': probe,
                                              'clustering_method': method, 'unit': u, **metrics[u]}
@@ -382,7 +385,7 @@ class EphysIngest(dj.Imported):
 
             if cluster_noise_label is not None:
                 dj.conn().ping()
-                log.info('.. inserting unit noise label')
+                logger.info('.. inserting unit noise label')
                 ephys.UnitNoiseLabel.insert((
                     {**skey, 'insertion_number': probe, 'clustering_method': method,
                      'unit': u, 'noise': note}
@@ -391,7 +394,7 @@ class EphysIngest(dj.Imported):
                     allow_direct_insert=True)
 
             dj.conn().ping()
-            log.info('.. inserting clustering timestamp and label')
+            logger.info('.. inserting clustering timestamp and label')
 
             ephys.ClusteringLabel.insert([{**skey, 'insertion_number': probe,
                                            'clustering_method': method, 'unit': u,
@@ -401,14 +404,14 @@ class EphysIngest(dj.Imported):
                                           for u in unit_set],
                                          allow_direct_insert=True)
 
-            log.info('.. inserting file load information')
+            logger.info('.. inserting file load information')
 
             self.insert1(skey, skip_duplicates=True, allow_direct_insert=True)
             self.EphysFile.insert1(
                 {**skey, 'probe_insertion_number': probe,
                  'ephys_file': ef_path.relative_to(rigpath).as_posix()}, allow_direct_insert=True)
 
-            log.info('-- ephys ingest for {} - probe {} complete'.format(skey, probe))
+            logger.info('-- ephys ingest for {} - probe {} complete'.format(skey, probe))
 
 
 def ingest_units(insertion_key, data, npx_meta):
@@ -438,7 +441,7 @@ def ingest_units(insertion_key, data, npx_meta):
 
     probe_no = insertion_key['insertion_number']
 
-    log.info('-- Start insertions for probe: {} - Clustering method: {} - Label: {}'.format(
+    logger.info('-- Start insertions for probe: {} - Clustering method: {} - Label: {}'.format(
         probe_no, method, clustering_label))
 
     assert len(trial_start) == len(trial_go), 'Unequal number of bitcode "trial_start" ({}) and "trial_go" ({})'.format(
@@ -482,7 +485,7 @@ def ingest_units(insertion_key, data, npx_meta):
 
     if not np.all(np.equal(sync_ephys_range, sync_behav_range)):
         if trial_fix is not None:
-            log.info('ephys/bitcode trial mismatch - fix using "trialNum"')
+            logger.info('ephys/bitcode trial mismatch - fix using "trialNum"')
             trials = trial_fix
         else:
             raise Exception('Bitcode Mismatch - Fix with "trialNum" not available')
@@ -569,7 +572,7 @@ def ingest_units(insertion_key, data, npx_meta):
     unit_spike_depths = np.array([spike_depths[np.where(units == u)] for u in unit_set])
 
     # insert Unit
-    log.info('.. ephys.Unit')
+    logger.info('.. ephys.Unit')
 
     with InsertBuffer(ephys.Unit, 10, skip_duplicates=True,
                       allow_direct_insert=True) as ib:
@@ -596,10 +599,10 @@ def ingest_units(insertion_key, data, npx_meta):
                         'waveform': unit_wav[i][wf_chn_idx]})
 
             if ib.flush():
-                log.debug('.... {}'.format(u))
+                logger.debug('.... {}'.format(u))
 
     # insert Unit.UnitTrial
-    log.info('.. ephys.Unit.UnitTrial')
+    logger.info('.. ephys.Unit.UnitTrial')
     dj.conn().ping()
     with InsertBuffer(ephys.Unit.UnitTrial, 10000, skip_duplicates=True,
                       allow_direct_insert=True) as ib:
@@ -612,10 +615,10 @@ def ingest_units(insertion_key, data, npx_meta):
                                 'unit': u,
                                 'trial': trials[t]})
                     if ib.flush():
-                        log.debug('.... (u: {}, t: {})'.format(u, t))
+                        logger.debug('.... (u: {}, t: {})'.format(u, t))
 
     # insert TrialSpikes
-    log.info('.. ephys.Unit.TrialSpikes')
+    logger.info('.. ephys.Unit.TrialSpikes')
     dj.conn().ping()
     with InsertBuffer(ephys.Unit.TrialSpikes, 10000, skip_duplicates=True,
                       allow_direct_insert=True) as ib:
@@ -627,11 +630,11 @@ def ingest_units(insertion_key, data, npx_meta):
                             'trial': trials[t],
                             'spike_times': unit_trial_spikes[i][t]})
                 if ib.flush():
-                    log.debug('.... (u: {}, t: {})'.format(u, t))
+                    logger.debug('.... (u: {}, t: {})'.format(u, t))
 
     if cluster_noise_label is not None and cluster_noise_label:
         dj.conn().ping()
-        log.info('.. inserting unit noise label')
+        logger.info('.. inserting unit noise label')
         ephys.UnitNoiseLabel.insert((
             {**insertion_key, 'clustering_method': method,
              'unit': u, 'noise': note}
@@ -640,7 +643,7 @@ def ingest_units(insertion_key, data, npx_meta):
             allow_direct_insert=True)
 
     dj.conn().ping()
-    log.info('.. inserting clustering timestamp and label')
+    logger.info('.. inserting clustering timestamp and label')
 
     ephys.ClusteringLabel.insert([{**insertion_key,
                                    'clustering_method': method, 'unit': u,
@@ -650,7 +653,7 @@ def ingest_units(insertion_key, data, npx_meta):
                                   for u in unit_set],
                                  allow_direct_insert=True)
 
-    log.info('.. inserting file load information')
+    logger.info('.. inserting file load information')
 
     EphysIngest.EphysFile.insert1(
         {**insertion_key, 'probe_insertion_number': insertion_key['insertion_number'],
@@ -676,7 +679,7 @@ def ingest_metrics(insertion_key, data):
 
         metrics = dict(metrics.T)
 
-        log.info('.. inserting cluster metrics and waveform metrics')
+        logger.info('.. inserting cluster metrics and waveform metrics')
         dj.conn().ping()
         ephys.ClusterMetric.insert([{**insertion_key,
                                      'clustering_method': method, 'unit': u, **metrics[u]}
@@ -702,8 +705,8 @@ def insert_ephys_events(skey, bf, trial_trunc=None):
     # --- Events available both from behavior .csv file (trial time) and ephys NIDQ (session time) ---
     # digMarkerPerTrial from bitcode.mat: [STRIG_, GOCUE_, CHOICEL_, CHOICER_, REWARD_, ITI_, BPOD_START_, ZABER_IN_POS_]
     # <--> ephys.TrialEventType: 'bitcodestart', 'go', 'choice', 'choice', 'reward', 'trialend', 'bpodstart', 'zaberinposition'
-    log.info('.... insert_ephys_events() ...')
-    log.info('       loading ephys events from NIDQ ...')
+    logger.info('.... insert_ephys_events() ...')
+    logger.info('       loading ephys events from NIDQ ...')
     df = pd.DataFrame()
     headings = bf['headings'][0]
     digMarkerPerTrial = bf['digMarkerPerTrial']
@@ -742,7 +745,7 @@ def insert_ephys_events(skey, bf, trial_trunc=None):
     exist_lick = [ltype for ltype in lick_wrapper.keys() if lick_wrapper[ltype] in bf]
 
     if len(exist_lick):
-        log.info(f'       loading licks from NIDQ ...')
+        logger.info(f'       loading licks from NIDQ ...')
 
         for trial, *licks in enumerate(zip(*(bf[lick_wrapper[ltype]][0][:trial_trunc] for ltype in exist_lick))):
             lick_times = {ltype: ltime for ltype, ltime in zip(exist_lick, *licks)}
@@ -765,7 +768,7 @@ def insert_ephys_events(skey, bf, trial_trunc=None):
 
     # --- Camera frames (only available from ephys NIDQ) ---
     if 'cameraPerTrial' in bf:
-        log.info('       loading camera frames from NIDQ ...')
+        logger.info('       loading camera frames from NIDQ ...')
 
         _idx = [_idx for _idx, field in enumerate(bf['chan'].dtype.descr) if 'cameraNameInDJ' in field][0]
         cameras = bf['chan'][0, 0][_idx][0, :]
@@ -780,7 +783,7 @@ def insert_ephys_events(skey, bf, trial_trunc=None):
                 tracking.Tracking.Frame.insert1({**key,
                                                  'frame_time': frames.flatten()},
                                                 allow_direct_insert=True)
-    log.info('.... insert_ephys_events() Done! ...')
+    logger.info('.... insert_ephys_events() Done! ...')
 
 
 # ====== Methods for ephys ingestion ======
@@ -805,7 +808,7 @@ def do_ephys_ingest(session_key, replace=False, probe_insertion_exists=False, in
     try:
         clustering_files = match_probe_to_ephys(h2o, dpath, dglob)
     except FileNotFoundError as e:
-        log.warning(str(e) + '. Skipping...')
+        logger.warning(str(e) + '. Skipping...')
         return
 
     if replace:
@@ -836,7 +839,7 @@ def do_ephys_ingest(session_key, replace=False, probe_insertion_exists=False, in
                 # if probe_insertion exists and there exists also units for this insertion_key, skip over it
                 continue
             try:
-                log.info('------ Start loading clustering results for probe: {} ------'.format(probe_no))
+                logger.info('------ Start loading clustering results for probe: {} ------'.format(probe_no))
                 loader = cluster_loader_map[cluster_method]
                 dj.conn().ping()
                 EphysIngest()._load(loader(sinfo, *f), probe_no, npx_meta, rigpath,
@@ -844,9 +847,9 @@ def do_ephys_ingest(session_key, replace=False, probe_insertion_exists=False, in
             except (ProbeInsertionError, ClusterMetricError, FileNotFoundError) as e:
                 dj.conn().cancel_transaction()  # either successful ingestion of all probes, or none at all
                 if isinstance(e, ProbeInsertionError):
-                    log.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
+                    logger.warning('Probe Insertion Error: \n{}. \nSkipping...'.format(str(e)))
                 else:
-                    log.warning('Error: {}'.format(str(e)))
+                    logger.warning('Error: {}'.format(str(e)))
                 return
 
     # the insert part
@@ -877,8 +880,10 @@ def archive_ingested_clustering_results(key, archive_trial_spike=False):
     1. Copy to ephys.ArchivedUnit
     2. Delete ephys.Unit
     """
+    assert dj.__version__ >= "0.13.5", f'Archiving clustering results requires DataJoint 0.13.5 and above - you are using {dj.__version__}'
+
     insertion_keys = (ephys.ProbeInsertion & key).fetch('KEY')
-    log.info('Archiving {} probe insertion(s): {}'.format(len(insertion_keys), insertion_keys))
+    logger.info('Archiving {} probe insertion(s): {}'.format(len(insertion_keys), insertion_keys))
 
     archival_time = datetime.now()
 
@@ -887,19 +892,18 @@ def archive_ingested_clustering_results(key, archive_trial_spike=False):
     q_archived_waveform_metrics = [], [], [], [], [], []
 
     for insert_key in insertion_keys:
+        logger.info(f'\tChecking insertion: {insert_key}')
         q_archived_clustering = (ephys.ProbeInsertion.proj() & insert_key).aggr(
             ephys.ClusteringLabel * ephys.ClusteringMethod, ...,
-            clustering_method='clustering_method', clustering_time='clustering_time',
-            quality_control='quality_control', manual_curation='manual_curation',
-            clustering_note='clustering_note', archival_time='cast("{}" as datetime)'.format(archival_time))
+            clustering_method='max(clustering_method)', clustering_time='max(clustering_time)',
+            quality_control='max(quality_control)', manual_curation='max(manual_curation)',
+            clustering_note='max(clustering_note)', archival_time='cast("{}" as datetime)'.format(archival_time))
 
         q_files = (EphysIngest.EphysFile.proj(insertion_number='probe_insertion_number') & insert_key)
 
-        q_units = (ephys.Unit & insert_key).aggr(ephys.UnitCellType, ..., cell_type='cell_type', keep_all_rows=True)
+        q_units = (ephys.Unit & insert_key).join(ephys.UnitCellType, left=True)
 
-        q_units_stat = q_units.proj('unit_amp', 'unit_snr').aggr(ephys.UnitStat, ...,
-                                                                 isi_violation='isi_violation',
-                                                                 avg_firing_rate='avg_firing_rate', keep_all_rows=True)
+        q_units_stat = q_units.proj('unit_amp', 'unit_snr').join(ephys.UnitStat, left=True)
         q_units_cluster_metrics = q_units.proj() * ephys.ClusterMetric
         q_units_waveform_metrics = q_units.proj() * ephys.WaveformMetric
 
@@ -915,7 +919,7 @@ def archive_ingested_clustering_results(key, archive_trial_spike=False):
                           for archived_key in q_archived_clusterings])
 
     if is_archived:
-        log.info('This set of clustering results has already been archived, skip archiving...')
+        logger.info('This set of clustering results has already been archived, skip archiving...')
     else:
         if archive_trial_spike:
             # preparing spike_times and trial_spike
@@ -927,7 +931,7 @@ def archive_ingested_clustering_results(key, archive_trial_spike=False):
         archived_units = []
         for q_units in q_archived_units:
             # recompute trial_spike
-            log.info('Archiving {} units'.format(len(q_units)))
+            logger.info('\tArchiving {} units'.format(len(q_units)))
             units = q_units.fetch(as_dict=True)
             if archive_trial_spike:
                 for unit in tqdm(units):
@@ -947,29 +951,43 @@ def archive_ingested_clustering_results(key, archive_trial_spike=False):
 
         if not is_archived:
             # server-side copy
-            log.info('Archiving {} units from {} probe insertions'.format(len(ephys.Unit & key),
-                                                                          len(ephys.ProbeInsertion & key)))
+            logger.info('Archiving {} units from {} probe insertions'.format(len(ephys.Unit & key),
+                                                                             len(ephys.ProbeInsertion & key)))
             insert_settings = dict(ignore_extra_fields=True, allow_direct_insert=True)
 
+            logger.info('\tArchivedClustering...')
             [ephys.ArchivedClustering.insert(clustering, **insert_settings)
              for clustering in q_archived_clusterings]
             [ephys.ArchivedClustering.EphysFile.insert(ephys_files, **insert_settings)
              for ephys_files in q_ephys_files]
+
+            logger.info('\tArchivedClustering.Unit...')
             ephys.ArchivedClustering.Unit.insert(archived_units, **insert_settings)
+
+            logger.info('\tArchivedClustering.UnitStat...')
             [ephys.ArchivedClustering.UnitStat.insert(units_stat, **insert_settings)
              for units_stat in q_archived_units_stat]
+
+            logger.info('\tArchivedClustering.ClusterMetric...')
             [ephys.ArchivedClustering.ClusterMetric.insert(cluster_metrics, **insert_settings)
              for cluster_metrics in q_archived_cluster_metrics]
+
+            logger.info('\tArchivedClustering.WaveformMetric...')
             [ephys.ArchivedClustering.WaveformMetric.insert(waveform_metrics, **insert_settings)
              for waveform_metrics in q_archived_waveform_metrics]
 
         with dj.config(safemode=False):
-            log.info('Delete clustering data and associated analysis results')
+            logger.info('Delete clustering data and associated analysis results')
+            logger.info('\tephys.Unit...')
             (ephys.Unit & key).delete()
             (EphysIngest.EphysFile & key).delete(force=True)
+            logger.info('\treport.SessionLevelCDReport...')
             (report.SessionLevelCDReport & key).delete()
+            logger.info('\treport.ProbeLevelPhotostimEffectReport...')
             (report.ProbeLevelPhotostimEffectReport & key).delete()
+            logger.info('\treport.ProbeLevelReport...')
             (report.ProbeLevelReport & key).delete()
+            logger.info('\treport.ProbeLevelDriftMap...')
             (report.ProbeLevelDriftMap & key).delete()
 
     # the copy, delete part
