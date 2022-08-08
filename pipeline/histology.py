@@ -97,6 +97,7 @@ class InterpolatedElectrodeCCF(dj.Computed):
         from scipy import interpolate
 
         ccf_res = ccf.CCFLabel.CCF_R3_20UM_RESOLUTION  # 20um voxel size
+        ccf_label_id = ccf.CCFLabel.CCF_R3_20UM_ID
 
         electrode_ccf_query = (lab.ProbeType.Electrode
                                * lab.ElectrodeConfig.Electrode
@@ -105,7 +106,8 @@ class InterpolatedElectrodeCCF(dj.Computed):
             'shank', 'shank_col', 'shank_row',
             x='IFNULL(ccf_x, -1)', y='IFNULL(ccf_y, -1)', z='IFNULL(ccf_z, -1)')
 
-        electrode_ccf = (dj.U('electrode', 'shank', 'shank_col', 'shank_row', 'x', 'y', 'z')
+        electrode_ccf = (dj.U('electrode_group', 'electrode',
+                              'shank', 'shank_col', 'shank_row', 'x', 'y', 'z')
                          & electrode_ccf_query).fetch(format='frame').reset_index()
         electrode_ccf.set_index('electrode', inplace=True)
         electrode_ccf.replace(-1, np.nan, inplace=True)
@@ -129,7 +131,10 @@ class InterpolatedElectrodeCCF(dj.Computed):
 
         # insert
         econfig_key = (ephys.ProbeInsertion * lab.ElectrodeConfig & key).fetch1('KEY')
-        filled_positions = [{**econfig_key, 'electrode': r.name,
+        filled_positions = [{**econfig_key,
+                             'electrode_group': r.electrode_group,
+                             'electrode': r.name,
+                             'ccf_label_id': ccf_label_id,
                              'ccf_x': r.x, 'ccf_y': r.y, 'ccf_z': r.z}
                             for _, r in electrode_ccf[~not_nan].iterrows()]
 
