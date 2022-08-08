@@ -510,7 +510,7 @@ class UnitCellType(dj.Computed):
 
     @property
     def key_source(self):
-        return super().key_source & 'unit_quality != "all"'
+        return Unit & 'unit_quality != "all"'
 
     def make(self, key):
         upsample_factor = 100
@@ -642,6 +642,8 @@ class WaveformMetric(dj.Imported):
     velocity_above=null: float
     velocity_below=null: float   
     """
+
+    key_source = ProbeInsertion & ClusterMetric.proj()
 
 
 @schema

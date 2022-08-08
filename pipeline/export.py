@@ -223,7 +223,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
         ephys.UnitStat, ..., **{n: n for n in ephys.UnitStat.heading.names if n not in ephys.UnitStat.heading.primary_key},
         keep_all_rows=True).aggr(
         ephys.MAPClusterMetric.DriftMetric, ..., **{n: n for n in ephys.MAPClusterMetric.DriftMetric.heading.names if n not in ephys.MAPClusterMetric.DriftMetric.heading.primary_key},
-        keep_all_rows = True).aggr(
+        keep_all_rows=True).aggr(
         ephys.ClusterMetric, ..., **{n: n for n in ephys.ClusterMetric.heading.names if n not in ephys.ClusterMetric.heading.primary_key},
         keep_all_rows=True).aggr(
         ephys.WaveformMetric, ..., **{n: n for n in ephys.WaveformMetric.heading.names if n not in ephys.WaveformMetric.heading.primary_key},
