@@ -2,7 +2,6 @@ import datajoint as dj
 import numpy as np
 
 from . import lab, experiment, ccf, ephys, get_schema_name, create_schema_settings
-from pipeline.plot import unit_characteristic_plot
 
 [lab, experiment, ccf, ephys]  # schema imports only
 
@@ -80,6 +79,68 @@ class ElectrodeCCFPosition(dj.Manual):
         mri_y=null: float  # (mm)
         mri_z=null: float  # (mm)
         """
+
+
+@schema
+class InterpolatedElectrodeCCF(dj.Computed):
+    definition = """
+    -> ElectrodeCCFPosition
+    """
+
+    class ElectrodePosition(dj.Part):
+        definition = """
+        -> master
+        -> ElectrodeCCFPosition.ElectrodePosition
+        """
+
+    def make(self, key):
+        from scipy import interpolate
+
+        ccf_res = ccf.CCFLabel.CCF_R3_20UM_RESOLUTION  # 20um voxel size
+        ccf_label_id = ccf.CCFLabel.CCF_R3_20UM_ID
+
+        electrode_ccf_query = (lab.ProbeType.Electrode
+                               * lab.ElectrodeConfig.Electrode
+                               * ephys.ProbeInsertion & key).join(
+            ElectrodeCCFPosition.ElectrodePosition, left=True).proj(
+            'shank', 'shank_col', 'shank_row',
+            x='IFNULL(ccf_x, -1)', y='IFNULL(ccf_y, -1)', z='IFNULL(ccf_z, -1)')
+
+        electrode_ccf = (dj.U('electrode_group', 'electrode',
+                              'shank', 'shank_col', 'shank_row', 'x', 'y', 'z')
+                         & electrode_ccf_query).fetch(format='frame').reset_index()
+        electrode_ccf.set_index('electrode', inplace=True)
+        electrode_ccf.replace(-1, np.nan, inplace=True)
+
+        not_nan = ~electrode_ccf.x.isna()
+
+        # per-shank, per-col interpolation of missing electrode site
+        for shank in set(electrode_ccf.shank):
+            for shank_col in set(electrode_ccf.shank_col):
+                col_ind = electrode_ccf.query(f'shank == {shank} & shank_col == {shank_col}').index
+                for c in ('x', 'y', 'z'):
+                    is_nan = electrode_ccf[c][col_ind].isna()
+                    # build interpolation function
+                    interp_f = interpolate.interp1d(electrode_ccf[c][col_ind][~is_nan].index,
+                                                    electrode_ccf[c][col_ind][~is_nan],
+                                                    kind='linear', fill_value='extrapolate')
+                    # interpolate missing data and round to CCF voxel size
+                    interp_coord = interp_f(electrode_ccf[c][col_ind].index)
+                    interp_coord = ccf_res * np.around(interp_coord / ccf_res)
+                    electrode_ccf[c][col_ind[is_nan]] = interp_coord[is_nan]
+
+        # insert
+        econfig_key = (ephys.ProbeInsertion * lab.ElectrodeConfig & key).fetch1('KEY')
+        filled_positions = [{**econfig_key,
+                             'electrode_group': r.electrode_group,
+                             'electrode': r.name,
+                             'ccf_label_id': ccf_label_id,
+                             'ccf_x': r.x, 'ccf_y': r.y, 'ccf_z': r.z}
+                            for _, r in electrode_ccf[~not_nan].iterrows()]
+
+        ElectrodeCCFPosition.ElectrodePosition.insert(filled_positions)
+        self.insert1(key)
+        self.ElectrodePosition.insert(filled_positions)
 
 
 @schema
