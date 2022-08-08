@@ -1,9 +1,7 @@
 import datajoint as dj
-import matplotlib.pyplot as plt
 import numpy as np
 
 from . import lab, experiment, ccf, ephys, get_schema_name, create_schema_settings
-from pipeline.plot import unit_characteristic_plot
 
 [lab, experiment, ccf, ephys]  # schema imports only
 
