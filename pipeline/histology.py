@@ -1,5 +1,6 @@
 import datajoint as dj
 import numpy as np
+import pandas as pd
 
 from . import lab, experiment, ccf, ephys, get_schema_name, create_schema_settings
 
@@ -82,6 +83,27 @@ class ElectrodeCCFPosition(dj.Manual):
 
 
 @schema
+class LabeledProbeTrack(dj.Manual):
+    definition = """
+    -> ephys.ProbeInsertion
+    ---
+    labeling_date=NULL:         date
+    dye_color=NULL:             varchar(32)
+    """
+
+    class Point(dj.Part):
+        definition = """
+        -> master
+        order: int
+        shank: int
+        ---
+        ccf_x: float  # (um)
+        ccf_y: float  # (um)
+        ccf_z: float  # (um)    
+        """
+
+
+@schema
 class InterpolatedElectrodeCCF(dj.Computed):
     definition = """
     -> ElectrodeCCFPosition
@@ -92,6 +114,17 @@ class InterpolatedElectrodeCCF(dj.Computed):
         -> master
         -> ElectrodeCCFPosition.ElectrodePosition
         """
+
+    @property
+    def key_source(self):
+        """
+        Only Insertions with incomplete ElectrodeCCFPosition
+        """
+        all_electrodes = ElectrodeCCFPosition.aggr(ephys.ProbeInsertion * lab.ElectrodeConfig.Electrode,
+                                                   elec_count='count(electrode)')
+        ccf_electrodes = ElectrodeCCFPosition.aggr(ephys.ProbeInsertion * ElectrodeCCFPosition.ElectrodePosition,
+                                                   ccf_count='count(electrode)')
+        return ElectrodeCCFPosition & (all_electrodes * ccf_electrodes & 'elec_count > ccf_count')
 
     def make(self, key):
         from scipy import interpolate
@@ -112,14 +145,14 @@ class InterpolatedElectrodeCCF(dj.Computed):
         electrode_ccf.set_index('electrode', inplace=True)
         electrode_ccf.replace(-1, np.nan, inplace=True)
 
-        not_nan = ~electrode_ccf.x.isna()
-
         # per-shank, per-col interpolation of missing electrode site
+        interp_electrodes = []
         for shank in set(electrode_ccf.shank):
             for shank_col in set(electrode_ccf.shank_col):
                 col_ind = electrode_ccf.query(f'shank == {shank} & shank_col == {shank_col}').index
+                is_nan = electrode_ccf['x'][col_ind].isna()
+                interp_electrode = electrode_ccf.loc[col_ind[is_nan]]
                 for c in ('x', 'y', 'z'):
-                    is_nan = electrode_ccf[c][col_ind].isna()
                     # build interpolation function
                     interp_f = interpolate.interp1d(electrode_ccf[c][col_ind][~is_nan].index,
                                                     electrode_ccf[c][col_ind][~is_nan],
@@ -127,41 +160,27 @@ class InterpolatedElectrodeCCF(dj.Computed):
                     # interpolate missing data and round to CCF voxel size
                     interp_coord = interp_f(electrode_ccf[c][col_ind].index)
                     interp_coord = ccf_res * np.around(interp_coord / ccf_res)
-                    electrode_ccf[c][col_ind[is_nan]] = interp_coord[is_nan]
+                    interp_electrode[c] = interp_coord[is_nan]
+                interp_electrodes.append(interp_electrode)
+        interp_electrodes = pd.concat(interp_electrodes)
 
         # insert
         econfig_key = (ephys.ProbeInsertion * lab.ElectrodeConfig & key).fetch1('KEY')
-        filled_positions = [{**econfig_key,
-                             'electrode_group': r.electrode_group,
-                             'electrode': r.name,
-                             'ccf_label_id': ccf_label_id,
-                             'ccf_x': r.x, 'ccf_y': r.y, 'ccf_z': r.z}
-                            for _, r in electrode_ccf[~not_nan].iterrows()]
-
-        ElectrodeCCFPosition.ElectrodePosition.insert(filled_positions)
         self.insert1(key)
-        self.ElectrodePosition.insert(filled_positions)
 
+        for _, r in interp_electrodes.iterrows():
+            filled_position = {**econfig_key,
+                               'electrode_group': r.electrode_group,
+                               'electrode': r.name,
+                               'ccf_label_id': ccf_label_id,
+                               'ccf_x': r.x, 'ccf_y': r.y, 'ccf_z': r.z}
 
-@schema
-class LabeledProbeTrack(dj.Manual):
-    definition = """
-    -> ephys.ProbeInsertion
-    ---
-    labeling_date=NULL:         date
-    dye_color=NULL:             varchar(32)
-    """
-
-    class Point(dj.Part):
-        definition = """
-        -> master
-        order: int
-        shank: int
-        ---
-        ccf_x: float  # (um)
-        ccf_y: float  # (um)
-        ccf_z: float  # (um)    
-        """
+            try:
+                ElectrodeCCFPosition.ElectrodePosition.insert1(filled_position, allow_direct_insert=True)
+            except dj.errors.IntegrityError:
+                pass  # skip CCF coords outside the brain
+            else:
+                self.ElectrodePosition.insert1(filled_position)
 
 
 @schema
