@@ -14,27 +14,8 @@ from pipeline import lab, experiment, tracking, ephys, histology, psth, ccf
 from pipeline.util import _get_clustering_method
 from pipeline.report import get_wr_sessdatetime
 
-'''
 
-Notes:
-
-  - export includes behavior for trials without ephys data. how to handle?
-
-    if exclude, this means trial indices will be non-contiguous w/r/t database
-    if include, this means .mat cell arrays will vary by shape and need
-    handling locally.
-
-  - Photostim Data (task_stimulation):
-
-    - Experimental data doesn't contain actual start/end/power times;
-      Start is captured per trial with power/duration modelled as session
-      parameters. This implies that power+off time in export data are
-      synthetic.
-
-'''
-
-
-def mkfilename(insert_key):
+def _mkfilename(insert_key):
     '''
     create a filename for the given insertion key.
     filename will be of the format map-export_h2o_YYYYMMDD_HHMMSS_SN_PN.mat
@@ -104,7 +85,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     '''
 
     if filename is None:
-        filename = mkfilename(insert_key)
+        filename = _mkfilename(insert_key)
 
     filepath = pathlib.Path(output_dir) / filename
 
@@ -452,11 +433,15 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     # histology - unit ccf
     # ----------------
     print('... histology:', end='')
+    unit_ccf_query = (ephys.Unit * histology.ElectrodeCCFPosition.ElectrodePosition
+                      * ccf.CCFAnnotation & insert_key & {'clustering_method': clustering_method})
+    unit_missing_ccf_query = (ephys.Unit * histology.ElectrodeCCFPosition.ElectrodePositionError
+                              - (ephys.Unit.proj() & unit_ccf_query)
+                              & insert_key & {'clustering_method': clustering_method}).proj(..., annotation='""')
+
     unit_ccfs = []
-    for ccf_tbl in (histology.ElectrodeCCFPosition.ElectrodePosition, histology.ElectrodeCCFPosition.ElectrodePositionError):
-        unit_ccf = (ephys.Unit * ccf_tbl & insert_key & {'clustering_method': clustering_method}).aggr(
-            ccf.CCFAnnotation, ..., annotation='IFNULL(annotation, "")', keep_all_rows=True).fetch(
-            'unit', 'ccf_x', 'ccf_y', 'ccf_z', 'annotation', order_by='unit')
+    for q in (unit_ccf_query, unit_missing_ccf_query):
+        unit_ccf = q.fetch('unit', 'ccf_x', 'ccf_y', 'ccf_z', '_annotation', order_by='unit')
         unit_ccfs.extend(list(zip(*unit_ccf)))
 
     if unit_ccfs:
