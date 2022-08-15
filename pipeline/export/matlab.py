@@ -14,25 +14,6 @@ from pipeline import lab, experiment, tracking, ephys, histology, psth, ccf
 from pipeline.util import _get_clustering_method
 from pipeline.report import get_wr_sessdatetime
 
-'''
-
-Notes:
-
-  - export includes behavior for trials without ephys data. how to handle?
-
-    if exclude, this means trial indices will be non-contiguous w/r/t database
-    if include, this means .mat cell arrays will vary by shape and need
-    handling locally.
-
-  - Photostim Data (task_stimulation):
-
-    - Experimental data doesn't contain actual start/end/power times;
-      Start is captured per trial with power/duration modelled as session
-      parameters. This implies that power+off time in export data are
-      synthetic.
-
-'''
-
 
 def mkfilename(insert_key):
     '''
@@ -133,9 +114,14 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
 
     units = q_unit.fetch(order_by='unit')
 
-    behav = (experiment.BehaviorTrial & insert_key).aggr(
-        experiment.TrialNote & 'trial_note_type="autolearn"',
-        ..., auto_learn='trial_note', keep_all_rows=True).fetch(order_by='trial asc')
+    if dj.__version__ >= '0.13.0':
+        behav = (experiment.BehaviorTrial & insert_key).join(
+            experiment.TrialNote & 'trial_note_type="autolearn"', left=True).proj(
+            ..., auto_learn='trial_note').fetch(order_by='trial asc')
+    else:
+        behav = (experiment.BehaviorTrial & insert_key).aggr(
+            experiment.TrialNote & 'trial_note_type="autolearn"',
+            ..., auto_learn='trial_note', keep_all_rows=True).fetch(order_by='trial asc')
 
     trials = behav['trial']
 
@@ -164,8 +150,13 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     # [[u0t0.spikes, ..., u0tN.spikes], ..., [uNt0.spikes, ..., uNtN.spikes]]
     print('... neuron_single_units:', end='')
 
-    q_trial_spikes = (experiment.SessionTrial.proj() * ephys.Unit.proj() & insert_key).aggr(
-        ephys.Unit.TrialSpikes, ..., spike_times='spike_times', keep_all_rows=True)
+    if dj.__version__ >= '0.13.0':
+        #TODO: check here
+        q_trial_spikes = (experiment.SessionTrial.proj() * ephys.Unit.proj() & insert_key).join(
+            ephys.Unit.TrialSpikes, left=True)
+    else:
+        q_trial_spikes = (experiment.SessionTrial.proj() * ephys.Unit.proj() & insert_key).aggr(
+            ephys.Unit.TrialSpikes, ..., spike_times='spike_times', keep_all_rows=True)
 
     trial_spikes = q_trial_spikes.fetch(format='frame', order_by='trial asc').reset_index()
 
@@ -218,16 +209,22 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     # unit_amp: (Nx1)
     # unit_snr: (Nx1)
     # ...
-
-    q_qc = (ephys.Unit & insert_key).proj('unit_amp', 'unit_snr').aggr(
-        ephys.UnitStat, ..., **{n: n for n in ephys.UnitStat.heading.names if n not in ephys.UnitStat.heading.primary_key},
-        keep_all_rows=True).aggr(
-        ephys.MAPClusterMetric.DriftMetric, ..., **{n: n for n in ephys.MAPClusterMetric.DriftMetric.heading.names if n not in ephys.MAPClusterMetric.DriftMetric.heading.primary_key},
-        keep_all_rows=True).aggr(
-        ephys.ClusterMetric, ..., **{n: n for n in ephys.ClusterMetric.heading.names if n not in ephys.ClusterMetric.heading.primary_key},
-        keep_all_rows=True).aggr(
-        ephys.WaveformMetric, ..., **{n: n for n in ephys.WaveformMetric.heading.names if n not in ephys.WaveformMetric.heading.primary_key},
-        keep_all_rows=True)
+    if dj.__version__ >= '0.13.0':
+        q_qc = (ephys.Unit & insert_key).proj('unit_amp', 'unit_snr').join(
+            ephys.UnitStat, left=True).join(
+            ephys.MAPClusterMetric.DriftMetric, left=True).join(
+            ephys.ClusterMetric, left=True).join(
+            ephys.WaveformMetric, left=True)
+    else:
+        q_qc = (ephys.Unit & insert_key).proj('unit_amp', 'unit_snr').aggr(
+            ephys.UnitStat, ..., **{n: n for n in ephys.UnitStat.heading.names if n not in ephys.UnitStat.heading.primary_key},
+            keep_all_rows=True).aggr(
+            ephys.MAPClusterMetric.DriftMetric, ..., **{n: n for n in ephys.MAPClusterMetric.DriftMetric.heading.names if n not in ephys.MAPClusterMetric.DriftMetric.heading.primary_key},
+            keep_all_rows=True).aggr(
+            ephys.ClusterMetric, ..., **{n: n for n in ephys.ClusterMetric.heading.names if n not in ephys.ClusterMetric.heading.primary_key},
+            keep_all_rows=True).aggr(
+            ephys.WaveformMetric, ..., **{n: n for n in ephys.WaveformMetric.heading.names if n not in ephys.WaveformMetric.heading.primary_key},
+            keep_all_rows=True)
     qc_names = [n for n in q_qc.heading.names if n not in q_qc.primary_key]
 
     if q_qc:
@@ -452,11 +449,15 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     # histology - unit ccf
     # ----------------
     print('... histology:', end='')
+    unit_ccf_query = (ephys.Unit * histology.ElectrodeCCFPosition.ElectrodePosition
+                      * ccf.CCFAnnotation & insert_key & {'clustering_method': clustering_method})
+    unit_missing_ccf_query = (ephys.Unit * histology.ElectrodeCCFPosition.ElectrodePositionError
+                              - (ephys.Unit.proj() & unit_ccf_query)
+                              & insert_key & {'clustering_method': clustering_method}).proj(..., annotation='""')
+
     unit_ccfs = []
-    for ccf_tbl in (histology.ElectrodeCCFPosition.ElectrodePosition, histology.ElectrodeCCFPosition.ElectrodePositionError):
-        unit_ccf = (ephys.Unit * ccf_tbl & insert_key & {'clustering_method': clustering_method}).aggr(
-            ccf.CCFAnnotation, ..., annotation='IFNULL(annotation, "")', keep_all_rows=True).fetch(
-            'unit', 'ccf_x', 'ccf_y', 'ccf_z', 'annotation', order_by='unit')
+    for q in (unit_ccf_query, unit_missing_ccf_query):
+        unit_ccf = q.fetch('unit', 'ccf_x', 'ccf_y', 'ccf_z', 'annotation', order_by='unit')
         unit_ccfs.extend(list(zip(*unit_ccf)))
 
     if unit_ccfs:
