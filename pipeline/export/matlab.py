@@ -449,15 +449,21 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     # histology - unit ccf
     # ----------------
     print('... histology:', end='')
-    unit_ccf_query = (ephys.Unit * histology.ElectrodeCCFPosition.ElectrodePosition
-                      * ccf.CCFAnnotation & insert_key & {'clustering_method': clustering_method})
     unit_missing_ccf_query = (ephys.Unit * histology.ElectrodeCCFPosition.ElectrodePositionError
-                              - (ephys.Unit.proj() & unit_ccf_query)
-                              & insert_key & {'clustering_method': clustering_method}).proj(..., annotation='""')
+                              - (ephys.Unit.proj() & histology.ElectrodeCCFPosition.ElectrodePosition)
+                              & insert_key & {'clustering_method': clustering_method}).proj(..., _annotation='""')
+    if dj.__version__ >= '0.13.0':
+        unit_ccf_query = (ephys.Unit * histology.ElectrodeCCFPosition.ElectrodePosition
+                          & insert_key & {'clustering_method': clustering_method}).join(
+            ccf.CCFAnnotation, left=True).proj(_annotation='IFNULL(annotation, "")')
+    else:
+        unit_ccf_query = (ephys.Unit * histology.ElectrodeCCFPosition.ElectrodePosition
+                          & insert_key & {'clustering_method': clustering_method}).aggr(
+            ccf.CCFAnnotation, ..., _annotation='IFNULL(annotation, "")', keep_all_rows=True)
 
     unit_ccfs = []
     for q in (unit_ccf_query, unit_missing_ccf_query):
-        unit_ccf = q.fetch('unit', 'ccf_x', 'ccf_y', 'ccf_z', 'annotation', order_by='unit')
+        unit_ccf = q.fetch('unit', 'ccf_x', 'ccf_y', 'ccf_z', '_annotation', order_by='unit')
         unit_ccfs.extend(list(zip(*unit_ccf)))
 
     if unit_ccfs:
