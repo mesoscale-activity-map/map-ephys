@@ -450,7 +450,7 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
     # ----------------
     print('... histology:', end='')
     unit_missing_ccf_query = (ephys.Unit * histology.ElectrodeCCFPosition.ElectrodePositionError
-                              - (ephys.Unit.proj() & histology.ElectrodeCCFPosition.ElectrodePosition)
+                              - (ephys.Unit & histology.ElectrodeCCFPosition.ElectrodePosition).proj()
                               & insert_key & {'clustering_method': clustering_method}).proj(..., _annotation='""')
     if dj.__version__ >= '0.13.0':
         unit_ccf_query = (ephys.Unit * histology.ElectrodeCCFPosition.ElectrodePosition
