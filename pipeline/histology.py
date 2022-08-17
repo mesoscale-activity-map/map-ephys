@@ -131,7 +131,7 @@ class InterpolatedElectrodeCCF(dj.Computed):
         ccf_electrodes = ElectrodeCCFPosition.aggr(ephys.ProbeInsertion * ElectrodeCCFPosition.ElectrodePosition,
                                                    ccf_count='count(electrode)')
         ccf_error_electrodes = ElectrodeCCFPosition.aggr(ephys.ProbeInsertion * ElectrodeCCFPosition.ElectrodePositionError,
-                                                         ccf_err_count='count(electrode)')
+                                                         ccf_err_count='count(electrode)', keep_all_rows=True)
         return ElectrodeCCFPosition & (all_electrodes * ccf_electrodes * ccf_error_electrodes
                                        & 'elec_count > ccf_count + ccf_err_count')
 
