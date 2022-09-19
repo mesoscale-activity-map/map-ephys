@@ -1,8 +1,8 @@
 import datajoint as dj
 import numpy as np
+import pandas as pd
 
 from . import lab, experiment, ccf, ephys, get_schema_name, create_schema_settings
-from pipeline.plot import unit_characteristic_plot
 
 [lab, experiment, ccf, ephys]  # schema imports only
 
@@ -101,6 +101,100 @@ class LabeledProbeTrack(dj.Manual):
         ccf_y: float  # (um)
         ccf_z: float  # (um)    
         """
+
+
+@schema
+class InterpolatedElectrodeCCF(dj.Computed):
+    definition = """
+    -> ElectrodeCCFPosition
+    """
+
+    class ElectrodePosition(dj.Part):
+        definition = """
+        -> master
+        -> ElectrodeCCFPosition.ElectrodePosition
+        """
+
+    class ElectrodePositionError(dj.Part):
+        definition = """
+        -> master
+        -> ElectrodeCCFPosition.ElectrodePositionError
+        """
+
+    @property
+    def key_source(self):
+        """
+        Only Insertions with incomplete ElectrodeCCFPosition
+        """
+        all_electrodes = ElectrodeCCFPosition.aggr(ephys.ProbeInsertion * lab.ElectrodeConfig.Electrode,
+                                                   elec_count='count(electrode)')
+        ccf_electrodes = ElectrodeCCFPosition.aggr(ephys.ProbeInsertion * ElectrodeCCFPosition.ElectrodePosition,
+                                                   ccf_count='count(electrode)')
+        ccf_error_electrodes = ElectrodeCCFPosition.aggr(ephys.ProbeInsertion * ElectrodeCCFPosition.ElectrodePositionError,
+                                                         ccf_err_count='count(electrode)', keep_all_rows=True)
+        return ElectrodeCCFPosition & (all_electrodes * ccf_electrodes * ccf_error_electrodes
+                                       & 'elec_count > ccf_count + ccf_err_count')
+
+    def make(self, key):
+        from scipy import interpolate
+
+        ccf_res = ccf.CCFLabel.CCF_R3_20UM_RESOLUTION  # 20um voxel size
+        ccf_label_id = ccf.CCFLabel.CCF_R3_20UM_ID
+
+        electrode_ccf_query = (lab.ProbeType.Electrode
+                               * lab.ElectrodeConfig.Electrode
+                               * ephys.ProbeInsertion & key).join(
+            ElectrodeCCFPosition.ElectrodePosition, left=True).proj(
+            'shank', 'shank_col', 'shank_row',
+            x='IFNULL(ccf_x, -1)', y='IFNULL(ccf_y, -1)', z='IFNULL(ccf_z, -1)')
+
+        electrode_ccf = (dj.U('electrode_group', 'electrode',
+                              'shank', 'shank_col', 'shank_row', 'x', 'y', 'z')
+                         & electrode_ccf_query).fetch(format='frame').reset_index()
+        electrode_ccf.set_index('electrode', inplace=True)
+        electrode_ccf.replace(-1, np.nan, inplace=True)
+
+        # per-shank, per-col interpolation of missing electrode site
+        interp_electrodes = []
+        for shank in set(electrode_ccf.shank):
+            for shank_col in set(electrode_ccf.shank_col):
+                col_ind = electrode_ccf.query(f'shank == {shank} & shank_col == {shank_col}').index
+                is_nan = electrode_ccf['x'][col_ind].isna()
+                interp_electrode = electrode_ccf.loc[col_ind[is_nan]]
+                for c in ('x', 'y', 'z'):
+                    # build interpolation function
+                    interp_f = interpolate.interp1d(electrode_ccf[c][col_ind][~is_nan].index,
+                                                    electrode_ccf[c][col_ind][~is_nan],
+                                                    kind='linear', fill_value='extrapolate')
+                    # interpolate missing data and round to CCF voxel size
+                    interp_coord = interp_f(electrode_ccf[c][col_ind].index)
+                    interp_coord = ccf_res * np.around(interp_coord / ccf_res)
+                    interp_electrode[c] = interp_coord[is_nan]
+                interp_electrodes.append(interp_electrode)
+        interp_electrodes = pd.concat(interp_electrodes)
+
+        # insert
+        econfig_key = (ephys.ProbeInsertion * lab.ElectrodeConfig & key).fetch1('KEY')
+        self.insert1(key)
+
+        for _, r in interp_electrodes.iterrows():
+            filled_position = {**econfig_key,
+                               'electrode_group': r.electrode_group,
+                               'electrode': r.name,
+                               'ccf_label_id': ccf_label_id,
+                               'ccf_x': r.x, 'ccf_y': r.y, 'ccf_z': r.z}
+
+            try:
+                ElectrodeCCFPosition.ElectrodePosition.insert1(filled_position, allow_direct_insert=True)
+            except dj.errors.IntegrityError:
+                if not (ElectrodeCCFPosition.ElectrodePositionError & {**econfig_key,
+                                                                       'electrode_group': r.electrode_group,
+                                                                       'electrode': r.name,
+                                                                       'ccf_label_id': ccf_label_id}):
+                    ElectrodeCCFPosition.ElectrodePositionError.insert1(filled_position, allow_direct_insert=True)
+                    self.ElectrodePositionError.insert1(filled_position)
+            else:
+                self.ElectrodePosition.insert1(filled_position)
 
 
 @schema

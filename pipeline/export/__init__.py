@@ -1,1 +1,1 @@
-from .matlab import export_recording
+from .matlab import export_recording, mkfilename, write_to_activity_viewer

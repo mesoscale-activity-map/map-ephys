@@ -793,6 +793,7 @@ def do_ephys_ingest(session_key, replace=False, probe_insertion_exists=False, in
     Perform ephys-ingestion for a particular session (defined by session_key) to either
         + fresh ingest of new probe insertion and clustering results
         + archive existing clustering results and replace with new one (set 'replace=True')
+        + ingest directly into archive (set 'into_archive=True')
     """
     # =========== Find Ephys Recording ============
     sinfo = ((lab.WaterRestriction
@@ -875,7 +876,7 @@ def extend_ephys_ingest(session_key):
 
 def archive_ingested_clustering_results(key, archive_trial_spike=False):
     """
-    The input-argument "key" should be at the level of ProbeInsertion or its anscestor.
+    The input-argument "key" should be at the level of ProbeInsertion or its ancestor.
 
     1. Copy to ephys.ArchivedUnit
     2. Delete ephys.Unit

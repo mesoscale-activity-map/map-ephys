@@ -68,7 +68,7 @@ def logsetup(*args):
 
     try:
         dj.logger.setLevel(level)
-    except Exception:
+    except AttributeError:
         pass
 
     log.setLevel(level)
@@ -665,11 +665,11 @@ def automate_computation():
                          'display_progress': True, 'max_calls': 100}
     while True:
         log.info('Populate for: Ephys - PSTH - Report')
-        populate_oralfacial_analysis(populate_settings)
         populate_ephys(populate_settings)
         populate_psth(populate_settings)
         populate_foraging_analysis(populate_settings)
         generate_report(populate_settings)
+        populate_oralfacial_analysis(populate_settings)
 
         log.info('report.delete_outdated_session_plots()')
         try:
