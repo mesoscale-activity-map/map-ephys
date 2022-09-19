@@ -1,3 +1,4 @@
+import datajoint as dj
 import pathlib
 import numpy as np
 import json
@@ -44,11 +45,13 @@ def datajoint_to_nwb(session_key):
                       keywords=[])
 
     # ==================================== SUBJECT ==================================
-    subject = (lab.Subject & session_key).fetch1()
+    subject = (lab.Subject * lab.WaterRestriction.proj('water_restriction_number') & session_key).fetch1()
     nwbfile.subject = pynwb.file.Subject(
         subject_id=str(subject['subject_id']),
         date_of_birth=datetime.combine(subject['date_of_birth'], zero_time) if subject['date_of_birth'] else None,
-        sex=subject['sex'])
+        description=subject['water_restriction_number'],
+        sex=subject['sex'],
+        species='mus musculus')
 
     # ==================================== EPHYS ==================================
     # add additional columns to the electrodes table
@@ -59,10 +62,24 @@ def datajoint_to_nwb(session_key):
             description=electrodes_query.heading.attributes[additional_attribute].comment)
 
     # add additional columns to the units table
-    units_query = (ephys.ProbeInsertion.RecordingSystemSetup
-                   * ephys.Unit * ephys.UnitStat
-                   * ephys.ClusterMetric * ephys.WaveformMetric
-                   & session_key)
+    if dj.__version__ >= '0.13.0':
+        units_query = (ephys.ProbeInsertion.RecordingSystemSetup
+                       * ephys.Unit & session_key).proj('unit_amp', 'unit_snr').join(
+            ephys.UnitStat, left=True).join(
+            ephys.MAPClusterMetric.DriftMetric, left=True).join(
+            ephys.ClusterMetric, left=True).join(
+            ephys.WaveformMetric, left=True)
+    else:
+        units_query = (ephys.ProbeInsertion.RecordingSystemSetup
+                       * ephys.Unit & session_key).proj('unit_amp', 'unit_snr').aggr(
+            ephys.UnitStat, ..., **{n: n for n in ephys.UnitStat.heading.names if n not in ephys.UnitStat.heading.primary_key},
+            keep_all_rows=True).aggr(
+            ephys.MAPClusterMetric.DriftMetric, ..., **{n: n for n in ephys.MAPClusterMetric.DriftMetric.heading.names if n not in ephys.MAPClusterMetric.DriftMetric.heading.primary_key},
+            keep_all_rows=True).aggr(
+            ephys.ClusterMetric, ..., **{n: n for n in ephys.ClusterMetric.heading.names if n not in ephys.ClusterMetric.heading.primary_key},
+            keep_all_rows=True).aggr(
+            ephys.WaveformMetric, ..., **{n: n for n in ephys.WaveformMetric.heading.names if n not in ephys.WaveformMetric.heading.primary_key},
+            keep_all_rows=True)
 
     units_omitted_attributes = ['subject_id', 'session', 'insertion_number',
                                 'clustering_method', 'unit', 'unit_uid', 'probe_type',
