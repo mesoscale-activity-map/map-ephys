@@ -17,3 +17,5 @@ astropy
 statannot
 h5py==3.3.0
 pynwb==2.0.1
+spikeinterface
+nwb-conversion-tools

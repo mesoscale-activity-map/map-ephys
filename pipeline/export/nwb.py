@@ -1,3 +1,4 @@
+import os
 import pathlib
 import numpy as np
 import json
@@ -65,7 +66,31 @@ def get_electrodes_mapping(electrodes):
         (electrodes["group"][idx].device.name, electrodes["id"][idx],): idx
         for idx in range(len(electrodes))
     }
-
+def gains_helper(gains):
+    """
+    This handles three different cases for gains:
+    1. gains are all 1. In this case, return conversion=1e-6, which applies to all
+    channels and converts from microvolts to volts.
+    2. Gains are all equal, but not 1. In this case, multiply this by 1e-6 to apply this
+    gain to all channels and convert units to volts.
+    3. Gains are different for different channels. In this case use the
+    `channel_conversion` field in addition to the `conversion` field so that each
+    channel can be converted to volts using its own individual gain.
+    Parameters
+    ----------
+    gains: np.ndarray
+    Returns
+    -------
+    dict
+        conversion : float
+        channel_conversion : np.ndarray
+    """
+    if all(x == 1 for x in gains):
+        return dict(conversion=1e-6, channel_conversion=None)
+    if all(x == gains[0] for x in gains):
+        return dict(conversion=1e-6 * gains[0], channel_conversion=None)
+    return dict(conversion=1e-6, channel_conversion=gains)
+    
 # Some constants to work with
 zero_time = datetime.strptime('00:00:00', '%H:%M:%S').time()  # no precise time available
 
@@ -135,11 +160,11 @@ def datajoint_to_nwb(session_key):
 
     # iterate through curated clusterings and export units data
     for insert_key in (ephys.ProbeInsertion & session_key).fetch('KEY'):
-        # ---- Probe Insertion Location ----
+    # ---- Probe Insertion Location ----
         if ephys.ProbeInsertion.InsertionLocation & insert_key:
             insert_location = {
                 k: str(v) for k, v in (ephys.ProbeInsertion.InsertionLocation
-                                       & insert_key).aggr(
+                                        & insert_key).aggr(
                     ephys.ProbeInsertion.RecordableBrainRegion.proj(
                         ..., brain_region='CONCAT(hemisphere, " ", brain_area)'),
                     ..., brain_regions='GROUP_CONCAT(brain_region SEPARATOR ", ")').fetch1().items()
@@ -163,10 +188,10 @@ def datajoint_to_nwb(session_key):
             location=insert_location)
 
         electrode_query = (lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode
-                           & electrode_config)
+                            & electrode_config)
         electrode_ccf = {e: {'x': float(x), 'y': float(y), 'z': float(z)} for e, x, y, z in zip(
             *(histology.ElectrodeCCFPosition.ElectrodePosition
-              & electrode_config).fetch(
+                & electrode_config).fetch(
                 'electrode', 'ccf_x', 'ccf_y', 'ccf_z'))}
 
         for electrode in electrode_query.fetch(as_dict=True):
@@ -200,65 +225,45 @@ def datajoint_to_nwb(session_key):
             nwbfile.add_unit(**unit)
 
         # ---- Raw Data ---
-    ephys_root_data_dir = ''
-    end_frame = None
-    """
-    Read voltage data directly from source files and iteratively transfer them to the NWB file. Automatically
-    applies lossless compression to the data, so the final file might be smaller than the original, without
-    data loss. Currently supports Neuropixels data acquired with SpikeGLX or Open Ephys, and relies on SpikeInterface to read the data.
-    source data -> acquisition["ElectricalSeries"]
-    Parameters
-    ----------
-    session_key: dict
-    ephys_root_data_dir: str
-    nwbfile: NWBFile
-    end_frame: int, optional
-        Used for small test conversions
-    """
+        ephys_recording_record = (ephys_ingest.EphysIngest.EphysFile & session_key).fetch(as_dict=True)
+        sampling_rates = (ephys.ProbeInsertion.RecordingSystemSetup & ephys_recording_record).fetch('sampling_rate')
+        probe_ids = (ephys.ProbeInsertion & ephys_recording_record).fetch("probe")
+        mapping = get_electrodes_mapping(nwbfile.electrodes)
+        mapping_key = (ephys.ProbeInsertion & ephys_recording_record).fetch('probe', 'probe_type')
+        ephys_root_data_dir = ''
+        end_frame = None
 
+        for insertion_num in range(0, len(ephys_recording_record)):
+            
+            probe_id = probe_ids[insertion_num]
+            
+            relative_path = ephys_recording_record[insertion_num].get('ephys_file')
+            relative_path = relative_path.replace("\\","/")
+            file_path = find_full_path(ephys_root_data_dir, relative_path)
 
-    ephys_recording_record = (ephys_ingest.EphysIngest.EphysFile & session_key).fetch(as_dict=True)
-    sampling_rates = (ephys.ProbeInsertion.RecordingSystemSetup & ephys_recording_record).fetch('sampling_rate')
-    probe_ids = (ephys.ProbeInsertion & ephys_recording_record).fetch("probe")
-    probe_types = (ephys.ProbeInsertion & ephys_recording_record).fetch("probe_type")
-    mapping_key = (ephys.ProbeInsertion & ephys_recording_record).fetch('probe', 'probe_type')
-    ephys_root_data_dir = pathlib.Path('C:/Users/kusha/mapEphys/user_data')
+            extractor = extractors.read_spikeglx(os.path.split(file_path)[0], "imec.ap")
 
-    for insertion_num in range(0, 1): #len(ephys_recording_record)):
-        
-        probe_id = probe_ids[insertion_num]
-        
-        relative_path = ephys_recording_record[insertion_num].get('ephys_file')
-        relative_path = relative_path.replace("\\","/")
-        file_path = find_full_path(ephys_root_data_dir, relative_path)
+            conversion_kwargs = gains_helper(extractor.get_channel_gains())
 
-        extractor = extractors.read_spikeglx(os.path.split(file_path)[0], "imec.ap")
+            if end_frame is not None:
+                extractor = extractor.frame_slice(0, end_frame)
 
-        conversion_kwargs = gains_helper(extractor.get_channel_gains())
+            recording_channels_by_id = (lab.ElectrodeConfig.Electrode * ephys.ProbeInsertion & ephys_recording_record[insertion_num] & {'probe': probe_id}).fetch('electrode')
 
-        if end_frame is not None:
-            extractor = extractor.frame_slice(0, end_frame)
-
-        recording_channels_by_id = (lab.ElectrodeConfig.Electrode * ephys.ProbeInsertion & ephys_recording_record[insertion_num]).fetch('electrode')
-
-        nwbfile.add_acquisition(
-            pynwb.ecephys.ElectricalSeries(
-                name=f"ElectricalSeries{ephys_recording_record[insertion_num].get('probe_insertion_number')}",
-                description=str(ephys_recording_record[insertion_num]),
-                data=SpikeInterfaceRecordingDataChunkIterator(extractor),
-                rate=sampling_rates[insertion_num].astype('float'),
-                # starting_time=(
-                #     ephys_recording_record["recording_datetime"]
-                #     - ephys_recording_record["session_datetime"]
-                # ).total_seconds(),
-                electrodes=nwbfile.create_electrode_table_region(
-                        region=[mapping[(str(mapping_key[0][insertion_num] + ' (' + mapping_key[1][insertion_num] + ')'), x)] for x in recording_channels_by_id],
-                        name="electrodes",
-                        description="recorded electrodes",
-            ),
-            **conversion_kwargs
-        )
-        )
+            nwbfile.add_acquisition(
+                pynwb.ecephys.ElectricalSeries(
+                    name=f"ElectricalSeries{ephys_recording_record[insertion_num].get('probe_insertion_number')}",
+                    description=str(ephys_recording_record[insertion_num]),
+                    data=SpikeInterfaceRecordingDataChunkIterator(extractor),
+                    rate=sampling_rates[insertion_num].astype('float'),
+                    electrodes=nwbfile.create_electrode_table_region(
+                            region=[mapping[(str(mapping_key[0][insertion_num] + ' (' + mapping_key[1][insertion_num] + ')'), x)] for x in recording_channels_by_id],
+                            name="electrodes",
+                            description="recorded electrodes",
+                ),
+                **conversion_kwargs
+            )
+            )
 
     # =============================== PHOTO-STIMULATION ===============================
     stim_sites = {}
