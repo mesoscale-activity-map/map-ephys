@@ -9,6 +9,62 @@ from pynwb import NWBFile, NWBHDF5IO
 
 from pipeline import lab, experiment, tracking, ephys, histology, psth, ccf
 from pipeline.report import get_wr_sessdatetime
+from pipeline.ingest import ephys as ephys_ingest
+from nwb_conversion_tools.tools.spikeinterface.spikeinterfacerecordingdatachunkiterator import (
+    SpikeInterfaceRecordingDataChunkIterator
+)
+from spikeinterface import extractors
+
+# Helper functions for raw data import
+def find_full_path(root_directories, relative_path):
+    """
+    Given a relative path, search and return the full-path
+     from provided potential root directories (in the given order)
+        :param root_directories: potential root directories
+        :param relative_path: the relative path to find the valid root directory
+        :return: full-path (pathlib.Path object)
+    """
+    relative_path = _to_Path(relative_path)
+
+    if relative_path.exists():
+        return relative_path
+
+    # Turn to list if only a single root directory is provided
+    if isinstance(root_directories, (str, pathlib.Path)):
+        root_directories = [_to_Path(root_directories)]
+
+    for root_dir in root_directories:
+        if (_to_Path(root_dir) / relative_path).exists():
+            return _to_Path(root_dir) / relative_path
+
+    raise FileNotFoundError(
+        "No valid full-path found (from {})"
+        " for {}".format(root_directories, relative_path)
+    )
+
+def _to_Path(path):
+    """
+    Convert the input "path" into a pathlib.Path object
+    Handles one odd Windows/Linux incompatibility of the "\\"
+    """
+    return pathlib.Path(str(path).replace("\\", "/"))
+
+def get_electrodes_mapping(electrodes):
+    """
+    Create a mapping from the probe and electrode id to the row number of the electrodes
+    table. This is used in the construction of the DynamicTableRegion that indicates what rows of the electrodes
+    table correspond to the data in an ElectricalSeries.
+    Parameters
+    ----------
+    electrodes: hdmf.common.table.DynamicTable
+    Returns
+    -------
+    dict
+    """
+    return {
+        (electrodes["group"][idx].device.name, electrodes["id"][idx],): idx
+        for idx in range(len(electrodes))
+    }
 
 # Some constants to work with
 zero_time = datetime.strptime('00:00:00', '%H:%M:%S').time()  # no precise time available
@@ -124,6 +180,7 @@ def datajoint_to_nwb(session_key):
 
         electrode_df = nwbfile.electrodes.to_dataframe()
         electrode_ind = electrode_df.index[electrode_df.group_name == electrode_group.name]
+        
         # ---- Units ----
         unit_query = units_query & insert_key
         for unit in unit_query.fetch(as_dict=True):
@@ -141,6 +198,67 @@ def datajoint_to_nwb(session_key):
                     unit[attr] = np.nan
 
             nwbfile.add_unit(**unit)
+
+        # ---- Raw Data ---
+    ephys_root_data_dir = ''
+    end_frame = None
+    """
+    Read voltage data directly from source files and iteratively transfer them to the NWB file. Automatically
+    applies lossless compression to the data, so the final file might be smaller than the original, without
+    data loss. Currently supports Neuropixels data acquired with SpikeGLX or Open Ephys, and relies on SpikeInterface to read the data.
+    source data -> acquisition["ElectricalSeries"]
+    Parameters
+    ----------
+    session_key: dict
+    ephys_root_data_dir: str
+    nwbfile: NWBFile
+    end_frame: int, optional
+        Used for small test conversions
+    """
+
+
+    ephys_recording_record = (ephys_ingest.EphysIngest.EphysFile & session_key).fetch(as_dict=True)
+    sampling_rates = (ephys.ProbeInsertion.RecordingSystemSetup & ephys_recording_record).fetch('sampling_rate')
+    probe_ids = (ephys.ProbeInsertion & ephys_recording_record).fetch("probe")
+    probe_types = (ephys.ProbeInsertion & ephys_recording_record).fetch("probe_type")
+    mapping_key = (ephys.ProbeInsertion & ephys_recording_record).fetch('probe', 'probe_type')
+    ephys_root_data_dir = pathlib.Path('C:/Users/kusha/mapEphys/user_data')
+
+    for insertion_num in range(0, 1): #len(ephys_recording_record)):
+        
+        probe_id = probe_ids[insertion_num]
+        
+        relative_path = ephys_recording_record[insertion_num].get('ephys_file')
+        relative_path = relative_path.replace("\\","/")
+        file_path = find_full_path(ephys_root_data_dir, relative_path)
+
+        extractor = extractors.read_spikeglx(os.path.split(file_path)[0], "imec.ap")
+
+        conversion_kwargs = gains_helper(extractor.get_channel_gains())
+
+        if end_frame is not None:
+            extractor = extractor.frame_slice(0, end_frame)
+
+        recording_channels_by_id = (lab.ElectrodeConfig.Electrode * ephys.ProbeInsertion & ephys_recording_record[insertion_num]).fetch('electrode')
+
+        nwbfile.add_acquisition(
+            pynwb.ecephys.ElectricalSeries(
+                name=f"ElectricalSeries{ephys_recording_record[insertion_num].get('probe_insertion_number')}",
+                description=str(ephys_recording_record[insertion_num]),
+                data=SpikeInterfaceRecordingDataChunkIterator(extractor),
+                rate=sampling_rates[insertion_num].astype('float'),
+                # starting_time=(
+                #     ephys_recording_record["recording_datetime"]
+                #     - ephys_recording_record["session_datetime"]
+                # ).total_seconds(),
+                electrodes=nwbfile.create_electrode_table_region(
+                        region=[mapping[(str(mapping_key[0][insertion_num] + ' (' + mapping_key[1][insertion_num] + ')'), x)] for x in recording_channels_by_id],
+                        name="electrodes",
+                        description="recorded electrodes",
+            ),
+            **conversion_kwargs
+        )
+        )
 
     # =============================== PHOTO-STIMULATION ===============================
     stim_sites = {}
