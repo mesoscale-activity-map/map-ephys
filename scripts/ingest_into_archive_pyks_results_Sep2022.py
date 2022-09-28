@@ -14,12 +14,15 @@ def main(limit=None):
     subject_keys = (lab.Subject * lab.WaterRestriction.proj('water_restriction_number')
                     & f'water_restriction_number in {subjects_to_archive}').fetch('KEY')
 
-    sorted_sessions = experiment.Session & ephys.Unit - ephys.ArchivedClustering & subject_keys
+    sessions = (experiment.Session
+                - (ephys.ArchivedClustering & {'clustering_method': 'pykilosort2.5'})
+                & subject_keys)
 
-    for session_key in sorted_sessions.fetch('KEY', limit=limit):
+    for session_key in sessions.fetch('KEY', limit=limit):
         print(f'\n----------- Archiving for {session_key} ------------')
         try:
-            ephys_ingest.archive_ingested_clustering_results(session_key)
+            ephys_ingest.do_ephys_ingest(session_key, replace=False,
+                                         probe_insertion_exists=True, into_archive=True)
         except Exception as e:
             print(f'\tError... Skipped\n{str(e)}')
 

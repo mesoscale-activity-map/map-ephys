@@ -200,7 +200,8 @@ def match_probe_to_ephys(h2o, dpath, dglob):
         v4files = [((f, ), 'jrclust_v4') for f in probe_dir.glob(jrclustv4spec)]
         # Kilosort
         ks2spec = ks2specs[0] if len(list(probe_dir.rglob(ks2specs[0]))) > 0 else ks2specs[1]
-        ks2files = [((f.parent, probe_dir), 'kilosort2') for f in probe_dir.rglob(ks2spec)]
+        ks2files = [((f.parent, probe_dir), 'kilosort2')
+                    for f in probe_dir.rglob(ks2spec) if 'pyks25' in f.parent.name]  # look for pykilosort results only
 
         if len(ks2files) > 1:
             raise ValueError('Multiple Kilosort outputs found at: {}'.format([str(x[0]) for x in ks2files]))

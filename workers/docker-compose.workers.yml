@@ -12,8 +12,7 @@ services:
       - /bin/sh
       - -c
       - |
-        python scripts/mapshell.py automate-computation &
-        tail -f /dev/null
+        python scripts/mapshell.py automate-computation
 
     scale: $worker_count
 
@@ -27,5 +26,4 @@ services:
       - /bin/sh
       - -c
       - |
-        python scripts/mapshell.py automate-sync-and-cleanup &
-        tail -f /dev/null
+        python scripts/mapshell.py automate-sync-and-cleanup

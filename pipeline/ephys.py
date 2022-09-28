@@ -255,7 +255,7 @@ class ClusteringMethod(dj.Lookup):
     # jrclust_v3 is the version Dave uses
     # jrclust_v4 is the version Susu uses
 
-    contents = zip(['jrclust_v3', 'kilosort', 'jrclust_v4', 'kilosort2'])
+    contents = zip(['jrclust_v3', 'kilosort', 'jrclust_v4', 'kilosort2', 'pykilosort2.5'])
 
 
 @schema
@@ -510,7 +510,7 @@ class UnitCellType(dj.Computed):
 
     @property
     def key_source(self):
-        return super().key_source & 'unit_quality != "all"'
+        return Unit & 'unit_quality != "all"'
 
     def make(self, key):
         upsample_factor = 100
@@ -642,6 +642,8 @@ class WaveformMetric(dj.Imported):
     velocity_above=null: float
     velocity_below=null: float   
     """
+
+    key_source = ProbeInsertion & ClusterMetric.proj()
 
 
 @schema
