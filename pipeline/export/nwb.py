@@ -11,12 +11,23 @@ from pynwb import NWBFile, NWBHDF5IO
 from pipeline import lab, experiment, tracking, ephys, histology, psth, ccf
 from pipeline.report import get_wr_sessdatetime
 from pipeline.ingest import ephys as ephys_ingest
+from pipeline.ingest import tracking as tracking_ingest
 from nwb_conversion_tools.tools.spikeinterface.spikeinterfacerecordingdatachunkiterator import (
     SpikeInterfaceRecordingDataChunkIterator
 )
 from spikeinterface import extractors
+from nwb_conversion_tools.datainterfaces.behavior.movie.moviedatainterface import MovieInterface
 
-# Helper functions for raw data import
+
+# Helper functions for raw ephys data import
+def _to_Path(path):
+    """
+    Convert the input "path" into a pathlib.Path object
+    Handles one odd Windows/Linux incompatibility of the "\\"
+    """
+    return pathlib.Path(str(path).replace("\\", "/"))
+
+
 def find_full_path(root_directories, relative_path):
     """
     Given a relative path, search and return the full-path
@@ -43,12 +54,6 @@ def find_full_path(root_directories, relative_path):
         " for {}".format(root_directories, relative_path)
     )
 
-def _to_Path(path):
-    """
-    Convert the input "path" into a pathlib.Path object
-    Handles one odd Windows/Linux incompatibility of the "\\"
-    """
-    return pathlib.Path(str(path).replace("\\", "/"))
 
 def get_electrodes_mapping(electrodes):
     """
@@ -66,6 +71,8 @@ def get_electrodes_mapping(electrodes):
         (electrodes["group"][idx].device.name, electrodes["id"][idx],): idx
         for idx in range(len(electrodes))
     }
+
+
 def gains_helper(gains):
     """
     This handles three different cases for gains:
@@ -91,6 +98,7 @@ def gains_helper(gains):
         return dict(conversion=1e-6 * gains[0], channel_conversion=None)
     return dict(conversion=1e-6, channel_conversion=gains)
     
+
 # Some constants to work with
 zero_time = datetime.strptime('00:00:00', '%H:%M:%S').time()  # no precise time available
 
@@ -430,6 +438,33 @@ def datajoint_to_nwb(session_key):
         timestamps=event_stops.astype(float),
         control=photo_stim.astype('uint8'), control_description=stim_sites)
 
+        # ----- Raw Video Files -----
+    behavior_root_data_dir = ''
+    session_device_list = np.unique((tracking_ingest.TrackingIngest.TrackingFile & session_key).fetch('tracking_device'))
+    for device in range(0, session_device_list.shape[0]):
+        session_trials = (tracking_ingest.TrackingIngest.TrackingFile & session_key & {'tracking_device': session_device_list[device]}).fetch('trial')
+        for trial in range(0, session_trials.shape[0]):
+            relative_video_path = (tracking_ingest.TrackingIngest.TrackingFile & session_key & {'tracking_device': session_device_list[device]} & {'trial': session_trials[trial]}).fetch('tracking_file')
+            relative_video_path = relative_video_path[0].replace("\\", "/")
+            relative_video_dir = os.path.split(relative_video_path)[0]
+            video_dir = find_full_path(behavior_root_data_dir, relative_video_dir)
+            file_name = os.path.split(relative_video_path)[1].rsplit('.', 1)[0]
+            video_path = pathlib.Path(os.path.join(video_dir, file_name + '.mp4'))
+            video_metadata = dict(
+                Behavior=dict(
+                    Movies=[
+                        dict(
+                            name=file_name, 
+                            description=str(video_path), 
+                            unit="n.a.", 
+                            format='external', 
+                            starting_frame=[0, 0, 0], 
+                            comments=str((tracking_ingest.TrackingIngest.TrackingFile & session_key & {'tracking_device': session_device_list[device]} & {'trial': session_trials[trial]}).fetch("KEY"))),
+                            ]
+                            )
+                            )
+            MovieInterface([video_path]).run_conversion(nwbfile=nwbfile, metadata=video_metadata, external_mode=False)
+    
     return nwbfile
 
 
