@@ -836,7 +836,7 @@ def do_ephys_ingest(session_key, replace=False, probe_insertion_exists=False, in
         # do the insertion per probe for all probes
         for probe_no, (f, cluster_method, npx_meta) in clustering_files.items():
             insertion_key = {'subject_id': sinfo['subject_id'], 'session': sinfo['session'], 'insertion_number': probe_no}
-            if probe_insertion_exists and (ephys.Unit & insertion_key):
+            if probe_insertion_exists and (ephys.Unit & insertion_key) and not into_archive:
                 # if probe_insertion exists and there exists also units for this insertion_key, skip over it
                 continue
             try:
