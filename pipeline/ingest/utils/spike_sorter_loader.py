@@ -920,8 +920,14 @@ class Kilosort:
             self._data['cluster_ids'] = np.array(df['cluster_id'].values)
         elif (self._kilosort_dir / 'cluster_group.tsv').exists():
             df = pd.read_csv(self._kilosort_dir / 'cluster_group.tsv', sep="\t", header=0)
-            self._data['cluster_groups'] = np.array(df['group'].values)
-            self._data['cluster_ids'] = np.array(df['cluster_id'].values)
+            cluster_ids = np.unique(self._data['spike_clusters'])
+            _, ind, _ = np.intersect1d(cluster_ids, np.array(df['cluster_id'].values),
+                                       assume_unique=True, return_indices=True)
+            group = np.full(len(cluster_ids), 'mua', dtype='U6')
+            group[ind] = np.array(df['group'].values)
+
+            self._data['cluster_groups'] = group
+            self._data['cluster_ids'] = cluster_ids
         else:
             raise FileNotFoundError('Neither cluster_groups.csv nor cluster_KSLabel.tsv found!')
 
