@@ -1,5 +1,4 @@
 import datajoint as dj
-import os
 import pathlib
 import numpy as np
 import json
@@ -13,6 +12,7 @@ from pipeline import lab, experiment, tracking, ephys, histology, psth, ccf
 from pipeline.report import get_wr_sessdatetime
 from pipeline.ingest import ephys as ephys_ingest
 from pipeline.ingest import tracking as tracking_ingest
+from pipeline.ingest.utils.paths import get_ephys_paths
 from nwb_conversion_tools.tools.spikeinterface.spikeinterfacerecordingdatachunkiterator import (
     SpikeInterfaceRecordingDataChunkIterator
 )
@@ -20,42 +20,11 @@ from spikeinterface import extractors
 from nwb_conversion_tools.datainterfaces.behavior.movie.moviedatainterface import MovieInterface
 
 
+ephys_root_data_dir = pathlib.Path(get_ephys_paths()[0])
+tracking_root_data_dir = pathlib.Path(tracking_ingest.get_tracking_paths()[0])
+
+
 # Helper functions for raw ephys data import
-def _to_Path(path):
-    """
-    Convert the input "path" into a pathlib.Path object
-    Handles one odd Windows/Linux incompatibility of the "\\"
-    """
-    return pathlib.Path(str(path).replace("\\", "/"))
-
-
-def find_full_path(root_directories, relative_path):
-    """
-    Given a relative path, search and return the full-path
-     from provided potential root directories (in the given order)
-        :param root_directories: potential root directories
-        :param relative_path: the relative path to find the valid root directory
-        :return: full-path (pathlib.Path object)
-    """
-    relative_path = _to_Path(relative_path)
-
-    if relative_path.exists():
-        return relative_path
-
-    # Turn to list if only a single root directory is provided
-    if isinstance(root_directories, (str, pathlib.Path)):
-        root_directories = [_to_Path(root_directories)]
-
-    for root_dir in root_directories:
-        if (_to_Path(root_dir) / relative_path).exists():
-            return _to_Path(root_dir) / relative_path
-
-    raise FileNotFoundError(
-        "No valid full-path found (from {})"
-        " for {}".format(root_directories, relative_path)
-    )
-
-
 def get_electrodes_mapping(electrodes):
     """
     Create a mapping from the probe and electrode id to the row number of the electrodes
@@ -104,7 +73,7 @@ def gains_helper(gains):
 zero_time = datetime.strptime('00:00:00', '%H:%M:%S').time()  # no precise time available
 
 
-def datajoint_to_nwb(session_key):
+def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
     """
     Generate one NWBFile object representing all data
      coming from the specified "session_key" (representing one session)
@@ -249,45 +218,45 @@ def datajoint_to_nwb(session_key):
 
             nwbfile.add_unit(**unit)
 
-        # ---- Raw Data ---
-        ephys_recording_record = (ephys_ingest.EphysIngest.EphysFile & session_key).fetch(as_dict=True)
-        sampling_rates = (ephys.ProbeInsertion.RecordingSystemSetup & ephys_recording_record).fetch('sampling_rate')
-        probe_ids = (ephys.ProbeInsertion & ephys_recording_record).fetch("probe")
-        mapping = get_electrodes_mapping(nwbfile.electrodes)
-        mapping_key = (ephys.ProbeInsertion & ephys_recording_record).fetch('probe', 'probe_type')
-        ephys_root_data_dir = ''
-        end_frame = None
+        # ---- Raw Ephys Data ---
+        if raw_ephys:
+            ks_dir_relpath = (ephys_ingest.EphysIngest.EphysFile.proj(
+                ..., insertion_number='probe_insertion_number')
+                              & insert_key).fetch('ephys_file')
+            ks_dir = ephys_root_data_dir / ks_dir_relpath
+            npx_dir = ks_dir.parent
 
-        for insertion_num in range(0, len(ephys_recording_record)):
-            
-            probe_id = probe_ids[insertion_num]
-            
-            relative_path = ephys_recording_record[insertion_num].get('ephys_file')
-            relative_path = relative_path.replace("\\","/")
-            file_path = find_full_path(ephys_root_data_dir, relative_path)
+            try:
+                next(npx_dir.glob('*imec*.ap.bin'))
+            except StopIteration:
+                raise FileNotFoundError(f'No raw ephys file (.ap.bin) found at {npx_dir}')
 
-            extractor = extractors.read_spikeglx(os.path.split(file_path)[0], "imec.ap")
+            sampling_rate = (ephys.ProbeInsertion.RecordingSystemSetup & insert_key).fetch1('sampling_rate')
+            probe_id, probe_type = (ephys.ProbeInsertion & insert_key).fetch1('probe', 'probe_type')
+            mapping = get_electrodes_mapping(nwbfile.electrodes)
+
+            extractor = extractors.read_spikeglx(npx_dir)
 
             conversion_kwargs = gains_helper(extractor.get_channel_gains())
 
-            if end_frame is not None:
-                extractor = extractor.frame_slice(0, end_frame)
+            recording_channels_by_id = (lab.ElectrodeConfig.Electrode * ephys.ProbeInsertion
+                                        & insert_key).fetch('electrode')
 
-            recording_channels_by_id = (lab.ElectrodeConfig.Electrode * ephys.ProbeInsertion & ephys_recording_record[insertion_num] & {'probe': probe_id}).fetch('electrode')
+            probe_str = f'{probe_id} ({probe_type})'
 
             nwbfile.add_acquisition(
                 pynwb.ecephys.ElectricalSeries(
-                    name=f"ElectricalSeries{ephys_recording_record[insertion_num].get('probe_insertion_number')}",
-                    description=str(ephys_recording_record[insertion_num]),
+                    name=f"ElectricalSeries{insert_key['insertion_number']}",
+                    description=f"Ephys recording from {probe_str}, at location: {insert_location}",
                     data=SpikeInterfaceRecordingDataChunkIterator(extractor),
-                    rate=sampling_rates[insertion_num].astype('float'),
+                    rate=float(sampling_rate),
                     electrodes=nwbfile.create_electrode_table_region(
-                            region=[mapping[(str(mapping_key[0][insertion_num] + ' (' + mapping_key[1][insertion_num] + ')'), x)] for x in recording_channels_by_id],
-                            name="electrodes",
-                            description="recorded electrodes",
-                ),
-                **conversion_kwargs
-            )
+                        region=[mapping[(probe_str, x)] for x in recording_channels_by_id],
+                        name="electrodes",
+                        description="recorded electrodes",
+                    ),
+                    **conversion_kwargs
+                )
             )
 
     # =============================== PHOTO-STIMULATION ===============================
@@ -455,31 +424,25 @@ def datajoint_to_nwb(session_key):
         timestamps=event_stops.astype(float),
         control=photo_stim.astype('uint8'), control_description=stim_sites)
 
-        # ----- Raw Video Files -----
-    behavior_root_data_dir = ''
-    session_device_list = np.unique((tracking_ingest.TrackingIngest.TrackingFile & session_key).fetch('tracking_device'))
-    for device in range(0, session_device_list.shape[0]):
-        session_trials = (tracking_ingest.TrackingIngest.TrackingFile & session_key & {'tracking_device': session_device_list[device]}).fetch('trial')
-        for trial in range(0, session_trials.shape[0]):
-            relative_video_path = (tracking_ingest.TrackingIngest.TrackingFile & session_key & {'tracking_device': session_device_list[device]} & {'trial': session_trials[trial]}).fetch('tracking_file')
-            relative_video_path = relative_video_path[0].replace("\\", "/")
-            relative_video_dir = os.path.split(relative_video_path)[0]
-            video_dir = find_full_path(behavior_root_data_dir, relative_video_dir)
-            file_name = os.path.split(relative_video_path)[1].rsplit('.', 1)[0]
-            video_path = pathlib.Path(os.path.join(video_dir, file_name + '.mp4'))
+    # ----- Raw Video Files -----
+    if raw_video:
+        tracking_files_info = (tracking_ingest.TrackingIngest.TrackingFile & session_key).fetch(
+            as_dict=True, order_by='tracking_device, trial')
+        for tracking_file_info in tracking_files_info:
+            video_path = tracking_root_data_dir / tracking_file_info.pop('tracking_file')
             video_metadata = dict(
                 Behavior=dict(
                     Movies=[
                         dict(
-                            name=file_name, 
-                            description=str(video_path), 
-                            unit="n.a.", 
-                            format='external', 
-                            starting_frame=[0, 0, 0], 
-                            comments=str((tracking_ingest.TrackingIngest.TrackingFile & session_key & {'tracking_device': session_device_list[device]} & {'trial': session_trials[trial]}).fetch("KEY"))),
-                            ]
-                            )
-                            )
+                            name=video_path,
+                            description=video_path.as_posix(),
+                            unit="n.a.",
+                            format='external',
+                            starting_frame=[0, 0, 0],
+                            comments=str(tracking_file_info))
+                    ]
+                )
+            )
             MovieInterface([video_path]).run_conversion(nwbfile=nwbfile, metadata=video_metadata, external_mode=False)
     
     return nwbfile
