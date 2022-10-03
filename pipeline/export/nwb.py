@@ -1,4 +1,5 @@
 import datajoint as dj
+import os
 import pathlib
 import numpy as np
 import json
@@ -10,6 +11,94 @@ from pynwb import NWBFile, NWBHDF5IO
 
 from pipeline import lab, experiment, tracking, ephys, histology, psth, ccf
 from pipeline.report import get_wr_sessdatetime
+from pipeline.ingest import ephys as ephys_ingest
+from pipeline.ingest import tracking as tracking_ingest
+from nwb_conversion_tools.tools.spikeinterface.spikeinterfacerecordingdatachunkiterator import (
+    SpikeInterfaceRecordingDataChunkIterator
+)
+from spikeinterface import extractors
+from nwb_conversion_tools.datainterfaces.behavior.movie.moviedatainterface import MovieInterface
+
+
+# Helper functions for raw ephys data import
+def _to_Path(path):
+    """
+    Convert the input "path" into a pathlib.Path object
+    Handles one odd Windows/Linux incompatibility of the "\\"
+    """
+    return pathlib.Path(str(path).replace("\\", "/"))
+
+
+def find_full_path(root_directories, relative_path):
+    """
+    Given a relative path, search and return the full-path
+     from provided potential root directories (in the given order)
+        :param root_directories: potential root directories
+        :param relative_path: the relative path to find the valid root directory
+        :return: full-path (pathlib.Path object)
+    """
+    relative_path = _to_Path(relative_path)
+
+    if relative_path.exists():
+        return relative_path
+
+    # Turn to list if only a single root directory is provided
+    if isinstance(root_directories, (str, pathlib.Path)):
+        root_directories = [_to_Path(root_directories)]
+
+    for root_dir in root_directories:
+        if (_to_Path(root_dir) / relative_path).exists():
+            return _to_Path(root_dir) / relative_path
+
+    raise FileNotFoundError(
+        "No valid full-path found (from {})"
+        " for {}".format(root_directories, relative_path)
+    )
+
+
+def get_electrodes_mapping(electrodes):
+    """
+    Create a mapping from the probe and electrode id to the row number of the electrodes
+    table. This is used in the construction of the DynamicTableRegion that indicates what rows of the electrodes
+    table correspond to the data in an ElectricalSeries.
+    Parameters
+    ----------
+    electrodes: hdmf.common.table.DynamicTable
+    Returns
+    -------
+    dict
+    """
+    return {
+        (electrodes["group"][idx].device.name, electrodes["id"][idx],): idx
+        for idx in range(len(electrodes))
+    }
+
+
+def gains_helper(gains):
+    """
+    This handles three different cases for gains:
+    1. gains are all 1. In this case, return conversion=1e-6, which applies to all
+    channels and converts from microvolts to volts.
+    2. Gains are all equal, but not 1. In this case, multiply this by 1e-6 to apply this
+    gain to all channels and convert units to volts.
+    3. Gains are different for different channels. In this case use the
+    `channel_conversion` field in addition to the `conversion` field so that each
+    channel can be converted to volts using its own individual gain.
+    Parameters
+    ----------
+    gains: np.ndarray
+    Returns
+    -------
+    dict
+        conversion : float
+        channel_conversion : np.ndarray
+    """
+    if all(x == 1 for x in gains):
+        return dict(conversion=1e-6, channel_conversion=None)
+    if all(x == gains[0] for x in gains):
+        return dict(conversion=1e-6 * gains[0], channel_conversion=None)
+    return dict(conversion=1e-6, channel_conversion=gains)
+    
 
 # Some constants to work with
 zero_time = datetime.strptime('00:00:00', '%H:%M:%S').time()  # no precise time available
@@ -96,11 +185,11 @@ def datajoint_to_nwb(session_key):
 
     # iterate through curated clusterings and export units data
     for insert_key in (ephys.ProbeInsertion & session_key).fetch('KEY'):
-        # ---- Probe Insertion Location ----
+    # ---- Probe Insertion Location ----
         if ephys.ProbeInsertion.InsertionLocation & insert_key:
             insert_location = {
                 k: str(v) for k, v in (ephys.ProbeInsertion.InsertionLocation
-                                       & insert_key).aggr(
+                                        & insert_key).aggr(
                     ephys.ProbeInsertion.RecordableBrainRegion.proj(
                         ..., brain_region='CONCAT(hemisphere, " ", brain_area)'),
                     ..., brain_regions='GROUP_CONCAT(brain_region SEPARATOR ", ")').fetch1().items()
@@ -124,10 +213,10 @@ def datajoint_to_nwb(session_key):
             location=insert_location)
 
         electrode_query = (lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode
-                           & electrode_config)
+                            & electrode_config)
         electrode_ccf = {e: {'x': float(x), 'y': float(y), 'z': float(z)} for e, x, y, z in zip(
             *(histology.ElectrodeCCFPosition.ElectrodePosition
-              & electrode_config).fetch(
+                & electrode_config).fetch(
                 'electrode', 'ccf_x', 'ccf_y', 'ccf_z'))}
 
         for electrode in electrode_query.fetch(as_dict=True):
@@ -141,6 +230,7 @@ def datajoint_to_nwb(session_key):
 
         electrode_df = nwbfile.electrodes.to_dataframe()
         electrode_ind = electrode_df.index[electrode_df.group_name == electrode_group.name]
+        
         # ---- Units ----
         unit_query = units_query & insert_key
         for unit in unit_query.fetch(as_dict=True):
@@ -158,6 +248,47 @@ def datajoint_to_nwb(session_key):
                     unit[attr] = np.nan
 
             nwbfile.add_unit(**unit)
+
+        # ---- Raw Data ---
+        ephys_recording_record = (ephys_ingest.EphysIngest.EphysFile & session_key).fetch(as_dict=True)
+        sampling_rates = (ephys.ProbeInsertion.RecordingSystemSetup & ephys_recording_record).fetch('sampling_rate')
+        probe_ids = (ephys.ProbeInsertion & ephys_recording_record).fetch("probe")
+        mapping = get_electrodes_mapping(nwbfile.electrodes)
+        mapping_key = (ephys.ProbeInsertion & ephys_recording_record).fetch('probe', 'probe_type')
+        ephys_root_data_dir = ''
+        end_frame = None
+
+        for insertion_num in range(0, len(ephys_recording_record)):
+            
+            probe_id = probe_ids[insertion_num]
+            
+            relative_path = ephys_recording_record[insertion_num].get('ephys_file')
+            relative_path = relative_path.replace("\\","/")
+            file_path = find_full_path(ephys_root_data_dir, relative_path)
+
+            extractor = extractors.read_spikeglx(os.path.split(file_path)[0], "imec.ap")
+
+            conversion_kwargs = gains_helper(extractor.get_channel_gains())
+
+            if end_frame is not None:
+                extractor = extractor.frame_slice(0, end_frame)
+
+            recording_channels_by_id = (lab.ElectrodeConfig.Electrode * ephys.ProbeInsertion & ephys_recording_record[insertion_num] & {'probe': probe_id}).fetch('electrode')
+
+            nwbfile.add_acquisition(
+                pynwb.ecephys.ElectricalSeries(
+                    name=f"ElectricalSeries{ephys_recording_record[insertion_num].get('probe_insertion_number')}",
+                    description=str(ephys_recording_record[insertion_num]),
+                    data=SpikeInterfaceRecordingDataChunkIterator(extractor),
+                    rate=sampling_rates[insertion_num].astype('float'),
+                    electrodes=nwbfile.create_electrode_table_region(
+                            region=[mapping[(str(mapping_key[0][insertion_num] + ' (' + mapping_key[1][insertion_num] + ')'), x)] for x in recording_channels_by_id],
+                            name="electrodes",
+                            description="recorded electrodes",
+                ),
+                **conversion_kwargs
+            )
+            )
 
     # =============================== PHOTO-STIMULATION ===============================
     stim_sites = {}
@@ -324,6 +455,33 @@ def datajoint_to_nwb(session_key):
         timestamps=event_stops.astype(float),
         control=photo_stim.astype('uint8'), control_description=stim_sites)
 
+        # ----- Raw Video Files -----
+    behavior_root_data_dir = ''
+    session_device_list = np.unique((tracking_ingest.TrackingIngest.TrackingFile & session_key).fetch('tracking_device'))
+    for device in range(0, session_device_list.shape[0]):
+        session_trials = (tracking_ingest.TrackingIngest.TrackingFile & session_key & {'tracking_device': session_device_list[device]}).fetch('trial')
+        for trial in range(0, session_trials.shape[0]):
+            relative_video_path = (tracking_ingest.TrackingIngest.TrackingFile & session_key & {'tracking_device': session_device_list[device]} & {'trial': session_trials[trial]}).fetch('tracking_file')
+            relative_video_path = relative_video_path[0].replace("\\", "/")
+            relative_video_dir = os.path.split(relative_video_path)[0]
+            video_dir = find_full_path(behavior_root_data_dir, relative_video_dir)
+            file_name = os.path.split(relative_video_path)[1].rsplit('.', 1)[0]
+            video_path = pathlib.Path(os.path.join(video_dir, file_name + '.mp4'))
+            video_metadata = dict(
+                Behavior=dict(
+                    Movies=[
+                        dict(
+                            name=file_name, 
+                            description=str(video_path), 
+                            unit="n.a.", 
+                            format='external', 
+                            starting_frame=[0, 0, 0], 
+                            comments=str((tracking_ingest.TrackingIngest.TrackingFile & session_key & {'tracking_device': session_device_list[device]} & {'trial': session_trials[trial]}).fetch("KEY"))),
+                            ]
+                            )
+                            )
+            MovieInterface([video_path]).run_conversion(nwbfile=nwbfile, metadata=video_metadata, external_mode=False)
+    
     return nwbfile
 
 
