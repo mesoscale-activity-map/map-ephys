@@ -324,7 +324,7 @@ def _load_kilosort2(sinfo, ks_dir, npx_dir):
         'sinfo': sinfo,
         'ef_path': ks_dir,
         'skey': skey,
-        'method': 'kilosort2',
+        'method': 'pykilosort2.5' if 'pyks25' in ks_dir else 'kilosort2',
         'hz': hz,
         'spikes': spike_times.astype(int),
         'spike_sites': ks.data['spike_sites'] + 1,  # channel numbering in this pipeline is 1-based indexed
@@ -934,8 +934,8 @@ class Kilosort:
 
     def extract_cluster_noise_label(self):
         """
-        # labeling based on the noiseTemplate module - output to "cluster_group.tsv" file
-        # (https://github.com/jenniferColonell/ecephys_spike_sorting/tree/master/ecephys_spike_sorting/modules/noise_templates)
+        labeling based on the noiseTemplate module - output to "cluster_group.tsv" file
+        (https://github.com/jenniferColonell/ecephys_spike_sorting/tree/master/ecephys_spike_sorting/modules/noise_templates)
         """
         noise_labels = {}
         cluster_group_tsv = pathlib.Path(self._kilosort_dir) / 'cluster_group.tsv'
