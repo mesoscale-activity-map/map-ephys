@@ -1,6 +1,8 @@
-from pipeline import lab, experiment, ephys
+from pipeline import lab, experiment, ephys, shell
 from pipeline.ingest import ephys as ephys_ingest
 
+
+shell.logsetup('DEBUG')
 
 subjects_to_archive = ("SC011", "SC013", "SC015", "SC016", "SC017",
                        "SC022", "SC023", "SC026", "SC027", "SC030",
