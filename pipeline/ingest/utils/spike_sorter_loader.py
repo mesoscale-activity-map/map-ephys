@@ -944,8 +944,8 @@ class Kilosort:
 
     def extract_cluster_noise_label(self):
         """
-        # labeling based on the noiseTemplate module - output to "cluster_group.tsv" file
-        # (https://github.com/jenniferColonell/ecephys_spike_sorting/tree/master/ecephys_spike_sorting/modules/noise_templates)
+        labeling based on the noiseTemplate module - output to "cluster_group.tsv" file
+        (https://github.com/jenniferColonell/ecephys_spike_sorting/tree/master/ecephys_spike_sorting/modules/noise_templates)
         """
         noise_labels = {}
         cluster_group_tsv = pathlib.Path(self._kilosort_dir) / 'cluster_group.tsv'
