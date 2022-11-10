@@ -484,5 +484,6 @@ def export_recording(session_keys, output_dir='./', overwrite=False, validate=Fa
             import nwbinspector
             with NWBHDF5IO(output_fp.as_posix(), mode='r') as io:
                 validation_status = pynwb.validate(io=io)
-
-            inspection_messages = list(nwbinspector.inspect_all(path=output_fp))
+            print(validation_status)
+            for inspection_message in nwbinspector.inspect_all(path=output_fp):
+                print(inspection_message)
