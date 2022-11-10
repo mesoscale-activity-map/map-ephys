@@ -113,14 +113,16 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
     # add additional columns to the units table
     if dj.__version__ >= '0.13.0':
         units_query = (ephys.ProbeInsertion.RecordingSystemSetup
-                       * ephys.Unit & session_key).proj('unit_amp', 'unit_snr').join(
+                       * ephys.Unit & session_key).proj(
+            ..., '-spike_times', '-spike_sites', '-spike_depths').join(
             ephys.UnitStat, left=True).join(
             ephys.MAPClusterMetric.DriftMetric, left=True).join(
             ephys.ClusterMetric, left=True).join(
             ephys.WaveformMetric, left=True)
     else:
         units_query = (ephys.ProbeInsertion.RecordingSystemSetup
-                       * ephys.Unit & session_key).proj('unit_amp', 'unit_snr').aggr(
+                       * ephys.Unit & session_key).proj(
+            ..., '-spike_times', '-spike_sites', '-spike_depths').aggr(
             ephys.UnitStat, ..., **{n: n for n in ephys.UnitStat.heading.names if n not in ephys.UnitStat.heading.primary_key},
             keep_all_rows=True).aggr(
             ephys.MAPClusterMetric.DriftMetric, ..., **{n: n for n in ephys.MAPClusterMetric.DriftMetric.heading.names if n not in ephys.MAPClusterMetric.DriftMetric.heading.primary_key},
@@ -148,11 +150,12 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
     # ---- Probe Insertion Location ----
         if ephys.ProbeInsertion.InsertionLocation & insert_key:
             insert_location = {
-                k: str(v) for k, v in (ephys.ProbeInsertion.InsertionLocation
-                                        & insert_key).aggr(
-                    ephys.ProbeInsertion.RecordableBrainRegion.proj(
-                        ..., brain_region='CONCAT(hemisphere, " ", brain_area)'),
-                    ..., brain_regions='GROUP_CONCAT(brain_region SEPARATOR ", ")').fetch1().items()
+                k: str(v) for k, v in (
+                        (ephys.ProbeInsertion.proj() & insert_key).aggr(
+                            ephys.ProbeInsertion.RecordableBrainRegion.proj(
+                                ..., brain_region='CONCAT(hemisphere, " ", brain_area)'),
+                            ..., brain_regions='GROUP_CONCAT(brain_region SEPARATOR ", ")')
+                        * ephys.ProbeInsertion.InsertionLocation).fetch1().items()
                 if k not in ephys.ProbeInsertion.primary_key}
             insert_location = json.dumps(insert_location)
         else:
@@ -324,12 +327,20 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
                    * experiment.Photostim & session_key).proj(
         'photostim_event_time', 'power', 'duration')
     q_trial = experiment.SessionTrial * experiment.BehaviorTrial & session_key
-    q_trial = q_trial.aggr(
-        q_photostim, ...,
-        photostim_onset='IFNULL(GROUP_CONCAT(photostim_event_time SEPARATOR ", "), "N/A")',
-        photostim_power='IFNULL(GROUP_CONCAT(power SEPARATOR ", "), "N/A")',
-        photostim_duration='IFNULL(GROUP_CONCAT(duration SEPARATOR ", "), "N/A")',
-        keep_all_rows=True)
+    if dj.__version__ >= '0.13.0':
+        q_trial = q_trial.proj().aggr(
+            q_photostim, ...,
+            photostim_onset='IFNULL(GROUP_CONCAT(photostim_event_time SEPARATOR ", "), "N/A")',
+            photostim_power='IFNULL(GROUP_CONCAT(power SEPARATOR ", "), "N/A")',
+            photostim_duration='IFNULL(GROUP_CONCAT(duration SEPARATOR ", "), "N/A")',
+            keep_all_rows=True) * q_trial
+    else:
+        q_trial = q_trial.aggr(
+            q_photostim, ...,
+            photostim_onset='IFNULL(GROUP_CONCAT(photostim_event_time SEPARATOR ", "), "N/A")',
+            photostim_power='IFNULL(GROUP_CONCAT(power SEPARATOR ", "), "N/A")',
+            photostim_duration='IFNULL(GROUP_CONCAT(duration SEPARATOR ", "), "N/A")',
+            keep_all_rows=True)
 
     skip_adding_columns = experiment.Session.primary_key 
 
@@ -467,5 +478,8 @@ def export_recording(session_keys, output_dir='./', overwrite=False, validate=Fa
                 print(f'\tWrite NWB 2.0 file: {save_file_name}')
         if validate:
             import nwbinspector
-            pynwb.validate(paths=[output_fp])
+            from pynwb.validate import validate as validate_nwb
+            with NWBHDF5IO(output_fp.as_posix(), mode='r') as io:
+                validation_errors, validation_status = validate_nwb(io=io)
+
             nwbinspector.inspect_all(path=output_fp)
