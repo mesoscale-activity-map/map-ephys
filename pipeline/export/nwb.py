@@ -13,15 +13,6 @@ from pipeline.report import get_wr_sessdatetime
 from pipeline.ingest import ephys as ephys_ingest
 from pipeline.ingest import tracking as tracking_ingest
 from pipeline.ingest.utils.paths import get_ephys_paths
-from nwb_conversion_tools.tools.spikeinterface.spikeinterfacerecordingdatachunkiterator import (
-    SpikeInterfaceRecordingDataChunkIterator
-)
-from spikeinterface import extractors
-from nwb_conversion_tools.datainterfaces.behavior.movie.moviedatainterface import MovieInterface
-
-
-ephys_root_data_dir = pathlib.Path(get_ephys_paths()[0])
-tracking_root_data_dir = pathlib.Path(tracking_ingest.get_tracking_paths()[0])
 
 
 # Helper functions for raw ephys data import
@@ -220,6 +211,12 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
 
         # ---- Raw Ephys Data ---
         if raw_ephys:
+            from spikeinterface import extractors
+            from nwb_conversion_tools.tools.spikeinterface.spikeinterfacerecordingdatachunkiterator import (
+                SpikeInterfaceRecordingDataChunkIterator
+            )
+            ephys_root_data_dir = pathlib.Path(get_ephys_paths()[0])
+
             ks_dir_relpath = (ephys_ingest.EphysIngest.EphysFile.proj(
                 ..., insertion_number='probe_insertion_number')
                               & insert_key).fetch('ephys_file')
@@ -426,6 +423,10 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
 
     # ----- Raw Video Files -----
     if raw_video:
+        from nwb_conversion_tools.datainterfaces.behavior.movie.moviedatainterface import MovieInterface
+
+        tracking_root_data_dir = pathlib.Path(tracking_ingest.get_tracking_paths()[0])
+
         tracking_files_info = (tracking_ingest.TrackingIngest.TrackingFile & session_key).fetch(
             as_dict=True, order_by='tracking_device, trial')
         for tracking_file_info in tracking_files_info:
@@ -448,7 +449,7 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
     return nwbfile
 
 
-def export_recording(session_keys, output_dir='./', overwrite=False):
+def export_recording(session_keys, output_dir='./', overwrite=False, validate=False):
     if not isinstance(session_keys, list):
         session_keys = [session_keys]
 
@@ -464,3 +465,7 @@ def export_recording(session_keys, output_dir='./', overwrite=False):
             with NWBHDF5IO(output_fp.as_posix(), mode='w') as io:
                 io.write(nwbfile)
                 print(f'\tWrite NWB 2.0 file: {save_file_name}')
+        if validate:
+            import nwbinspector
+            pynwb.validate(paths=[output_fp])
+            nwbinspector.inspect_all(path=output_fp)
