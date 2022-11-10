@@ -91,7 +91,7 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
                       institution='Janelia Research Campus',
                       experiment_description=experiment_description,
                       related_publications='',
-                      keywords=[])
+                      keywords=['electrophysiology'])
 
     # ==================================== SUBJECT ==================================
     subject = (lab.Subject * lab.WaterRestriction.proj('water_restriction_number') & session_key).fetch1()
@@ -100,12 +100,12 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
         date_of_birth=datetime.combine(subject['date_of_birth'], zero_time) if subject['date_of_birth'] else None,
         description=subject['water_restriction_number'],
         sex=subject['sex'],
-        species='mus musculus')
+        species='Mus musculus')
 
     # ==================================== EPHYS ==================================
     # add additional columns to the electrodes table
     electrodes_query = lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode
-    for additional_attribute in ['shank', 'shank_col', 'shank_row']:
+    for additional_attribute in ['electrode', 'shank', 'shank_col', 'shank_row']:
         nwbfile.add_electrode_column(
             name=electrodes_query.heading.attributes[additional_attribute].name,
             description=electrodes_query.heading.attributes[additional_attribute].comment)
@@ -167,7 +167,8 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
         ephys_device_name = f'{electrode_config["probe"]} ({electrode_config["probe_type"]})'
         ephys_device = (nwbfile.get_device(ephys_device_name)
                         if ephys_device_name in nwbfile.devices
-                        else nwbfile.create_device(name=ephys_device_name))
+                        else nwbfile.create_device(name=ephys_device_name,
+                                                   description=electrode_config["probe_type"]))
 
         electrode_group = nwbfile.create_electrode_group(
             name=f'{electrode_config["probe"]} {electrode_config["electrode_config_name"]}',
@@ -184,7 +185,7 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
 
         for electrode in electrode_query.fetch(as_dict=True):
             nwbfile.add_electrode(
-                id=electrode['electrode'], group=electrode_group,
+                electrode=electrode['electrode'], group=electrode_group,
                 filtering='', imp=-1.,
                 **electrode_ccf.get(electrode['electrode'], {'x': np.nan, 'y': np.nan, 'z': np.nan}),
                 rel_x=electrode['x_coord'], rel_y=electrode['y_coord'], rel_z=np.nan,
@@ -192,7 +193,7 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
                 location=electrode_group.location)
 
         electrode_df = nwbfile.electrodes.to_dataframe()
-        electrode_ind = electrode_df.index[electrode_df.group_name == electrode_group.name]
+        electrode_ind = electrode_df.electrode[electrode_df.group_name == electrode_group.name]
         
         # ---- Units ----
         unit_query = units_query & insert_key
@@ -310,7 +311,7 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
 
                         tracking_timestamps = np.hstack([np.arange(nsample) / trk_fs + float(trial_start_time)
                                                          for nsample, trial_start_time in zip(samples, start_time)])
-                        position_data = np.vstack([np.hstack(d) for d in position_data])
+                        position_data = np.vstack([np.hstack(d) for d in position_data]).T
 
                         behav_ts_name = f'{trk_device_name}_{feature}' + (f'_{r["whisker_name"]}' if r else '')
 
@@ -375,19 +376,21 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
     for trial_event_type in (experiment.TrialEventType & q_trial_event).fetch('trial_event_type'):
         trial, event_starts, event_stops = (q_trial_event
                                             & {'trial_event_type': trial_event_type}).fetch(
-            'trial', 'event_start', 'event_stop', order_by='trial')
+            'trial', 'event_start', 'event_stop', order_by='trial, event_start')
 
         behavioral_event.create_timeseries(
             name=trial_event_type + '_start_times',
             unit='a.u.', conversion=1.0,
             data=np.full_like(event_starts.astype(float), 1),
-            timestamps=event_starts.astype(float))
+            timestamps=event_starts.astype(float),
+            description=f'Timestamps for event type: {trial_event_type} - Start Time')
 
         behavioral_event.create_timeseries(
             name=trial_event_type + '_stop_times',
             unit='a.u.', conversion=1.0,
             data=np.full_like(event_stops.astype(float), 1),
-            timestamps=event_stops.astype(float))
+            timestamps=event_stops.astype(float),
+            description=f'Timestamps for event type: {trial_event_type} - Stop Time')
 
     # ---- action events
 
@@ -404,7 +407,8 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
             name=action_event_type.replace(' ', '_') + '_times',
             unit='a.u.', conversion=1.0,
             data=np.full_like(event_starts.astype(float), 1),
-            timestamps=event_starts.astype(float))
+            timestamps=event_starts.astype(float),
+            description=f'Timestamps for event type: {action_event_type}')
 
     # ---- photostim events ----
 
@@ -478,8 +482,7 @@ def export_recording(session_keys, output_dir='./', overwrite=False, validate=Fa
                 print(f'\tWrite NWB 2.0 file: {save_file_name}')
         if validate:
             import nwbinspector
-            from pynwb.validate import validate as validate_nwb
             with NWBHDF5IO(output_fp.as_posix(), mode='r') as io:
-                validation_errors, validation_status = validate_nwb(io=io)
+                validation_status = pynwb.validate(io=io)
 
-            nwbinspector.inspect_all(path=output_fp)
+            inspection_messages = list(nwbinspector.inspect_all(path=output_fp))
