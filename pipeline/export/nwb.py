@@ -1,3 +1,4 @@
+import datajoint as dj
 import pathlib
 import numpy as np
 import json
@@ -9,12 +10,61 @@ from pynwb import NWBFile, NWBHDF5IO
 
 from pipeline import lab, experiment, tracking, ephys, histology, psth, ccf
 from pipeline.report import get_wr_sessdatetime
+from pipeline.ingest import ephys as ephys_ingest
+from pipeline.ingest import tracking as tracking_ingest
+from pipeline.ingest.utils.paths import get_ephys_paths
+
+
+# Helper functions for raw ephys data import
+def get_electrodes_mapping(electrodes):
+    """
+    Create a mapping from the probe and electrode id to the row number of the electrodes
+    table. This is used in the construction of the DynamicTableRegion that indicates what rows of the electrodes
+    table correspond to the data in an ElectricalSeries.
+    Parameters
+    ----------
+    electrodes: hdmf.common.table.DynamicTable
+    Returns
+    -------
+    dict
+    """
+    return {
+        (electrodes["group"][idx].device.name, electrodes["id"][idx],): idx
+        for idx in range(len(electrodes))
+    }
+
+
+def gains_helper(gains):
+    """
+    This handles three different cases for gains:
+    1. gains are all 1. In this case, return conversion=1e-6, which applies to all
+    channels and converts from microvolts to volts.
+    2. Gains are all equal, but not 1. In this case, multiply this by 1e-6 to apply this
+    gain to all channels and convert units to volts.
+    3. Gains are different for different channels. In this case use the
+    `channel_conversion` field in addition to the `conversion` field so that each
+    channel can be converted to volts using its own individual gain.
+    Parameters
+    ----------
+    gains: np.ndarray
+    Returns
+    -------
+    dict
+        conversion : float
+        channel_conversion : np.ndarray
+    """
+    if all(x == 1 for x in gains):
+        return dict(conversion=1e-6, channel_conversion=None)
+    if all(x == gains[0] for x in gains):
+        return dict(conversion=1e-6 * gains[0], channel_conversion=None)
+    return dict(conversion=1e-6, channel_conversion=gains)
+    
 
 # Some constants to work with
 zero_time = datetime.strptime('00:00:00', '%H:%M:%S').time()  # no precise time available
 
 
-def datajoint_to_nwb(session_key):
+def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
     """
     Generate one NWBFile object representing all data
      coming from the specified "session_key" (representing one session)
@@ -41,28 +91,46 @@ def datajoint_to_nwb(session_key):
                       institution='Janelia Research Campus',
                       experiment_description=experiment_description,
                       related_publications='',
-                      keywords=[])
+                      keywords=['electrophysiology'])
 
     # ==================================== SUBJECT ==================================
-    subject = (lab.Subject & session_key).fetch1()
+    subject = (lab.Subject * lab.WaterRestriction.proj('water_restriction_number') & session_key).fetch1()
     nwbfile.subject = pynwb.file.Subject(
         subject_id=str(subject['subject_id']),
         date_of_birth=datetime.combine(subject['date_of_birth'], zero_time) if subject['date_of_birth'] else None,
-        sex=subject['sex'])
+        description=subject['water_restriction_number'],
+        sex=subject['sex'],
+        species='Mus musculus')
 
     # ==================================== EPHYS ==================================
     # add additional columns to the electrodes table
     electrodes_query = lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode
-    for additional_attribute in ['shank', 'shank_col', 'shank_row']:
+    for additional_attribute in ['electrode', 'shank', 'shank_col', 'shank_row']:
         nwbfile.add_electrode_column(
             name=electrodes_query.heading.attributes[additional_attribute].name,
             description=electrodes_query.heading.attributes[additional_attribute].comment)
 
     # add additional columns to the units table
-    units_query = (ephys.ProbeInsertion.RecordingSystemSetup
-                   * ephys.Unit * ephys.UnitStat
-                   * ephys.ClusterMetric * ephys.WaveformMetric
-                   & session_key)
+    if dj.__version__ >= '0.13.0':
+        units_query = (ephys.ProbeInsertion.RecordingSystemSetup
+                       * ephys.Unit & session_key).proj(
+            ..., '-spike_times', '-spike_sites', '-spike_depths').join(
+            ephys.UnitStat, left=True).join(
+            ephys.MAPClusterMetric.DriftMetric, left=True).join(
+            ephys.ClusterMetric, left=True).join(
+            ephys.WaveformMetric, left=True)
+    else:
+        units_query = (ephys.ProbeInsertion.RecordingSystemSetup
+                       * ephys.Unit & session_key).proj(
+            ..., '-spike_times', '-spike_sites', '-spike_depths').aggr(
+            ephys.UnitStat, ..., **{n: n for n in ephys.UnitStat.heading.names if n not in ephys.UnitStat.heading.primary_key},
+            keep_all_rows=True).aggr(
+            ephys.MAPClusterMetric.DriftMetric, ..., **{n: n for n in ephys.MAPClusterMetric.DriftMetric.heading.names if n not in ephys.MAPClusterMetric.DriftMetric.heading.primary_key},
+            keep_all_rows=True).aggr(
+            ephys.ClusterMetric, ..., **{n: n for n in ephys.ClusterMetric.heading.names if n not in ephys.ClusterMetric.heading.primary_key},
+            keep_all_rows=True).aggr(
+            ephys.WaveformMetric, ..., **{n: n for n in ephys.WaveformMetric.heading.names if n not in ephys.WaveformMetric.heading.primary_key},
+            keep_all_rows=True)
 
     units_omitted_attributes = ['subject_id', 'session', 'insertion_number',
                                 'clustering_method', 'unit', 'unit_uid', 'probe_type',
@@ -79,14 +147,15 @@ def datajoint_to_nwb(session_key):
 
     # iterate through curated clusterings and export units data
     for insert_key in (ephys.ProbeInsertion & session_key).fetch('KEY'):
-        # ---- Probe Insertion Location ----
+    # ---- Probe Insertion Location ----
         if ephys.ProbeInsertion.InsertionLocation & insert_key:
             insert_location = {
-                k: str(v) for k, v in (ephys.ProbeInsertion.InsertionLocation
-                                       & insert_key).aggr(
-                    ephys.ProbeInsertion.RecordableBrainRegion.proj(
-                        ..., brain_region='CONCAT(hemisphere, " ", brain_area)'),
-                    ..., brain_regions='GROUP_CONCAT(brain_region SEPARATOR ", ")').fetch1().items()
+                k: str(v) for k, v in (
+                        (ephys.ProbeInsertion.proj() & insert_key).aggr(
+                            ephys.ProbeInsertion.RecordableBrainRegion.proj(
+                                ..., brain_region='CONCAT(hemisphere, " ", brain_area)'),
+                            ..., brain_regions='GROUP_CONCAT(brain_region SEPARATOR ", ")')
+                        * ephys.ProbeInsertion.InsertionLocation).fetch1().items()
                 if k not in ephys.ProbeInsertion.primary_key}
             insert_location = json.dumps(insert_location)
         else:
@@ -98,7 +167,8 @@ def datajoint_to_nwb(session_key):
         ephys_device_name = f'{electrode_config["probe"]} ({electrode_config["probe_type"]})'
         ephys_device = (nwbfile.get_device(ephys_device_name)
                         if ephys_device_name in nwbfile.devices
-                        else nwbfile.create_device(name=ephys_device_name))
+                        else nwbfile.create_device(name=ephys_device_name,
+                                                   description=electrode_config["probe_type"]))
 
         electrode_group = nwbfile.create_electrode_group(
             name=f'{electrode_config["probe"]} {electrode_config["electrode_config_name"]}',
@@ -107,15 +177,15 @@ def datajoint_to_nwb(session_key):
             location=insert_location)
 
         electrode_query = (lab.ProbeType.Electrode * lab.ElectrodeConfig.Electrode
-                           & electrode_config)
+                            & electrode_config)
         electrode_ccf = {e: {'x': float(x), 'y': float(y), 'z': float(z)} for e, x, y, z in zip(
             *(histology.ElectrodeCCFPosition.ElectrodePosition
-              & electrode_config).fetch(
+                & electrode_config).fetch(
                 'electrode', 'ccf_x', 'ccf_y', 'ccf_z'))}
 
         for electrode in electrode_query.fetch(as_dict=True):
             nwbfile.add_electrode(
-                id=electrode['electrode'], group=electrode_group,
+                electrode=electrode['electrode'], group=electrode_group,
                 filtering='', imp=-1.,
                 **electrode_ccf.get(electrode['electrode'], {'x': np.nan, 'y': np.nan, 'z': np.nan}),
                 rel_x=electrode['x_coord'], rel_y=electrode['y_coord'], rel_z=np.nan,
@@ -123,7 +193,8 @@ def datajoint_to_nwb(session_key):
                 location=electrode_group.location)
 
         electrode_df = nwbfile.electrodes.to_dataframe()
-        electrode_ind = electrode_df.index[electrode_df.group_name == electrode_group.name]
+        electrode_ind = electrode_df.electrode[electrode_df.group_name == electrode_group.name]
+        
         # ---- Units ----
         unit_query = units_query & insert_key
         for unit in unit_query.fetch(as_dict=True):
@@ -141,6 +212,53 @@ def datajoint_to_nwb(session_key):
                     unit[attr] = np.nan
 
             nwbfile.add_unit(**unit)
+
+        # ---- Raw Ephys Data ---
+        if raw_ephys:
+            from spikeinterface import extractors
+            from nwb_conversion_tools.tools.spikeinterface.spikeinterfacerecordingdatachunkiterator import (
+                SpikeInterfaceRecordingDataChunkIterator
+            )
+            ephys_root_data_dir = pathlib.Path(get_ephys_paths()[0])
+
+            ks_dir_relpath = (ephys_ingest.EphysIngest.EphysFile.proj(
+                ..., insertion_number='probe_insertion_number')
+                              & insert_key).fetch('ephys_file')
+            ks_dir = ephys_root_data_dir / ks_dir_relpath
+            npx_dir = ks_dir.parent
+
+            try:
+                next(npx_dir.glob('*imec*.ap.bin'))
+            except StopIteration:
+                raise FileNotFoundError(f'No raw ephys file (.ap.bin) found at {npx_dir}')
+
+            sampling_rate = (ephys.ProbeInsertion.RecordingSystemSetup & insert_key).fetch1('sampling_rate')
+            probe_id, probe_type = (ephys.ProbeInsertion & insert_key).fetch1('probe', 'probe_type')
+            mapping = get_electrodes_mapping(nwbfile.electrodes)
+
+            extractor = extractors.read_spikeglx(npx_dir)
+
+            conversion_kwargs = gains_helper(extractor.get_channel_gains())
+
+            recording_channels_by_id = (lab.ElectrodeConfig.Electrode * ephys.ProbeInsertion
+                                        & insert_key).fetch('electrode')
+
+            probe_str = f'{probe_id} ({probe_type})'
+
+            nwbfile.add_acquisition(
+                pynwb.ecephys.ElectricalSeries(
+                    name=f"ElectricalSeries{insert_key['insertion_number']}",
+                    description=f"Ephys recording from {probe_str}, at location: {insert_location}",
+                    data=SpikeInterfaceRecordingDataChunkIterator(extractor),
+                    rate=float(sampling_rate),
+                    electrodes=nwbfile.create_electrode_table_region(
+                        region=[mapping[(probe_str, x)] for x in recording_channels_by_id],
+                        name="electrodes",
+                        description="recorded electrodes",
+                    ),
+                    **conversion_kwargs
+                )
+            )
 
     # =============================== PHOTO-STIMULATION ===============================
     stim_sites = {}
@@ -193,13 +311,13 @@ def datajoint_to_nwb(session_key):
 
                         tracking_timestamps = np.hstack([np.arange(nsample) / trk_fs + float(trial_start_time)
                                                          for nsample, trial_start_time in zip(samples, start_time)])
-                        position_data = np.vstack([np.hstack(d) for d in position_data])
+                        position_data = np.vstack([np.hstack(d) for d in position_data]).T
 
                         behav_ts_name = f'{trk_device_name}_{feature}' + (f'_{r["whisker_name"]}' if r else '')
 
                         behav_acq.create_timeseries(name=behav_ts_name,
                                                     data=position_data,
-                                                    timestamps=tracking_timestamps,
+                                                    timestamps=tracking_timestamps[:position_data.shape[0]],
                                                     description=f'Time series for {feature} position: {tuple(ft_attrs)}',
                                                     unit='a.u.',
                                                     conversion=1.0)
@@ -210,12 +328,20 @@ def datajoint_to_nwb(session_key):
                    * experiment.Photostim & session_key).proj(
         'photostim_event_time', 'power', 'duration')
     q_trial = experiment.SessionTrial * experiment.BehaviorTrial & session_key
-    q_trial = q_trial.aggr(
-        q_photostim, ...,
-        photostim_onset='IFNULL(GROUP_CONCAT(photostim_event_time SEPARATOR ", "), "N/A")',
-        photostim_power='IFNULL(GROUP_CONCAT(power SEPARATOR ", "), "N/A")',
-        photostim_duration='IFNULL(GROUP_CONCAT(duration SEPARATOR ", "), "N/A")',
-        keep_all_rows=True)
+    if dj.__version__ >= '0.13.0':
+        q_trial = q_trial.proj().aggr(
+            q_photostim, ...,
+            photostim_onset='IFNULL(GROUP_CONCAT(photostim_event_time SEPARATOR ", "), "N/A")',
+            photostim_power='IFNULL(GROUP_CONCAT(power SEPARATOR ", "), "N/A")',
+            photostim_duration='IFNULL(GROUP_CONCAT(duration SEPARATOR ", "), "N/A")',
+            keep_all_rows=True) * q_trial
+    else:
+        q_trial = q_trial.aggr(
+            q_photostim, ...,
+            photostim_onset='IFNULL(GROUP_CONCAT(photostim_event_time SEPARATOR ", "), "N/A")',
+            photostim_power='IFNULL(GROUP_CONCAT(power SEPARATOR ", "), "N/A")',
+            photostim_duration='IFNULL(GROUP_CONCAT(duration SEPARATOR ", "), "N/A")',
+            keep_all_rows=True)
 
     skip_adding_columns = experiment.Session.primary_key 
 
@@ -250,19 +376,21 @@ def datajoint_to_nwb(session_key):
     for trial_event_type in (experiment.TrialEventType & q_trial_event).fetch('trial_event_type'):
         trial, event_starts, event_stops = (q_trial_event
                                             & {'trial_event_type': trial_event_type}).fetch(
-            'trial', 'event_start', 'event_stop', order_by='trial')
+            'trial', 'event_start', 'event_stop', order_by='trial, event_start')
 
         behavioral_event.create_timeseries(
             name=trial_event_type + '_start_times',
             unit='a.u.', conversion=1.0,
             data=np.full_like(event_starts.astype(float), 1),
-            timestamps=event_starts.astype(float))
+            timestamps=event_starts.astype(float),
+            description=f'Timestamps for event type: {trial_event_type} - Start Time')
 
         behavioral_event.create_timeseries(
             name=trial_event_type + '_stop_times',
             unit='a.u.', conversion=1.0,
             data=np.full_like(event_stops.astype(float), 1),
-            timestamps=event_stops.astype(float))
+            timestamps=event_stops.astype(float),
+            description=f'Timestamps for event type: {trial_event_type} - Stop Time')
 
     # ---- action events
 
@@ -279,7 +407,8 @@ def datajoint_to_nwb(session_key):
             name=action_event_type.replace(' ', '_') + '_times',
             unit='a.u.', conversion=1.0,
             data=np.full_like(event_starts.astype(float), 1),
-            timestamps=event_starts.astype(float))
+            timestamps=event_starts.astype(float),
+            description=f'Timestamps for event type: {action_event_type}')
 
     # ---- photostim events ----
 
@@ -307,10 +436,35 @@ def datajoint_to_nwb(session_key):
         timestamps=event_stops.astype(float),
         control=photo_stim.astype('uint8'), control_description=stim_sites)
 
+    # ----- Raw Video Files -----
+    if raw_video:
+        from nwb_conversion_tools.datainterfaces.behavior.movie.moviedatainterface import MovieInterface
+
+        tracking_root_data_dir = pathlib.Path(tracking_ingest.get_tracking_paths()[0])
+
+        tracking_files_info = (tracking_ingest.TrackingIngest.TrackingFile & session_key).fetch(
+            as_dict=True, order_by='tracking_device, trial')
+        for tracking_file_info in tracking_files_info:
+            video_path = tracking_root_data_dir / tracking_file_info.pop('tracking_file')
+            video_metadata = dict(
+                Behavior=dict(
+                    Movies=[
+                        dict(
+                            name=video_path,
+                            description=video_path.as_posix(),
+                            unit="n.a.",
+                            format='external',
+                            starting_frame=[0, 0, 0],
+                            comments=str(tracking_file_info))
+                    ]
+                )
+            )
+            MovieInterface([video_path]).run_conversion(nwbfile=nwbfile, metadata=video_metadata, external_mode=False)
+    
     return nwbfile
 
 
-def export_recording(session_keys, output_dir='./', overwrite=False):
+def export_recording(session_keys, output_dir='./', overwrite=False, validate=False):
     if not isinstance(session_keys, list):
         session_keys = [session_keys]
 
@@ -326,3 +480,10 @@ def export_recording(session_keys, output_dir='./', overwrite=False):
             with NWBHDF5IO(output_fp.as_posix(), mode='w') as io:
                 io.write(nwbfile)
                 print(f'\tWrite NWB 2.0 file: {save_file_name}')
+        if validate:
+            import nwbinspector
+            with NWBHDF5IO(output_fp.as_posix(), mode='r') as io:
+                validation_status = pynwb.validate(io=io)
+            print(validation_status)
+            for inspection_message in nwbinspector.inspect_all(path=output_fp):
+                print(inspection_message)

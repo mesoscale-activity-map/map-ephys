@@ -115,6 +115,12 @@ class InterpolatedElectrodeCCF(dj.Computed):
         -> ElectrodeCCFPosition.ElectrodePosition
         """
 
+    class ElectrodePositionError(dj.Part):
+        definition = """
+        -> master
+        -> ElectrodeCCFPosition.ElectrodePositionError
+        """
+
     @property
     def key_source(self):
         """
@@ -124,7 +130,10 @@ class InterpolatedElectrodeCCF(dj.Computed):
                                                    elec_count='count(electrode)')
         ccf_electrodes = ElectrodeCCFPosition.aggr(ephys.ProbeInsertion * ElectrodeCCFPosition.ElectrodePosition,
                                                    ccf_count='count(electrode)')
-        return ElectrodeCCFPosition & (all_electrodes * ccf_electrodes & 'elec_count > ccf_count')
+        ccf_error_electrodes = ElectrodeCCFPosition.aggr(ephys.ProbeInsertion * ElectrodeCCFPosition.ElectrodePositionError,
+                                                         ccf_err_count='count(electrode)', keep_all_rows=True)
+        return ElectrodeCCFPosition & (all_electrodes * ccf_electrodes * ccf_error_electrodes
+                                       & 'elec_count > ccf_count + ccf_err_count')
 
     def make(self, key):
         from scipy import interpolate
@@ -178,7 +187,12 @@ class InterpolatedElectrodeCCF(dj.Computed):
             try:
                 ElectrodeCCFPosition.ElectrodePosition.insert1(filled_position, allow_direct_insert=True)
             except dj.errors.IntegrityError:
-                pass  # skip CCF coords outside the brain
+                if not (ElectrodeCCFPosition.ElectrodePositionError & {**econfig_key,
+                                                                       'electrode_group': r.electrode_group,
+                                                                       'electrode': r.name,
+                                                                       'ccf_label_id': ccf_label_id}):
+                    ElectrodeCCFPosition.ElectrodePositionError.insert1(filled_position, allow_direct_insert=True)
+                    self.ElectrodePositionError.insert1(filled_position)
             else:
                 self.ElectrodePosition.insert1(filled_position)
 

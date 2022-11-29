@@ -117,7 +117,7 @@ class EphysIngest(dj.Imported):
                 (units, spikes, spike_sites, spike_depths), repeat((units > 0))))
 
         # scale amplitudes by uV/bit scaling factor (for kilosort2)
-        if method in ['kilosort2']:
+        if 'kilosort' in method:
             if 'qc' not in clustering_label:
                 bit_volts = npx_bit_volts[re.match('neuropixels (\d.0)', npx_meta.probe_model).group()]
                 unit_amp = unit_amp * bit_volts
@@ -249,7 +249,7 @@ class EphysIngest(dj.Imported):
                 for i, u in enumerate(unit_set):
                     if method in ['jrclust_v3', 'jrclust_v4']:
                         wf_chn_idx = 0
-                    elif method in ['kilosort2']:
+                    elif 'kilosort' in method:
                         wf_chn_idx = np.where(data['ks_channel_map'] == vmax_unit_site[i])[0][0]
                     ib.insert1({**archive_key,
                                 **site2electrode_map[vmax_unit_site[i]],
@@ -300,7 +300,7 @@ class EphysIngest(dj.Imported):
                 for i, u in enumerate(unit_set):
                     if method in ['jrclust_v3', 'jrclust_v4']:
                         wf_chn_idx = 0
-                    elif method in ['kilosort2']:
+                    elif 'kilosort' in method:
                         wf_chn_idx = np.where(data['ks_channel_map'] == vmax_unit_site[i])[0][0]
 
                     ib.insert1({**skey, **insertion_key,
@@ -462,7 +462,7 @@ def ingest_units(insertion_key, data, npx_meta):
             (units, spikes, spike_sites, spike_depths), repeat((units > 0))))
 
     # scale amplitudes by uV/bit scaling factor (for kilosort2)
-    if method in ['kilosort2']:
+    if 'kilosort' in method:
         if 'qc' not in clustering_label:
             bit_volts = npx_bit_volts[re.match('neuropixels (\d.0)', npx_meta.probe_model).group()]
             unit_amp = unit_amp * bit_volts
@@ -580,7 +580,7 @@ def ingest_units(insertion_key, data, npx_meta):
         for i, u in enumerate(unit_set):
             if method in ['jrclust_v3', 'jrclust_v4']:
                 wf_chn_idx = 0
-            elif method in ['kilosort2']:
+            elif 'kilosort' in method:
                 wf_chn_idx = np.where(data['ks_channel_map'] == vmax_unit_site[i])[0][0]
 
             ib.insert1({**insertion_key,
@@ -793,6 +793,7 @@ def do_ephys_ingest(session_key, replace=False, probe_insertion_exists=False, in
     Perform ephys-ingestion for a particular session (defined by session_key) to either
         + fresh ingest of new probe insertion and clustering results
         + archive existing clustering results and replace with new one (set 'replace=True')
+        + ingest directly into archive (set 'into_archive=True')
     """
     # =========== Find Ephys Recording ============
     sinfo = ((lab.WaterRestriction
@@ -835,7 +836,7 @@ def do_ephys_ingest(session_key, replace=False, probe_insertion_exists=False, in
         # do the insertion per probe for all probes
         for probe_no, (f, cluster_method, npx_meta) in clustering_files.items():
             insertion_key = {'subject_id': sinfo['subject_id'], 'session': sinfo['session'], 'insertion_number': probe_no}
-            if probe_insertion_exists and (ephys.Unit & insertion_key):
+            if probe_insertion_exists and (ephys.Unit & insertion_key) and not into_archive:
                 # if probe_insertion exists and there exists also units for this insertion_key, skip over it
                 continue
             try:
@@ -875,7 +876,7 @@ def extend_ephys_ingest(session_key):
 
 def archive_ingested_clustering_results(key, archive_trial_spike=False):
     """
-    The input-argument "key" should be at the level of ProbeInsertion or its anscestor.
+    The input-argument "key" should be at the level of ProbeInsertion or its ancestor.
 
     1. Copy to ephys.ArchivedUnit
     2. Delete ephys.Unit
