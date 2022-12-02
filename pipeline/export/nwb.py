@@ -394,14 +394,12 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
                             f'_{r["whisker_name"]}' if r else ""
                         )
 
-                        behav_acq.create_timeseries(
-                            name=behav_ts_name,
-                            data=position_data,
-                            timestamps=tracking_timestamps,
-                            description=f"Time series for {feature} position: {tuple(ft_attrs)}",
-                            unit="a.u.",
-                            conversion=1.0,
-                        )
+                        behav_acq.create_timeseries(name=behav_ts_name,
+                                                    data=position_data,
+                                                    timestamps=tracking_timestamps[:position_data.shape[0]],
+                                                    description=f'Time series for {feature} position: {tuple(ft_attrs)}',
+                                                    unit='a.u.',
+                                                    conversion=1.0)
 
     # =============================== BEHAVIOR TRIALS ===============================
     # ---- TrialSet ----
