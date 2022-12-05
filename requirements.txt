@@ -16,7 +16,7 @@ statsmodels==0.12.2	# oralfacial_analysis.GLMFit error
 astropy
 statannot
 pynwb==2.2.0
-spikeinterface
+spikeinterface==0.96.1
 nwb-conversion-tools
 nwbinspector
 opencv-python
