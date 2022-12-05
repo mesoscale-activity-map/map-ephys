@@ -246,7 +246,7 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
 
         # ---- Raw Ephys Data ---
         if raw_ephys:
-            from spikeinterface import extractors
+            import spikeinterface.extractors as se
             from nwb_conversion_tools.tools.spikeinterface.spikeinterfacerecordingdatachunkiterator import (
                 SpikeInterfaceRecordingDataChunkIterator
             )
@@ -276,7 +276,7 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
             )
             mapping = get_electrodes_mapping(nwbfile.electrodes)
 
-            extractor = extractors.read_spikeglx(npx_dir)
+            extractor = se.read_spikeglx(npx_dir, load_sync_channel=True)
 
             conversion_kwargs = gains_helper(extractor.get_channel_gains())
 
