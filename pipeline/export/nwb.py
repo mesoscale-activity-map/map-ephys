@@ -69,9 +69,9 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
     Generate one NWBFile object representing all data
      coming from the specified "session_key" (representing one session)
     """
-    water_res_num, sess_datetime = get_wr_sessdatetime(session_key)
+    _, sess_datetime = get_wr_sessdatetime(session_key)
 
-    session_identifier = f'{water_res_num}_{sess_datetime}_s{session_key["session"]}'
+    session_identifier = _get_session_identifier(session_key)
 
     experiment_description = (experiment.TaskProtocol
                               & (experiment.BehaviorTrial & session_key)).fetch1(
@@ -198,7 +198,7 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
         # ---- Units ----
         unit_query = units_query & insert_key
         for unit in unit_query.fetch(as_dict=True):
-            # make an electrode table region (which electrode(s) is this unit coming from)
+            unit['spike_times'] = (ephys.Unit.proj('spike_times') & unit).fetch1('spike_times')
             unit['id'] = unit.pop('unit')
             unit['electrodes'] = np.where(electrode_ind == unit.pop('electrode'))[0]
             unit['electrode_group'] = electrode_group
@@ -464,6 +464,11 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
     return nwbfile
 
 
+def _get_session_identifier(session_key):
+    water_res_num, sess_datetime = get_wr_sessdatetime(session_key)
+    return f'{water_res_num}_{sess_datetime}_s{session_key["session"]}'
+
+
 def export_recording(session_keys, output_dir='./', overwrite=False, validate=False):
     if not isinstance(session_keys, list):
         session_keys = [session_keys]
@@ -472,11 +477,12 @@ def export_recording(session_keys, output_dir='./', overwrite=False, validate=Fa
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for session_key in session_keys:
-        nwbfile = datajoint_to_nwb(session_key)
+        session_identifier = _get_session_identifier(session_key)
         # Write to .nwb
-        save_file_name = ''.join([nwbfile.identifier, '.nwb'])
+        save_file_name = ''.join([session_identifier, '.nwb'])
         output_fp = (output_dir / save_file_name).absolute()
         if overwrite or not output_fp.exists():
+            nwbfile = datajoint_to_nwb(session_key)
             with NWBHDF5IO(output_fp.as_posix(), mode='w') as io:
                 io.write(nwbfile)
                 print(f'\tWrite NWB 2.0 file: {save_file_name}')

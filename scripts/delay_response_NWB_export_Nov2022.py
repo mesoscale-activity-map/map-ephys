@@ -39,4 +39,5 @@ def publish_to_dandi(dandiset_id, dandi_api_key):
         staging=False,
         working_directory=dandiset_dir,
         api_key=dandi_api_key,
-        sync=True)
+        sync=True,
+        existing='overwrite')
