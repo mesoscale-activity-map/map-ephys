@@ -214,14 +214,15 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
                 location=electrode_group.location)
 
         electrode_df = nwbfile.electrodes.to_dataframe()
-        electrode_ind = electrode_df.electrode[electrode_df.group_name == electrode_group.name]
-        
+
         # ---- Units ----
         unit_query = units_query & insert_key
         for unit in unit_query.fetch(as_dict=True):
             unit['id'] = max(nwbfile.units.id.data) + 1 if nwbfile.units.id.data else 0
             unit['spike_times'] = (ephys.Unit.proj('spike_times') & unit).fetch1('spike_times')
-            unit['electrodes'] = np.where(electrode_ind == unit.pop('electrode'))[0]
+            unit['electrodes'] = electrode_df.query(
+                f'group_name == "{electrode_group.name}" & electrode == {unit.pop("electrode")}'
+            ).index.values
             unit['waveform_mean'] = unit.pop('waveform')
             unit['waveform_sd'] = np.full(1, np.nan)
 
