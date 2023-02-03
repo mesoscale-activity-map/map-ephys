@@ -133,7 +133,7 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
             keep_all_rows=True)
 
     units_omitted_attributes = ['subject_id', 'session', 'insertion_number',
-                                'clustering_method', 'unit', 'unit_uid', 'probe_type',
+                                'clustering_method', 'unit_uid', 'probe_type',
                                 'epoch_name_quality_metrics', 'epoch_name_waveform_metrics',
                                 'electrode_config_name', 'electrode_group',
                                 'electrode', 'waveform']
@@ -198,10 +198,9 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
         # ---- Units ----
         unit_query = units_query & insert_key
         for unit in unit_query.fetch(as_dict=True):
+            unit['id'] = max(nwbfile.units.id.data) + 1 if nwbfile.units.id.data else 0
             unit['spike_times'] = (ephys.Unit.proj('spike_times') & unit).fetch1('spike_times')
-            unit['id'] = unit.pop('unit')
             unit['electrodes'] = np.where(electrode_ind == unit.pop('electrode'))[0]
-            unit['electrode_group'] = electrode_group
             unit['waveform_mean'] = unit.pop('waveform')
             unit['waveform_sd'] = np.full(1, np.nan)
 
@@ -210,6 +209,8 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
                     unit.pop(attr)
                 elif unit[attr] is None:
                     unit[attr] = np.nan
+
+            unit['electrode_group'] = electrode_group
 
             nwbfile.add_unit(**unit)
 
