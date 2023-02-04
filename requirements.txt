@@ -1,10 +1,10 @@
-datajoint==0.12.9
+datajoint
 scipy==1.7.1	# build issue - see statsmodels
 globus-sdk
 tifffile
 pandas
-seaborn==0.11.0		# build issue - see matplotlib
-matplotlib #==3.1.3   # build issue - details unclear; to be revisited
+seaborn
+matplotlib
 pillow
 tqdm
 xlrd

@@ -75,9 +75,9 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
     Generate one NWBFile object representing all data
      coming from the specified "session_key" (representing one session)
     """
-    water_res_num, sess_datetime = get_wr_sessdatetime(session_key)
+    _, sess_datetime = get_wr_sessdatetime(session_key)
 
-    session_identifier = f'{water_res_num}_{sess_datetime}_s{session_key["session"]}'
+    session_identifier = _get_session_identifier(session_key)
 
     experiment_description = (
         experiment.TaskProtocol & (experiment.BehaviorTrial & session_key)
@@ -146,21 +146,11 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
             ephys.WaveformMetric, ..., **{n: n for n in ephys.WaveformMetric.heading.names if n not in ephys.WaveformMetric.heading.primary_key},
             keep_all_rows=True)
 
-    units_omitted_attributes = [
-        "subject_id",
-        "session",
-        "insertion_number",
-        "clustering_method",
-        "unit",
-        "unit_uid",
-        "probe_type",
-        "epoch_name_quality_metrics",
-        "epoch_name_waveform_metrics",
-        "electrode_config_name",
-        "electrode_group",
-        "waveform",
-        "electrode",
-    ]
+    units_omitted_attributes = ['subject_id', 'session', 'insertion_number',
+                                'clustering_method', 'unit_uid', 'probe_type',
+                                'epoch_name_quality_metrics', 'epoch_name_waveform_metrics',
+                                'electrode_config_name', 'electrode_group',
+                                'electrode', 'waveform']
 
     for attr in units_query.heading.names:
         if attr in units_omitted_attributes:
@@ -224,23 +214,25 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
                 location=electrode_group.location)
 
         electrode_df = nwbfile.electrodes.to_dataframe()
-        electrode_ind = electrode_df.electrode[electrode_df.group_name == electrode_group.name]
-        
+
         # ---- Units ----
         unit_query = units_query & insert_key
         for unit in unit_query.fetch(as_dict=True):
-            # make an electrode table region (which electrode(s) is this unit coming from)
-            unit["id"] = unit.pop("unit")
-            unit["electrodes"] = np.where(electrode_ind == unit.pop("electrode"))[0]
-            unit["electrode_group"] = electrode_group
-            unit["waveform_mean"] = unit.pop("waveform")
-            unit["waveform_sd"] = np.full(1, np.nan)
+            unit['id'] = max(nwbfile.units.id.data) + 1 if nwbfile.units.id.data else 0
+            unit['spike_times'] = (ephys.Unit.proj('spike_times') & unit).fetch1('spike_times')
+            unit['electrodes'] = electrode_df.query(
+                f'group_name == "{electrode_group.name}" & electrode == {unit.pop("electrode")}'
+            ).index.values
+            unit['waveform_mean'] = unit.pop('waveform')
+            unit['waveform_sd'] = np.full(1, np.nan)
 
             for attr in list(unit.keys()):
                 if attr in units_omitted_attributes:
                     unit.pop(attr)
                 elif unit[attr] is None:
                     unit[attr] = np.nan
+
+            unit['electrode_group'] = electrode_group
 
             nwbfile.add_unit(**unit)
 
@@ -579,6 +571,11 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
     return nwbfile
 
 
+def _get_session_identifier(session_key):
+    water_res_num, sess_datetime = get_wr_sessdatetime(session_key)
+    return f'{water_res_num}_{sess_datetime}_s{session_key["session"]}'
+
+
 def export_recording(session_keys, output_dir='./', overwrite=False, validate=False):
     if not isinstance(session_keys, list):
         session_keys = [session_keys]
@@ -587,12 +584,13 @@ def export_recording(session_keys, output_dir='./', overwrite=False, validate=Fa
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for session_key in session_keys:
-        nwbfile = datajoint_to_nwb(session_key, raw_ephys=True, raw_video=True)
+        session_identifier = _get_session_identifier(session_key)
         # Write to .nwb
-        save_file_name = "".join([nwbfile.identifier, ".nwb"])
+        save_file_name = ''.join([session_identifier, '.nwb'])
         output_fp = (output_dir / save_file_name).absolute()
         if overwrite or not output_fp.exists():
-            with NWBHDF5IO(output_fp.as_posix(), mode="w") as io:
+            nwbfile = datajoint_to_nwb(session_key)
+            with NWBHDF5IO(output_fp.as_posix(), mode='w') as io:
                 io.write(nwbfile)
                 print(f'\tWrite NWB 2.0 file: {save_file_name}')
         if validate:
