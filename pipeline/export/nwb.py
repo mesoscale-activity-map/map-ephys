@@ -225,7 +225,7 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
                 go_cue_time = (experiment.SessionTrial * experiment.TrialEvent & session_key & {'trial': trial_number} & {'trial_event_type':'go'}).fetch('trial_event_time', order_by='trial')
                 raw_spike_times.append(aligned_time + float(trial_start) + float(go_cue_time))
             spikes = np.concatenate(raw_spike_times).ravel()
-            observed_times = np.array([trial_start, trial_stop]).T.astype('float')
+            observed_times = np.array([trial_starts, trial_stops]).T.astype('float')
             unit['spike_times'] = spikes
             unit['obs_intervals'] = observed_times
             unit['electrodes'] = electrode_df.query(
