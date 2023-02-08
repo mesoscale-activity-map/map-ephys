@@ -161,7 +161,6 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
         )
 
     # iterate through curated clusterings and export units data
-    trial_no = len((experiment.SessionTrial * experiment.TrialEvent & session_key & {'trial_event_type': 'go'}))
     for insert_key in (ephys.ProbeInsertion & session_key).fetch("KEY"):
         # ---- Probe Insertion Location ----
         if ephys.ProbeInsertion.InsertionLocation & insert_key:
@@ -220,14 +219,13 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
         unit_query = units_query & insert_key
         for unit in unit_query.fetch(as_dict=True):
             unit['id'] = max(nwbfile.units.id.data) + 1 if nwbfile.units.id.data else 0
-            aligned_times = (ephys.Unit.TrialSpikes & unit).fetch('spike_times')
-            trial_corrected_times = np.empty_like(aligned_times)
-            for go_trial in range(trial_no):
-                trial_start, go_cue_time = np.array((experiment.SessionTrial * experiment.TrialEvent & session_key & {'trial': go_trial+1} & {'trial_event_type':'go'}).fetch1('start_time', 'trial_event_time')).astype('float')
-
-                trial_corrected_times[go_trial] = aligned_times[go_trial] + trial_start + go_cue_time
-            spikes = np.concatenate(trial_corrected_times).ravel()
-            observed_times = np.array((ephys.Unit.TrialSpikes * experiment.SessionTrial & unit).fetch('start_time', 'stop_time')).T.astype('float')
+            aligned_times, trial_no, trial_start, trial_stop = (ephys.Unit.TrialSpikes * experiment.SessionTrial & unit).fetch('spike_times', 'trial', 'start_time', 'stop_time', order_by='trial')
+            raw_spike_times = []
+            for trial in trial_no:
+                go_cue_time = (experiment.SessionTrial * experiment.TrialEvent & session_key & {'trial': trial} & {'trial_event_type':'go'}).fetch('trial_event_time', order_by='trial')
+                raw_spike_times.append(aligned_times[trial-1] + float(trial_start[trial-1]) + float(go_cue_time))
+            spikes = np.concatenate(raw_spike_times).ravel()
+            observed_times = np.array([trial_start, trial_stop]).T.astype('float')
             unit['spike_times'] = spikes
             unit['obs_intervals'] = observed_times
             unit['electrodes'] = electrode_df.query(
