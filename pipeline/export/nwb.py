@@ -216,14 +216,20 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
         electrode_df = nwbfile.electrodes.to_dataframe()
 
         # ---- Units ----
+        go_cue_times, trial_starts, trial_stops = (experiment.TrialEvent * experiment.SessionTrial
+                                                   & (ephys.Unit.TrialSpikes & insert_key)
+                                                   & {'trial_event_type': 'go'}).fetch(
+            'trial_event_time', 'start_time', 'stop_time', order_by='trial')
+
         unit_query = units_query & insert_key
         for unit in unit_query.fetch(as_dict=True):
             unit['id'] = max(nwbfile.units.id.data) + 1 if nwbfile.units.id.data else 0
-            aligned_times, trial_numbers, trial_starts, trial_stops = (ephys.Unit.TrialSpikes * experiment.SessionTrial & unit).fetch('spike_times', 'trial', 'start_time', 'stop_time', order_by='trial')
+            aligned_spikes = (ephys.Unit.TrialSpikes & unit).fetch(
+                'spike_times', order_by='trial')
             raw_spike_times = []
-            for aligned_time, trial_number, trial_start, trial_stop in zip(aligned_times, trial_numbers, trial_starts, trial_stops):
-                go_cue_time = (experiment.SessionTrial * experiment.TrialEvent & session_key & {'trial': trial_number} & {'trial_event_type':'go'}).fetch1('trial_event_time', order_by='trial')
-                raw_spike_times.append(aligned_time + float(trial_start) + float(go_cue_time))
+            for aligned_spks, go_cue_time, trial_start, trial_stop in zip(
+                    aligned_spikes, go_cue_times, trial_starts, trial_stops):
+                raw_spike_times.append(aligned_spks + float(trial_start) + float(go_cue_time))
             spikes = np.concatenate(raw_spike_times).ravel()
             observed_times = np.array([trial_starts, trial_stops]).T.astype('float')
             unit['spike_times'] = spikes
