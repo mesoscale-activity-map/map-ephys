@@ -10,7 +10,7 @@ import pynwb
 from pynwb import NWBFile, NWBHDF5IO
 
 from pipeline import lab, experiment, tracking, ephys, histology, psth, ccf
-from pipeline.report import get_wr_sessdatetime
+from pipeline.experiment import get_wr_sessdatetime
 from pipeline.ingest import ephys as ephys_ingest
 from pipeline.ingest import tracking as tracking_ingest
 from pipeline.ingest.utils.paths import get_ephys_paths
@@ -132,7 +132,8 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
             ephys.UnitStat, left=True).join(
             ephys.MAPClusterMetric.DriftMetric, left=True).join(
             ephys.ClusterMetric, left=True).join(
-            ephys.WaveformMetric, left=True)
+            ephys.WaveformMetric, left=True).join(
+            ephys.SingleUnitClassification.UnitClassification, left=True)
     else:
         units_query = (ephys.ProbeInsertion.RecordingSystemSetup
                        * ephys.Unit & session_key).proj(
@@ -144,6 +145,8 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
             ephys.ClusterMetric, ..., **{n: n for n in ephys.ClusterMetric.heading.names if n not in ephys.ClusterMetric.heading.primary_key},
             keep_all_rows=True).aggr(
             ephys.WaveformMetric, ..., **{n: n for n in ephys.WaveformMetric.heading.names if n not in ephys.WaveformMetric.heading.primary_key},
+            keep_all_rows=True).aggr(
+            ephys.SingleUnitClassification.UnitClassification, ..., **{n: n for n in ephys.SingleUnitClassification.UnitClassification.heading.names if n not in ephys.SingleUnitClassification.UnitClassification.heading.primary_key},
             keep_all_rows=True)
 
     units_omitted_attributes = ['subject_id', 'session', 'insertion_number',
