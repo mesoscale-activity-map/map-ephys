@@ -5,11 +5,14 @@ from scipy.interpolate import CubicSpline
 from scipy import signal
 from scipy.stats import poisson
 import logging
+import scipy.io as spio
 
-from . import lab, experiment, ccf
-from . import get_schema_name, create_schema_settings
+from pipeline import lab, experiment, ccf
+from pipeline import get_schema_name, create_schema_settings
 from pipeline.ingest.utils.paths import get_sess_dir, gen_probe_insert, match_probe_to_ephys
 from pipeline.ingest.utils.spike_sorter_loader import cluster_loader_map
+
+from pipeline.experiment import get_wr_sessdatetime
 
 
 schema = dj.schema(get_schema_name('ephys'), **create_schema_settings)
@@ -706,6 +709,79 @@ class UnitCCF(dj.Computed):
     ---
     -> ccf.CCF
     """
+
+
+# ======== Classification of "good/unlabelled" on a per-region basis ========
+# using logistic regression - based on the white paper below
+# https://janelia.figshare.com/articles/online_resource/Spike_sorting_and_quality_control_for_the_mesoscale_activity_map_project/22154810/1
+
+@schema
+class SingleUnitClassification(dj.Computed):
+    definition = """
+    -> experiment.Session
+    """
+
+    class UnitClassification(dj.Part):
+        definition = """
+        -> master
+        -> Unit
+        ---
+        classification: enum('good', 'unlabelled')  # single unit classification label ("good"/"unlabelled")
+        anno_name='': varchar(128)  # brain region annotation of the classified unit
+        """
+
+    key_source = experiment.Session & (experiment.ProjectSession
+                                       & {'project_name': 'Brain-wide neural activity underlying memory-guided movement'})
+
+    def make(self, key):
+        classified_output_dir = dj.config['custom'].get('single_unit_classification_dir')
+        if not classified_output_dir:
+            raise FileNotFoundError('Missing specification of "single_unit_classification_dir" directory in dj.config["custom"]')
+
+        water_res_num, sess_datetime = get_wr_sessdatetime(key)
+        fname = f"{water_res_num}_{sess_datetime}_GoodUnitsIdx_14regions_cl.mat"
+        matlab_filepath = pathlib.Path(classified_output_dir) / fname
+        mat = spio.loadmat(matlab_filepath.as_posix(),
+                           squeeze_me=True, struct_as_record=False)
+        mat_idx = mat['Idx']
+        mat_anno = mat['AnnoName']
+
+        # unit Idx from the .mat file are concatenated unit indexes, not the original unit id
+        # create a `unit_mapping` to map back to the original unit id
+        insertion_numbers, unit_counts = (ProbeInsertion & key).aggr(
+            Unit.proj(), unit_count='count(unit)').fetch('insertion_number', 'unit_count',
+                                                       order_by='insertion_number')
+        unit_count_cumsum = np.concatenate([[0], unit_counts.astype(int).cumsum()[:-1]])
+        unit_count_cumsum = {i: c for i, c in zip(insertion_numbers, unit_count_cumsum)}
+
+        unit_mapping = {}
+        for insertion_number in insertion_numbers:
+            unit_mapping = {**unit_mapping, **{unit_idx + 1 + unit_count_cumsum[insertion_number]: k
+                            for unit_idx, k in enumerate((
+                        Unit & key & {'insertion_number': insertion_number}).fetch(
+                    'KEY', order_by='unit'))}}
+
+        # extract units' classification labels for all regions
+        entries = []
+        for region_attr in dir(mat_idx):
+            if region_attr.startswith('_') or not region_attr.endswith('_qc'):
+                continue
+            unit_ind = getattr(mat_idx, region_attr)
+            unit_anno = getattr(mat_anno, region_attr)
+            if isinstance(unit_ind, int):
+                unit_ind = [unit_ind]
+                unit_anno = [unit_anno]
+            if 661 in unit_ind:
+                print(region_attr)
+            entries.extend([{**key, **unit_mapping[u_idx],
+                             'classification': 'good',
+                             'anno_name': u_anno}
+                           for u_idx, u_anno in zip(unit_ind, unit_anno)])
+
+        self.insert1(key)
+        self.UnitClassification.insert(entries, skip_duplicates=True)
+        self.UnitClassification.insert((Unit - self.UnitClassification & key).proj(
+            classification='"unlabelled"', anno_name='""'))
 
 
 # ======== Archived Clustering ========
