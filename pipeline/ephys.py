@@ -771,6 +771,8 @@ class SingleUnitClassification(dj.Computed):
             if isinstance(unit_ind, int):
                 unit_ind = [unit_ind]
                 unit_anno = [unit_anno]
+            if 661 in unit_ind:
+                print(region_attr)
             entries.extend([{**key, **unit_mapping[u_idx],
                              'classification': 'good',
                              'anno_name': u_anno}
