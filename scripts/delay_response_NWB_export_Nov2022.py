@@ -24,7 +24,7 @@ dandi_api_key = os.getenv('DANDI_API_KEY')
 def publish_to_dandi(dandiset_id, dandi_api_key):
     from element_interface.dandi import upload_to_dandi
 
-    dandiset_dir = output_dir / 'dandi'
+    dandiset_dir = output_dir.parent / f"{output_dir.name}_DANDI"
     dandiset_dir.mkdir(parents=True, exist_ok=True)
 
     upload_to_dandi(
