@@ -2,14 +2,12 @@ import os
 import datajoint as dj
 import numpy as np
 import pathlib
-from datetime import datetime
 import pandas as pd
 import uuid
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 
 import io
@@ -19,6 +17,7 @@ import itertools
 from pipeline import get_schema_name, create_schema_settings, FailedUnitCriteriaError
 from pipeline import (experiment, ephys, psth, tracking, lab, histology, ccf,
                       foraging_analysis, foraging_model, oralfacial_analysis)
+from pipeline.experiment import get_wr_sessdatetime
 
 from pipeline.plot import behavior_plot, unit_characteristic_plot, unit_psth, histology_plot, PhotostimError, foraging_plot
 from pipeline.plot.util import _plot_with_sem, _jointplot_w_hue
@@ -910,13 +909,6 @@ report_tables = [SessionLevelReport,
                  ProjectLevelProbeTrack,
                  ProbeLevelDriftMap,
                  ProbeLevelCoronalSlice]
-
-
-def get_wr_sessdatetime(key):
-    water_res_num, session_datetime = (lab.WaterRestriction * experiment.Session.proj(
-        session_datetime="cast(concat(session_date, ' ', session_time) as datetime)") & key).fetch1(
-        'water_restriction_number', 'session_datetime')
-    return water_res_num, datetime.strftime(session_datetime, '%Y%m%d_%H%M%S')
 
 
 def save_figs(figs, fig_names, dir2save, prefix):

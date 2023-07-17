@@ -12,7 +12,7 @@ from tqdm import tqdm
 from datetime import datetime
 from pipeline import lab, experiment, tracking, ephys, histology, psth, ccf
 from pipeline.util import _get_clustering_method
-from pipeline.report import get_wr_sessdatetime
+from pipeline.experiment import get_wr_sessdatetime
 
 
 def mkfilename(insert_key):
@@ -214,7 +214,8 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
             ephys.UnitStat, left=True).join(
             ephys.MAPClusterMetric.DriftMetric, left=True).join(
             ephys.ClusterMetric, left=True).join(
-            ephys.WaveformMetric, left=True)
+            ephys.WaveformMetric, left=True).join(
+            ephys.SingleUnitClassification.UnitClassification, left=True)
     else:
         q_qc = (ephys.Unit & insert_key).proj('unit_amp', 'unit_snr').aggr(
             ephys.UnitStat, ..., **{n: n for n in ephys.UnitStat.heading.names if n not in ephys.UnitStat.heading.primary_key},
@@ -224,6 +225,8 @@ def _export_recording(insert_key, output_dir='./', filename=None, overwrite=Fals
             ephys.ClusterMetric, ..., **{n: n for n in ephys.ClusterMetric.heading.names if n not in ephys.ClusterMetric.heading.primary_key},
             keep_all_rows=True).aggr(
             ephys.WaveformMetric, ..., **{n: n for n in ephys.WaveformMetric.heading.names if n not in ephys.WaveformMetric.heading.primary_key},
+            keep_all_rows=True).aggr(
+            ephys.SingleUnitClassification.UnitClassification, ..., **{n: n for n in ephys.SingleUnitClassification.UnitClassification.heading.names if n not in ephys.SingleUnitClassification.UnitClassification.heading.primary_key},
             keep_all_rows=True)
     qc_names = [n for n in q_qc.heading.names if n not in q_qc.primary_key]
 

@@ -10,7 +10,7 @@ import pynwb
 from pynwb import NWBFile, NWBHDF5IO
 
 from pipeline import lab, experiment, tracking, ephys, histology, psth, ccf
-from pipeline.report import get_wr_sessdatetime
+from pipeline.experiment import get_wr_sessdatetime
 from pipeline.ingest import ephys as ephys_ingest
 from pipeline.ingest import tracking as tracking_ingest
 from pipeline.ingest.utils.paths import get_ephys_paths
@@ -132,7 +132,8 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
             ephys.UnitStat, left=True).join(
             ephys.MAPClusterMetric.DriftMetric, left=True).join(
             ephys.ClusterMetric, left=True).join(
-            ephys.WaveformMetric, left=True)
+            ephys.WaveformMetric, left=True).join(
+            ephys.SingleUnitClassification.UnitClassification, left=True)
     else:
         units_query = (ephys.ProbeInsertion.RecordingSystemSetup
                        * ephys.Unit & session_key).proj(
@@ -144,6 +145,8 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
             ephys.ClusterMetric, ..., **{n: n for n in ephys.ClusterMetric.heading.names if n not in ephys.ClusterMetric.heading.primary_key},
             keep_all_rows=True).aggr(
             ephys.WaveformMetric, ..., **{n: n for n in ephys.WaveformMetric.heading.names if n not in ephys.WaveformMetric.heading.primary_key},
+            keep_all_rows=True).aggr(
+            ephys.SingleUnitClassification.UnitClassification, ..., **{n: n for n in ephys.SingleUnitClassification.UnitClassification.heading.names if n not in ephys.SingleUnitClassification.UnitClassification.heading.primary_key},
             keep_all_rows=True)
 
     units_omitted_attributes = ['subject_id', 'session', 'insertion_number',
@@ -216,14 +219,20 @@ def datajoint_to_nwb(session_key, raw_ephys=False, raw_video=False):
         electrode_df = nwbfile.electrodes.to_dataframe()
 
         # ---- Units ----
+        go_cue_times, trial_starts, trial_stops = (experiment.TrialEvent * experiment.SessionTrial
+                                                   & (ephys.Unit.TrialSpikes & insert_key)
+                                                   & {'trial_event_type': 'go'}).fetch(
+            'trial_event_time', 'start_time', 'stop_time', order_by='trial')
+
         unit_query = units_query & insert_key
         for unit in unit_query.fetch(as_dict=True):
             unit['id'] = max(nwbfile.units.id.data) + 1 if nwbfile.units.id.data else 0
-            aligned_times, trial_numbers, trial_starts, trial_stops = (ephys.Unit.TrialSpikes * experiment.SessionTrial & unit).fetch('spike_times', 'trial', 'start_time', 'stop_time', order_by='trial')
+            aligned_spikes = (ephys.Unit.TrialSpikes & unit).fetch(
+                'spike_times', order_by='trial')
             raw_spike_times = []
-            for aligned_time, trial_number, trial_start, trial_stop in zip(aligned_times, trial_numbers, trial_starts, trial_stops):
-                go_cue_time = (experiment.SessionTrial * experiment.TrialEvent & session_key & {'trial': trial_number} & {'trial_event_type':'go'}).fetch1('trial_event_time', order_by='trial')
-                raw_spike_times.append(aligned_time + float(trial_start) + float(go_cue_time))
+            for aligned_spks, go_cue_time, trial_start, trial_stop in zip(
+                    aligned_spikes, go_cue_times, trial_starts, trial_stops):
+                raw_spike_times.append(aligned_spks + float(trial_start) + float(go_cue_time))
             spikes = np.concatenate(raw_spike_times).ravel()
             observed_times = np.array([trial_starts, trial_stops]).T.astype('float')
             unit['spike_times'] = spikes
