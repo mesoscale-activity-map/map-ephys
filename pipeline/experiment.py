@@ -2,6 +2,7 @@ import logging
 import datajoint as dj
 import numpy as np
 import pathlib
+from datetime import datetime
 
 from . import lab, ccf
 from . import get_schema_name, create_schema_settings
@@ -556,7 +557,18 @@ class Project(dj.Lookup):
     publication='': varchar(256)  # e.g. publication doi    
     """
 
-    contents = [('MAP', 'The Mesoscale Activity Map project', '')]
+    contents = [('MAP', 'The Mesoscale Activity Map project', ''),
+                ('Brain-wide neural activity underlying memory-guided movement',
+                 'Brain-wide neural activity underlying memory-guided movement - 2023',
+                 'https://doi.org/10.1101/2023.03.01.530520')]
+
+
+@schema
+class ProjectSession(dj.Manual):
+    definition = """
+    -> Project
+    -> Session
+    """
 
 
 # ============================= HELPER METHODS ==========================
@@ -627,3 +639,10 @@ def extract_nidq_trial_data(session_key, channel):
                 'data': trial_data,
                 'timestamps': np.arange(len(trial_data)) / sampling_rate})
     return all_trials_data
+
+
+def get_wr_sessdatetime(key):
+    water_res_num, session_datetime = (lab.WaterRestriction * Session.proj(
+        session_datetime="cast(concat(session_date, ' ', session_time) as datetime)") & key).fetch1(
+        'water_restriction_number', 'session_datetime')
+    return water_res_num, datetime.strftime(session_datetime, '%Y%m%d_%H%M%S')
