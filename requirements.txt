@@ -1,5 +1,5 @@
 datajoint
-scipy==1.7.1	# build issue - see statsmodels
+scipy==1.10.0	# build issue - see statsmodels
 globus-sdk
 tifffile
 pandas
